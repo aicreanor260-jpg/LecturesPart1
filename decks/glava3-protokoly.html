@@ -241,14 +241,14 @@ svg .rough{filter:url(#rough)}
   <div class="tophint">1.1 · стандарты</div>
   <div class="pad" style="top:60px">
     <h2 class="h-d h-sm blue" style="margin-bottom:16px">ПОЧЕМУ ПОБЕДИЛИ СТАНДАРТЫ</h2>
-    <p class="body b-md ink" style="max-width:60ch;margin-bottom:20px">Сеть по определению соединяет устройства <b>разных производителей</b>. Если бы каждый вендор говорил на своём диалекте, единого интернета не было бы. Стандарт — решение проблемы «вавилонского смешения»: договорились один раз и глобально.</p>
+    <p class="body b-md ink" style="max-width:60ch;margin-bottom:20px">Сеть по определению соединяет устройства <b>разных производителей</b>. Если бы каждый производитель говорил на своём диалекте, единого интернета не было бы. Стандарт — решение проблемы «вавилонского смешения»: договорились один раз и глобально.</p>
     <svg viewBox="0 0 1680 470" style="width:100%;height:520px">
       <g class="rough" fill="none" stroke="var(--blue)" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
         <rect x="70" y="150" width="230" height="170" rx="26"/><rect x="740" y="150" width="230" height="170" rx="26"/>
         <path d="M300 235 L740 235"/><rect x="410" y="196" width="220" height="80" rx="24" fill="var(--yellow)" stroke="var(--ink)"/>
       </g>
-      <text x="185" y="245" text-anchor="middle" class="lab">Вендор A</text>
-      <text x="855" y="245" text-anchor="middle" class="lab">Вендор B</text>
+      <text x="185" y="245" text-anchor="middle" class="lab">Производитель A</text>
+      <text x="855" y="245" text-anchor="middle" class="lab">Производитель B</text>
       <text x="520" y="243" text-anchor="middle" class="lab-s">стандартный протокол</text>
       <text x="520" y="120" text-anchor="middle" class="lab" fill="var(--blue)">СВЯЗЬ УСТАНОВЛЕНА</text>
       <g class="rough" fill="none" stroke="#a89a86" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
@@ -548,40 +548,56 @@ svg .rough{filter:url(#rough)}
 
 <section class="slide bg-white on-white" data-init="cast">
   <div class="tophint">3.1 · способы рассылки · unicast</div>
-  <div class="pad g2a" style="top:80px">
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
       <h2 class="h-d h-sm blue" style="margin-bottom:22px">ОДНОМУ · UNICAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель <b>192.168.1.10</b> шлёт сообщение на адрес <b>одного</b> получателя (192.168.1.20). Другие устройства его не получают — точность обеспечивает адресация.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как личное письмо с точным адресом на конверте — доходит именно тому, кому написано.</div>
-      
     </div>
-    <svg class="castsvg" data-kind="uni" viewBox="0 0 860 500" style="width:100%;height:520px"><g class="rough"><path d="M190 250 L724 250" stroke="var(--blue)" stroke-width="8" fill="none"/><circle cx="760" cy="110" r="34" fill="#cabfa9" stroke="#cabfa9" stroke-width="7"/><circle cx="760" cy="250" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="760" cy="390" r="34" fill="#cabfa9" stroke="#cabfa9" stroke-width="7"/><circle cx="150" cy="250" r="34" fill="var(--yellow)" stroke="var(--ink)" stroke-width="7"/></g><text x="150" y="314" text-anchor="middle" class="lab-s" fill="var(--ink)">192.168.1.10</text><text x="150" y="204" text-anchor="middle" class="lab-s" fill="var(--blue)">отправитель</text><text x="760" y="172" text-anchor="middle" class="lab-s" fill="#a89a86">192.168.1.20</text><text x="760" y="312" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.21</text><text x="760" y="452" text-anchor="middle" class="lab-s" fill="#a89a86">192.168.1.22</text><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/></svg>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="uni" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="slide bg-white on-white" data-init="cast">
   <div class="tophint">3.1 · способы рассылки · multicast</div>
-  <div class="pad g2a" style="top:80px">
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
       <h2 class="h-d h-sm blue" style="margin-bottom:22px">ГРУППЕ · MULTICAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель шлёт на <b>групповой</b> адрес <b>224.0.0.5</b>, который «прослушивают» подписчики. Технически сообщение проходит мимо многих, но обрабатывают его только подписчики группы.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как объявление в чате: его видят участники канала, но не весь мир.</div>
-      
     </div>
-    <svg class="castsvg" data-kind="multi" viewBox="0 0 860 500" style="width:100%;height:520px"><g class="rough"><path d="M190 250 L426 250" stroke="var(--blue)" stroke-width="8" fill="none"/><path d="M514 250 L722 116" stroke="var(--blue)" stroke-width="8" fill="none"/><path d="M514 250 L722 384" stroke="var(--blue)" stroke-width="8" fill="none"/><rect x="430" y="210" width="80" height="80" rx="16" fill="var(--yellow)" stroke="var(--ink)" stroke-width="6"/><circle cx="760" cy="110" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="760" cy="250" r="34" fill="#cabfa9" stroke="#cabfa9" stroke-width="7"/><circle cx="760" cy="390" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="150" cy="250" r="34" fill="var(--yellow)" stroke="var(--ink)" stroke-width="7"/></g><text x="150" y="314" text-anchor="middle" class="lab-s" fill="var(--ink)">192.168.1.10</text><text x="150" y="204" text-anchor="middle" class="lab-s" fill="var(--blue)">отправитель</text><text x="760" y="172" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.20</text><text x="760" y="312" text-anchor="middle" class="lab-s" fill="#a89a86">192.168.1.21</text><text x="760" y="452" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.22</text><text x="470" y="326" text-anchor="middle" class="lab-s" fill="var(--ink)">группа 224.0.0.5</text><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/></svg>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="multi" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
   </div>
 </section>
 
 <section class="slide bg-white on-white" data-init="cast">
   <div class="tophint">3.1 · способы рассылки · broadcast</div>
-  <div class="pad g2a" style="top:80px">
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
       <h2 class="h-d h-sm blue" style="margin-bottom:22px">ВСЕМ · BROADCAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Сообщение уходит на <b>широковещательный</b> адрес <b>192.168.1.255</b> и обрабатывается всеми устройствами сети без исключения.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как крикнуть в мегафон посреди зала: услышат все, хотят они того или нет.</div>
       <p class="body b-sm ink" style="opacity:.72;margin-top:14px">Осторожно: «крики на весь зал» снижают работоспособность сети. Но запретить нельзя — на принципе «спросить у всех» держатся <b>ARP</b> и <b>DHCP</b>.</p>
     </div>
-    <svg class="castsvg" data-kind="bc" viewBox="0 0 860 500" style="width:100%;height:520px"><g class="rough"><path d="M190 250 L726 110" stroke="var(--blue)" stroke-width="8" fill="none"/><path d="M190 250 L726 250" stroke="var(--blue)" stroke-width="8" fill="none"/><path d="M190 250 L726 390" stroke="var(--blue)" stroke-width="8" fill="none"/><circle cx="760" cy="110" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="760" cy="250" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="760" cy="390" r="34" fill="var(--blue)" stroke="var(--blue)" stroke-width="7"/><circle cx="150" cy="250" r="34" fill="var(--yellow)" stroke="var(--ink)" stroke-width="7"/></g><text x="150" y="314" text-anchor="middle" class="lab-s" fill="var(--ink)">192.168.1.10</text><text x="150" y="204" text-anchor="middle" class="lab-s" fill="var(--blue)">отправитель</text><text x="760" y="172" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.20</text><text x="760" y="312" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.21</text><text x="760" y="452" text-anchor="middle" class="lab-s" fill="var(--blue)">192.168.1.22</text><text x="470" y="56" text-anchor="middle" class="lab" fill="var(--blue)">адрес 192.168.1.255 — всем</text><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/><circle class="pkt" r="14" fill="var(--yellow)" stroke="var(--ink)" stroke-width="4" cx="150" cy="250"/></svg>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="bc" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -604,13 +620,13 @@ svg .rough{filter:url(#rough)}
 <section class="slide bg-blue on-blue">
   <div class="tophint">3.2 · сегментация · мультиплексирование</div>
   <div class="pad" style="top:60px">
-    <h2 class="h-d h-sm" style="margin-bottom:14px">ПОЧЕМУ TELEGRAM И WHATSAPP <span class="yl">НЕ ПУТАЮТСЯ</span></h2>
+    <h2 class="h-d h-sm" style="margin-bottom:14px">ПОЧЕМУ ВКОНТАКТЕ И РУТЬЮБ <span class="yl">НЕ ПУТАЮТСЯ</span></h2>
     <p class="body b-sm white" style="opacity:.9;max-width:74ch;margin-bottom:14px">Сообщение делится на <b>сегменты</b>, каждый помечен портами: из какого приложения пришёл и какому предназначен. Метки едут вместе с данными до получателя.</p>
     <svg viewBox="0 0 1620 440" style="width:100%;height:440px;background:rgba(255,255,255,.06);border-radius:24px">
       <g class="rough" fill="none" stroke="var(--white)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
         <rect x="60" y="120" width="220" height="200" rx="24"/><rect x="1340" y="50" width="220" height="140" rx="24"/><rect x="1340" y="250" width="220" height="140" rx="24"/>
         <rect x="720" y="170" width="180" height="100" rx="22" fill="var(--yellow)" stroke="var(--ink)"/>
-        <path d="M280 190 L720 205"/><path d="M280 260 L720 240"/><path d="M900 200 L1340 120"/><path d="M900 245 L1340 320"/>
+        <path d="M280 220 L720 220"/><path d="M900 200 L1340 120"/><path d="M900 245 L1340 320"/>
       </g>
       <text x="170" y="225" text-anchor="middle" class="lab" fill="var(--blue)">ноутбук</text>
       <text x="810" y="228" text-anchor="middle" class="lab-s" fill="var(--ink)">маршрутизатор</text>
@@ -720,7 +736,14 @@ svg .rough{filter:url(#rough)}
       <div class="callout"><div class="term" style="font-size:38px">Сегмент</div><div class="def" style="font-size:28px">отрезок данных с заголовком транспортного уровня L4.</div></div>
     </div>
     <div class="col">
-      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px"><rect class="rough" x="40" y="20" width="460" height="300" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="58" y="54" class="lab" fill="var(--blue)">TCP</text><rect class="rough" x="70" y="50" width="400" height="240" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="88" y="84" class="lab" fill="var(--blue)">HTTP</text><rect class="rough" x="100" y="80" width="340" height="180" rx="18" fill="var(--yellow)" stroke="var(--blue)" stroke-width="5"/><text x="118" y="114" class="lab" fill="var(--blue)">Данные</text></svg>
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="20" y="16" width="500" height="328" rx="24" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="34" y="26" width="70" height="34" rx="11" fill="#6E7355"/><text x="69" y="49" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="64" y="68" width="412" height="252" rx="22" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="78" y="78" width="86" height="34" rx="11" fill="#D2632B"/><text x="121" y="101" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="108" y="120" width="324" height="150" rx="20" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="207" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:36px;fill:#3E2D21">Данные</text>
+      </svg>
       <div class="card analogy b-md"><span class="tag">Книга по почте</span>Каждую страницу копируем на лист А4, вкладываем в конверт и подписываем: название книги, номер страницы и общее число страниц.</div>
     </div>
   </div>
@@ -735,7 +758,16 @@ svg .rough{filter:url(#rough)}
       <div class="callout"><div class="term" style="font-size:38px">Пакет</div><div class="def" style="font-size:28px">единица данных L3: сегмент плюс заголовок сетевого уровня.</div></div>
     </div>
     <div class="col">
-      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px"><rect class="rough" x="40" y="20" width="460" height="300" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="58" y="54" class="lab" fill="var(--blue)">IP</text><rect class="rough" x="70" y="50" width="400" height="240" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="88" y="84" class="lab" fill="var(--blue)">TCP</text><rect class="rough" x="100" y="80" width="340" height="180" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="118" y="114" class="lab" fill="var(--blue)">HTTP</text><rect class="rough" x="130" y="110" width="280" height="120" rx="18" fill="var(--yellow)" stroke="var(--blue)" stroke-width="5"/><text x="148" y="144" class="lab" fill="var(--blue)">Данные</text></svg>
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="16" y="12" width="508" height="336" rx="24" fill="rgba(86,91,65,.14)" stroke="#565B41" stroke-width="4"/>
+        <rect x="30" y="22" width="52" height="34" rx="11" fill="#565B41"/><text x="56" y="45" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">IP</text>
+        <rect x="54" y="60" width="432" height="256" rx="22" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="68" y="70" width="70" height="34" rx="11" fill="#6E7355"/><text x="103" y="93" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="92" y="108" width="356" height="176" rx="20" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="106" y="118" width="86" height="34" rx="11" fill="#D2632B"/><text x="149" y="141" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="130" y="156" width="280" height="100" rx="18" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="214" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:32px;fill:#3E2D21">Данные</text>
+      </svg>
       <div class="card analogy b-md"><span class="tag">Книга по почте</span>Конверт-сегмент вкладывают в конверт побольше, на котором пишут город, улицу и номер дома получателя — и такие же данные отправителя.</div>
     </div>
   </div>
@@ -750,7 +782,18 @@ svg .rough{filter:url(#rough)}
       <div class="callout"><div class="term" style="font-size:38px">Кадр</div><div class="def" style="font-size:28px">единица данных L2: пакет плюс заголовок канального уровня. MAC = Media Access Control.</div></div>
     </div>
     <div class="col">
-      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px"><rect class="rough" x="40" y="20" width="460" height="300" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="58" y="54" class="lab" fill="var(--blue)">Ethernet</text><rect class="rough" x="70" y="50" width="400" height="240" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="88" y="84" class="lab" fill="var(--blue)">IP</text><rect class="rough" x="100" y="80" width="340" height="180" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="118" y="114" class="lab" fill="var(--blue)">TCP</text><rect class="rough" x="130" y="110" width="280" height="120" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="148" y="144" class="lab" fill="var(--blue)">HTTP</text><rect class="rough" x="160" y="140" width="220" height="60" rx="18" fill="var(--yellow)" stroke="var(--blue)" stroke-width="5"/><text x="178" y="174" class="lab" fill="var(--blue)">Данные</text></svg>
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="12" y="10" width="516" height="340" rx="24" fill="rgba(86,91,65,.14)" stroke="#565B41" stroke-width="4"/>
+        <rect x="26" y="20" width="118" height="34" rx="11" fill="#565B41"/><text x="85" y="43" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">Ethernet</text>
+        <rect x="46" y="58" width="448" height="264" rx="22" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="60" y="68" width="52" height="34" rx="11" fill="#6E7355"/><text x="86" y="91" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">IP</text>
+        <rect x="80" y="106" width="380" height="192" rx="20" fill="rgba(178,78,30,.12)" stroke="#B24E1E" stroke-width="4"/>
+        <rect x="94" y="116" width="70" height="34" rx="11" fill="#B24E1E"/><text x="129" y="139" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="114" y="154" width="312" height="120" rx="18" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="128" y="164" width="86" height="34" rx="11" fill="#D2632B"/><text x="171" y="187" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="148" y="204" width="244" height="52" rx="14" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="238" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:#3E2D21">Данные</text>
+      </svg>
       <div class="card analogy b-md"><span class="tag">Книга по почте</span>Пакет кладут в самый большой конверт и относят на почту, где ставят индексы отправляющего и принимающего отделений.</div>
     </div>
   </div>
@@ -768,7 +811,7 @@ svg .rough{filter:url(#rough)}
   </div>
 </section>
 
-<section class="slide bg-white on-white">
+<section class="slide bg-white on-white" data-init="encap">
   <div class="tophint">3.2.2 · инкапсуляция · декапсуляция</div>
   <div class="pad g2a" style="top:66px;grid-template-columns:1.1fr .9fr">
     <div class="col">
@@ -776,10 +819,7 @@ svg .rough{filter:url(#rough)}
       <div class="callout"><div class="term" style="font-size:36px">Декапсуляция</div><div class="def" style="font-size:27px">восстановление блоков верхних уровней путём <b>удаления</b> заголовков нижних. У получателя всё зеркально.</div></div>
       <p class="note-hand" style="margin-top:20px">образ — матрёшка: данные внутри HTTP, внутри TCP, внутри IP, внутри Ethernet</p>
     </div>
-    <svg viewBox="0 0 520 460" style="width:100%;height:520px">
-      <text x="260" y="34" text-anchor="middle" class="lab" fill="var(--blue)">инкапсуляция ↓ · декапсуляция ↑</text>
-      <rect class="rough" x="100.0" y="60.0" width="320" height="380" rx="20" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="260" y="94.0" text-anchor="middle" class="lab-s" fill="var(--blue)">Данные</text><rect class="rough" x="127.0" y="91.0" width="266" height="318" rx="20" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="260" y="125.0" text-anchor="middle" class="lab-s" fill="var(--blue)">HTTP</text><rect class="rough" x="154.0" y="122.0" width="212" height="256" rx="20" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="260" y="156.0" text-anchor="middle" class="lab-s" fill="var(--blue)">TCP</text><rect class="rough" x="181.0" y="153.0" width="158" height="194" rx="20" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="260" y="187.0" text-anchor="middle" class="lab-s" fill="var(--blue)">IP</text><rect class="rough" x="208.0" y="184.0" width="104" height="132" rx="20" fill="var(--yellow)" stroke="var(--blue)" stroke-width="5"/><text x="260" y="218.0" text-anchor="middle" class="lab-s" fill="var(--blue)">Eth</text>
-    </svg>
+    <svg class="encapsvg" viewBox="0 0 560 600" style="width:100%;height:560px"></svg>
   </div>
 </section>
 
@@ -926,25 +966,148 @@ svg .rough{filter:url(#rough)}
     var rb=w.querySelector('[data-act=rand]'); if(rb)rb.onclick=function(){ w._bits=w._bits.map(function(){return Math.random()<0.5?'0':'1'}); redraw(); };
     redraw();
   };
-  // ---- анимация рассылки ----
+  // ---- анимация рассылки: коммутатор + кто обрабатывает / откидывает ----
   inits.cast=function(sl){
     var svg=sl.querySelector('.castsvg'); if(!svg)return;
-    var kind=svg.dataset.kind, src=[150,250], G=[470,250];
-    var dests=[[760,110],[760,250],[760,390]];
-    var active = kind==='uni'?[1] : (kind==='multi'?[0,2] : [0,1,2]);
-    var pk=[].slice.call(svg.querySelectorAll('.pkt')); var t=0;
-    function loop(){
-      t+=0.010;
-      active.forEach(function(di,ix){
-        var c=pk[ix]; if(!c)return; var f=(t+ix*0.16)%1, B=dests[di], x,y;
-        if(kind==='multi'){ if(f<0.5){var u=f/0.5;x=src[0]+(G[0]-src[0])*u;y=src[1]+(G[1]-src[1])*u;} else {var u2=(f-0.5)/0.5;x=G[0]+(B[0]-G[0])*u2;y=G[1]+(B[1]-G[1])*u2;} }
-        else { x=src[0]+(B[0]-src[0])*f; y=src[1]+(B[1]-src[1])*f; }
-        c.setAttribute('cx',x.toFixed(1)); c.setAttribute('cy',y.toFixed(1));
-        c.setAttribute('opacity',(f<0.05||f>0.95)?'0.15':'1');
+    var kind=svg.dataset.kind, hintEl=sl.querySelector('.casthint');
+    var src=[120,280], sw=[450,280], dst=[[780,110],[780,280],[780,450]];
+    var GROUP=[0,2], names=['192.168.1.20','192.168.1.21','192.168.1.22'];
+    var timers=[];
+    function targets(){ return kind==='uni'?[0] : (kind==='multi'?GROUP.slice() : [0,1,2]); }
+    function statusLbl(inT){
+      if(kind==='uni')   return inT?'обрабатываю':'не мне · игнор';
+      if(kind==='multi') return inT?'в группе · обрабатываю':'не в группе · откидываю';
+      return 'обрабатываю';
+    }
+    var hintTxt = kind==='uni'?'один → одному: кадр берёт только адресат'
+      : (kind==='multi'?'многим сразу, но обрабатывают лишь члены группы 224.0.0.5'
+      : 'на 192.168.1.255 — получают и обрабатывают все');
+
+    function nodeBox(x,y,name,active,status){
+      var w=190,h=76, fill=active?'#6E7355':'#FFFDF7', tcol=active?'#fff':'#3E2D21', stroke=active?'#565B41':'#3E2D21';
+      var s='<rect x="'+(x-w/2)+'" y="'+(y-h/2)+'" width="'+w+'" height="'+h+'" rx="16" fill="'+fill+'" stroke="'+stroke+'" stroke-width="5"/>'
+        +'<text x="'+x+'" y="'+(y+9)+'" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:26px;fill:'+tcol+'">'+name+'</text>';
+      if(status){ var scol=active?'#565B41':'#a89a86';
+        s+='<text x="'+x+'" y="'+(y+h/2+30)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:22px;fill:'+scol+'">'+status+'</text>'; }
+      return s;
+    }
+    function switchBox(sub){
+      var x=sw[0],y=sw[1],w=210,h=112;
+      var s='<rect x="'+(x-w/2)+'" y="'+(y-h/2)+'" width="'+w+'" height="'+h+'" rx="20" fill="#3E2D21"/>'
+        +'<text x="'+x+'" y="'+(y-2)+'" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:#fff">КОММУТАТОР</text>';
+      if(sub)s+='<text x="'+x+'" y="'+(y+32)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:21px;fill:#F5B63C">'+sub+'</text>';
+      return s;
+    }
+    function base(st){
+      st=st||{};
+      var s='<g stroke="#a89a86" stroke-width="5" stroke-linecap="round">';
+      s+='<line x1="'+(src[0]+95)+'" y1="'+src[1]+'" x2="'+(sw[0]-105)+'" y2="'+sw[1]+'"/>';
+      dst.forEach(function(d){ s+='<line x1="'+(sw[0]+105)+'" y1="'+sw[1]+'" x2="'+(d[0]-95)+'" y2="'+d[1]+'"/>'; });
+      s+='</g>';
+      s+=switchBox(st.sw||'');
+      s+=nodeBox(src[0],src[1],'ПК1',false,st.srcS||'');
+      s+='<text x="'+src[0]+'" y="'+(src[1]-52)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:20px;fill:#D2632B">отправитель · 192.168.1.10</text>';
+      dst.forEach(function(d,k){ var ok=st.pc&&st.pc[k]==='ok'; s+=nodeBox(d[0],d[1],names[k],ok,(st.pcL&&st.pcL[k])||''); });
+      s+='<g id="pk"></g>';
+      return s;
+    }
+    function pkAnim(segs,done){
+      var t0=null;
+      function frame(ts){ if(t0===null)t0=ts; var f=Math.min((ts-t0)/850,1);
+        var g=svg.querySelector('#pk'); if(!g){ return; }
+        var inner='';
+        segs.forEach(function(sg){ var x=sg.a[0]+(sg.b[0]-sg.a[0])*f, y=sg.a[1]+(sg.b[1]-sg.a[1])*f;
+          inner+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="13" fill="#F5B63C" stroke="#3E2D21" stroke-width="4"/>'; });
+        g.innerHTML=inner;
+        if(f<1){ curRaf=requestAnimationFrame(frame); } else { g.innerHTML=''; if(done)done(); }
+      }
+      curRaf=requestAnimationFrame(frame);
+    }
+    function play(){
+      timers.forEach(clearTimeout); timers=[]; stopAnim();
+      var st={sw:'', srcS:'отправляю кадр', pc:['','',''], pcL:['','','']};
+      svg.innerHTML=base(st);
+      pkAnim([{a:src,b:sw}], function(){
+        st.srcS=''; st.sw='принимаю → обрабатываю'; svg.innerHTML=base(st);
+        timers.push(setTimeout(function(){
+          st.sw='рассылаю'; svg.innerHTML=base(st);
+          var tg=targets(), segs=tg.map(function(k){ return {a:sw,b:dst[k]}; });
+          pkAnim(segs, function(){
+            st.sw='';
+            dst.forEach(function(d,k){ var inT=tg.indexOf(k)>=0; st.pc[k]=inT?'ok':''; st.pcL[k]=statusLbl(inT); });
+            svg.innerHTML=base(st);
+          });
+        },650));
       });
+      if(hintEl)hintEl.textContent=hintTxt;
+    }
+    var btn=sl.querySelector('.castplay'); if(btn)btn.onclick=play;
+    play();
+  };
+  // ---- инкапсуляция / декапсуляция (анимация как «путь по уровням») ----
+  inits.encap=function(sl){
+    var svg=sl.querySelector('.encapsvg'); if(!svg)return;
+    var L=[
+      {y:104,nm:'Приложение',pr:'HTTP',c:'#D2632B'},
+      {y:196,nm:'Транспорт',pr:'TCP',c:'#B24E1E'},
+      {y:288,nm:'Сеть',pr:'IP',c:'#6E7355'},
+      {y:380,nm:'Канальный',pr:'Ethernet',c:'#565B41'},
+      {y:486,nm:'Физический',pr:'биты',c:'#3E2D21'}
+    ];
+    var HDR={'HTTP':'#D2632B','TCP':'#B24E1E','IP':'#6E7355','Eth':'#565B41'};
+    var stops=[
+      {li:0,h:['HTTP']},
+      {li:1,h:['TCP','HTTP']},
+      {li:2,h:['IP','TCP','HTTP']},
+      {li:3,h:['Eth','IP','TCP','HTTP']},
+      {li:4,h:['Eth','IP','TCP','HTTP'],bits:true},
+      {li:4,h:['Eth','IP','TCP','HTTP'],bits:true},
+      {li:3,h:['IP','TCP','HTTP']},
+      {li:2,h:['TCP','HTTP']},
+      {li:1,h:['HTTP']},
+      {li:0,h:[]}
+    ];
+    var CX=372;
+    function bg(){
+      var s='';
+      L.forEach(function(l){
+        s+='<rect x="188" y="'+(l.y-38)+'" width="360" height="76" rx="16" fill="#FBF6EA" stroke="'+l.c+'" stroke-width="2.5"/>';
+        s+='<text x="26" y="'+(l.y-3)+'" style="font-family:Fredoka;font-weight:700;font-size:27px;fill:'+l.c+'">'+l.pr+'</text>';
+        s+='<text x="26" y="'+(l.y+24)+'" style="font-family:Nunito Sans;font-weight:700;font-size:16px;fill:#8a7d6b">'+l.nm+'</text>';
+      });
+      return s;
+    }
+    function barSVG(hdrs,bits){
+      var chipW=54,dataW=110,total=hdrs.length*chipW+dataW,x=CX-total/2,s='';
+      hdrs.forEach(function(k){
+        s+='<rect x="'+x+'" y="-27" width="'+chipW+'" height="54" rx="9" fill="'+HDR[k]+'"/>';
+        s+='<text x="'+(x+chipW/2)+'" y="8" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:19px;fill:#fff">'+k+'</text>';
+        x+=chipW;
+      });
+      s+='<rect x="'+x+'" y="-27" width="'+dataW+'" height="54" rx="9" fill="#F5B63C" stroke="#B24E1E" stroke-width="2.5"/>';
+      s+='<text x="'+(x+dataW/2)+'" y="9" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:21px;fill:#3E2D21">Данные</text>';
+      if(bits)s+='<text x="'+CX+'" y="48" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:16px;fill:#3E2D21;letter-spacing:3px">10110100 01101001 …</text>';
+      return s;
+    }
+    function render(seg,f){
+      var a=stops[seg],b=stops[(seg+1)%stops.length];
+      var y=L[a.li].y+(L[b.li].y-L[a.li].y)*f;
+      var enc=seg<5, phase=enc?'ОТПРАВИТЕЛЬ · инкапсуляция ↓':'ПОЛУЧАТЕЛЬ · декапсуляция ↑';
+      var s=bg();
+      s+='<text x="372" y="52" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:'+(enc?'#D2632B':'#6E7355')+'">'+phase+'</text>';
+      s+='<g transform="translate(0,'+y.toFixed(1)+')">'+barSVG(a.h,a.bits)+'</g>';
+      svg.innerHTML=s;
+    }
+    var start=null,SEG=1150;
+    function loop(ts){
+      if(start===null)start=ts;
+      var e=ts-start, seg=Math.floor(e/SEG)%stops.length, f=(e%SEG)/SEG;
+      var m=Math.min(f/0.72,1); m=m<0.5?2*m*m:1-Math.pow(-2*m+2,2)/2;
+      render(seg,m);
       curRaf=requestAnimationFrame(loop);
     }
-    loop();
+    render(0,0);
+    curRaf=requestAnimationFrame(loop);
   };
 
   fit(); show(0);
