@@ -906,10 +906,30 @@ svg .rough{filter:url(#rough)}
   var n=slides.length, i=0, curRaf=null, inits={};
   slides.forEach(function(s,k){ var c=document.createElement('div'); c.className='counter'; c.textContent=(k+1)+' / '+n; s.appendChild(c); });
   function fit(){ var s=Math.min(window.innerWidth/1920, window.innerHeight/1080); if(!(s>0)||!isFinite(s))s=1; deck.style.transform='scale('+s+')'; }
+  // авто-подгонка контента слайда под кадр 1920×1080 — чтобы на любом ПК/шрифте ничего не обрезалось
+  function fitSlide(sl){
+    if(!sl)return; var pad=sl.querySelector('.pad'); if(!pad)return;
+    pad.style.transform='none';
+    var dr=deck.getBoundingClientRect(), sc=dr.width/1920; if(!(sc>0))return;
+    var CT=1e9,CB=-1e9,CL=1e9,CR=-1e9, any=false;
+    [].forEach.call(pad.children,function(c){
+      var r=c.getBoundingClientRect(); if(r.width===0&&r.height===0)return; any=true;
+      var t=(r.top-dr.top)/sc,b=(r.bottom-dr.top)/sc,l=(r.left-dr.left)/sc,rr=(r.right-dr.left)/sc;
+      if(t<CT)CT=t; if(b>CB)CB=b; if(l<CL)CL=l; if(rr>CR)CR=rr;
+    });
+    if(!any)return;
+    var availB=1080-20, availR=1920-20;
+    if(CB<=availB && CR<=availR)return;
+    var sh=Math.min((availB-CT)/(CB-CT),(availR-CL)/(CR-CL),1);
+    if(sh<0.999){ pad.style.transformOrigin=CL+'px '+CT+'px'; pad.style.transform='scale('+sh.toFixed(4)+')'; }
+  }
   function stopAnim(){ if(curRaf){cancelAnimationFrame(curRaf);curRaf=null;} }
-  function show(k){ i=(k+n)%n; stopAnim(); slides.forEach(function(s,j){s.classList.toggle('on',j===i)}); var sl=slides[i], key=sl.dataset.init; if(key&&inits[key])inits[key](sl); }
-  window.addEventListener('resize',fit); window.addEventListener('load',fit);
-  if(window.ResizeObserver){new ResizeObserver(fit).observe(document.documentElement);}
+  function show(k){ i=(k+n)%n; stopAnim(); slides.forEach(function(s,j){s.classList.toggle('on',j===i)}); var sl=slides[i], key=sl.dataset.init; if(key&&inits[key])inits[key](sl); fitSlide(sl); }
+  function relayout(){ fit(); fitSlide(slides[i]); }
+  window.addEventListener('resize',relayout); window.addEventListener('load',relayout);
+  document.addEventListener('fullscreenchange',relayout);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(relayout);
+  if(window.ResizeObserver){new ResizeObserver(relayout).observe(document.documentElement);}
   addEventListener('keydown',function(e){
     var t=e.target.tagName; if(t==='INPUT'||t==='BUTTON'){ if(e.key===' ')return; }
     if(['ArrowRight',' ','PageDown'].indexOf(e.key)>=0){e.preventDefault();show(i+1);}
