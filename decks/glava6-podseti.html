@@ -12,6 +12,7 @@ html,body{height:100%;background:#dcdad4;overflow:hidden;-webkit-tap-highlight-c
 .deck{width:1920px;height:1080px;position:relative;transform-origin:center;flex:none;background:var(--paper)}
 .slide{position:absolute;inset:0;display:none;overflow:hidden;background:var(--paper)}
 .slide.on{display:block}
+.slide.scroll .pad{justify-content:flex-start;overflow:auto}
 .slide::before{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
  background-image:radial-gradient(var(--g1) .5px,transparent .5px);background-size:9px 9px}
 .pad{position:absolute;inset:0;padding:74px 96px;z-index:2;display:flex;flex-direction:column;justify-content:center}
@@ -37,6 +38,7 @@ p+p{margin-top:14px}
 .card{background:var(--paper);border:1.5px solid var(--ink);border-radius:20px;padding:30px 34px;position:relative}
 .card.inv{background:var(--ink);color:#fff}.card.inv .h-d{color:#fff}.card.inv .body{color:#e8e6e0}
 .card.plain{border-color:var(--g1);background:#fff}
+.card.sm{padding:20px 24px}
 .starburst{position:absolute;display:grid;place-items:center;color:#fff;text-align:center;font-family:var(--fd);font-weight:800;text-transform:uppercase}
 .starburst svg{position:absolute;inset:0;width:100%;height:100%}
 .starburst span{position:relative;z-index:1;line-height:1.05}
@@ -50,17 +52,24 @@ p+p{margin-top:14px}
 .ul li::before{content:"";width:12px;height:12px;background:var(--accent);border-radius:50%;margin-top:.45em}
 .ul li b{font-weight:700}
 .def{border:1.5px solid var(--ink);border-radius:20px;padding:30px 34px;position:relative;background:#fff}
+.def.dk{background:var(--ink)}.def.dk p,.def.dk .term{color:#e8e6e0}
 .def .badge{position:absolute;top:-14px;left:26px;background:var(--accent);color:#fff;font-family:var(--fd);font-weight:800;font-size:13px;letter-spacing:.1em;padding:6px 12px;border-radius:8px;text-transform:uppercase}
+.def .badge.dk{background:var(--ink)}
 .def .term{font-family:var(--fd);font-weight:800;font-size:32px;color:var(--ink);margin-bottom:10px}
 .def .term .o{color:var(--accent)}
 .def p{font-family:var(--fb);font-size:24px;line-height:1.45;color:var(--ink)}
+.def.cmp{padding:22px 28px}.def.cmp p{font-size:21px}
 .tbl{border-collapse:collapse;width:100%;font-family:var(--fm);font-size:21px}
 .tbl th,.tbl td{border:1px solid var(--g1);padding:11px 16px;text-align:center}
 .tbl th{background:var(--ink);color:#fff;font-family:var(--fd);font-size:18px}
 .tbl .hot td{background:var(--accent);color:#fff}
+.tbl tr[data-p]{cursor:pointer;transition:.12s}.tbl tr[data-p]:hover td{background:var(--g1)}
+.tbl tr[data-p].hot:hover td{background:var(--accent)}
 .tbl.sm2{font-size:17px}.tbl.sm2 th,.tbl.sm2 td{padding:7px 10px}
 .mblk{font-family:var(--fm);font-size:30px;color:var(--ink);letter-spacing:.05em;background:#fff;border:1.5px solid var(--g1);border-radius:12px;padding:16px 22px;display:inline-block}
 .mbig{font-family:var(--fm);font-weight:700;font-size:44px;color:var(--ink);letter-spacing:.05em}
+/* ---- BIT-TABLE component ---- */
+.btbl{max-width:1200px;margin:0 auto}
 .bits{display:flex;gap:8px}
 .bit{flex:1;min-width:0;text-align:center;border:1.5px solid var(--ink);border-radius:10px;padding:12px 4px;background:#fff}
 .bit .w{font-family:var(--fm);font-size:16px;color:var(--g2)}
@@ -68,7 +77,19 @@ p+p{margin-top:14px}
 .bit.on{background:var(--accent);border-color:var(--accent)}.bit.on .v{color:#fff}.bit.on .w{color:#ffdccb}
 .bits.live .bit{cursor:pointer;transition:.12s}.bits.live .bit:hover{transform:translateY(-3px)}
 .bit.net{background:var(--ink);border-color:var(--ink)}.bit.net .v{color:#fff}.bit.net .w{color:#bbb}
+.bits.sm .bit{padding:7px 3px}.bits.sm .bit .v{font-size:24px}.bits.sm .bit .w{font-size:12px}
+.brow{display:grid;grid-template-columns:120px 1fr;gap:20px;align-items:center;margin:10px 0}
+.brow .rlab{font-family:var(--fd);font-weight:800;font-size:19px;color:var(--ink);text-align:right;text-transform:uppercase;letter-spacing:.03em}
+.brow .rlab.o{color:var(--accent)}
+.b2d{font-family:var(--fm);font-size:26px;color:var(--ink);text-align:center;margin-top:8px}
+.b2d .dec{font-family:var(--fd);font-weight:800;font-size:34px;color:var(--accent)}
+.b2d .ip{color:var(--accent);font-weight:700}
+.role{font-family:var(--fd);font-weight:800;font-size:20px;color:var(--g2);text-align:center;margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+.octrow{display:flex;justify-content:center;align-items:center;gap:6px;flex-wrap:wrap}
+.octtxt{font-family:var(--fm);font-size:26px;color:var(--g2)}
 .octdot{font-family:var(--fd);font-weight:800;font-size:30px;color:var(--accent);padding:0 4px;align-self:center}
+.legrow{font-family:var(--fm);font-size:18px;color:var(--g2);text-align:center;margin-bottom:8px}
+.legrow .sq{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-1px;margin:0 3px}
 .inp{font-family:var(--fm);font-size:24px;border:1.5px solid var(--ink);border-radius:10px;padding:10px 14px;background:#fff;color:var(--ink);width:220px;text-align:center}
 .inp:focus{outline:none;border-color:var(--accent)}
 .steps{display:grid;gap:12px}
@@ -94,8 +115,9 @@ input[type=range]::-moz-range-thumb{width:34px;height:34px;border-radius:50%;bac
  .deck{transform:none!important;width:1920px;height:auto}.slide{position:relative!important;display:block!important;width:1920px;height:1080px;page-break-after:always}}
 </style></head><body>
 <div id="stage"><div class="deck" id="deck"><div class="prog" id="prog"></div>
-<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="starburst" style="left:520px;top:120px;transform:rotate(-12deg);width:160px;height:160px;font-size:21px"><svg viewBox="0 0 100 100"><path fill="var(--accent)" d="M50 2 L58 20 L78 12 L74 32 L94 36 L80 50 L94 64 L74 68 L78 88 L58 80 L50 98 L42 80 L22 88 L26 68 L6 64 L20 50 L6 36 L26 32 L22 12 L42 20 Z"/></svg><span>ШАГ ЗА ШАГОМ</span></div>
+<!-- 1 ТИТУЛ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="starburst" style="left:520px;top:120px;transform:rotate(-12deg);width:160px;height:160px;font-size:19px"><svg viewBox="0 0 100 100"><path fill="var(--accent)" d="M50 2 L58 20 L78 12 L74 32 L94 36 L80 50 L94 64 L74 68 L78 88 L58 80 L50 98 L42 80 L22 88 L26 68 L6 64 L20 50 L6 36 L26 32 L22 12 L42 20 Z"/></svg><span>ОБУЧАЕМ<br>С НУЛЯ</span></div>
   <div class="pad">
     <div class="h-d h1">РАЗБИЕНИЕ</div>
     <div class="h-d h1" style="margin-top:4px">IP-СЕТЕЙ НА</div>
@@ -103,235 +125,911 @@ input[type=range]::-moz-range-thumb{width:34px;height:34px;border-radius:50%;bac
     <div style="margin-top:34px"><span class="pill">Глава 06 · Онлайн-курс</span></div>
     <div class="mono g2c" style="margin-top:30px;font-size:22px">Ананко · Качур</div>
   </div>
-  <svg style="position:absolute;right:110px;top:210px;width:620px;height:640px;z-index:1" viewBox="0 0 300 300" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="40" y="40" width="220" height="220" rx="18"/>
-    <line x1="150" y1="40" x2="150" y2="260" stroke="var(--accent)"/><line x1="40" y1="150" x2="260" y2="150" stroke="var(--accent)"/>
-    <circle cx="95" cy="95" r="9"/><circle cx="205" cy="95" r="9"/><circle cx="95" cy="205" r="9"/><circle cx="205" cy="205" r="9"/>
+  <svg style="position:absolute;right:130px;top:250px;width:560px;height:560px;z-index:1" viewBox="0 0 300 300" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="120" y="20" width="60" height="46" rx="9" fill="#111"/><text x="150" y="49" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#FF5A1F">R</text>
+    <line x1="150" y1="66" x2="60" y2="150" stroke="var(--accent)"/><line x1="150" y1="66" x2="150" y2="150" stroke="var(--accent)"/><line x1="150" y1="66" x2="240" y2="150" stroke="var(--accent)"/>
+    <rect x="30" y="150" width="60" height="46" rx="9"/><rect x="120" y="150" width="60" height="46" rx="9"/><rect x="210" y="150" width="60" height="46" rx="9"/>
+    <circle cx="60" cy="240" r="8"/><circle cx="150" cy="240" r="8"/><circle cx="240" cy="240" r="8"/>
+    <line x1="60" y1="196" x2="60" y2="232"/><line x1="150" y1="196" x2="150" y2="232"/><line x1="240" y1="196" x2="240" y2="232"/>
   </svg>
 </section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
+
+<!-- 2 · 6.0 МОСТИК -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.0 · Мостик от главы 5</div>
+    <div class="h-d h2" style="margin-bottom:26px">У НАС УЖЕ ЕСТЬ <span class="o">ИНСТРУМЕНТ</span></div>
+    <p class="body">В прошлой главе мы научились читать адрес и маску: где <b>сеть</b>, где <b>узел</b>, как найти <b>адрес сети</b> и <b>broadcast</b>. Сегодня возьмём эту же «ручку» и разрежем одну большую сеть на несколько поменьше.</p>
+    <div class="def" style="margin-top:24px"><div class="badge">как мы помним</div><p>Граница «сеть / узел» задаётся <b>маской</b>. В CIDR она может стоять на <b>любом</b> бите. Сдвигая её вправо — <b>заимствуем биты</b> у узловой части в пользу сетевой.</p></div>
+  </div><div class="foot">6.0 · Мостик</div></section>
+
+<!-- 3 · ЦЕЛИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
   <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Цели главы</div><div class="h-d h2" style="margin-bottom:34px">ЧТО <span class="o">РАЗБЕРЁМ</span></div>
   <div class="grid g3">
-   <div class="card"><div class="h-d" style="font-size:52px;color:var(--accent)">01</div><div class="h4 h-d" style="margin:10px 0 6px">Понятие подсети</div><p class="body sm g2c">зачем и когда сегментируют сеть</p></div>
-   <div class="card inv"><div class="h-d" style="font-size:52px;color:var(--accent)">02</div><div class="h4 h-d" style="margin:10px 0 6px">Логическое разбиение</div><p class="body sm">заимствование бит · границы подсетей</p></div>
-   <div class="card"><div class="h-d" style="font-size:52px;color:var(--accent)">03</div><div class="h4 h-d" style="margin:10px 0 6px">Методы</div><p class="body sm g2c">равные подсети · VLSM · IPv6</p></div>
+   <div class="card"><div class="h-d" style="font-size:52px;color:var(--accent)">01</div><div class="h4 h-d" style="margin:10px 0 6px">Зачем сегментация</div><p class="body sm g2c">три причины дробить сеть · broadcast-домен</p></div>
+   <div class="card inv"><div class="h-d" style="font-size:52px;color:var(--accent)">02</div><div class="h4 h-d" style="margin:10px 0 6px">Механика и формулы</div><p class="body sm">заимствование бит · 2ᵇ и 2ⁿ−2 · границы подсетей</p></div>
+   <div class="card"><div class="h-d" style="font-size:52px;color:var(--accent)">03</div><div class="h4 h-d" style="margin:10px 0 6px">VLSM и IPv6</div><p class="body sm g2c">маски переменной длины · подсети IPv6</p></div>
   </div></div><div class="foot">Глава 06 · Введение</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1 · Необходимость</div><div class="h-d h2" style="margin-bottom:30px">ЗАЧЕМ <span class="o">СЕГМЕНТИРОВАТЬ</span></div>
+
+<!-- 4 · ДОРОЖНАЯ КАРТА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Дорожная карта</div><div class="h-d h2" style="margin-bottom:34px">ПУТЬ <span class="o">ГЛАВЫ</span></div>
+  <div style="display:flex;align-items:stretch;gap:0">
+   <div class="card" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">01</div><p class="body sm" style="margin-top:6px">причины</p></div>
+   <div style="display:flex;align-items:center;color:var(--accent);font-size:34px;padding:0 6px">→</div>
+   <div class="card" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">02</div><p class="body sm" style="margin-top:6px">базовое деление<br>2→4→8→50</p></div>
+   <div style="display:flex;align-items:center;color:var(--accent);font-size:34px;padding:0 6px">→</div>
+   <div class="card" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">03</div><p class="body sm" style="margin-top:6px">формулы</p></div>
+   <div style="display:flex;align-items:center;color:var(--accent);font-size:34px;padding:0 6px">→</div>
+   <div class="card" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">04</div><p class="body sm" style="margin-top:6px">по узлам</p></div>
+   <div style="display:flex;align-items:center;color:var(--accent);font-size:34px;padding:0 6px">→</div>
+   <div class="card" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">05</div><p class="body sm" style="margin-top:6px">VLSM</p></div>
+   <div style="display:flex;align-items:center;color:var(--accent);font-size:34px;padding:0 6px">→</div>
+   <div class="card inv" style="flex:1;text-align:center"><div class="h-d o" style="font-size:34px">06</div><p class="body sm" style="margin-top:6px">IPv6</p></div>
+  </div></div><div class="foot">Глава 06 · Маршрут</div></section>
+
+<!-- 5 · 6.1.1 ТРИ ПРИЧИНЫ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.1 · Необходимость</div><div class="h-d h2" style="margin-bottom:30px">ТРИ ПРИЧИНЫ <span class="o">ДРОБИТЬ</span></div>
   <div class="grid g3">
-   <div class="card"><div class="h4 h-d" style="color:var(--accent)">Производительность</div><p class="body sm" style="margin-top:8px">в больших сетях идёт конкуренция за пропускную способность. Сегменты позволяют раздать приоритеты.</p></div>
-   <div class="card"><div class="h4 h-d" style="color:var(--accent)">Администрирование</div><p class="body sm" style="margin-top:8px">меньший сегмент проще мониторить, обновлять и разграничивать доступ по отделам.</p></div>
-   <div class="card inv"><div class="h4 h-d">Меньше broadcast</div><p class="body sm" style="margin-top:8px">разбиение уменьшает широковещательный домен — главную «головную боль» больших L2-сетей.</p></div>
+   <div class="card"><div class="h4 h-d" style="color:var(--accent)">Производительность</div><p class="body sm" style="margin-top:8px">меньше конкуренция за полосу; важному трафику можно дать приоритет.</p></div>
+   <div class="card"><div class="h4 h-d" style="color:var(--accent)">Администрирование</div><p class="body sm" style="margin-top:8px">малым сегментом проще управлять и разграничивать доступ.</p></div>
+   <div class="card inv"><div class="h4 h-d">Меньше broadcast</div><p class="body sm" style="margin-top:8px">главная головная боль больших L2-сетей — широковещательный трафик.</p></div>
   </div></div><div class="foot">6.1.1 · Причины</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.1.1 · Производительность</div>
-    <div class="h-d h3" style="margin-bottom:22px">ПРИОРИТЕТ <span class='o'>ВАЖНОМУ ТРАФИКУ</span></div>
-    <p class="body sm">Пропускная способность ограничена, и каждое приложение «тянет одеяло на себя». Сегментация даёт раздать приоритеты: важное — в отдельную подсеть, оно не зависит от менее важного трафика.</p><div class="grid g2" style="margin-top:22px">
-   <div class="card"><div class="h4 h-d" style="color:var(--accent)">VoIP · голос</div><p class="body sm" style="margin-top:6px">приоритет на скорость: собеседника всегда слышно. 10-секундный обрыв речи — срыв звонка.</p></div>
-   <div class="card"><div class="h4 h-d">Обычный трафик</div><p class="body sm" style="margin-top:6px">обрабатывается медленнее — для него это не критично: лишние 10 сек выгрузки файла терпимы.</p></div>
-  </div>
+
+<!-- 6 · ПРИЧИНА 1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Производительность</div>
+    <div class="h-d h3" style="margin-bottom:22px">ПРИОРИТЕТ <span class="o">ВАЖНОМУ ТРАФИКУ</span></div>
+    <p class="body sm">Пропускная способность ограничена, а приложения-«эгоисты» тянут одеяло на себя. Разделив сети, важному трафику (например, VoIP) можно выдать приоритет — он перестаёт зависеть от второстепенного.</p>
+    <div class="def" style="margin-top:22px"><div class="badge">ключевое</div><p>10 секунд задержки при выгрузке файла — терпимо. 10 секунд тишины в голосовом звонке — это <b>сорванный звонок</b>.</p></div>
   </div><div class="foot">6.1.1 · Производительность</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.1.1 · Администрирование</div>
-    <div class="h-d h3" style="margin-bottom:22px">ОТДЕЛ = <span class='o'>ПОДСЕТЬ</span></div>
-    <p class="body">Чем меньше сегмент, тем проще с ним работать: мониторинг, устранение неполадок, обновление приложений. В организации каждый отдел — своя подсеть: целый отдел можно быстро отсечь от чужих фрагментов сети, вместо того чтобы настраивать каждое устройство по отдельности.</p>
+
+<!-- 7 · ПРИЧИНА 2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Администрирование</div>
+    <div class="h-d h3" style="margin-bottom:22px">ОТДЕЛ = <span class="o">ПОДСЕТЬ</span></div>
+    <p class="body">Чем меньше сегмент, тем проще мониторинг, поиск неполадок и обновления. Каждый отдел — своя подсеть: доступ выдают и отбирают «оптом», отрезая целый отдел на границе, а не настраивая каждое устройство по отдельности.</p>
   </div><div class="foot">6.1.1 · Администрирование</div></section>
-<section class="slide" data-init="bsmall"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.1 · Broadcast</div>
+
+<!-- 8 · ПРИЧИНА 3 постановка -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Broadcast</div>
+    <div class="h-d h3" style="margin-bottom:22px">КОГДА СЕГМЕНТАЦИЯ <span class="o">НЕ НУЖНА</span></div>
+    <p class="body sm">Маленькому офису на 15–20 устройств в приватном блоке сегментация ни к чему — broadcast там ничтожен. Дробить начинают, когда сеть разрастается.</p>
+    <div class="def" style="margin-top:22px"><div class="badge">дополнение</div><p>Приватный блок <span class="mono">192.168.0.0/16</span> называют «мелким» лишь среди приватных диапазонов. На деле это <b>65 536 адресов</b> — совсем не мало.</p></div>
+  </div><div class="foot">6.1.1 · Постановка</div></section>
+
+<!-- 9 · L2 рассылка (bsmall) -->
+<section class="slide" data-init="bsmall"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.1 · Малый сегмент</div>
     <div class="h-d h3" style="margin-bottom:6px">L2: БРОДКАСТ <span class="o">СЛЫШАТ ВСЕ</span></div>
-    <p class="body sm g2c" style="margin-bottom:14px">В сети на коммутаторах L2 широковещательный кадр от одного устройства получают и обрабатывают все. В маленьком сегменте это не проблема.</p>
+    <p class="body sm g2c" style="margin-bottom:14px">Широковещательный кадр от одного устройства получают и обрабатывают все узлы сегмента. В маленькой сети это не проблема.</p>
     <svg id="bsmallSvg" viewBox="0 0 1400 380" style="width:100%;max-width:1500px;display:block;margin:0 auto"></svg>
     <div style="text-align:center;margin-top:12px"><button class="abtn acc" id="bsmallBtn">Пустить широковещательный кадр</button></div>
+    <div class="def cmp" style="margin-top:14px;max-width:1200px;margin-left:auto;margin-right:auto"><div class="badge">под запись</div><p>Коммутатор копирует broadcast во все порты, кроме входного, и <b>остановить его не может</b>.</p></div>
   </div><div class="foot">6.1.1 · Малый сегмент</div></section>
-<section class="slide" data-init="bgrow"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.1 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">РОСТ <span class="o">ШИРОКОВЕЩАТЕЛЬНОГО</span> ТРАФИКА</div>
-    <p class="body sm g2c" style="margin-bottom:18px">Масштабируем сеть одними L2-коммутаторами. Двигай ползунок: трафик растёт даже не пропорционально числу узлов, а опережающими темпами.</p>
-    <div style="max-width:1500px;margin:0 auto">
-      <div id="bgrowBars" style="display:flex;align-items:flex-end;gap:10px;height:280px;border-bottom:2px solid var(--ink)"></div>
-      <div style="display:flex;gap:40px;align-items:center;margin-top:24px">
-        <span class="mono g2c">узлов:</span><input type="range" id="bgrowR" min="2" max="40" value="8" style="flex:2">
-        <div class="mono" id="bgrowInfo" style="flex:1;font-size:22px"></div>
-      </div>
+
+<!-- 10 · ARP -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Зачем broadcast</div>
+    <div class="h-d h3" style="margin-bottom:22px">BROADCAST НУЖЕН: <span class="o">ARP</span></div>
+    <p class="body">Протокол разрешения адресов <b>ARP</b> спрашивает broadcast'ом «у кого этот IP?» и так находит MAC-адрес соседа (подробно — в главе 4). Без широковещания устройства просто не нашли бы друг друга на канальном уровне.</p>
+    <div class="mblk" style="margin-top:22px;font-size:24px">ARP: «Кто такой 192.168.15.7? Сообщите свой MAC» → всем в сегменте</div>
+  </div><div class="foot">6.1.1 · ARP</div></section>
+
+<!-- 11 · DHCP -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Зачем broadcast</div>
+    <div class="h-d h3" style="margin-bottom:22px">BROADCAST НУЖЕН: <span class="o">DHCP</span></div>
+    <p class="body">Новое устройство ещё без адреса ищет DHCP-сервер <b>широковещательным запросом</b> (подробно — в главе 7). Значит от broadcast'а отказаться нельзя — на нём держатся базовые сервисы.</p>
+    <div class="def" style="margin-top:22px"><div class="badge">вывод</div><p>Broadcast не выключить — можно только <b>ограничить его область</b>.</p></div>
+  </div><div class="foot">6.1.1 · DHCP</div></section>
+
+<!-- 12 · ОПЕНСПЕЙС -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.1 · Аналогия</div>
+    <div class="h-d h3" style="margin-bottom:22px">ОФИС-<span class="o">ОПЕНСПЕЙС</span></div>
+    <div class="def dk" style="max-width:1400px"><div class="badge dk">аналогия · не выкидывать</div>
+      <p>Представь опенспейс без перегородок. Broadcast — это <b>крик на весь зал</b>: «эй, кто тут Иванов?». Пока в зале 10 человек — терпимо. Когда 300 и все кричат одновременно — работать невозможно.</p></div>
+    <p class="body sm g2c" style="margin-top:20px">Именно поэтому большие L2-сети «задыхаются»: шум растёт быстрее, чем число людей.</p>
+  </div><div class="foot">6.1.1 · Опенспейс</div></section>
+
+<!-- 13 · КВАДРАТИЧНЫЙ РОСТ (bgrow) -->
+<section class="slide" data-init="bgrow"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.1 · Почему рост опережающий</div>
+    <div class="h-d h3" style="margin-bottom:8px">ТРАФИК РАСТЁТ <span class="o">БЫСТРЕЕ ЧИСЛА УЗЛОВ</span></div>
+    <div class="grid g3" style="margin:6px 0 14px">
+      <div class="card sm stat"><div class="n">×2 <span class="fl">узлов</span></div><div class="c">вдвое больше устройств</div></div>
+      <div class="card sm inv stat"><div class="n" style="color:#fff">×4 <span class="fl">возни</span></div><div class="c" style="color:#ccc">работа ∝ N × N</div></div>
+      <div class="card sm stat"><div class="n">∝ N</div><div class="c">нагрузка на каждый узел</div></div>
     </div>
+    <div style="max-width:1400px;margin:0 auto">
+      <div id="bgrowBars" style="display:flex;align-items:flex-end;gap:8px;height:200px;border-bottom:2px solid var(--ink)"></div>
+      <div style="display:flex;gap:36px;align-items:center;margin-top:16px"><span class="mono g2c">узлов:</span><input type="range" id="bgrowR" min="2" max="40" value="8" style="flex:2"><div class="mono" id="bgrowInfo" style="flex:1;font-size:20px"></div></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:10px"><b>Идея дополнения:</b> кадр рождается один раз, но обрабатывают его все N узлов → суммарная работа ∝ N².</p>
   </div><div class="foot">6.1.1 · Рост трафика</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.1.1 · Зачем broadcast</div>
-    <div class="h-d h3" style="margin-bottom:22px">БРОДКАСТ <span class='o'>УБРАТЬ НЕЛЬЗЯ</span></div>
-    <p class="body sm">Коммутатор обязан передавать широковещательный кадр во все порты, кроме входного. А сети IPv4 не могут обойтись без broadcast — на нём держатся базовые сервисы:</p>
-  <div class="grid g2" style="margin-top:20px">
-   <div class="def"><div class="badge">ARP</div><p>протокол разрешения адресов — по IP-адресу находит MAC-адрес устройства.</p></div>
-   <div class="def"><div class="badge">DHCP</div><p>динамическая конфигурация узла — broadcast'ом ищет DHCP-сервер в сети.</p></div>
-  </div>
-  <p class="body sm g2c" style="margin-top:18px">Значит, broadcast не выключить — можно только <b>ограничить его область</b>.</p>
-  </div><div class="foot">6.1.1 · Зачем broadcast</div></section>
-<section class="slide" data-init="rdom"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.1 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">РЕШЕНИЕ — <span class="o">МАРШРУТИЗАТОР</span></div>
-    <p class="body sm g2c" style="margin-bottom:12px">Маршрутизатор, в отличие от коммутатора, не пропускает broadcast (оранжевый), но пропускает одноадресный трафик (синий). Так домен уменьшается.</p>
+
+<!-- 14 · РЕШЕНИЕ МАРШРУТИЗАТОР (rdom) -->
+<section class="slide" data-init="rdom"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.1 · Решение</div>
+    <div class="h-d h3" style="margin-bottom:6px">МАРШРУТИЗАТОР <span class="o">ОГРАНИЧИВАЕТ ДОМЕН</span></div>
+    <p class="body sm g2c" style="margin-bottom:10px">Маршрутизатор не пропускает broadcast (оранжевый), но пропускает одноадресный трафик (синий). Условие: все его интерфейсы — в <b>разных</b> сетях.</p>
     <svg id="rdomSvg" viewBox="0 0 1400 400" style="width:100%;max-width:1500px;display:block;margin:0 auto"></svg>
-    <div style="display:flex;gap:16px;justify-content:center;margin-top:12px">
-      <button class="abtn acc" id="rdomBcast">Пустить broadcast (оранж.)</button>
-      <button class="abtn" id="rdomUni">Пустить unicast (синий)</button>
-    </div>
-    <p class="mono" id="rdomHint" style="text-align:center;margin-top:8px;font-size:20px;color:var(--g2)"></p>
+    <div style="display:flex;gap:16px;justify-content:center;margin-top:10px"><button class="abtn acc" id="rdomBcast">Пустить broadcast</button><button class="abtn" id="rdomUni">Пустить unicast</button></div>
+    <p class="mono" id="rdomHint" style="text-align:center;margin-top:6px;font-size:19px;color:var(--g2)"></p>
   </div><div class="foot">6.1.1 · Маршрутизатор</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.1.2 · Базовое разбиение</div>
-    <div class="h-d h3" style="margin-bottom:22px">ЗАИМСТВУЕМ <span class='o'>БИТ</span></div>
-    <p class="body">Берём знакомую сеть <span class="mono">192.168.15.0</span> с маской <span class="mono">255.255.255.0</span> (<span class="mono">/24</span>). Как разбить? Поможет <b>заимствование бит</b>. Забираем один бит из узловой части в сетевую — и получаем <b>две подсети</b> с равным числом адресов.</p><div class="def" style="margin-top:22px"><div class="badge">исходное</div><p>Сейчас в узловой части 8 бит → адресов <b>Q = 2⁸ = 256</b>. Забираем 1 бит: маска станет <span class="mono">255.255.255.128</span>, префикс <b>/25</b>.</p></div>
-  </div><div class="foot">6.1.2 · Базовое разбиение</div></section>
-<section class="slide" data-init="divider"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.2 · Интерактив · главный</div>
-    <div class="h-d h3" style="margin-bottom:4px">ДЕЛИТЕЛЬ <span class="o">СЕТИ</span></div>
-    <p class="body sm g2c" style="margin-bottom:10px">Сеть <span class="mono">192.168.15.0/24</span>. Двигай ползунок «заимствованных бит» — маска, число подсетей, узлов и сами диапазоны считаются вживую.</p>
-    <div style="display:flex;gap:26px;align-items:center;margin-bottom:12px">
-      <span class="mono g2c">заимствуем бит:</span><input type="range" id="divR" min="0" max="6" value="1" style="flex:1;max-width:520px">
+
+<!-- 15 · ШТОРМ (storm) -->
+<section class="slide" data-init="storm"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.1 · Интерактив</div>
+    <div class="h-d h3" style="margin-bottom:6px">ДОМЕН И <span class="o">ШТОРМ</span></div>
+    <p class="body sm g2c" style="margin-bottom:8px">Две сети A и B. Убери маршрутизатор — и они сольются в один L2-домен: broadcast устроит шторм. Верни R1 — домен снова ограничен.</p>
+    <svg id="stormSvg" viewBox="0 0 1400 400" style="width:100%;max-width:1500px;display:block;margin:0 auto"></svg>
+    <div style="display:flex;gap:16px;justify-content:center;margin-top:8px"><button class="abtn acc" id="stormGo">Пустить broadcast</button><button class="abtn acc" id="stormR">Маршрутизатор: есть</button></div>
+    <p class="mono" id="stormHint" style="text-align:center;margin-top:6px;font-size:19px;color:var(--g2)"></p>
+  </div><div class="foot">6.1.1 · Шторм</div></section>
+
+<!-- 16 · ПОСТАНОВКА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.2 · Базовое разбиение</div>
+    <div class="h-d h3" style="margin-bottom:22px">РЕЖЕМ <span class="o">/24 НА ДВЕ /25</span></div>
+    <p class="body">Дано: сеть <span class="mono">192.168.15.0</span>, маска <span class="mono">255.255.255.0</span> (<span class="mono">/24</span>). Вопрос — как разбить её на подсети? Инструмент один: <b>заимствование бит</b> у узловой части.</p>
+    <div class="def" style="margin-top:22px"><div class="badge">идея</div><p>Забираем один старший бит узловой части в сетевую — и большая сеть распадается на <b>две равные подсети</b>.</p></div>
+  </div><div class="foot">6.1.2 · Постановка</div></section>
+
+<!-- 17 · ЭТАЖИ В ОТЕЛЕ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.2 · Аналогия</div>
+    <div class="h-d h3" style="margin-bottom:22px">ЭТАЖИ <span class="o">В ОТЕЛЕ</span></div>
+    <div class="def dk" style="max-width:1400px"><div class="badge dk">аналогия · не выкидывать</div>
+      <p>Номера в отеле: старшую цифру заняли под <b>этаж</b>, отобрав её у нумерации комнат. Теперь этажей стало <b>2</b>, но комнат на каждом — вдвое меньше. Ровно то же делает заимствование бита: больше подсетей — меньше узлов в каждой.</p></div>
+  </div><div class="foot">6.1.2 · Этажи</div></section>
+
+<!-- 18 · ИСХОДНАЯ СЕТЬ В БИТАХ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Таблица 6.1.2.1</div>
+    <div class="h-d h3" style="margin-bottom:12px">ИСХОДНАЯ СЕТЬ <span class="o">В ДВОИЧНОМ</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевая часть (24 бита) &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узловая часть (8 бит)</div>
+    <div class="mono g2c" style="text-align:center;margin-bottom:4px;font-size:19px">IP-адрес · 192.168.15.0</div>
+    <div style="display:flex;gap:12px;justify-content:center;align-items:center;max-width:1500px;margin:0 auto">
+      <div style="flex:1"><div class="bitauto smb" data-oct="11000000" data-net="8"></div><div class="b2d" style="font-size:20px">=<span class="dec" style="font-size:26px">192</span></div></div>
+      <div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="10101000" data-net="8"></div><div class="b2d" style="font-size:20px">=<span class="dec" style="font-size:26px">168</span></div></div>
+      <div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="00001111" data-net="8"></div><div class="b2d" style="font-size:20px">=<span class="dec" style="font-size:26px">15</span></div></div>
+      <div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="00000000" data-net="0"></div><div class="b2d" style="font-size:20px">=<span class="dec" style="font-size:26px">0</span></div></div>
+    </div>
+    <div class="mono g2c" style="text-align:center;margin:14px 0 4px;font-size:19px">Маска · 255.255.255.0</div>
+    <div style="display:flex;gap:12px;justify-content:center;align-items:center;max-width:1500px;margin:0 auto">
+      <div style="flex:1"><div class="bitauto smb" data-oct="11111111" data-net="0"></div></div><div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="11111111" data-net="0"></div></div><div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="11111111" data-net="0"></div></div><div class="octdot">.</div>
+      <div style="flex:1"><div class="bitauto smb" data-oct="00000000" data-net="0"></div></div>
+    </div>
+    <p class="body sm g2c" style="text-align:center;margin-top:12px">Единицы маски = сеть, нули = узлы. Граница ровно между 3-м и 4-м октетом → /24.</p>
+  </div><div class="foot">6.1.2 · Двоичный вид</div></section>
+
+<!-- 19 · ЁМКОСТЬ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.2 · Ёмкость</div><div class="h-d h3" style="margin-bottom:24px">СКОЛЬКО АДРЕСОВ <span class="o">СЕЙЧАС</span></div>
+    <div style="display:flex;gap:50px;align-items:center;justify-content:center;margin:10px 0">
+      <div class="mbig" style="font-size:60px">Q = 2<sup>8</sup> = <span class="o">256</span></div>
+    </div>
+    <p class="body" style="text-align:center;max-width:1100px;margin:14px auto 0">Узловая часть — 8 бит, значит адресов <b>Q = 2⁸ = 256</b> (формула ёмкости из главы 5). Именно эти 256 адресов мы и будем делить.</p>
+  </div><div class="foot">6.1.2 · Ёмкость</div></section>
+
+<!-- 20 · ЗАИМСТВУЕМ 1 БИТ /25 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Маска /25</div>
+    <div class="h-d h3" style="margin-bottom:14px">ЗАИМСТВУЕМ <span class="o">1 БИТ</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:12px">Старший бит 4-го октета уходит в сеть. Маска 4-го октета:</p>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узловые (7)</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="10000000" data-net="1"></div>
+      <div class="b2d"><span class="mono">10000000</span> = <span class="dec">128</span> → маска <span class="ip">255.255.255.128</span> = <span class="ip">/25</span></div></div>
+    <p class="body sm g2c" style="text-align:center;margin-top:16px">Один бит забрали в сеть → осталось <b>7</b> узловых бит на каждую подсеть.</p>
+  </div><div class="foot">6.1.2 · Маска /25</div></section>
+
+<!-- 21 · ПРАВИЛО ГРАНИЦ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.2 · Как считать</div>
+    <div class="h-d h3" style="margin-bottom:24px">ГРАНИЦЫ <span class="o">ПОДСЕТИ</span></div>
+    <div class="grid g2">
+      <div class="def"><div class="badge">адрес сети</div><p>вся <b>узловая</b> часть — <b>нули</b>. Это <b>первый</b> адрес подсети.</p></div>
+      <div class="def"><div class="badge">broadcast</div><p>вся <b>узловая</b> часть — <b>единицы</b>. Это <b>последний</b> адрес подсети.</p></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:20px">Найдя эти две границы, мы знаем всё: между ними — рабочие адреса узлов.</p>
+  </div><div class="foot">6.1.2 · Границы</div></section>
+
+<!-- 22 · СЕТЬ ПОДСЕТИ 1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Таблица 6.1.2.2</div>
+    <div class="h-d h3" style="margin-bottom:14px">ПОДСЕТЬ 1 · <span class="o">АДРЕС СЕТИ</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит=0 &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узлы=нули</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="00000000" data-net="1"></div>
+      <div class="b2d"><span class="mono">0 0000000</span> = <span class="dec">0</span> → <span class="ip">192.168.15.0/25</span></div>
+      <div class="role">адрес сети №1</div></div>
+  </div><div class="foot">6.1.2 · Сеть №1</div></section>
+
+<!-- 23 · BROADCAST ПОДСЕТИ 1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Таблица 6.1.2.3</div>
+    <div class="h-d h3" style="margin-bottom:14px">ПОДСЕТЬ 1 · <span class="o">BROADCAST</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит=0 &nbsp; <span class="sq" style="background:var(--accent)"></span>узлы=единицы</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="01111111" data-net="1"></div>
+      <div class="b2d"><span class="mono">0 1111111</span> = <span class="dec">127</span> → <span class="ip">192.168.15.127/25</span></div>
+      <div class="role">broadcast №1</div></div>
+  </div><div class="foot">6.1.2 · Broadcast №1</div></section>
+
+<!-- 24 · ИТОГ ПОДСЕТИ 1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.2 · Итог подсети 1</div><div class="h-d h3" style="margin-bottom:24px">ДИАПАЗОН <span class="o">.0 – .127</span></div>
+    <div class="grid g3">
+      <div class="card sm stat"><div class="n">.0</div><div class="c">адрес сети</div></div>
+      <div class="card sm inv stat"><div class="n" style="color:#fff">126</div><div class="c" style="color:#ccc">рабочих узлов (.1–.126)</div></div>
+      <div class="card sm stat"><div class="n">.127</div><div class="c">broadcast</div></div>
+    </div>
+    <p class="body" style="margin-top:22px">Границы найдены → всё между ними (.1 – .126) — адреса узлов. Итого блок из <b>128</b> адресов.</p>
+  </div><div class="foot">6.1.2 · Итог №1</div></section>
+
+<!-- 25 · ПЕРЕНОС БИТА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Где вторая?</div>
+    <div class="h-d h3" style="margin-bottom:14px">ПЕРЕНОС <span class="o">В СЕТЕВОЙ БИТ</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:12px">Прибавляем 1 к broadcast'у первой подсети — младшие биты «переполняются» и перенос попадает в сетевой бит.</p>
+    <div style="display:flex;gap:26px;align-items:center;justify-content:center;flex-wrap:wrap">
+      <div class="btbl" style="max-width:520px"><div class="bitauto" data-oct="01111111" data-net="1"></div><div class="b2d" style="font-size:20px">127</div></div>
+      <div style="font-size:46px;color:var(--accent)">+1 →</div>
+      <div class="btbl" style="max-width:520px"><div class="bitauto" data-oct="10000000" data-net="1"></div><div class="b2d" style="font-size:20px">128</div></div>
+    </div>
+    <p class="body sm g2c" style="text-align:center;margin-top:14px"><span class="mono">01111111 + 1 = 10000000</span> — единица «перетекла» в сетевой разряд.</p>
+  </div><div class="foot">6.1.2 · Перенос</div></section>
+
+<!-- 26 · КЛЮЧЕВАЯ МЫСЛЬ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.2 · Ключевое</div>
+    <div class="h-d h2" style="margin-bottom:24px">СМЕНИЛАСЬ <span class="o">СЕТЕВАЯ ЧАСТЬ</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">ключевое</div><p>Как только изменился <b>сетевой</b> бит — родилась <b>новая подсеть</b>, а узловая часть при этом обнулилась. Именно смена сетевой части, а не узловой, порождает следующую подсеть.</p></div>
+  </div><div class="foot">6.1.2 · Ключевое</div></section>
+
+<!-- 27 · СЕТЬ ПОДСЕТИ 2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Таблица 6.1.2.4</div>
+    <div class="h-d h3" style="margin-bottom:14px">ПОДСЕТЬ 2 · <span class="o">АДРЕС СЕТИ</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит=1 &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узлы=нули</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="10000000" data-net="1"></div>
+      <div class="b2d"><span class="mono">1 0000000</span> = <span class="dec">128</span> → <span class="ip">192.168.15.128/25</span></div>
+      <div class="role">адрес сети №2</div></div>
+  </div><div class="foot">6.1.2 · Сеть №2</div></section>
+
+<!-- 28 · BROADCAST ПОДСЕТИ 2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Таблица 6.1.2.5</div>
+    <div class="h-d h3" style="margin-bottom:14px">ПОДСЕТЬ 2 · <span class="o">BROADCAST</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит=1 &nbsp; <span class="sq" style="background:var(--accent)"></span>узлы=единицы</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="11111111" data-net="1"></div>
+      <div class="b2d"><span class="mono">1 1111111</span> = <span class="dec">255</span> → <span class="ip">192.168.15.255/25</span></div>
+      <div class="role">broadcast №2</div></div>
+  </div><div class="foot">6.1.2 · Broadcast №2</div></section>
+
+<!-- 29 · ИТОГ + СТЕППЕР (half) -->
+<section class="slide" data-init="half"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.2 · Интерактив</div>
+    <div class="h-d h3" style="margin-bottom:8px">ДВЕ ПОДСЕТИ <span class="o">/25</span> · ШАГ ЗА ШАГОМ</div>
+    <div class="split" style="display:grid;grid-template-columns:1.2fr .9fr;gap:34px;align-items:center">
+     <div>
+      <div class="legrow"><span class="sq" style="background:#111"></span>сетевой бит &nbsp; <span class="sq" style="background:var(--accent)"></span>узловые</div>
+      <div id="halfBits" class="btbl" style="max-width:820px"></div>
+      <div id="halfCap" style="text-align:center;margin-top:12px"></div>
+      <div id="halfDec" class="b2d" style="margin-top:8px"></div>
+      <p id="halfNote" class="body sm g2c" style="text-align:center;margin-top:10px;min-height:2.6em"></p>
+      <div style="display:flex;gap:14px;justify-content:center;margin-top:6px"><button class="abtn" id="halfPrev">‹ Назад</button><button class="abtn acc" id="halfNext">Дальше ›</button></div>
+     </div>
+     <div class="steps">
+      <div class="st"><div class="num">1</div><div>подсеть 1 · сеть <span class="mono">.0</span></div></div>
+      <div class="st"><div class="num">2</div><div>подсеть 1 · broadcast <span class="mono">.127</span></div></div>
+      <div class="st"><div class="num">3</div><div>перенос → подсеть 2 · сеть <span class="mono">.128</span></div></div>
+      <div class="st"><div class="num">4</div><div>подсеть 2 · broadcast <span class="mono">.255</span></div></div>
+     </div>
+    </div>
+  </div><div class="foot">6.1.2 · Степпер</div></section>
+
+<!-- 30 · 4 ДА, 3/5 НЕТ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.2 · Только степени двойки</div>
+    <div class="h-d h3" style="margin-bottom:22px">4 — <span class="o">МОЖНО</span>, 3 И 5 — НЕТ</div>
+    <p class="body sm">На <b>4</b> подсети — пожалуйста: заимствуем 2 бита. А вот на <b>3</b>, <b>5</b> или <b>6</b> ровно поделить нельзя: число подсетей всегда кратно степени двойки. Нужно 3 → берёшь 4, одна простаивает.</p>
+    <div class="def" style="margin-top:22px"><div class="badge">суммаризация</div><p>Обратная операция — <b>объединение</b> подсетей в одну. Её называют суммаризацией; это тема маршрутизации, в нашем курсе не разбирается.</p></div>
+  </div><div class="foot">6.1.2 · Степени двойки</div></section>
+
+<!-- 31 · ФОРМУЛА ПОДСЕТЕЙ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.3 · Рисунок 6.1.3.1</div>
+    <div class="h-d h3" style="margin-bottom:16px">ЧИСЛО <span class="o">ПОДСЕТЕЙ</span></div>
+    <div class="mbig" style="font-size:64px;text-align:center;margin:6px 0 20px">подсетей = 2<sup>b</sup></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:16px"><b>b</b> — число заимствованных бит. Лесенка удвоения:</p>
+    <div style="display:flex;gap:16px;justify-content:center;align-items:flex-end">
+      <div class="card sm stat" style="text-align:center"><div class="n" style="font-size:44px">2</div><div class="c">b=1</div></div>
+      <div class="card sm stat" style="text-align:center"><div class="n" style="font-size:44px">4</div><div class="c">b=2</div></div>
+      <div class="card sm inv stat" style="text-align:center"><div class="n" style="font-size:44px;color:#fff">8</div><div class="c" style="color:#ccc">b=3</div></div>
+      <div class="card sm stat" style="text-align:center"><div class="n" style="font-size:44px">16</div><div class="c">b=4</div></div>
+      <div class="card sm stat" style="text-align:center"><div class="n" style="font-size:44px">32</div><div class="c">b=5</div></div>
+    </div>
+  </div><div class="foot">6.1.3 · 2ᵇ</div></section>
+
+<!-- 32 · ФОРМУЛА УЗЛОВ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.3 · Рисунок 6.1.3.2</div>
+    <div class="h-d h3" style="margin-bottom:16px">ЧИСЛО <span class="o">УЗЛОВ</span></div>
+    <div class="mbig" style="font-size:64px;text-align:center;margin:6px 0 18px">узлов = 2<sup>h</sup> − 2</div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:16px"><b>h</b> — оставшихся узловых бит. Почему «−2»?</p>
+    <div class="def dk" style="max-width:1300px"><div class="badge dk">аналогия · не выкидывать</div><p>Два адреса всегда «служебные»: <b>табличка с названием</b> подсети (адрес сети) и <b>громкоговоритель</b> для всех сразу (broadcast). Отсюда и вычитаем 2.</p></div>
+  </div><div class="foot">6.1.3 · 2ʰ−2</div></section>
+
+<!-- 33 · СЧИТАТЬ И УЗЛЫ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.3 · Важно</div>
+    <div class="h-d h3" style="margin-bottom:22px">ДВЕ ФОРМУЛЫ <span class="o">РАБОТАЮТ ВМЕСТЕ</span></div>
+    <p class="body">Планировать нужно и по числу <b>подсетей</b>, и по числу <b>узлов</b> в каждой. Забыл про узлы — и сегмент, где формально «хватает подсетей», окажется <b>неработоспособным</b>: устройства просто не поместятся.</p>
+  </div><div class="foot">6.1.3 · Важно</div></section>
+
+<!-- 34 · РУЧКА ЗАИМСТВОВАНИЯ (divider) -->
+<section class="slide" data-init="divider"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.3 · Интерактив · главный</div>
+    <div class="h-d h3" style="margin-bottom:4px">РУЧКА <span class="o">ЗАИМСТВОВАНИЯ</span></div>
+    <p class="body sm g2c" style="margin-bottom:8px">Сеть <span class="mono">192.168.15.0/24</span>. Двигай ползунок — маска, число подсетей (2ᵇ), узлов (2⁸⁻ᵇ−2), префикс и диапазоны считаются вживую.</p>
+    <div style="display:flex;gap:26px;align-items:center;margin-bottom:10px">
+      <span class="mono g2c">заимствуем бит:</span><input type="range" id="divR" min="1" max="6" value="1" style="flex:1;max-width:520px">
       <span class="mono" id="divBits" style="font-size:26px;font-weight:700"></span>
-      <div class="mono" id="divInfo" style="font-size:20px;margin-left:auto"></div>
+      <div class="mono" id="divInfo" style="font-size:19px;margin-left:auto"></div>
     </div>
-    <div style="display:flex;height:44px;border:1.5px solid var(--ink);border-radius:12px;overflow:hidden;margin-bottom:14px" id="divBar"></div>
-    <div style="max-height:360px;overflow:auto"><table class="tbl sm2" id="divTbl"></table></div>
-  </div><div class="foot">6.1.2 · Делитель</div></section>
-<section class="slide" data-init="border"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.2 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">ГРАНИЦЫ ПОДСЕТИ · <span class="o">/25</span></div>
-    <p class="body sm g2c" style="margin-bottom:16px">Сетевой адрес — вся узловая часть в нулях; broadcast — в единицах. Жми кнопки и смотри 4-й октет по битам.</p>
-    <div id="borderBody" style="max-width:1500px;margin:0 auto"></div>
-    <div style="display:flex;gap:14px;justify-content:center;margin-top:18px">
-      <button class="abtn acc on" data-bd="net1">1-я · сеть .0</button>
-      <button class="abtn" data-bd="bc1">1-я · broadcast .127</button>
-      <button class="abtn" data-bd="net2">2-я · сеть .128</button>
-      <button class="abtn" data-bd="bc2">2-я · broadcast .255</button>
+    <div style="display:flex;height:40px;border:1.5px solid var(--ink);border-radius:12px;overflow:hidden;margin-bottom:12px" id="divBar"></div>
+    <div style="max-height:340px;overflow:auto"><table class="tbl sm2" id="divTbl"></table></div>
+  </div><div class="foot">6.1.3 · Ручка</div></section>
+
+<!-- 35 · ЗАДАЧА 4 ПОДСЕТИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.4 · Задача</div>
+    <div class="h-d h2" style="margin-bottom:24px">РАЗБИТЬ <span class="o">НА 4 ПОДСЕТИ</span></div>
+    <p class="body">Та же сеть <span class="mono">192.168.15.0/24</span>. Нужно получить <b>4</b> равные подсети. Сколько бит заимствовать и какой будет маска?</p>
+  </div><div class="foot">6.1.4 · Задача</div></section>
+
+<!-- 36 · СКОЛЬКО БИТ /26 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.4 · Маска</div>
+    <div class="h-d h3" style="margin-bottom:14px">2 БИТА <span class="o">= 4 ПОДСЕТИ</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:12px">1 бит → 2 (мало). 2 бита → 4 ✓. Маска 4-го октета:</p>
+    <div class="legrow"><span class="sq" style="background:#111"></span>2 сетевых бита &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узловые (6)</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="11000000" data-net="2"></div>
+      <div class="b2d"><span class="mono">11000000</span> = <span class="dec">192</span> → маска <span class="ip">255.255.255.192</span> = <span class="ip">/26</span></div></div>
+  </div><div class="foot">6.1.4 · Маска /26</div></section>
+
+<!-- 37 · СКОЛЬКО УЗЛОВ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.4 · Узлы</div><div class="h-d h3" style="margin-bottom:24px">УЗЛОВ <span class="o">В КАЖДОЙ /26</span></div>
+    <div class="grid g3">
+      <div class="card sm stat"><div class="n">2<sup>6</sup>=64</div><div class="c">адреса в подсети</div></div>
+      <div class="card sm inv stat"><div class="n" style="color:#fff">62</div><div class="c" style="color:#ccc">рабочих узла (64−2)</div></div>
+      <div class="card sm stat"><div class="n">64</div><div class="c">шаг блока</div></div>
     </div>
-  </div><div class="foot">6.1.2 · Границы /25</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.2 · Итог</div><div class="h-d h3" style="margin-bottom:24px">ДВЕ СЕТИ <span class="o">/25</span></div>
-  <div class="grid g2">
-   <div class="card"><div class="mono" style="font-size:30px">192.168.15.0/25</div><p class="body sm g2c" style="margin-top:8px">узлы .1 – .126 · broadcast .127</p></div>
-   <div class="card inv"><div class="mono" style="font-size:30px;color:#fff">192.168.15.128/25</div><p class="body sm" style="margin-top:8px;color:#ccc">узлы .129 – .254 · broadcast .255</p></div>
-  </div>
-  <div class="def" style="margin-top:24px"><div class="badge">почему степень двойки</div><p>Делить можно только на <b>2, 4, 8, 16…</b> — заимствуется целое число бит. Нужны 3 подсети → берём 4, одна простаивает. Обратная операция (склеить подсети) — <b>суммаризация</b>, тема маршрутизации.</p></div></div><div class="foot">6.1.2 · Итог</div></section>
-<section class="slide" data-init="formula"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.3 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:10px">ФОРМУЛЫ <span class="o">РАЗБИЕНИЯ</span></div>
-    <div style="display:flex;gap:60px;justify-content:center;margin:10px 0 20px">
-      <div class="mbig" style="font-size:52px">подсетей = 2<sup>b</sup></div>
-      <div class="mbig" style="font-size:52px">узлов = 2<sup>n</sup> − 2</div>
+    <p class="body" style="margin-top:22px">Осталось 6 узловых бит → 2⁶ = 64 адреса, из них узлов <b>64 − 2 = 62</b>. Адрес каждой следующей подсети — через <b>64</b>.</p>
+  </div><div class="foot">6.1.4 · Узлы</div></section>
+
+<!-- 38 · ПРИНЦИП 2 БИТА = НОМЕР -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.4 · Принцип</div>
+    <div class="h-d h3" style="margin-bottom:14px">2 БИТА <span class="o">= НОМЕР ПОДСЕТИ</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:10px">4-й октет = [2 сетевых бита][6 узловых]. Два старших бита перебирают номер подсети:</p>
+    <div style="display:flex;gap:18px;justify-content:center;flex-wrap:wrap">
+      <div class="card sm" style="text-align:center"><div class="mono o" style="font-size:30px">00</div><div class="body sm g2c">подсеть 1</div></div>
+      <div class="card sm" style="text-align:center"><div class="mono o" style="font-size:30px">01</div><div class="body sm g2c">подсеть 2</div></div>
+      <div class="card sm" style="text-align:center"><div class="mono o" style="font-size:30px">10</div><div class="body sm g2c">подсеть 3</div></div>
+      <div class="card sm" style="text-align:center"><div class="mono o" style="font-size:30px">11</div><div class="body sm g2c">подсеть 4</div></div>
     </div>
-    <p class="body sm g2c" style="text-align:center;margin-bottom:14px"><b>b</b> — заимствованных бит, <b>n</b> — оставшихся узловых бит. «−2» — адрес сети и broadcast.</p>
-    <div style="display:flex;gap:26px;align-items:center;justify-content:center">
-      <span class="mono g2c">b (бит под подсети):</span><input type="range" id="fR" min="0" max="8" value="2" style="width:420px">
-      <span class="mono" id="fB" style="font-size:24px;font-weight:700"></span>
+  </div><div class="foot">6.1.4 · Номер</div></section>
+
+<!-- 39 · ПОДСЕТЬ 1 (00) -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.4 · Подсеть 1</div>
+    <div class="h-d h3" style="margin-bottom:12px">НОМЕР <span class="o">00</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>2 сетевых бита &nbsp; <span class="sq" style="background:var(--accent)"></span>узлы</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="00000000" data-net="2"></div>
+      <div class="b2d"><span class="mono">00 000000</span> = <span class="dec">0</span> → <span class="ip">192.168.15.0/26</span></div></div>
+    <div class="btbl" style="max-width:900px;margin-top:10px"><div class="bitauto" data-oct="00111111" data-net="2"></div>
+      <div class="b2d"><span class="mono">00 111111</span> = <span class="dec">63</span> → broadcast <span class="ip">192.168.15.63</span></div></div>
+    <p class="body sm g2c" style="text-align:center;margin-top:12px">узлы .1 – .62</p>
+  </div><div class="foot">6.1.4 · 00</div></section>
+
+<!-- 40 · ПОДСЕТИ 2-4 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.4 · Подсети 2–4</div>
+    <div class="h-d h3" style="margin-bottom:12px">НОМЕРА <span class="o">01 · 10 · 11</span></div>
+    <div class="grid" style="gap:14px">
+      <div class="card sm" style="display:flex;align-items:center;gap:20px"><div class="mono o" style="font-size:28px;min-width:110px">01 000000</div><div class="mono" style="font-size:22px">= 64 → <b class="o">192.168.15.64/26</b> · узлы .65–.126 · bc .127</div></div>
+      <div class="card sm" style="display:flex;align-items:center;gap:20px"><div class="mono o" style="font-size:28px;min-width:110px">10 000000</div><div class="mono" style="font-size:22px">= 128 → <b class="o">192.168.15.128/26</b> · узлы .129–.190 · bc .191</div></div>
+      <div class="card sm" style="display:flex;align-items:center;gap:20px"><div class="mono o" style="font-size:28px;min-width:110px">11 000000</div><div class="mono" style="font-size:22px">= 192 → <b class="o">192.168.15.192/26</b> · узлы .193–.254 · bc .255</div></div>
     </div>
-    <div class="card inv" style="max-width:1100px;margin:22px auto 0;text-align:center"><div class="mono" id="fOut" style="font-size:26px;color:#e8e6e0"></div></div>
-  </div><div class="foot">6.1.3 · Формулы</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.4 · Пример</div><div class="h-d h3" style="margin-bottom:8px">НА 4 ПОДСЕТИ · <span class="o">/26</span></div>
-  <p class="body sm g2c" style="margin-bottom:16px">Нужно 4 подсети → заимствуем 2 бита (2² = 4). Маска 255.255.255.192, префикс /26. Узлов: 2⁶ − 2 = <b>62</b>.</p>
-  <table class="tbl"><tr><th>№</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr><tr><td>1</td><td>192.168.15.0/26</td><td>192.168.15.1 – 192.168.15.62</td><td>192.168.15.63</td></tr><tr><td>2</td><td>192.168.15.64/26</td><td>192.168.15.65 – 192.168.15.126</td><td>192.168.15.127</td></tr><tr><td>3</td><td>192.168.15.128/26</td><td>192.168.15.129 – 192.168.15.190</td><td>192.168.15.191</td></tr><tr><td>4</td><td>192.168.15.192/26</td><td>192.168.15.193 – 192.168.15.254</td><td>192.168.15.255</td></tr></table></div><div class="foot">6.1.4 · 4 подсети</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.5 · Пример</div><div class="h-d h3" style="margin-bottom:8px">НА 8 ПОДСЕТЕЙ · <span class="o">/27</span></div>
-  <p class="body sm g2c" style="margin-bottom:14px">8 подсетей → заимствуем 3 бита (2³ = 8). Маска 255.255.255.224, префикс /27. Узлов: 2⁵ − 2 = <b>30</b>.</p>
-  <table class="tbl sm2"><tr><th>№</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr><tr><td>1</td><td>192.168.15.0/27</td><td>192.168.15.1 – 192.168.15.30</td><td>192.168.15.31</td></tr><tr><td>2</td><td>192.168.15.32/27</td><td>192.168.15.33 – 192.168.15.62</td><td>192.168.15.63</td></tr><tr><td>3</td><td>192.168.15.64/27</td><td>192.168.15.65 – 192.168.15.94</td><td>192.168.15.95</td></tr><tr><td>4</td><td>192.168.15.96/27</td><td>192.168.15.97 – 192.168.15.126</td><td>192.168.15.127</td></tr><tr><td>5</td><td>192.168.15.128/27</td><td>192.168.15.129 – 192.168.15.158</td><td>192.168.15.159</td></tr><tr><td>6</td><td>192.168.15.160/27</td><td>192.168.15.161 – 192.168.15.190</td><td>192.168.15.191</td></tr><tr><td>7</td><td>192.168.15.192/27</td><td>192.168.15.193 – 192.168.15.222</td><td>192.168.15.223</td></tr><tr><td>8</td><td>192.168.15.224/27</td><td>192.168.15.225 – 192.168.15.254</td><td>192.168.15.255</td></tr></table></div><div class="foot">6.1.5 · 8 подсетей</div></section>
-<section class="slide" data-init="need"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.6 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">СКОЛЬКО НУЖНО — <span class="o">СТОЛЬКО БЕРЁМ</span></div>
-    <p class="body sm g2c" style="margin-bottom:14px">Сеть <span class="mono">192.168.0.0/16</span>. Делить можно только на степень двойки. Впиши, сколько подсетей нужно — подберём ближайшую большую.</p>
-    <div style="text-align:center;margin-bottom:16px"><span class="mono g2c">нужно подсетей: </span><input class="inp" id="needN" type="number" min="1" max="4096" value="50"></div>
-    <div id="needOut" style="max-width:1200px;margin:0 auto"></div>
-    <table class="tbl" id="needTbl" style="max-width:1000px;margin:18px auto 0"></table>
-  </div><div class="foot">6.1.6 · Подбор маски</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.6 · Расчёт</div><div class="h-d h3" style="margin-bottom:8px">50 ПОДСЕТЕЙ · АДРЕСА <span class="o">/22</span></div>
-  <p class="body sm g2c" style="margin-bottom:14px">64 сети, маска 255.255.252.0. В каждой 2¹⁰ = 1024 адреса. Адрес каждой следующей сети = +4 в 3-м октете.</p>
-  <table class="tbl"><tr><th>№</th><th>Адрес сети</th><th>Диапазон</th><th>Broadcast</th></tr>
-   <tr><td>1</td><td>192.168.0.0/22</td><td>192.168.0.1 – 192.168.3.254</td><td>192.168.3.255</td></tr>
-   <tr><td>2</td><td>192.168.4.0/22</td><td>192.168.4.1 – 192.168.7.254</td><td>192.168.7.255</td></tr>
-   <tr><td>3</td><td>192.168.8.0/22</td><td>192.168.8.1 – 192.168.11.254</td><td>192.168.11.255</td></tr>
-   <tr class="hot"><td>50</td><td>192.168.196.0/22</td><td>192.168.196.1 – 192.168.199.254</td><td>192.168.199.255</td></tr>
-   <tr><td>64</td><td>192.168.252.0/22</td><td>192.168.252.1 – 192.168.255.254</td><td>192.168.255.255</td></tr></table>
-  <p class="body sm g2c" style="margin-top:14px">Сети с .200 по .255 в 3-м октете не заняты 50 подсетями — но пригодятся для других сетей.</p></div><div class="foot">6.1.6 · Адреса 50</div></section>
-<section class="slide" data-init="hostn"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.1.7 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">РАЗБИЕНИЕ ПО <span class="o">ЧИСЛУ УЗЛОВ</span></div>
-    <p class="body sm g2c" style="margin-bottom:16px">Планируя, учитывают и число подсетей, и число узлов в каждой. Наведи на строку — подсветится. Оставляй запас на рост!</p>
-    <table class="tbl" id="hostnTbl" style="max-width:1200px;margin:0 auto"><tr><th>Префикс</th><th>Маска</th><th>Подсетей</th><th>Узлов</th></tr></table>
-    <div class="def" style="max-width:1200px;margin:18px auto 0"><div class="badge">запас</div><p>В отделе 60 устройств? Маска /26 (62 узла) — на грани. Лучше взять /25 (126), чтобы сеть не «задохнулась» при росте.</p></div>
-  </div><div class="foot">6.1.7 · По узлам</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.2 · VLSM</div>
-    <div class="h-d h3" style="margin-bottom:22px">КОГДА ПОДСЕТИ <span class='o'>РАЗНОГО РАЗМЕРА</span></div>
-    <p class="body sm">Стандартный метод считает все подсети по <b>самой большой</b> — значит все одинаковые. Но в жизни отделы разные: в одном сотрудников всё больше, в другом стабильно, в третьем меньше. Итог — где-то адресов не хватает, где-то простаивают.</p><div class="def" style="margin-top:22px"><div class="badge">под запись</div><div class="term"><span class="o">VLSM</span> · Variable Length Subnet Mask</div><p>маски подсетей <b>переменной длины</b>: внутри одной сети используем разные маски, нарезая крупный блок под фактические потребности. Эффективно, иерархично, гибко.</p></div>
+  </div><div class="foot">6.1.4 · 01·10·11</div></section>
+
+<!-- 41 · ИТОГОВАЯ ТАБЛИЦА 6.1.4.1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.4 · Таблица 6.1.4.1</div><div class="h-d h3" style="margin-bottom:16px">ЧЕТЫРЕ ПОДСЕТИ <span class="o">/26</span></div>
+    <table class="tbl"><tr><th>2 бита</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr>
+     <tr data-p="1"><td>00</td><td>192.168.15.0/26</td><td>192.168.15.1 – 192.168.15.62</td><td>192.168.15.63</td></tr>
+     <tr data-p="1"><td>01</td><td>192.168.15.64/26</td><td>192.168.15.65 – 192.168.15.126</td><td>192.168.15.127</td></tr>
+     <tr data-p="1"><td>10</td><td>192.168.15.128/26</td><td>192.168.15.129 – 192.168.15.190</td><td>192.168.15.191</td></tr>
+     <tr data-p="1"><td>11</td><td>192.168.15.192/26</td><td>192.168.15.193 – 192.168.15.254</td><td>192.168.15.255</td></tr></table>
+    <p class="body sm g2c" style="margin-top:14px">Наведи на строку — подсветится. Все блоки равны и идут через 64.</p>
+  </div><div class="foot">6.1.4 · Итог</div></section>
+
+<!-- 42 · 6.1.5 ЗАДАЧА /27 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.5 · Задача</div>
+    <div class="h-d h3" style="margin-bottom:14px">НА 8 ПОДСЕТЕЙ · <span class="o">/27</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:12px">8 подсетей → 3 бита (2³ = 8). Маска 4-го октета:</p>
+    <div class="legrow"><span class="sq" style="background:#111"></span>3 сетевых бита &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узловые (5)</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="11100000" data-net="3"></div>
+      <div class="b2d"><span class="mono">11100000</span> = <span class="dec">224</span> → маска <span class="ip">255.255.255.224</span> = <span class="ip">/27</span></div></div>
+  </div><div class="foot">6.1.5 · Маска /27</div></section>
+
+<!-- 43 · УЗЛЫ + ШАГ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.5 · Узлы и шаг</div><div class="h-d h3" style="margin-bottom:24px">ПО <span class="o">30 УЗЛОВ</span>, ШАГ 32</div>
+    <div class="grid g3">
+      <div class="card sm stat"><div class="n">2<sup>5</sup>−2</div><div class="c">= 30 узлов</div></div>
+      <div class="card sm inv stat"><div class="n" style="color:#fff">32</div><div class="c" style="color:#ccc">шаг блока</div></div>
+      <div class="card sm stat"><div class="n">000…111</div><div class="c">3 бита = счёт 0–7</div></div>
+    </div>
+    <p class="body" style="margin-top:22px">Три сетевых бита перебирают номера от <b>000</b> до <b>111</b> — как двоичный счётчик от 0 до 7.</p>
+  </div><div class="foot">6.1.5 · Узлы/шаг</div></section>
+
+<!-- 44 · ТАБЛИЦА 8 ПОДСЕТЕЙ 6.1.5.1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.5 · Таблица 6.1.5.1</div><div class="h-d h3" style="margin-bottom:12px">ВОСЕМЬ ПОДСЕТЕЙ <span class="o">/27</span></div>
+    <table class="tbl sm2"><tr><th>3 бита</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr>
+     <tr data-p="1"><td>000</td><td>192.168.15.0/27</td><td>.1 – .30</td><td>.31</td></tr>
+     <tr data-p="1"><td>001</td><td>192.168.15.32/27</td><td>.33 – .62</td><td>.63</td></tr>
+     <tr data-p="1"><td>010</td><td>192.168.15.64/27</td><td>.65 – .94</td><td>.95</td></tr>
+     <tr data-p="1"><td>011</td><td>192.168.15.96/27</td><td>.97 – .126</td><td>.127</td></tr>
+     <tr data-p="1"><td>100</td><td>192.168.15.128/27</td><td>.129 – .158</td><td>.159</td></tr>
+     <tr data-p="1"><td>101</td><td>192.168.15.160/27</td><td>.161 – .190</td><td>.191</td></tr>
+     <tr data-p="1"><td>110</td><td>192.168.15.192/27</td><td>.193 – .222</td><td>.223</td></tr>
+     <tr data-p="1"><td>111</td><td>192.168.15.224/27</td><td>.225 – .254</td><td>.255</td></tr></table>
+  </div><div class="foot">6.1.5 · 8 подсетей</div></section>
+
+<!-- 45 · ПОШАГОВЫЙ ПРОСМОТР (eight) -->
+<section class="slide" data-init="eight"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.5 · Интерактив</div>
+    <div class="h-d h3" style="margin-bottom:14px">ЛИСТАЕМ <span class="o">8 ПОДСЕТЕЙ</span></div>
+    <div class="legrow"><span class="sq" style="background:#111"></span>3 сетевых бита (счётчик) &nbsp; <span class="sq" style="background:var(--accent)"></span>узловые</div>
+    <div id="eightBits" class="btbl" style="max-width:820px"></div>
+    <div id="eightCap" class="body" style="text-align:center;margin-top:12px"></div>
+    <div id="eightDec" class="b2d" style="margin-top:8px"></div>
+    <div id="eightRange" class="mono g2c" style="text-align:center;margin-top:6px;font-size:22px"></div>
+    <div style="display:flex;gap:14px;justify-content:center;margin-top:12px"><button class="abtn" id="eightPrev">‹ Назад</button><button class="abtn acc" id="eightNext">Дальше ›</button></div>
+  </div><div class="foot">6.1.5 · Листалка</div></section>
+
+<!-- 46 · 6.1.6 ЗАДАЧА 50 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.6 · Задача</div>
+    <div class="h-d h2" style="margin-bottom:24px">НУЖНО <span class="o">50 ПОДСЕТЕЙ</span></div>
+    <p class="body">Теперь исходная сеть крупнее: <span class="mono">192.168.0.0/16</span>. Требуется <b>50</b> подсетей. 50 — не степень двойки, значит ровно не поделить. Что делать?</p>
+  </div><div class="foot">6.1.6 · Задача 50</div></section>
+
+<!-- 47 · СКЛАДЫВАНИЕ ЛИСТА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.6 · Аналогия</div>
+    <div class="h-d h3" style="margin-bottom:22px">СКЛАДЫВАНИЕ <span class="o">ЛИСТА</span></div>
+    <div class="def dk" style="max-width:1400px"><div class="badge dk">аналогия · не выкидывать</div>
+      <p>Сгибая лист бумаги пополам, получаешь 2, 4, 8, 16 частей — но никогда ровно 3. С подсетями так же: доступны только степени двойки. Нужно 50 → берём ближайшую большую, <b>64</b>.</p></div>
+  </div><div class="foot">6.1.6 · Лист</div></section>
+
+<!-- 48 · ВЫБОР МАСКИ /22 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:8px">6.1.6 · Маска</div>
+    <div class="h-d h3" style="margin-bottom:14px">64 = 2<sup>6</sup> → <span class="o">6 БИТ → /22</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:10px">Заимствуем 6 бит. Они ложатся в <b>3-й октет</b>:</p>
+    <div class="legrow"><span class="sq" style="background:#111"></span>6 заимствованных бит &nbsp; <span class="sq" style="background:#fff;border:1.5px solid #111"></span>узловые</div>
+    <div class="btbl" style="max-width:900px"><div class="bitauto" data-oct="11111100" data-net="6"></div>
+      <div class="b2d"><span class="mono">11111100</span> = <span class="dec">252</span> → маска <span class="ip">255.255.252.0</span> = <span class="ip">/22</span></div></div>
+    <p class="body sm g2c" style="text-align:center;margin-top:12px">Префикс /16 + 6 бит = <b>/22</b>.</p>
+  </div><div class="foot">6.1.6 · Маска /22</div></section>
+
+<!-- 49 · ТАБЛИЦА ПОДБОРА 6.1.6.1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.6 · Таблица 6.1.6.1</div><div class="h-d h3" style="margin-bottom:16px">ПОДБОР <span class="o">ПРЕФИКСА</span></div>
+    <table class="tbl"><tr><th>Префикс</th><th>Подсетей</th><th>Узлов в подсети</th></tr>
+     <tr data-p="1"><td>/17</td><td>2</td><td>32 766</td></tr>
+     <tr data-p="1"><td>/18</td><td>4</td><td>16 382</td></tr>
+     <tr data-p="1"><td>/19</td><td>8</td><td>8 190</td></tr>
+     <tr data-p="1"><td>/20</td><td>16</td><td>4 094</td></tr>
+     <tr data-p="1"><td>/21</td><td>32</td><td>2 046</td></tr>
+     <tr class="hot" data-p="1"><td>/22</td><td>64</td><td>1 022</td></tr></table>
+    <p class="body sm g2c" style="margin-top:14px">/22 — первая строка, где подсетей <b>≥ 50</b>. Останавливаемся на ней.</p>
+  </div><div class="foot">6.1.6 · Подбор</div></section>
+
+<!-- 50 · ЁМКОСТЬ ПОДСЕТИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.6 · Ёмкость</div><div class="h-d h3" style="margin-bottom:24px">В КАЖДОЙ <span class="o">1024 АДРЕСА</span></div>
+    <div class="grid g2">
+      <div class="card sm stat"><div class="n">2<sup>10</sup>=1024</div><div class="c">адресов (32 − 22 = 10 узловых бит)</div></div>
+      <div class="card sm inv stat"><div class="n" style="color:#fff">1022</div><div class="c" style="color:#ccc">рабочих узла (1024 − 2)</div></div>
+    </div>
+    <p class="body" style="margin-top:22px">Узловых бит осталось 10 → 2¹⁰ = <b>1024</b> адреса, узлов <b>1022</b>. Более чем достаточно для крупных сегментов.</p>
+  </div><div class="foot">6.1.6 · Ёмкость</div></section>
+
+<!-- 51 · ЛОГИКА ШАГА +4 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.6 · Шаг блока</div><div class="h-d h3" style="margin-bottom:18px">ШАГ <span class="o">+4 В 3-М ОКТЕТЕ</span></div>
+    <p class="body sm">В подсети 1024 адреса. Один октет вмещает 256 значений, значит 1024 / 256 = <b>4</b> значения 3-го октета на одну подсеть. Поэтому адрес каждой следующей сети — это <b>+4</b> в третьем октете.</p>
+    <div style="display:flex;gap:16px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+      <div class="mblk" style="font-size:24px">192.168.<span class="o">0</span>.0</div>
+      <div style="align-self:center;color:var(--accent);font-size:28px">+4→</div>
+      <div class="mblk" style="font-size:24px">192.168.<span class="o">4</span>.0</div>
+      <div style="align-self:center;color:var(--accent);font-size:28px">+4→</div>
+      <div class="mblk" style="font-size:24px">192.168.<span class="o">8</span>.0</div>
+      <div style="align-self:center;color:var(--accent);font-size:28px">+4→</div>
+      <div class="mblk" style="font-size:24px">192.168.<span class="o">12</span>.0</div>
+    </div>
+  </div><div class="foot">6.1.6 · Шаг +4</div></section>
+
+<!-- 52 · ТАБЛИЦА АДРЕСОВ 6.1.6.2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.6 · Таблица 6.1.6.2</div><div class="h-d h3" style="margin-bottom:14px">АДРЕСА ПОДСЕТЕЙ <span class="o">/22</span></div>
+    <table class="tbl"><tr><th>№</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr>
+     <tr data-p="1"><td>1</td><td>192.168.0.0/22</td><td>192.168.0.1 – 192.168.3.254</td><td>192.168.3.255</td></tr>
+     <tr data-p="1"><td>2</td><td>192.168.4.0/22</td><td>192.168.4.1 – 192.168.7.254</td><td>192.168.7.255</td></tr>
+     <tr data-p="1"><td>3</td><td>192.168.8.0/22</td><td>192.168.8.1 – 192.168.11.254</td><td>192.168.11.255</td></tr>
+     <tr data-p="1"><td>…</td><td colspan="3">… каждая следующая — +4 в 3-м октете …</td></tr>
+     <tr class="hot" data-p="1"><td>50</td><td>192.168.196.0/22</td><td>192.168.196.1 – 192.168.199.254</td><td>192.168.199.255</td></tr>
+     <tr data-p="1"><td>64</td><td>192.168.252.0/22</td><td>192.168.252.1 – 192.168.255.254</td><td>192.168.255.255</td></tr></table>
+  </div><div class="foot">6.1.6 · Адреса</div></section>
+
+<!-- 53 · ХВОСТ СВОБОДЕН -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.6 · Резерв</div>
+    <div class="h-d h3" style="margin-bottom:22px">СЕТИ 51–64 — <span class="o">РЕЗЕРВ</span></div>
+    <p class="body">Мы попросили 50, а маска дала 64. Подсети с 51-й по 64-ю (начиная с <span class="mono">192.168.200.0</span>) просто <b>не заняты</b> — это не потеря, а запас на будущий рост.</p>
+  </div><div class="foot">6.1.6 · Хвост</div></section>
+
+<!-- 54 · РАВНЫЕ УЧАСТКИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.6 · Внимание</div>
+    <div class="h-d h3" style="margin-bottom:22px">БАЗОВОЕ ДЕЛЕНИЕ — <span class="o">РОВНЫЕ КУСКИ</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">внимание</div><p>Базовый метод всегда режет сеть на <b>равные</b> подсети. Сколько именно адресов в каждой — зависит от родительской сети: например, /16 на 32 подсети даёт /21 по 2048 адресов. Размер не фиксирован — фиксирована только <b>равность</b>.</p></div>
+  </div><div class="foot">6.1.6 · Равные</div></section>
+
+<!-- 55 · ДВА ПАРАМЕТРА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.7 · По числу узлов</div>
+    <div class="h-d h3" style="margin-bottom:22px">ПЛАНИРУЕМ ПО <span class="o">ДВУМ ПАРАМЕТРАМ</span></div>
+    <div class="grid g2">
+      <div class="card"><div class="h4 h-d" style="color:var(--accent)">Число узлов</div><p class="body sm" style="margin-top:6px">сколько устройств в самом крупном сегменте — задаёт минимум узловых бит.</p></div>
+      <div class="card inv"><div class="h4 h-d">Число подсетей</div><p class="body sm" style="margin-top:6px">сколько сегментов нужно — задаёт минимум заимствованных бит.</p></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:20px">Иногда отталкиваются не от числа сетей, а от <b>числа узлов</b> в каждой.</p>
+  </div><div class="foot">6.1.7 · Два параметра</div></section>
+
+<!-- 56 · ТАБЛИЦА МАСКА↔УЗЛЫ (hostn) -->
+<section class="slide" data-init="hostn"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.1.7 · Таблица 6.1.7.1</div>
+    <div class="h-d h3" style="margin-bottom:14px">МАСКА <span class="o">↔ УЗЛЫ</span></div>
+    <p class="body sm g2c" style="margin-bottom:12px">Наведи на строку — подсветится. Подбирай префикс по нужному числу узлов.</p>
+    <table class="tbl" id="hostnTbl" style="max-width:1200px;margin:0 auto"></table>
+  </div><div class="foot">6.1.7 · Маска↔узлы</div></section>
+
+<!-- 57 · ЗАПАС НА РОСТ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.1.7 · Запас</div>
+    <div class="h-d h3" style="margin-bottom:22px">ОСТАВЛЯЙ <span class="o">ЗАПАС</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">под запись</div><p>60 устройств → /26 (62 узла) — <b>впритык</b>. Правильно взять /25 (126). Сеть, набитая под завязку, ломается от одного нового сотрудника.</p></div>
+  </div><div class="foot">6.1.7 · Запас</div></section>
+
+<!-- 58 · ПРОБЛЕМА РАВНОГО ДЕЛЕНИЯ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2 · VLSM</div>
+    <div class="h-d h3" style="margin-bottom:22px">МИНУС РАВНОГО <span class="o">ДЕЛЕНИЯ</span></div>
+    <div class="grid g2">
+      <div class="card"><div class="h4 h-d" style="color:var(--accent)">Плюс</div><p class="body sm" style="margin-top:6px">быстро и просто: одна маска на все подсети.</p></div>
+      <div class="card inv"><div class="h4 h-d">Минус</div><p class="body sm" style="margin-top:6px">все подсети одного размера — по <b>самой большой</b>. Мелким сегментам достаётся слишком много адресов.</p></div>
+    </div>
+  </div><div class="foot">6.2 · Проблема</div></section>
+
+<!-- 59 · РЕАЛЬНОСТЬ ОТДЕЛОВ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2 · Реальность</div>
+    <div class="h-d h3" style="margin-bottom:22px">ОТДЕЛЫ <span class="o">РАЗНЫЕ</span></div>
+    <p class="body">В одном отделе сотрудников всё больше, в другом стабильно, в третьем — сокращают. Если резать всех одинаково, где-то адресов <b>не хватит</b>, а где-то они будут <b>простаивать</b>. Нужен более гибкий инструмент.</p>
+  </div><div class="foot">6.2 · Отделы</div></section>
+
+<!-- 60 · ОПРЕДЕЛЕНИЕ VLSM -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2 · Определение</div>
+    <div class="h-d h3" style="margin-bottom:18px">ЧТО ТАКОЕ <span class="o">VLSM</span></div>
+    <div class="def" style="max-width:1400px"><div class="badge">под запись</div><div class="term"><span class="o">VLSM</span> · Variable Length Subnet Mask</div><p>маски подсетей <b>переменной длины</b>: внутри одной сети используем разные маски, нарезая крупный блок под фактические потребности.</p></div>
+    <ul class="ul" style="margin-top:20px">
+      <li><b>Эффективность</b> — адреса под реальный размер сегмента</li>
+      <li><b>Разные маски</b> в пределах одной сети</li>
+      <li><b>Иерархия</b> и дробление по требованиям</li>
+    </ul>
   </div><div class="foot">6.2 · VLSM</div></section>
-<section class="slide" data-init="vtopo"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.2.1 · Задача</div>
-    <div class="h-d h3" style="margin-bottom:6px">ГОЛОВНОЙ ОФИС И <span class="o">ФИЛИАЛЫ</span></div>
-    <p class="body sm g2c" style="margin-bottom:12px">Из <span class="mono">172.16.0.0/16</span> нужно 3 сети: HQ 300 узлов, Ф1 20, Ф2 70. Но каналы между маршрутизаторами — тоже сети! Значит рассчитываем <b>5</b> сетей.</p>
-    <svg id="vtopoSvg" viewBox="0 0 1400 400" style="width:100%;max-width:1500px;display:block;margin:0 auto"></svg>
+
+<!-- 61 · РАСКРОЙ ТКАНИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2 · Аналогия</div>
+    <div class="h-d h3" style="margin-bottom:22px">РАСКРОЙ <span class="o">ТКАНИ</span></div>
+    <div class="def dk" style="max-width:1400px"><div class="badge dk">аналогия · не выкидывать</div>
+      <p>Равный метод — как выдать всем <b>одинаковый отрез</b> ткани, независимо от роста. VLSM — <b>пошив по мерке</b>: каждому ровно столько, сколько нужно. Ткани уходит меньше, а сидит лучше.</p></div>
+  </div><div class="foot">6.2 · Раскрой</div></section>
+
+<!-- 62 · ТОПОЛОГИЯ (vtopo) -->
+<section class="slide" data-init="vtopo"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Топология</div>
+    <div class="h-d h3" style="margin-bottom:8px">HQ И <span class="o">ДВА ФИЛИАЛА</span></div>
+    <p class="body sm g2c" style="margin-bottom:8px">Головной офис в центре, два канала — к филиалам Ф1 и Ф2, за каждым своя LAN.</p>
+    <svg id="vtopoSvg" viewBox="0 0 1400 360" style="width:100%;max-width:1500px;display:block;margin:0 auto"></svg>
   </div><div class="foot">6.2.1 · Топология</div></section>
-<section class="slide" data-init="vlsm"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.2.1 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">СЧИТАЕМ ОТ <span class="o">БОЛЬШЕГО К МЕНЬШЕМУ</span></div>
-    <p class="body sm g2c" style="margin-bottom:14px">Для каждой сети берём ближайшую большую степень двойки по узлам. Жми «Дальше» — распределяем адреса подряд из 172.16.0.0.</p>
-    <table class="tbl" id="vlsmTbl" style="max-width:1400px;margin:0 auto"></table>
-    <div style="display:flex;gap:14px;justify-content:center;margin-top:16px"><button class="abtn acc" id="vlsmNext">Дальше ▸</button><button class="abtn" id="vlsmReset">Сброс</button></div>
-  </div><div class="foot">6.2.1 · VLSM</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.2.1 · Итог VLSM</div>
-    <div class="h-d h3" style="margin-bottom:22px">УЛОЖИЛИСЬ В <span class='o'>/22</span></div>
-    <p class="body sm">Тремя сетями и двумя каналами обошлись <b>одним блоком /22</b>. Без VLSM (равное деление) пришлось бы под каждую из 5 сетей брать по /23 (под максимум 300 узлов) — это уже 8 сетей /23, целый <span class="mono">172.16.0.0/20</span>.</p><div class="grid g2" style="margin-top:22px">
-   <div class="card"><div class="h4 h-d" style="color:var(--accent)">С VLSM</div><p class="body sm" style="margin-top:6px">маски /23, /25, /27, /30, /30 → всё в 172.16.0.0/22</p></div>
-   <div class="card inv"><div class="h4 h-d">Без VLSM</div><p class="body sm" style="margin-top:6px">5 × /23 → округляем до 8 сетей → 172.16.0.0/20 (вчетверо больше)</p></div>
-  </div>
-  </div><div class="foot">6.2.1 · Экономия</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:12px">6.3 · IPv6</div>
-    <div class="h-d h3" style="margin-bottom:22px">ПОДСЕТИ <span class='o'>IPv6</span></div>
-    <p class="body sm">Причина та же — управление трафиком. Но экономить адреса не нужно: их гигантски много. Глобальный индивидуальный адрес состоит из трёх частей:</p>
-  <div class="grid g3" style="margin-top:20px">
-   <div class="card"><div class="mono" style="font-size:26px;color:var(--accent)">48 бит</div><p class="body sm" style="margin-top:6px">глобальный префикс маршрутизации (даёт провайдер)</p></div>
-   <div class="card inv"><div class="mono" style="font-size:26px;color:var(--accent)">16 бит</div><p class="body sm" style="margin-top:6px">идентификатор подсети — им и нарезаем</p></div>
-   <div class="card"><div class="mono" style="font-size:26px;color:var(--accent)">64 бита</div><p class="body sm" style="margin-top:6px">идентификатор интерфейса</p></div>
-  </div>
-  <p class="body sm g2c" style="margin-top:18px">Локальный адрес на подсети <b>не делится</b> (живёт только в канале), делится только глобальный индивидуальный.</p>
-  </div><div class="foot">6.3 · IPv6</div></section>
-<section class="slide" data-init="v6sub"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">6.3.1 · Интерактив</div>
-    <div class="h-d h3" style="margin-bottom:6px">ЧЕРЕЗ <span class="o">ИДЕНТИФИКАТОР ПОДСЕТИ</span></div>
-    <p class="body sm g2c" style="margin-bottom:14px">Провайдер выдал префикс <span class="mono">2001:ABCD:BCDA::/48</span>. Просто подставляем 16-битный номер подсети → готовые /64. Двигай ползунок.</p>
-    <div style="display:flex;gap:26px;align-items:center;justify-content:center;margin-bottom:16px">
-      <span class="mono g2c">подсетей:</span><input type="range" id="v6R" min="1" max="8" value="5" style="width:420px"><span class="mono" id="v6N" style="font-size:24px;font-weight:700"></span>
+
+<!-- 63 · УСЛОВИЕ ЗАДАЧИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2.1 · Условие</div>
+    <div class="h-d h3" style="margin-bottom:22px">ДАНО <span class="o">172.16.0.0/16</span></div>
+    <div class="grid g3">
+      <div class="card sm stat"><div class="n">300</div><div class="c">узлов · HQ</div></div>
+      <div class="card sm stat"><div class="n">70</div><div class="c">узлов · Ф2</div></div>
+      <div class="card sm stat"><div class="n">20</div><div class="c">узлов · Ф1</div></div>
     </div>
-    <div id="v6list" class="mono" style="max-width:1100px;margin:0 auto;font-size:26px;line-height:1.7;text-align:center"></div>
-    <p class="body sm g2c" style="text-align:center;margin-top:16px">Идентификатор подсети даёт до <b>2¹⁶ = 65 536</b> подсетей /64 — этого хватает с запасом.</p>
-  </div><div class="foot">6.3.1 · Subnet ID</div></section>
-<section class="slide "><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.2 · IPv6</div><div class="h-d h3" style="margin-bottom:10px">ЧЕРЕЗ <span class="o">ИДЕНТИФИКАТОР ИНТЕРФЕЙСА</span></div>
-  <p class="body sm g2c" style="margin-bottom:16px">Можно заимствовать биты и из идентификатора интерфейса — по тому же принципу, что в IPv4, но с кратностью 4 (за раз 4 бита). Те же 5 сетей:</p>
-  <div class="mblk" style="font-size:24px;display:block;max-width:900px">2001:ABCD:BCDA:0000:<span class="o">0</span>000/68<br>2001:ABCD:BCDA:0000:<span class="o">1</span>000/68<br>2001:ABCD:BCDA:0000:<span class="o">2</span>000/68<br>2001:ABCD:BCDA:0000:<span class="o">3</span>000/68<br>2001:ABCD:BCDA:0000:<span class="o">4</span>000/68</div>
-  <div class="def" style="margin-top:20px;max-width:1200px"><div class="badge">осторожно</div><p>При делении по идентификатору интерфейса перестают работать некоторые функции IPv6 — в частности, <b>автоматическая конфигурация адреса</b>. Поэтому способ применяют редко.</p></div></div><div class="foot">6.3.2 · Interface ID</div></section>
-<section class="slide" data-init="quiz"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad">
-    <div class="eyebrow" style="margin-bottom:10px">Проверь себя</div>
+    <p class="body" style="margin-top:22px">Из блока <span class="mono">172.16.0.0/16</span> надо выделить сети под HQ (300), Ф2 (70) и Ф1 (20).</p>
+  </div><div class="foot">6.2.1 · Условие</div></section>
+
+<!-- 64 · ЛОВУШКА 1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2.1 · Ловушка</div>
+    <div class="h-d h3" style="margin-bottom:22px">КАНАЛЫ — <span class="o">ТОЖЕ СЕТИ</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">ловушка 1</div><p>Каждый линк между маршрутизаторами — <b>отдельная сеть</b> из 2 узлов. Каналов два, значит считаем не 3, а <b>5</b> сетей: HQ, Ф2, Ф1 и два канала.</p></div>
+  </div><div class="foot">6.2.1 · Ловушка 1</div></section>
+
+<!-- 65 · ЛОВУШКА 2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2.1 · Ловушка</div>
+    <div class="h-d h3" style="margin-bottom:22px">СЧИТАЕМ <span class="o">ОТ БОЛЬШЕГО</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">ловушка 2</div><p>Распределяем сети <b>от большей к меньшей</b>. Начнёшь с мелких — крупная сеть может «не влезть» в оставшийся кусок.</p></div>
+    <div class="def dk" style="max-width:1300px;margin-top:16px"><div class="badge dk">аналогия · не выкидывать</div><p>Собирая рюкзак, сначала кладут <b>крупные вещи</b>, а мелочь рассовывают в щели. Наоборот — не поместится.</p></div>
+  </div><div class="foot">6.2.1 · Ловушка 2</div></section>
+
+<!-- 66 · ПРИНЦИП ПОДБОРА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2.1 · Как считать</div>
+    <div class="h-d h3" style="margin-bottom:22px">МАСКА <span class="o">ПО ЧИСЛУ УЗЛОВ</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">как считать</div><p>Для каждой сети берём <b>ближайшую большую степень двойки</b> по числу узлов — не забывая про <b>−2</b> (адрес сети и broadcast).</p></div>
+  </div><div class="foot">6.2.1 · Принцип</div></section>
+
+<!-- 67 · РАСЧЁТ HQ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Расчёт HQ</div><div class="h-d h3" style="margin-bottom:18px">HQ · 300 УЗЛОВ → <span class="o">/23</span></div>
+    <div class="steps" style="max-width:1200px;font-size:24px">
+      <div class="st on"><div class="num">1</div><div>8 узловых бит → 2⁸ − 2 = <b>254</b> — мало для 300</div></div>
+      <div class="st on"><div class="num">2</div><div>9 узловых бит → 2⁹ − 2 = <b>510</b> ✓ хватает</div></div>
+      <div class="st on"><div class="num">3</div><div>32 − 9 = 23 → префикс <b class="mono" style="color:var(--accent)">/23</b>, адрес сети 172.16.0.0</div></div>
+    </div>
+  </div><div class="foot">6.2.1 · HQ /23</div></section>
+
+<!-- 68 · РАСЧЁТ Ф2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Расчёт Ф2</div><div class="h-d h3" style="margin-bottom:18px">Ф2 · 70 УЗЛОВ → <span class="o">/25</span></div>
+    <div class="steps" style="max-width:1200px;font-size:24px">
+      <div class="st on"><div class="num">1</div><div>6 узловых бит → 2⁶ − 2 = <b>62</b> — мало для 70</div></div>
+      <div class="st on"><div class="num">2</div><div>7 узловых бит → 2⁷ − 2 = <b>126</b> ✓ хватает</div></div>
+      <div class="st on"><div class="num">3</div><div>32 − 7 = 25 → префикс <b class="mono" style="color:var(--accent)">/25</b></div></div>
+    </div>
+  </div><div class="foot">6.2.1 · Ф2 /25</div></section>
+
+<!-- 69 · РАСЧЁТ Ф1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Расчёт Ф1</div><div class="h-d h3" style="margin-bottom:18px">Ф1 · 20 УЗЛОВ → <span class="o">/27</span></div>
+    <div class="steps" style="max-width:1200px;font-size:24px">
+      <div class="st on"><div class="num">1</div><div>5 узловых бит → 2⁵ − 2 = <b>30</b> ✓ хватает для 20</div></div>
+      <div class="st on"><div class="num">2</div><div>32 − 5 = 27 → префикс <b class="mono" style="color:var(--accent)">/27</b></div></div>
+    </div>
+  </div><div class="foot">6.2.1 · Ф1 /27</div></section>
+
+<!-- 70 · РАСЧЁТ КАНАЛОВ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Расчёт каналов</div><div class="h-d h3" style="margin-bottom:18px">КАНАЛЫ · 2 УЗЛА → <span class="o">/30</span></div>
+    <div class="steps" style="max-width:1200px;font-size:24px">
+      <div class="st on"><div class="num">1</div><div>2 узловых бита → 2² − 2 = <b>2</b> ✓ ровно два узла</div></div>
+      <div class="st on"><div class="num">2</div><div>32 − 2 = 30 → префикс <b class="mono" style="color:var(--accent)">/30</b> для обоих каналов</div></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:18px">/30 — стандартная маска для канала «точка-точка».</p>
+  </div><div class="foot">6.2.1 · Каналы /30</div></section>
+
+<!-- 71 · СВОДНАЯ ТАБЛИЦА 6.2.1.1 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Таблица 6.2.1.1</div><div class="h-d h3" style="margin-bottom:16px">СВОДКА <span class="o">МАСОК</span></div>
+    <table class="tbl"><tr><th>Сеть</th><th>Нужно узлов</th><th>Даёт маска</th><th>Префикс</th></tr>
+     <tr class="hot" data-p="1"><td>HQ</td><td>300</td><td>510</td><td>/23</td></tr>
+     <tr data-p="1"><td>Ф2</td><td>70</td><td>126</td><td>/25</td></tr>
+     <tr data-p="1"><td>Ф1</td><td>20</td><td>30</td><td>/27</td></tr>
+     <tr data-p="1"><td>Канал Ф1↔HQ</td><td>2</td><td>2</td><td>/30</td></tr>
+     <tr data-p="1"><td>Канал Ф2↔HQ</td><td>2</td><td>2</td><td>/30</td></tr></table>
+  </div><div class="foot">6.2.1 · Сводка</div></section>
+
+<!-- 72 · РАСПИСЫВАЕМ HQ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · HQ подробно</div><div class="h-d h3" style="margin-bottom:16px">HQ · <span class="o">172.16.0.0/23</span></div>
+    <div class="grid g3">
+      <div class="card sm"><div class="mono o" style="font-size:24px">172.16.0.0</div><p class="body sm g2c" style="margin-top:6px">адрес сети (узлы = нули)</p></div>
+      <div class="card sm inv"><div class="mono o" style="font-size:24px">172.16.1.255</div><p class="body sm" style="margin-top:6px;color:#ccc">broadcast (узлы = единицы)</p></div>
+      <div class="card sm"><div class="mono" style="font-size:20px">172.16.0.1 –<br>172.16.1.254</div><p class="body sm g2c" style="margin-top:6px">диапазон узлов</p></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:20px">9 узловых бит «перекрывают» и 4-й, и часть 3-го октета — поэтому broadcast попадает в <b>172.16.1.255</b>.</p>
+  </div><div class="foot">6.2.1 · HQ</div></section>
+
+<!-- 73 · Ф2, Ф1, КАНАЛЫ ВСТЫК -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Встык</div><div class="h-d h3" style="margin-bottom:14px">Ф2 · Ф1 · <span class="o">КАНАЛЫ</span></div>
+    <div class="grid" style="gap:12px">
+      <div class="card sm" style="display:flex;align-items:center;gap:16px"><div class="mono o" style="font-size:22px;min-width:210px">Ф2 172.16.2.0/25</div><div class="mono" style="font-size:20px">узлы .2.1 – .2.126 · bc .2.127</div></div>
+      <div class="card sm" style="display:flex;align-items:center;gap:16px"><div class="mono o" style="font-size:22px;min-width:210px">Ф1 172.16.2.128/27</div><div class="mono" style="font-size:20px">узлы .2.129 – .2.158 · bc .2.159</div></div>
+      <div class="card sm" style="display:flex;align-items:center;gap:16px"><div class="mono o" style="font-size:22px;min-width:210px">к1 172.16.2.160/30</div><div class="mono" style="font-size:20px">узлы .2.161 – .2.162 · bc .2.163</div></div>
+      <div class="card sm" style="display:flex;align-items:center;gap:16px"><div class="mono o" style="font-size:22px;min-width:210px">к2 172.16.2.164/30</div><div class="mono" style="font-size:20px">узлы .2.165 – .2.166 · bc .2.167</div></div>
+    </div>
+    <p class="body sm g2c" style="margin-top:16px">Каждая следующая сеть начинается ровно там, где закончилась предыдущая — без дыр.</p>
+  </div><div class="foot">6.2.1 · Встык</div></section>
+
+<!-- 74 · ИТОГОВАЯ ТАБЛИЦА 6.2.1.2 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Таблица 6.2.1.2</div><div class="h-d h3" style="margin-bottom:14px">ИТОГ <span class="o">VLSM</span></div>
+    <table class="tbl sm2"><tr><th>Сеть</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr>
+     <tr data-p="1"><td>HQ</td><td>172.16.0.0/23</td><td>172.16.0.1 – 172.16.1.254</td><td>172.16.1.255</td></tr>
+     <tr data-p="1"><td>Ф2</td><td>172.16.2.0/25</td><td>172.16.2.1 – 172.16.2.126</td><td>172.16.2.127</td></tr>
+     <tr data-p="1"><td>Ф1</td><td>172.16.2.128/27</td><td>172.16.2.129 – 172.16.2.158</td><td>172.16.2.159</td></tr>
+     <tr data-p="1"><td>Канал Ф1↔HQ</td><td>172.16.2.160/30</td><td>172.16.2.161 – 172.16.2.162</td><td>172.16.2.163</td></tr>
+     <tr data-p="1"><td>Канал Ф2↔HQ</td><td>172.16.2.164/30</td><td>172.16.2.165 – 172.16.2.166</td><td>172.16.2.167</td></tr></table>
+  </div><div class="foot">6.2.1 · Итог</div></section>
+
+<!-- 75 · СХЕМА С АДРЕСАМИ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Схема с адресами</div><div class="h-d h3" style="margin-bottom:8px">ВСЁ В <span class="o">172.16.0.0/22</span></div>
+    <svg viewBox="0 0 1400 380" style="width:100%;max-width:1500px;display:block;margin:6px auto">
+      <line x1="700" y1="200" x2="330" y2="200" stroke="#9A9A94" stroke-width="2"/><line x1="700" y1="200" x2="1070" y2="200" stroke="#9A9A94" stroke-width="2"/>
+      <rect x="630" y="150" width="140" height="100" rx="14" fill="#111"/><text x="700" y="190" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="18" fill="#fff">HQ</text><text x="700" y="220" text-anchor="middle" font-family="JetBrains Mono" font-size="13" fill="#FF5A1F">172.16.0.0/23</text>
+      <rect x="190" y="150" width="150" height="100" rx="14" fill="#fff" stroke="#111" stroke-width="2"/><text x="265" y="190" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="18">Ф1</text><text x="265" y="220" text-anchor="middle" font-family="JetBrains Mono" font-size="13" fill="#FF5A1F">172.16.2.128/27</text>
+      <rect x="1060" y="150" width="150" height="100" rx="14" fill="#fff" stroke="#111" stroke-width="2"/><text x="1135" y="190" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="18">Ф2</text><text x="1135" y="220" text-anchor="middle" font-family="JetBrains Mono" font-size="13" fill="#FF5A1F">172.16.2.0/25</text>
+      <text x="490" y="185" text-anchor="middle" font-family="JetBrains Mono" font-size="13" fill="#9A9A94">172.16.2.160/30</text>
+      <text x="890" y="185" text-anchor="middle" font-family="JetBrains Mono" font-size="13" fill="#9A9A94">172.16.2.164/30</text>
+      <text x="700" y="320" text-anchor="middle" font-family="Inter" font-size="20" fill="#111">5 сетей уместились в один блок <tspan font-weight="700" fill="#FF5A1F">172.16.0.0/22</tspan></text>
+    </svg>
+  </div><div class="foot">6.2.1 · Схема</div></section>
+
+<!-- 76 · СРАВНЕНИЕ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.2.1 · Сравнение</div>
+    <div class="h-d h3" style="margin-bottom:22px">ВЧЕТВЕРО <span class="o">ЭКОНОМНЕЕ</span></div>
+    <p class="body sm">Без VLSM все 5 сетей пришлось бы считать по максимуму — каждая /23. Округляя до степени двойки, получаем 8×/23 = целый <span class="mono">/20</span>. С VLSM хватило <span class="mono">/22</span> — в <b>четыре раза</b> меньше адресного пространства.</p>
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card"><div class="h4 h-d" style="color:var(--accent)">С VLSM</div><p class="body sm" style="margin-top:6px">маски /23, /25, /27, /30, /30 → всё в 172.16.0.0/22</p></div>
+      <div class="card inv"><div class="h4 h-d">Без VLSM</div><p class="body sm" style="margin-top:6px">5 × /23 → округляем до 8 → 172.16.0.0/20</p></div>
+    </div>
+  </div><div class="foot">6.2.1 · Экономия</div></section>
+
+<!-- 77 · ЛИНЕЙКА (vruler) -->
+<section class="slide" data-init="vruler"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.2.1 · Интерактив</div>
+    <div class="h-d h3" style="margin-bottom:10px">ЛИНЕЙКА <span class="o">АДРЕСОВ</span></div>
+    <p class="body sm g2c" style="margin-bottom:14px">Блоки HQ, Ф2, Ф1 и два канала уложены в масштабе на линейку /22. Переключи режим — сравни с равным делением.</p>
+    <div id="vrulerBar" style="display:flex;height:70px;border:1.5px solid var(--ink);border-radius:12px;overflow:hidden;max-width:1500px;margin:0 auto"></div>
+    <p id="vrulerCap" class="body sm" style="text-align:center;margin-top:16px;min-height:2.6em;max-width:1200px;margin-left:auto;margin-right:auto"></p>
+    <div style="text-align:center;margin-top:6px"><button class="abtn acc" id="vrulerTog">Показать без VLSM (/20)</button></div>
+  </div><div class="foot">6.2.1 · Линейка</div></section>
+
+<!-- 78 · ТА ЖЕ ЛОГИКА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3 · IPv6</div>
+    <div class="h-d h3" style="margin-bottom:22px">ТА ЖЕ ЛОГИКА, <span class="o">ДРУГАЯ ФИЛОСОФИЯ</span></div>
+    <p class="body">Причина резать сеть та же — управление трафиком. Но адреса IPv6 <b>экономить не нужно</b>: их гигантски много. Поэтому расчёты становятся проще, а не сложнее.</p>
+  </div><div class="foot">6.3 · IPv6</div></section>
+
+<!-- 79 · СТРУКТУРА GUA -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3 · Рисунок 6.3.1.1</div><div class="h-d h3" style="margin-bottom:20px">СТРУКТУРА <span class="o">GUA</span></div>
+    <div style="display:flex;max-width:1500px;margin:0 auto;border:1.5px solid var(--ink);border-radius:14px;overflow:hidden">
+      <div style="flex:48;background:#111;color:#fff;padding:26px 10px;text-align:center"><div class="mono" style="font-size:26px">48 бит</div><div class="body sm" style="color:#ccc;margin-top:6px">префикс провайдера</div></div>
+      <div style="flex:16;background:var(--accent);color:#fff;padding:26px 10px;text-align:center"><div class="mono" style="font-size:26px">16 бит</div><div class="body sm" style="margin-top:6px">ID подсети</div></div>
+      <div style="flex:64;background:#fff;color:#111;padding:26px 10px;text-align:center"><div class="mono" style="font-size:26px">64 бита</div><div class="body sm g2c" style="margin-top:6px">ID интерфейса</div></div>
+    </div>
+    <p class="body sm g2c" style="text-align:center;margin-top:18px">Глобальный индивидуальный адрес (GUA): нарезаем сети <b>оранжевой</b> частью — идентификатором подсети.</p>
+  </div><div class="foot">6.3 · GUA</div></section>
+
+<!-- 80 · ЛОКАЛЬНЫЙ vs ГЛОБАЛЬНЫЙ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3 · Два типа</div>
+    <div class="h-d h3" style="margin-bottom:22px">ЛОКАЛЬНЫЙ <span class="o">vs ГЛОБАЛЬНЫЙ</span></div>
+    <div class="grid g2">
+      <div class="card"><div class="h4 h-d" style="color:var(--accent)">Link-local</div><p class="body sm" style="margin-top:6px">живёт только в пределах канала. На подсети <b>не делится</b>.</p></div>
+      <div class="card inv"><div class="h4 h-d">Глобальный (GUA)</div><p class="body sm" style="margin-top:6px">маршрутизируется в интернете. Его и <b>можно</b> нарезать на подсети.</p></div>
+    </div>
+  </div><div class="foot">6.3 · Типы</div></section>
+
+<!-- 81 · ЦЕЛАЯ СТРАНА -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3 · Аналогия</div>
+    <div class="h-d h3" style="margin-bottom:22px">ЦЕЛЫЙ <span class="o">КОНТИНЕНТ</span></div>
+    <div class="def dk" style="max-width:1400px"><div class="badge dk">аналогия · не выкидывать</div>
+      <p>Если IPv4 — это тесный лоскут земли, который приходится делить по сантиметру, то IPv6 — целый <b>континент</b>. Границы проводят не ради экономии, а ради <b>порядка и удобства</b>.</p></div>
+  </div><div class="foot">6.3 · Континент</div></section>
+
+<!-- 82 · ПРОВАЙДЕР ДАЁТ /48 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3.1 · По ID подсети</div>
+    <div class="h-d h3" style="margin-bottom:22px">ПРОВАЙДЕР ДАЁТ <span class="o">/48</span></div>
+    <p class="body">Клиент получает префикс <span class="mono">/48</span> и нарезает подсети <b>16-битным идентификатором подсети</b>. Ничего вычислять не надо — просто подставляем номер и получаем готовую /64.</p>
+  </div><div class="foot">6.3.1 · /48</div></section>
+
+<!-- 83 · ПЯТЬ ПОДСЕТЕЙ /64 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.1 · Рисунок 6.3.1.2</div><div class="h-d h3" style="margin-bottom:16px">ПЯТЬ ПОДСЕТЕЙ <span class="o">/64</span></div>
+    <div class="mblk" style="font-size:28px;display:block;max-width:900px;line-height:1.7">2001:ABCD:BCDA:<span class="o">0000</span>::/64<br>2001:ABCD:BCDA:<span class="o">0001</span>::/64<br>2001:ABCD:BCDA:<span class="o">0002</span>::/64<br>2001:ABCD:BCDA:<span class="o">0003</span>::/64<br>2001:ABCD:BCDA:<span class="o">0004</span>::/64</div>
+    <p class="body sm g2c" style="margin-top:16px">Меняется только <b>оранжевый</b> разряд — идентификатор подсети.</p>
+  </div><div class="foot">6.3.1 · /64</div></section>
+
+<!-- 84 · МАСШТАБ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.1 · Масштаб</div><div class="h-d h3" style="margin-bottom:24px">СКОЛЬКО <span class="o">ВСЕГО</span></div>
+    <div class="grid g2">
+      <div class="card stat"><div class="n">2<sup>16</sup> = <span class="fl">65 536</span></div><div class="c">подсетей /64 из одного /48</div></div>
+      <div class="card inv stat"><div class="n" style="color:#fff">2<sup>64</sup></div><div class="c" style="color:#ccc">адресов в каждой подсети — больше, чем весь IPv4 (2³²)</div></div>
+    </div>
+  </div><div class="foot">6.3.1 · Масштаб</div></section>
+
+<!-- 85 · КАНАЛЫ ТОЖЕ /64 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3.1 · Проще IPv4</div>
+    <div class="h-d h3" style="margin-bottom:22px">КАНАЛЫ — <span class="o">ТОЖЕ /64</span></div>
+    <p class="body">На линки «точка-точка» в IPv6 тоже выдают полноценную <span class="mono">/64</span> — и это норма. Никаких масок /30, границ и вычитания «−2»: адресов столько, что экономить бессмысленно.</p>
+  </div><div class="foot">6.3.1 · Каналы</div></section>
+
+<!-- 86 · ID ИНТЕРФЕЙСА КРАТНОСТЬ 4 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.2 · Рисунок 6.3.2.1</div><div class="h-d h3" style="margin-bottom:18px">ЗАИМСТВУЕМ <span class="o">ПО 4 БИТА</span></div>
+    <p class="body sm g2c" style="text-align:center;margin-bottom:16px">Как в IPv4, можно занять биты у идентификатора интерфейса — но кратно 4 (один hex-разряд):</p>
+    <div style="display:flex;max-width:1200px;margin:0 auto;border:1.5px solid var(--ink);border-radius:14px;overflow:hidden">
+      <div style="flex:48;background:#111;color:#fff;padding:22px 8px;text-align:center"><div class="mono" style="font-size:22px">48</div><div class="body sm" style="color:#ccc">префикс</div></div>
+      <div style="flex:16;background:#111;color:#fff;padding:22px 8px;text-align:center"><div class="mono" style="font-size:22px">16</div><div class="body sm" style="color:#ccc">ID подсети</div></div>
+      <div style="flex:4;background:var(--accent);color:#fff;padding:22px 4px;text-align:center"><div class="mono" style="font-size:22px">4</div></div>
+      <div style="flex:60;background:#fff;color:#111;padding:22px 8px;text-align:center"><div class="mono" style="font-size:22px">60</div><div class="body sm g2c">интерфейс</div></div>
+    </div>
+    <p class="body sm g2c" style="text-align:center;margin-top:16px">48 + 16 + 4 = <b class="mono" style="color:var(--accent)">/68</b>.</p>
+  </div><div class="foot">6.3.2 · /68</div></section>
+
+<!-- 87 · ПЯТЬ СЕТЕЙ /68 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.2 · Пять сетей</div><div class="h-d h3" style="margin-bottom:16px">ПЯТЬ СЕТЕЙ <span class="o">/68</span></div>
+    <div class="mblk" style="font-size:26px;display:block;max-width:960px;line-height:1.7">2001:ABCD:BCDA:0000:<span class="o">0</span>000::/68<br>2001:ABCD:BCDA:0000:<span class="o">1</span>000::/68<br>2001:ABCD:BCDA:0000:<span class="o">2</span>000::/68<br>2001:ABCD:BCDA:0000:<span class="o">3</span>000::/68<br>2001:ABCD:BCDA:0000:<span class="o">4</span>000::/68</div>
+    <p class="body sm g2c" style="margin-top:16px">Меняется один hex-разряд идентификатора интерфейса.</p>
+  </div><div class="foot">6.3.2 · /68</div></section>
+
+<!-- 88 · ПРЕДУПРЕЖДЕНИЕ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:12px">6.3.2 · Внимание</div>
+    <div class="h-d h3" style="margin-bottom:22px">ТАК <span class="o">ПОЧТИ НЕ ДЕЛАЮТ</span></div>
+    <div class="def" style="max-width:1300px"><div class="badge">внимание</div><p>Причины две: во-первых, <b>незачем</b> — 65 536 подсетей /64 хватает с огромным запасом. Во-вторых, деление интерфейса <b>ломает автоконфигурацию</b> адреса (SLAAC).</p></div>
+  </div><div class="foot">6.3.2 · Внимание</div></section>
+
+<!-- 89 · КОНСТРУКТОР IPv6 (v6b) -->
+<section class="slide" data-init="v6b"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">6.3.1–2 · Интерактив</div>
+    <div class="h-d h3" style="margin-bottom:12px">КОНСТРУКТОР <span class="o">IPv6</span></div>
+    <div style="display:flex;gap:14px;justify-content:center;margin-bottom:16px"><button class="abtn acc on" data-v6="sub">ID подсети · /64</button><button class="abtn" data-v6="iface">ID интерфейса · /68</button></div>
+    <div id="v6bList" class="mono" style="max-width:1100px;margin:0 auto;font-size:28px;line-height:1.7;text-align:center"></div>
+    <p id="v6bNote" class="body sm g2c" style="text-align:center;margin-top:18px;min-height:2.6em;max-width:1100px;margin-left:auto;margin-right:auto"></p>
+  </div><div class="foot">6.3 · Конструктор</div></section>
+
+<!-- 90 · ВИКТОРИНА (quiz) -->
+<section class="slide" data-init="quiz"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Проверь себя</div>
     <div class="grid g2" style="align-items:start">
       <div class="card"><div class="hint" style="margin-bottom:14px">Викторина</div>
         <div class="h-d h4" id="qzQ" style="min-height:2.4em">Нажми «Старт»</div>
@@ -342,32 +1040,66 @@ input[type=range]::-moz-range-thumb{width:34px;height:34px;border-radius:50%;bac
       <div class="card inv" style="text-align:center;align-self:center"><div style="display:flex;gap:30px;justify-content:center">
         <div><div class="mono" style="font-size:15px;color:#ccc">ВЕРНО</div><div class="h-d" style="font-size:48px;color:var(--accent)" id="qzOk">0</div></div>
         <div><div class="mono" style="font-size:15px;color:#ccc">ВСЕГО</div><div class="h-d" style="font-size:48px" id="qzAll">0</div></div></div>
-        <p class="body sm" style="margin-top:14px">Кликай ответ · листай кнопками</p></div>
+        <p class="body sm" style="margin-top:14px">14 вопросов · кликай ответ · листай кнопками</p></div>
     </div>
   </div><div class="foot">Глава 06 · Викторина</div></section>
-<section class="slide scroll"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Закрепление</div><div class="h-d h3" style="margin-bottom:22px">ВОПРОСИКИ <span class="o">· КЛИКНИ КАРТОЧКУ</span></div>
-  <div class="grid g2">
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Почему нельзя разбить сеть на 3 равные подсети?</div><div class="a">Заимствуется целое число бит, а число подсетей всегда кратно степени двойки: 2, 4, 8… Под 3 берут 4, одна простаивает.</div></div>
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Сколько узлов в подсети /26?</div><div class="a">Узловых бит 32 − 26 = 6 → 2⁶ − 2 = 62 узла.</div></div>
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Зачем при VLSM считать от большего к меньшему?</div><div class="a">Большой блок последовательно нарезается на меньшие. Если начать с мелких, крупная сеть может «не влезть».</div></div>
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Почему в VLSM 5 сетей, а не 3?</div><div class="a">Каналы между маршрутизаторами — это тоже отдельные сети (по 2 узла, маска /30).</div></div>
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Чем IPv6-разбиение проще?</div><div class="a">Экономить адреса не нужно: подставляем 16-битный идентификатор подсети — до 65 536 подсетей /64.</div></div>
-   <div class="qa" onclick="this.classList.toggle('open')"><div class="q">Что ограничивает broadcast-домен?</div><div class="a">Маршрутизатор — он не пропускает широковещательный трафик, в отличие от коммутатора.</div></div>
-  </div></div><div class="foot">Глава 06 · Вопросики</div></section>
-<section class="slide scroll"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Словарь</div><div class="h-d h3" style="margin-bottom:20px">СЛОВАРЬ <span class="o">ГЛАВЫ</span></div><div class="grid g4"><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Сегментация</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">деление сети на меньшие подсети</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Заимствование бит</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">перенос бит из узловой части в сетевую</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Подсетей = 2ᵇ</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">b — число заимствованных бит</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Узлов = 2ⁿ − 2</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">n — узловых бит; −сеть, −broadcast</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Адрес сети</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">первый адрес подсети (узловая часть — нули)</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Broadcast</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">последний адрес (узловая часть — единицы)</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Префикс /N</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">число сетевых бит; больше N — меньше сеть</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Суммаризация</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">обратное: склейка подсетей в одну</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">VLSM</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">маски переменной длины внутри одной сети</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Канал L3</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">линк между маршрутизаторами — тоже сеть (/30)</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Идентификатор подсети</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">16 бит IPv6 для нарезки подсетей</p></div><div class="card plain" style="padding:16px 20px"><div class="h-d" style="font-size:20px">Идентификатор интерфейса</div><p class="body sm g2c" style="font-size:16px;margin-top:4px">64 бита IPv6; делится с кратностью 4</p></div></div></div><div class="foot">Глава 06 · Словарь</div></section>
-<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">разбиение на подсети</div></div>
-  <div class="starburst" style="left:1350px;top:200px;transform:rotate(10deg);width:150px;height:150px;font-size:20px"><svg viewBox="0 0 100 100"><path fill="var(--accent)" d="M50 2 L58 20 L78 12 L74 32 L94 36 L80 50 L94 64 L74 68 L78 88 L58 80 L50 98 L42 80 L22 88 L26 68 L6 64 L20 50 L6 36 L26 32 L22 12 L42 20 Z"/></svg><span>КУРС</span></div>
+
+<!-- 91 · СЛОВАРЬ 1/2 -->
+<section class="slide scroll"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Словарь · 1/2</div><div class="h-d h3" style="margin-bottom:20px">СЛОВАРЬ <span class="o">ГЛАВЫ</span></div>
+    <div class="grid g3">
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Сегментация</div><p class="body sm g2c" style="margin-top:4px">деление сети на меньшие подсети</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Подсеть</div><p class="body sm g2c" style="margin-top:4px">часть сети со своим диапазоном адресов</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Широковещательный домен</div><p class="body sm g2c" style="margin-top:4px">область, куда доходит broadcast</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Заимствование битов</div><p class="body sm g2c" style="margin-top:4px">перенос бит из узловой части в сетевую</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Подсетей = 2ᵇ</div><p class="body sm g2c" style="margin-top:4px">b — число заимствованных бит</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Узлов = 2ʰ − 2</div><p class="body sm g2c" style="margin-top:4px">h — узловых бит; −сеть, −broadcast</p></div>
+    </div>
+  </div><div class="foot">Глава 06 · Словарь 1/2</div></section>
+
+<!-- 92 · СЛОВАРЬ 2/2 -->
+<section class="slide scroll"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Словарь · 2/2</div><div class="h-d h3" style="margin-bottom:20px">СЛОВАРЬ <span class="o">ГЛАВЫ</span></div>
+    <div class="grid g3">
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Правило степеней двойки</div><p class="body sm g2c" style="margin-top:4px">делить можно только на 2, 4, 8, 16…</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">VLSM</div><p class="body sm g2c" style="margin-top:4px">маски переменной длины в одной сети</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Канал точка-точка /30</div><p class="body sm g2c" style="margin-top:4px">линк между роутерами — отдельная сеть на 2 узла</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">Суммаризация</div><p class="body sm g2c" style="margin-top:4px">обратное: склейка подсетей в одну</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">ID подсети IPv6</div><p class="body sm g2c" style="margin-top:4px">16 бит для нарезки подсетей /64</p></div>
+      <div class="card plain sm"><div class="h-d" style="font-size:22px">ID интерфейса IPv6</div><p class="body sm g2c" style="margin-top:4px">64 бита; делится с кратностью 4</p></div>
+    </div>
+  </div><div class="foot">Глава 06 · Словарь 2/2</div></section>
+
+<!-- 93 · РЕЗЮМЕ -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="pad"><div class="eyebrow" style="margin-bottom:10px">Резюме</div><div class="h-d h2" style="margin-bottom:30px">ЧТО МЫ <span class="o">УМЕЕМ</span></div>
+    <div style="display:flex;align-items:stretch;gap:0;flex-wrap:wrap">
+      <div class="card sm" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>Зачем</b><br>broadcast-домен</div></div>
+      <div style="display:flex;align-items:center;color:var(--accent);font-size:28px;padding:0 4px">→</div>
+      <div class="card sm" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>Механика</b><br>заимствование</div></div>
+      <div style="display:flex;align-items:center;color:var(--accent);font-size:28px;padding:0 4px">→</div>
+      <div class="card sm" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>Формулы</b><br>2ᵇ, 2ʰ−2</div></div>
+      <div style="display:flex;align-items:center;color:var(--accent);font-size:28px;padding:0 4px">→</div>
+      <div class="card sm" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>По узлам</b><br>запас на рост</div></div>
+      <div style="display:flex;align-items:center;color:var(--accent);font-size:28px;padding:0 4px">→</div>
+      <div class="card sm" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>VLSM</b><br>по мерке</div></div>
+      <div style="display:flex;align-items:center;color:var(--accent);font-size:28px;padding:0 4px">→</div>
+      <div class="card sm inv" style="flex:1;text-align:center;min-width:150px"><div class="body sm"><b>IPv6</b><br>без экономии</div></div>
+    </div>
+    <p class="body" style="margin-top:26px">Теперь ты режешь адресное пространство под нужное число подсетей и узлов — равно и через VLSM, в IPv4 и IPv6.</p>
+  </div><div class="foot">Глава 06 · Резюме</div></section>
+
+<!-- 94 · ФИНАЛ → ГЛАВА 07 -->
+<section class="slide"><div class="top"><div class="brand"><span class="lg"></span>Global Net</div><div class="mono">时不再来</div></div>
+  <div class="starburst" style="left:1360px;top:200px;transform:rotate(10deg);width:150px;height:150px;font-size:22px"><svg viewBox="0 0 100 100"><path fill="var(--accent)" d="M50 2 L58 20 L78 12 L74 32 L94 36 L80 50 L94 64 L74 68 L78 88 L58 80 L50 98 L42 80 L22 88 L26 68 L6 64 L20 50 L6 36 L26 32 L22 12 L42 20 Z"/></svg><span>ГЛАВА 07</span></div>
   <div class="pad">
-    <div class="h-d h1">СЕТЬ —</div>
-    <div class="h-d h1">ПОД <span class="o">ЗАДАЧУ</span></div>
-    <p class="body" style="margin-top:24px;max-width:32ch">Теперь ты умеешь резать адресное пространство под нужное число подсетей и узлов — равно и через VLSM, в IPv4 и IPv6.</p>
-    <div style="margin-top:30px"><span class="pill acc">Основы сетевых технологий · продолжение следует</span></div>
+    <div class="h-d h1">ДАЛЬШЕ —</div>
+    <div class="h-d h1" style="margin-top:4px">УРОВЕНЬ <span class="o">ПРИЛОЖЕНИЙ</span></div>
+    <p class="body" style="margin-top:24px;max-width:34ch">Мы нарезали сети вручную. Дальше увидим, как адреса раздаются автоматически — через DHCP, и как работают сервисы прикладного уровня.</p>
+    <div style="margin-top:30px"><span class="pill acc">Глава 07 · Уровень приложений →</span></div>
     <div class="mono g2c" style="margin-top:26px;font-size:20px">Ананко · Качур · VK · TG</div>
   </div>
-</section>
-</div></div>
+</section></div></div>
 <script>
 (function(){
 var deck=document.getElementById('deck');var slides=[].slice.call(document.querySelectorAll('.slide'));
@@ -401,8 +1133,37 @@ function animPackets(svg,pkts){stopAnim();var t0=performance.now();
 function toO(x){return [(x>>>24)&255,(x>>>16)&255,(x>>>8)&255,x&255];}
 function ipS(x){var o=toO(x);return o[0]+'.'+o[1]+'.'+o[2]+'.'+o[3];}
 function maskStr(p){var m=[0,0,0,0];for(var k=0;k<32;k++){if(k<p)m[(k/8)|0]|=(1<<(7-k%8));}return m.join('.');}
+/* ---- auto bit-row renderer: <div class="bitauto" data-oct="11000000" data-net="1"></div> ---- */
+function renderBits(root){[].forEach.call((root||document).querySelectorAll('.bitauto'),function(el){
+  if(el.dataset.done)return;el.dataset.done='1';
+  var oct=el.dataset.oct||'00000000';var net=+(el.dataset.net||0);var sm=el.classList.contains('smb');
+  var s='<div class="bits'+(sm?' sm':'')+'">';
+  for(var k=0;k<8;k++){var on=oct.charAt(k)==='1';var cls=(k<net)?'net':(on?'on':'');
+    s+='<div class="bit '+cls+'"><div class="w">'+W[k]+'</div><div class="v">'+(on?1:0)+'</div></div>';}
+  s+='</div>';el.innerHTML=s;});}
 
-/* ---- bsmall: L2 broadcast all receive ---- */
+/* ===================== INTERACTIVES ===================== */
+
+/* storm: broadcast domain with / without router */
+inits.storm=function(sl){var svg=document.getElementById('stormSvg');var hasR=true;
+ var R=[700,210],SWA=[430,210],SWB=[970,210],A=[[210,120],[210,310]],B=[[1190,120],[1190,310]];
+ function draw(){var s='<rect x="70" y="70" width="560" height="290" rx="16" fill="#FF5A1F" opacity="0.07"/><text x="150" y="100" font-family="JetBrains Mono" font-size="16" fill="#9A9A94">сеть A</text>';
+  s+='<rect x="770" y="70" width="560" height="290" rx="16" fill="#2563EB" opacity="0.06"/><text x="1250" y="100" font-family="JetBrains Mono" font-size="16" fill="#9A9A94">сеть B</text>';
+  s+='<g stroke="#9A9A94" stroke-width="2">';A.forEach(function(p){s+='<line x1="'+SWA[0]+'" y1="'+SWA[1]+'" x2="'+p[0]+'" y2="'+p[1]+'"/>';});B.forEach(function(p){s+='<line x1="'+SWB[0]+'" y1="'+SWB[1]+'" x2="'+p[0]+'" y2="'+p[1]+'"/>';});
+  if(hasR){s+='<line x1="'+SWA[0]+'" y1="'+SWA[1]+'" x2="'+R[0]+'" y2="'+R[1]+'"/><line x1="'+R[0]+'" y1="'+R[1]+'" x2="'+SWB[0]+'" y2="'+SWB[1]+'"/>';}
+  else{s+='<line x1="'+SWA[0]+'" y1="'+SWA[1]+'" x2="'+SWB[0]+'" y2="'+SWB[1]+'"/>';}s+='</g>';
+  if(hasR){s+='<rect x="'+(R[0]-56)+'" y="'+(R[1]-38)+'" width="112" height="76" rx="14" fill="#111"/><text x="'+R[0]+'" y="'+(R[1]+6)+'" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="20" fill="#FF5A1F">R1</text>';}
+  else{s+='<circle cx="'+R[0]+'" cy="'+R[1]+'" r="30" fill="#fff" stroke="#9A9A94" stroke-width="2" stroke-dasharray="5 5"/><text x="'+R[0]+'" y="'+(R[1]+42)+'" text-anchor="middle" font-family="JetBrains Mono" font-size="14" fill="#9A9A94">нет роутера</text>';}
+  s+='<rect x="'+(SWA[0]-38)+'" y="'+(SWA[1]-26)+'" width="76" height="52" rx="10" fill="#fff" stroke="#111" stroke-width="2"/><text x="'+SWA[0]+'" y="'+(SWA[1]+5)+'" text-anchor="middle" font-family="JetBrains Mono" font-size="13">SW-A</text>';
+  s+='<rect x="'+(SWB[0]-38)+'" y="'+(SWB[1]-26)+'" width="76" height="52" rx="10" fill="#fff" stroke="#111" stroke-width="2"/><text x="'+SWB[0]+'" y="'+(SWB[1]+5)+'" text-anchor="middle" font-family="JetBrains Mono" font-size="13">SW-B</text>';
+  A.forEach(function(p,k){s+=node(p[0],p[1],'A'+(k+1));});B.forEach(function(p,k){s+=node(p[0],p[1],'B'+(k+1));});s+='<g id="pk"></g>';svg.innerHTML=s;}
+ draw();
+ document.getElementById('stormR').onclick=function(){hasR=!hasR;this.textContent='Маршрутизатор: '+(hasR?'есть':'убран');this.classList.toggle('acc',hasR);draw();document.getElementById('stormHint').textContent=hasR?'R1 на месте: broadcast упрётся в него и останется в сети A.':'Роутера нет — сети слились в один L2-домен: broadcast зальёт и A, и B.';};
+ document.getElementById('stormGo').onclick=function(){draw();var pk=[{a:SWA,b:A[0],sp:.9,col:'#FF5A1F',loop:true},{a:SWA,b:A[1],sp:.9,off:-.15,col:'#FF5A1F',loop:true},{a:SWA,b:R,sp:.9,off:-.3,col:'#FF5A1F',loop:true}];
+  if(!hasR){pk.push({a:R,b:SWB,sp:.9,off:-.5,col:'#FF5A1F',loop:true},{a:SWB,b:B[0],sp:.9,off:-.7,col:'#FF5A1F',loop:true},{a:SWB,b:B[1],sp:.9,off:-.85,col:'#FF5A1F',loop:true});}
+  animPackets(svg,pk);document.getElementById('stormHint').textContent=hasR?'Broadcast заполнил только сеть A — домен ограничен.':'ШТОРМ: broadcast залил обе сети — единый домен.';};};
+
+/* bsmall: L2 broadcast all receive */
 inits.bsmall=function(sl){var svg=document.getElementById('bsmallSvg');var sw=[700,190];
  var d=[[300,80],[300,300],[1100,80],[1100,300]];
  function draw(){var s='<g stroke="#9A9A94" stroke-width="2">';d.forEach(function(p){s+='<line x1="'+sw[0]+'" y1="'+sw[1]+'" x2="'+p[0]+'" y2="'+p[1]+'"/>';});s+='</g>';
@@ -411,7 +1172,7 @@ inits.bsmall=function(sl){var svg=document.getElementById('bsmallSvg');var sw=[7
  draw();
  document.getElementById('bsmallBtn').onclick=function(){draw();animPackets(svg,d.map(function(p,k){return {a:sw,b:p,sp:1,off:-k*0.05,col:'#FF5A1F',loop:true};}));};};
 
-/* ---- bgrow: broadcast traffic grows superlinearly ---- */
+/* bgrow: broadcast traffic grows superlinearly */
 inits.bgrow=function(sl){var box=document.getElementById('bgrowBars');var r=document.getElementById('bgrowR');
  function upd(){var nn=+r.value;box.innerHTML='';var maxT=40*39;
   for(var k=2;k<=nn;k+=Math.max(1,Math.round(nn/16))){var t=k*(k-1);var h=Math.max(4,t/maxT*260);
@@ -419,7 +1180,7 @@ inits.bgrow=function(sl){var box=document.getElementById('bgrowBars');var r=docu
   document.getElementById('bgrowInfo').innerHTML='узлов <b>'+nn+'</b> → broadcast-обменов ~ <b style="color:#FF5A1F">'+(nn*(nn-1))+'</b><br>трафик ∝ n² — растёт опережающе';}
  r.oninput=upd;upd();};
 
-/* ---- rdom: router limits broadcast ---- */
+/* rdom: router limits broadcast */
 inits.rdom=function(sl){var svg=document.getElementById('rdomSvg');var R=[700,200],A=[[220,110],[220,300]],B=[[1180,110],[1180,300]],SWA=[460,200],SWB=[940,200];
  function draw(){var s='<rect x="60" y="60" width="600" height="280" rx="16" fill="#FF5A1F" opacity="0.07"/><rect x="740" y="60" width="600" height="280" rx="16" fill="#2563EB" opacity="0.06"/>';
   s+='<g stroke="#9A9A94" stroke-width="2"><line x1="'+SWA[0]+'" y1="'+SWA[1]+'" x2="'+R[0]+'" y2="'+R[1]+'"/><line x1="'+R[0]+'" y1="'+R[1]+'" x2="'+SWB[0]+'" y2="'+SWB[1]+'"/>';
@@ -434,22 +1195,36 @@ inits.rdom=function(sl){var svg=document.getElementById('rdomSvg');var R=[700,20
  document.getElementById('rdomUni').onclick=function(){draw();animPackets(svg,[{a:A[0],b:SWA,sp:1,col:'#2563EB'},{a:SWA,b:R,sp:1,off:-1,col:'#2563EB'},{a:R,b:SWB,sp:1,off:-2,col:'#2563EB'},{a:SWB,b:B[0],sp:1,off:-3,col:'#2563EB'}]);
   document.getElementById('rdomHint').textContent='Unicast маршрутизатор пропускает — дошёл до сети B.';};};
 
-/* ---- divider: subnet divider (centerpiece) ---- */
+/* half: 4th-octet stepper for two /25 */
+inits.half=function(sl){var step=0;
+ var cases=[{o:'00000000',t:'подсеть 1 · адрес сети',ip:'192.168.15.0/25',note:'узловая часть — все нули → первый адрес'},
+  {o:'01111111',t:'подсеть 1 · broadcast',ip:'192.168.15.127/25',note:'узловая часть — все единицы → последний адрес'},
+  {o:'10000000',t:'подсеть 2 · адрес сети',ip:'192.168.15.128/25',note:'+1 к broadcast → перенос в сетевой бит: родилась новая подсеть'},
+  {o:'11111111',t:'подсеть 2 · broadcast',ip:'192.168.15.255/25',note:'узловая часть снова все единицы → конец второй подсети'}];
+ function render(){var c=cases[step];var dec=parseInt(c.o,2);
+  document.getElementById('halfBits').innerHTML='<div class="bitauto" data-oct="'+c.o+'" data-net="1"></div>';renderBits(document.getElementById('halfBits'));
+  document.getElementById('halfCap').innerHTML='<span class="h-d h4">'+c.t+'</span>';
+  document.getElementById('halfDec').innerHTML='<span class="mono">'+c.o.slice(0,1)+' '+c.o.slice(1)+'</span> = <span class="dec">'+dec+'</span> → <span class="ip mono">'+c.ip+'</span>';
+  document.getElementById('halfNote').textContent=c.note;
+  [].forEach.call(sl.querySelectorAll('.steps .st'),function(st,k){st.classList.toggle('on',k===step);});}
+ render();
+ document.getElementById('halfNext').onclick=function(){step=(step+1)%4;render();};
+ document.getElementById('halfPrev').onclick=function(){step=(step+3)%4;render();};};
+
+/* divider / borrow: subnet divider slider */
 inits.divider=function(sl){var base=(192<<24)|(168<<16)|(15<<8)|0;var basePref=24,hostBase=8;var r=document.getElementById('divR');
  function upd(){var b=+r.value;var pref=basePref+b;var subs=Math.pow(2,b);var hbits=hostBase-b;var per=Math.pow(2,hbits);var usable=Math.max(per-2,0);
   document.getElementById('divBits').textContent=b;
-  document.getElementById('divInfo').innerHTML='маска <b>'+maskStr(pref)+'</b> · /'+pref+'<br>подсетей <b style="color:#FF5A1F">'+subs+'</b> · узлов в каждой <b>'+usable+'</b>';
-  // bar
+  document.getElementById('divInfo').innerHTML='маска <b>'+maskStr(pref)+'</b> · /'+pref+'<br>подсетей <b style="color:#FF5A1F">'+subs+'</b> · узлов в каждой <b>'+usable+'</b> · шаг блока '+per;
   var seg='';var show=Math.min(subs,32);for(var k=0;k<show;k++)seg+='<div style="flex:1;background:'+(k%2?'#FF5A1F':'#111')+';border-right:1px solid #fff"></div>';
   document.getElementById('divBar').innerHTML=seg;
-  // table (up to 16 rows)
   var rows='<tr><th>№</th><th>Адрес сети</th><th>Диапазон узлов</th><th>Broadcast</th></tr>';var lim=Math.min(subs,16);
   for(var k=0;k<lim;k++){var net=(base+k*per)>>>0;var bc=(net+per-1)>>>0;rows+='<tr><td>'+(k+1)+'</td><td>'+ipS(net)+'/'+pref+'</td><td>'+ipS((net+1)>>>0)+' – '+ipS((bc-1)>>>0)+'</td><td>'+ipS(bc)+'</td></tr>';}
   if(subs>lim)rows+='<tr><td>…</td><td colspan="3">ещё '+(subs-lim)+' подсет(и/ей) по тому же принципу</td></tr>';
   document.getElementById('divTbl').innerHTML=rows;}
  r.oninput=upd;upd();};
 
-/* ---- border: 4th octet bit rows for /25 boundaries ---- */
+/* border: 4th octet bit rows for /25 boundaries */
 inits.border=function(sl){var mode='net1';
  var cases={net1:{v:0,t:'1-я подсеть · адрес сети',ip:'192.168.15.0/25'},bc1:{v:127,t:'1-я подсеть · broadcast',ip:'192.168.15.127/25'},
   net2:{v:128,t:'2-я подсеть · адрес сети',ip:'192.168.15.128/25'},bc2:{v:255,t:'2-я подсеть · broadcast',ip:'192.168.15.255/25'}};
@@ -463,14 +1238,26 @@ inits.border=function(sl){var mode='net1';
  [].forEach.call(sl.querySelectorAll('[data-bd]'),function(b){b.onclick=function(){mode=b.dataset.bd;[].forEach.call(sl.querySelectorAll('[data-bd]'),function(x){x.classList.toggle('on',x===b);x.classList.toggle('acc',x===b);});render();};});
  render();};
 
-/* ---- formula calc ---- */
+/* eight: stepper over 8 subnets /27 */
+inits.eight=function(sl){var idx=0;var W3=[128,64,32,16,8,4,2,1];
+ function three(k){return ('00'+k.toString(2)).slice(-3);}
+ function render(){var net=idx*32;var bc=net+31;var oct=('0000000'+net.toString(2)).slice(-8);
+  document.getElementById('eightBits').innerHTML='<div class="bitauto" data-oct="'+oct+'" data-net="3"></div>';renderBits(document.getElementById('eightBits'));
+  document.getElementById('eightCap').innerHTML='подсеть <b>'+(idx+1)+'</b> из 8 · счётчик <span class="mono o">'+three(idx)+'</span>';
+  document.getElementById('eightDec').innerHTML='<span class="mono">'+three(idx)+' '+oct.slice(3)+'</span> = <span class="dec">'+net+'</span> → <span class="ip mono">192.168.15.'+net+'/27</span>';
+  document.getElementById('eightRange').innerHTML='узлы .'+(net+1)+' – .'+(bc-1)+' · broadcast .'+bc;}
+ render();
+ document.getElementById('eightNext').onclick=function(){idx=(idx+1)%8;render();};
+ document.getElementById('eightPrev').onclick=function(){idx=(idx+7)%8;render();};};
+
+/* formula calc */
 inits.formula=function(sl){var r=document.getElementById('fR');
  function upd(){var b=+r.value;var hbits=8-b;var subs=Math.pow(2,b);var usable=Math.max(Math.pow(2,hbits)-2,0);var pref=24+b;
   document.getElementById('fB').textContent=b;
   document.getElementById('fOut').innerHTML='b = '+b+' → подсетей 2<sup>'+b+'</sup> = <b style="color:#FF5A1F">'+subs+'</b> · осталось узловых бит '+hbits+' → узлов 2<sup>'+hbits+'</sup> − 2 = <b style="color:#FF5A1F">'+usable+'</b> · маска /'+pref;}
  r.oninput=upd;upd();};
 
-/* ---- need: pick mask for N subnets from /16 ---- */
+/* need: pick mask for N subnets from /16 */
 inits.need=function(sl){var inp=document.getElementById('needN');
  function upd(){var need=parseInt(inp.value,10);if(isNaN(need)||need<1)need=1;
   var b=0;while(Math.pow(2,b)<need)b++;var subs=Math.pow(2,b);var pref=16+b;var hbits=32-pref;var usable=Math.pow(2,hbits)-2;
@@ -479,14 +1266,13 @@ inits.need=function(sl){var inp=document.getElementById('needN');
   document.getElementById('needTbl').innerHTML=rows;}
  inp.oninput=upd;upd();};
 
-/* ---- hostn: prefix vs hosts table ---- */
+/* hostn: prefix vs hosts table */
 inits.hostn=function(sl){var t=document.getElementById('hostnTbl');
  var rows='<tr><th>Префикс</th><th>Маска</th><th>Подсетей</th><th>Узлов</th></tr>';
- [[25,2,126],[26,4,62],[27,8,30],[28,16,14],[29,32,6],[30,64,2]].forEach(function(x){rows+='<tr data-h="1"><td>/'+x[0]+'</td><td>'+maskStr(x[0])+'</td><td>'+x[1]+'</td><td>'+x[2]+'</td></tr>';});
- t.innerHTML=rows;
- [].forEach.call(t.querySelectorAll('tr[data-h]'),function(tr){tr.style.cursor='pointer';tr.onmouseenter=function(){tr.classList.add('hot');};tr.onmouseleave=function(){tr.classList.remove('hot');};tr.onclick=function(){tr.classList.toggle('hot');};});};
+ [[25,2,126],[26,4,62],[27,8,30],[28,16,14],[29,32,6],[30,64,2]].forEach(function(x){rows+='<tr data-p="1"><td>/'+x[0]+'</td><td>'+maskStr(x[0])+'</td><td>'+x[1]+'</td><td>'+x[2]+'</td></tr>';});
+ t.innerHTML=rows;};
 
-/* ---- vtopo: VLSM topology ---- */
+/* vtopo: VLSM topology */
 inits.vtopo=function(sl){var svg=document.getElementById('vtopoSvg');
  var s='<g stroke="#9A9A94" stroke-width="2"><line x1="700" y1="200" x2="300" y2="200"/><line x1="700" y1="200" x2="1100" y2="200"/></g>';
  s+='<rect x="640" y="150" width="120" height="100" rx="14" fill="#111"/><text x="700" y="195" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="18" fill="#fff">HQ</text><text x="700" y="222" text-anchor="middle" font-family="JetBrains Mono" font-size="14" fill="#FF5A1F">300</text>';
@@ -497,7 +1283,7 @@ inits.vtopo=function(sl){var svg=document.getElementById('vtopoSvg');
  s+='<text x="700" y="330" text-anchor="middle" font-family="Inter" font-size="20" fill="#111">3 сети + 2 канала = <tspan font-weight="700" fill="#FF5A1F">5 сетей</tspan></text>';
  svg.innerHTML=s;};
 
-/* ---- vlsm stepper ---- */
+/* vlsm stepper */
 inits.vlsm=function(sl){var step=0;
  var rows=[['HQ, головной офис','300','510','/23','172.16.0.0/23','172.16.0.1 – 172.16.1.254','172.16.1.255'],
   ['Ф2, филиал №2','70','126','/25','172.16.2.0/25','172.16.2.1 – 172.16.2.126','172.16.2.127'],
@@ -511,27 +1297,52 @@ inits.vlsm=function(sl){var step=0;
  document.getElementById('vlsmNext').onclick=function(){if(step<rows.length)step++;render();};
  document.getElementById('vlsmReset').onclick=function(){step=0;render();};};
 
-/* ---- v6sub: IPv6 subnet id ---- */
+/* vruler: VLSM ruler on /22 */
+inits.vruler=function(sl){var withV=true;
+ var blocks=[{n:'HQ /23',f:512,c:'#111'},{n:'Ф2 /25',f:128,c:'#FF5A1F'},{n:'Ф1 /27',f:32,c:'#2563EB'},{n:'к1 /30',f:4,c:'#0f9d58'},{n:'к2 /30',f:4,c:'#7c3aed'},{n:'резерв',f:1024-512-128-32-8,c:'#E7E5E0'}];
+ var total=1024;
+ function render(){var box=document.getElementById('vrulerBar');
+  if(withV){box.innerHTML=blocks.map(function(b){return '<div style="width:'+(b.f/total*100)+'%;background:'+b.c+';color:'+(b.c==='#E7E5E0'?'#9A9A94':'#fff')+';font-family:JetBrains Mono;font-size:13px;display:flex;align-items:center;justify-content:center;padding:14px 2px;overflow:hidden;white-space:nowrap">'+b.n+'</div>';}).join('');
+   document.getElementById('vrulerCap').innerHTML='<b>С VLSM:</b> всё умещается в один блок <span class="mono o">172.16.0.0/22</span> (1024 адреса), ещё и резерв остаётся.';}
+  else{var s='';for(var k=0;k<8;k++){s+='<div style="width:12.5%;background:'+(k<5?'#111':'#E7E5E0')+';color:'+(k<5?'#fff':'#9A9A94')+';font-family:JetBrains Mono;font-size:13px;display:flex;align-items:center;justify-content:center;padding:14px 2px;border-right:1px solid #fff">'+(k<5?'сеть '+(k+1)+' /23':'—')+'</div>';}box.innerHTML=s;
+   document.getElementById('vrulerCap').innerHTML='<b>Без VLSM:</b> каждая из 5 сетей = /23 (под максимум 300), округляем до 8×/23 = <span class="mono o">172.16.0.0/20</span> — вчетверо больше.';}}
+ render();
+ document.getElementById('vrulerTog').onclick=function(){withV=!withV;this.textContent=withV?'Показать без VLSM (/20)':'Показать с VLSM (/22)';render();};};
+
+/* v6sub: IPv6 subnet id slider */
 inits.v6sub=function(sl){var r=document.getElementById('v6R');
  function upd(){var nn=+r.value;document.getElementById('v6N').textContent=nn;var s='';
   for(var k=0;k<nn;k++){var id=('000'+k).slice(-4);s+='2001:ABCD:BCDA:<span class="o">'+id+'</span>::/64<br>';}
   document.getElementById('v6list').innerHTML=s;}
  r.oninput=upd;upd();};
 
-/* ---- quiz ---- */
+/* v6b: toggle subnet-id /64 vs interface-id /68 */
+inits.v6b=function(sl){var mode='sub';
+ function render(){var s='';
+  if(mode==='sub'){for(var k=0;k<5;k++){var id=('000'+k).slice(-4);s+='2001:ABCD:BCDA:<span class="o">'+id+'</span>::/64<br>';}
+   document.getElementById('v6bNote').innerHTML='Идентификатор подсети (16 бит) → до <b>2¹⁶ = 65 536</b> подсетей /64. Штатный способ.';}
+  else{for(var k=0;k<5;k++){s+='2001:ABCD:BCDA:0000:<span class="o">'+k+'</span>000::/68<br>';}
+   document.getElementById('v6bNote').innerHTML='Заимствуем 4 бита интерфейса (кратно 4) → /68. Так почти не делают: ломается автоконфигурация (SLAAC).';}
+  document.getElementById('v6bList').innerHTML=s;}
+ [].forEach.call(sl.querySelectorAll('[data-v6]'),function(b){b.onclick=function(){mode=b.dataset.v6;[].forEach.call(sl.querySelectorAll('[data-v6]'),function(x){x.classList.toggle('on',x===b);x.classList.toggle('acc',x===b);});render();};});
+ render();};
+
+/* quiz */
 var QZ=[
 {q:'Что ограничивает широковещательный домен?',a:['маршрутизатор','коммутатор L2','хаб'],ok:0,why:'Маршрутизатор не пропускает broadcast.'},
-{q:'Чтобы получить 4 подсети, сколько бит заимствуем?',a:['2','1','4'],ok:0,why:'2² = 4 подсети.'},
+{q:'Чтобы получить 8 подсетей, сколько бит заимствуем?',a:['3','2','8'],ok:0,why:'2³ = 8 подсетей.'},
 {q:'Сколько узлов в подсети /26?',a:['62','64','126'],ok:0,why:'2⁶ − 2 = 62.'},
-{q:'Разбить сеть на 3 равные подсети…',a:['нельзя, только степень двойки','можно','можно на /26'],ok:0,why:'Число подсетей всегда кратно степени двойки; под 3 берут 4.'},
-{q:'Адрес сети — это адрес, где узловая часть…',a:['все нули','все единицы','127'],ok:0,why:'Первый адрес подсети — узловая часть в нулях.'},
-{q:'50 подсетей из /16 → какой префикс?',a:['/22','/21','/23'],ok:0,why:'Ближайшая степень двойки 64 = 2⁶ → /22.'},
-{q:'VLSM позволяет…',a:['разные маски в одной сети','только равные подсети','только IPv6'],ok:0,why:'Variable Length Subnet Mask — маски переменной длины.'},
-{q:'Почему в VLSM-примере 5 сетей, а не 3?',a:['каналы между роутерами — тоже сети','ошибка','три филиала'],ok:0,why:'Каждый канал L3 — отдельная сеть /30.'},
+{q:'Маска для /27 — это…',a:['255.255.255.224','255.255.255.192','255.255.255.240'],ok:0,why:'11100000 = 224.'},
+{q:'Почему в формуле узлов вычитают 2?',a:['адрес сети и broadcast','шлюз и DNS','запас на рост'],ok:0,why:'Первый адрес — сеть, последний — broadcast.'},
+{q:'Разбить сеть ровно на 3 равные подсети…',a:['нельзя, только степень двойки','можно','можно на /26'],ok:0,why:'Число подсетей кратно степени двойки; под 3 берут 4.'},
+{q:'Нужно 50 подсетей — на сколько режем?',a:['на 64','на 50','на 56'],ok:0,why:'Ближайшая большая степень двойки — 64 = 2⁶.'},
+{q:'Главный плюс VLSM?',a:['адреса под фактический размер','быстрее считать','только для IPv6'],ok:0,why:'Маски переменной длины — блок под реальную потребность.'},
 {q:'В VLSM считают…',a:['от большего к меньшему','от меньшего','в любом порядке'],ok:0,why:'Крупный блок последовательно режут на меньшие.'},
-{q:'Из чего состоит глобальный IPv6-адрес?',a:['48 + 16 + 64 бит','32 бита','64 + 64'],ok:0,why:'Префикс 48 + идентификатор подсети 16 + интерфейс 64.'},
+{q:'Канал точка-точка между роутерами — это…',a:['отдельная сеть /30','не сеть','часть LAN'],ok:0,why:'2 узла → маска /30, отдельная сеть.'},
 {q:'Сколько подсетей даёт идентификатор подсети IPv6?',a:['2¹⁶ = 65 536','256','2⁶⁴'],ok:0,why:'16 бит → 65 536 подсетей /64.'},
-{q:'Какой IPv6-адрес НЕ делится на подсети?',a:['локальный (link-local)','глобальный','ULA'],ok:0,why:'Link-local существует только в канале и не делится.'}];
+{q:'Заимствование бит интерфейса в IPv6…',a:['ломает SLAAC','ускоряет сеть','обязательно'],ok:0,why:'Перестаёт работать автоконфигурация адреса.'},
+{q:'Broadcast первой подсети 192.168.15.0/25 — это…',a:['.127','.128','.255'],ok:0,why:'01111111 = 127.'},
+{q:'Адрес сети — это адрес, где узловая часть…',a:['все нули','все единицы','127'],ok:0,why:'Первый адрес подсети — узловая часть в нулях.'}];
 var qzI=0,qzOk=0,qzAll=0,qzRun=false,qzAns=[];
 function qzStart(){qzI=0;qzOk=0;qzAll=0;qzRun=true;qzAns=QZ.map(function(){return -1});document.getElementById('qzOk').textContent='0';document.getElementById('qzAll').textContent='0';document.getElementById('qzStart').textContent='Заново';qzShow();}
 function qzShow(){var box=document.getElementById('qzBtns'),it=QZ[qzI],ch=qzAns[qzI];document.getElementById('qzQ').textContent=(qzI+1)+'. '+it.q;box.innerHTML='';
@@ -541,8 +1352,8 @@ function qzShow(){var box=document.getElementById('qzBtns'),it=QZ[qzI],ch=qzAns[
 function qzAns2(k){if(!qzRun)return;if(qzAns[qzI]===-1){qzAns[qzI]=k;qzAll++;if(k===QZ[qzI].ok)qzOk++;document.getElementById('qzOk').textContent=qzOk;document.getElementById('qzAll').textContent=qzAll;}else qzAns[qzI]=k;qzShow();}
 inits.quiz=function(){var b=document.getElementById('qzStart');b.onclick=qzStart;if(!qzRun){document.getElementById('qzQ').textContent='Нажми «Старт»';document.getElementById('qzBtns').innerHTML='';document.getElementById('qzNav').innerHTML='';}};
 
+renderBits(document);
 fit();show(0);
 })();
 </script>
-
 </body></html>
