@@ -945,6 +945,53 @@ button.btn.pri:hover{background:var(--vio);border-color:var(--vio);color:#fff}
   </div>
   <div class="bot"><span class="rec">BAN → PAN → LAN → CAN → MAN → WAN</span><span>Ананко · Качур · VK · TG</span></div>
 </section>
+
+<section class="slide">
+  <span class="bignum"></span>
+  <div class="top"><span class="k"><i></i>1.5 · Сравнение</span><span>LAN и WAN</span></div>
+  <div class="mid">
+    <h2>ЧЕМ LAN ОТЛИЧАЕТСЯ ОТ <span class="hl">WAN</span></h2>
+    <div class="versus">
+      <div class="vcol a"><h3>LAN · локальная</h3><ul>
+        <li>Небольшая территория: <b>здание, этаж, кампус</b></li>
+        <li>Обычно <b>один владелец</b> — организация или человек</li>
+        <li><b>Высокие скорости</b> внутри и своё оборудование</li>
+        <li>Правила задаёт сам владелец</li>
+      </ul></div>
+      <div class="vs">vs</div>
+      <div class="vcol b"><h3>WAN · глобальная</h3><ul>
+        <li>Большие расстояния: <b>города, страны</b></li>
+        <li>Обычно <b>несколько владельцев</b>, чаще провайдеры связи</li>
+        <li>Скорости ниже, а каналы <b>арендуются</b></li>
+        <li>Соединяет между собой отдельные LAN</li>
+      </ul></div>
+    </div>
+    <p class="note" style="max-width:none">Интернет — это <b>WAN без единого владельца</b>: множество сетей разных операторов, договорившихся об общих правилах передачи данных.</p>
+  </div>
+  <div class="bot"><span class="rec">LAN — своя, WAN — общая</span><span>Ананко · Качур · VK · TG</span></div>
+</section>
+
+<section class="slide" data-init="types">
+  <span class="bignum"></span>
+  <div class="top"><span class="k"><i></i>1.5 · Интерактив</span><span>Какая это сеть</span></div>
+  <div class="mid two">
+    <div class="panelbox hotb">
+      <div class="cap">Выбери ситуацию</div>
+      <div class="row">
+        <button class="btn" onclick="typeSet(0)">Наушники и часы</button>
+        <button class="btn" onclick="typeSet(1)">Ноутбук и телефон</button>
+        <button class="btn pri" onclick="typeSet(2)">Офис на этаже</button>
+        <button class="btn" onclick="typeSet(3)">Университет</button>
+        <button class="btn" onclick="typeSet(4)">Район города</button>
+        <button class="btn" onclick="typeSet(5)">Филиалы в разных странах</button>
+      </div>
+      <p class="small">Тип сети определяется не техникой, а <b>масштабом</b>: до какого расстояния она дотягивается и кто ею владеет.</p>
+    </div>
+    <div class="kv" id="typeOut"></div>
+  </div>
+  <div class="bot"><span>От BAN до WAN — по расстоянию</span><span>Ананко · Качур</span></div>
+</section>
+
 <section class="slide">
   <span class="bignum"></span>
   <div class="top"><span class="k"><i></i>1.5.2 · Раньше</span><span>Варианты подключения</span></div>
@@ -1090,53 +1137,6 @@ button.btn.pri:hover{background:var(--vio);border-color:var(--vio);color:#fff}
   </div>
   <div class="bot"><span>1.6 · Сети в жизни</span><span>Ананко · Качур</span></div>
 </section>
-
-<section class="slide">
-  <span class="bignum"></span>
-  <div class="top"><span class="k"><i></i>1.5 · Сравнение</span><span>LAN и WAN</span></div>
-  <div class="mid">
-    <h2>ЧЕМ LAN ОТЛИЧАЕТСЯ ОТ <span class="hl">WAN</span></h2>
-    <div class="versus">
-      <div class="vcol a"><h3>LAN · локальная</h3><ul>
-        <li>Небольшая территория: <b>здание, этаж, кампус</b></li>
-        <li>Обычно <b>один владелец</b> — организация или человек</li>
-        <li><b>Высокие скорости</b> внутри и своё оборудование</li>
-        <li>Правила задаёт сам владелец</li>
-      </ul></div>
-      <div class="vs">vs</div>
-      <div class="vcol b"><h3>WAN · глобальная</h3><ul>
-        <li>Большие расстояния: <b>города, страны</b></li>
-        <li>Обычно <b>несколько владельцев</b>, чаще провайдеры связи</li>
-        <li>Скорости ниже, а каналы <b>арендуются</b></li>
-        <li>Соединяет между собой отдельные LAN</li>
-      </ul></div>
-    </div>
-    <p class="note" style="max-width:none">Интернет — это <b>WAN без единого владельца</b>: множество сетей разных операторов, договорившихся об общих правилах передачи данных.</p>
-  </div>
-  <div class="bot"><span class="rec">LAN — своя, WAN — общая</span><span>Ананко · Качур · VK · TG</span></div>
-</section>
-
-<section class="slide" data-init="types">
-  <span class="bignum"></span>
-  <div class="top"><span class="k"><i></i>1.5 · Интерактив</span><span>Какая это сеть</span></div>
-  <div class="mid two">
-    <div class="panelbox hotb">
-      <div class="cap">Выбери ситуацию</div>
-      <div class="row">
-        <button class="btn" onclick="typeSet(0)">Наушники и часы</button>
-        <button class="btn" onclick="typeSet(1)">Ноутбук и телефон</button>
-        <button class="btn pri" onclick="typeSet(2)">Офис на этаже</button>
-        <button class="btn" onclick="typeSet(3)">Университет</button>
-        <button class="btn" onclick="typeSet(4)">Район города</button>
-        <button class="btn" onclick="typeSet(5)">Филиалы в разных странах</button>
-      </div>
-      <p class="small">Тип сети определяется не техникой, а <b>масштабом</b>: до какого расстояния она дотягивается и кто ею владеет.</p>
-    </div>
-    <div class="kv" id="typeOut"></div>
-  </div>
-  <div class="bot"><span>От BAN до WAN — по расстоянию</span><span>Ананко · Качур</span></div>
-</section>
-
 <section class="slide" id="quiz" data-init="quiz">
   <span class="bignum"></span>
   <div class="top"><span class="k"><i></i>Интерактив · Викторина</span><span>Проверка на скорость</span></div>
