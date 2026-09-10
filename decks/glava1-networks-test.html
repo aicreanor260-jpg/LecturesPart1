@@ -730,6 +730,61 @@ button.btn.pri:hover{background:var(--vio);border-color:var(--vio);color:#fff}
 </section>
 
 
+<section class="slide">
+  <span class="bignum"></span>
+  <div class="top"><span class="k"><i></i>1.3.6 · Протоколы</span><span>Порядок обмена</span></div>
+  <div class="mid two">
+    <div style="display:flex;flex-direction:column;gap:clamp(18px,3vh,30px)">
+      <h1>ПРО<span class="blk">ТОКОЛ</span></h1>
+      <p class="def">Набор правил: как слать данные, подтверждать приём, что делать при ошибке.</p>
+      <div class="more" onclick="this.classList.toggle('open')">
+        <div class="mh"><span class="pl">+</span>Что было бы без него</div>
+        <div class="ma"><div>Представь телефонный разговор, где оба говорят одновременно, на разных языках и не понимают, ответили им или нет. <b>Хаос и потеря данных</b> — ровно так «общались» бы устройства без общих правил.</div></div>
+      </div>
+    </div>
+    <div class="proto">
+<span class="s">→</span> Готов принять данные?   <span class="c">(запрос)</span>
+<span class="r">←</span> Готов                   <span class="c">(подтверждение)</span>
+<span class="s">→</span> [пакет №1]
+<span class="r">←</span> №1 получен, жду №2       <span class="c">(квитанция)</span>
+<span class="s">→</span> Передача закончена       <span class="c">(разрыв)</span>
+    </div>
+  </div>
+  <div class="bot"><span class="rec">Протокол</span><span>Ананко · Качур · VK · TG</span></div>
+</section>
+
+<section class="slide scroll">
+  <span class="bignum"></span>
+  <div class="top"><span class="k"><i></i>1.3.7 · Программное обеспечение</span><span>Виды ПО</span></div>
+  <div class="mid">
+    <h2>ВИДЫ <span class="hl">ПО</span></h2>
+    <p class="note" style="max-width:none;margin:6px 0 20px"><b>Программное обеспечение (ПО)</b> — это специализированные программы для взаимодействия устройств с пользователями и друг с другом. В категорию ПО входят приложения, сервисы и процессы. <b>Приложение</b> — программный продукт, который выполняет определённые функции и даёт пользователю доступ к ресурсам или услугам. <b>Сетевой сервис</b> обеспечивает предоставление данных в ответ на запросы клиентов. <b>Процессы</b> выполняют операции, направляющие и передающие сообщения в сети.</p>
+    <div class="bento c3">
+      <div class="cell hot"><span class="n">01</span><b>Приложения</b><p>на ПК пользователя</p><p class="mono" style="color:var(--vio2)">браузер · мессенджер · игра</p></div>
+      <div class="cell vio"><span class="n">02</span><b>Сервисы</b><p>процессы на серверах</p><p class="mono" style="color:var(--vio2)">веб-сервер · база данных · почтовый сервер</p></div>
+      <div class="cell vio"><span class="n">03</span><b>Прошивки</b><p>firmware внутри устройств</p><p class="mono" style="color:var(--vio2)">роутер · Wi-Fi-адаптер · «умная» лампочка</p></div>
+    </div>
+    <p class="note" style="max-width:none">Без прошивки роутер — просто кусок пластика и кремния. Программы есть на всех трёх уровнях: у пользователя, на серверах и внутри самого железа.</p>
+  </div>
+  <div class="bot"><span class="rec">Приложения · сервисы · прошивки</span><span>Ананко · Качур · VK · TG</span></div>
+</section>
+
+<section class="slide">
+  <span class="bignum"></span>
+  <div class="top"><span class="k"><i></i>1.3.8 · Информационная безопасность</span><span>Методы защиты</span></div>
+  <div class="mid">
+    <h2>МЕТОДЫ <span class="hl">ЗАЩИТЫ</span></h2>
+    <div class="bento">
+      <div class="cell hot"><span class="n">01</span><b>Шифрование</b><p>данные нечитаемы без ключа</p><p class="mono" style="color:var(--vio2)">HTTPS · VPN · шифрование диска</p></div>
+      <div class="cell vio"><span class="n">02</span><b>Разграничение доступа</b><p>каждому только своё</p><p class="mono" style="color:var(--vio2)">логины · пароли · права · роли</p></div>
+      <div class="cell vio"><span class="n">03</span><b>Межсетевые экраны</b><p>фильтр на границе сети</p><p class="mono" style="color:var(--vio2)">firewall режет лишнее, пропускает нужное</p></div>
+      <div class="cell hot"><span class="n">04</span><b>Обнаружение атак</b><p>заметить вторжение</p><p class="mono" style="color:var(--vio2)">IDS / IPS следят за трафиком</p></div>
+    </div>
+    <p class="note" style="max-width:none">Ценные данные можно перехватить, подменить или украсть, поэтому защита — не довесок, а полноценный элемент сети.</p>
+  </div>
+  <div class="bot"><span class="rec">Шифрование · доступ · экран · IDS</span><span>Ананко · Качур · VK · TG</span></div>
+</section>
+
 <section class="slide scroll" id="razvitie" data-init="tl">
   <span class="bignum"></span>
   <div class="top"><span class="k"><i></i>1.4 · Хронология</span><span>Временная линия</span></div>
