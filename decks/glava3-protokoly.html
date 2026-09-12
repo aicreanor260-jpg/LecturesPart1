@@ -220,7 +220,7 @@ svg .rough{filter:url(#rough)}
         <li>что делать, если фразу заглушил шум</li>
       </ul>
     </div>
-    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Один говорит по-русски, другой отвечает азбукой Морзе в темноте — обмена не выйдет, даже если оба очень хотят пообщаться.</div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Один говорит по-русски, другой отвечает азбукой Морзе — обмена не выйдет, даже если оба очень хотят пообщаться.</div>
   </div>
 </section>
 
@@ -550,7 +550,7 @@ svg .rough{filter:url(#rough)}
   <div class="tophint">3.1 · способы рассылки · unicast</div>
   <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
-      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ОДНОМУ · UNICAST</h2>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ОДНОАДРЕСНАЯ РАССЫЛКА · UNICAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель <b>192.168.1.10</b> шлёт сообщение на адрес <b>одного</b> получателя (192.168.1.20). Другие устройства его не получают — точность обеспечивает адресация.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как личное письмо с точным адресом на конверте — доходит именно тому, кому написано.</div>
     </div>
@@ -568,7 +568,7 @@ svg .rough{filter:url(#rough)}
   <div class="tophint">3.1 · способы рассылки · multicast</div>
   <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
-      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ГРУППЕ · MULTICAST</h2>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">МНОГОАДРЕСНАЯ РАССЫЛКА · MULTICAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель шлёт на <b>групповой</b> адрес <b>224.0.0.5</b>, который «прослушивают» подписчики. Технически сообщение проходит мимо многих, но обрабатывают его только подписчики группы.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как объявление в чате: его видят участники канала, но не весь мир.</div>
     </div>
@@ -586,7 +586,7 @@ svg .rough{filter:url(#rough)}
   <div class="tophint">3.1 · способы рассылки · broadcast</div>
   <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
     <div class="col">
-      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ВСЕМ · BROADCAST</h2>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ШИРОКОВЕЩАТЕЛЬНАЯ РАССЫЛКА · BROADCAST</h2>
       <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Сообщение уходит на <b>широковещательный</b> адрес <b>192.168.1.255</b> и обрабатывается всеми устройствами сети без исключения.</p>
       <div class="card analogy b-md"><span class="tag">Аналогия</span>Как крикнуть в мегафон посреди зала: услышат все, хотят они того или нет.</div>
       <p class="body b-sm ink" style="opacity:.72;margin-top:14px">Осторожно: «крики на весь зал» снижают работоспособность сети. Но запретить нельзя — на принципе «спросить у всех» держатся <b>ARP</b> и <b>DHCP</b>.</p>
@@ -999,9 +999,9 @@ svg .rough{filter:url(#rough)}
       if(kind==='multi') return inT?'в группе · обрабатываю':'не в группе · откидываю';
       return 'обрабатываю';
     }
-    var hintTxt = kind==='uni'?'один → одному: кадр берёт только адресат'
-      : (kind==='multi'?'многим сразу, но обрабатывают лишь члены группы 224.0.0.5'
-      : 'на 192.168.1.255 — получают и обрабатывают все');
+    var hintTxt = kind==='uni'?'одноадресная рассылка: кадр берёт только адресат'
+      : (kind==='multi'?'многоадресная рассылка: обрабатывают лишь члены группы 224.0.0.5'
+      : 'широковещательная рассылка: на 192.168.1.255 — получают и обрабатывают все');
 
     function nodeBox(x,y,name,active,status){
       var w=190,h=76, fill=active?'#6E7355':'#FFFDF7', tcol=active?'#fff':'#3E2D21', stroke=active?'#565B41':'#3E2D21';
@@ -1025,7 +1025,7 @@ svg .rough{filter:url(#rough)}
       dst.forEach(function(d){ s+='<line x1="'+(sw[0]+105)+'" y1="'+sw[1]+'" x2="'+(d[0]-95)+'" y2="'+d[1]+'"/>'; });
       s+='</g>';
       s+=switchBox(st.sw||'');
-      s+=nodeBox(src[0],src[1],'ПК1',false,st.srcS||'');
+      s+=nodeBox(src[0],src[1],'192.168.1.10',false,st.srcS||'');
       s+='<text x="'+src[0]+'" y="'+(src[1]-52)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:20px;fill:#D2632B">отправитель · 192.168.1.10</text>';
       dst.forEach(function(d,k){ var ok=st.pc&&st.pc[k]==='ok'; s+=nodeBox(d[0],d[1],names[k],ok,(st.pcL&&st.pcL[k])||''); });
       s+='<g id="pk"></g>';
