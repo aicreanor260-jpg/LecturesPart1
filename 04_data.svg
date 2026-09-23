@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-<text x="128" y="28" text-anchor="middle" font-size="24" font-family="Arial">RGB</text>
-<g stroke="#244b6b" fill="none" stroke-width="2">
-<rect x="58" y="40" width="140" height="140"/>
-<path d="M104 40v140M150 40v140M58 75h140M58 110h140M58 145h140"/>
-</g>
-<text x="80" y="64" font-size="16">1</text><text x="126" y="64" font-size="16">0</text><text x="172" y="64" font-size="16">86</text>
-</svg>

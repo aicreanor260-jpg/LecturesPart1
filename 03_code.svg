@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-<path d="M60 30h100l36 36v160H60z" fill="none" stroke="#244b6b" stroke-width="4"/>
-<path d="M160 30v36h36" fill="none" stroke="#244b6b" stroke-width="4"/>
-<text x="76" y="86" font-size="14" font-family="monospace">import image;</text>
-<text x="76" y="108" font-size="14" font-family="monospace">img.send()</text>
-<path d="M76 128h80M76 144h60M76 160h90" stroke="#244b6b" stroke-width="3"/>
-</svg>
