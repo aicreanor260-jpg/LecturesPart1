@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Глава 8. Транспортный уровень</title>
+  <style>
+    /* ===== ПОДКЛЮЧЕНИЕ ШРИФТОВ ===== */
+    @font-face {
+      font-family: 'Oswald';
+      src: url('fonts/Oswald.ttf') format('truetype');
+      font-weight: 200 700;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Inter';
+      src: url('fonts/Inter.ttf') format('truetype');
+      font-weight: 100 900;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'STIX Two Math';
+      src: url('fonts/STIXTwoMath-Regular.otf') format('opentype');
+      font-weight: normal;
+      font-display: swap;
+    }
+
+    /* ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И СБРОС ===== */
+    :root {
+      --bg-dark: #0A1128;
+      --bg-dark-card: #1C2541;
+      --bg-dark-accent: #001F54;
+      --bg-light: #F8FAFC;
+      --bg-light-card: #FFFFFF;
+      --text-dark: #0F172A;
+      --text-muted-dark: #475569;
+      --text-light: #F8FAFC;
+      --text-muted-light: #94A3B8;
+      --primary: #1D4ED8;
+      --primary-accent: #3B82F6;
+      --cyan-accent: #06B6D4;
+      --yellow-accent: #F59E0B;
+      --success: #10B981;
+      --danger: #EF4444;
+      --border-light: #E2E8F0;
+      --border-dark: #334155;
+      --ff-header: 'Oswald', 'Arial Narrow', sans-serif;
+      --ff-body: 'Inter', system-ui, -apple-system, sans-serif;
+      --ff-math: 'STIX Two Math', serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: var(--ff-body);
+      color: var(--text-dark);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== ПОЛОСА ПРОГРЕССА ===== */
+    #progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--cyan-accent), var(--primary-accent), var(--yellow-accent));
+      width: 0%;
+      z-index: 10000;
+      transition: width 0.3s ease;
+    }
+
+    /* ===== КОНТЕЙНЕР СЛАЙДОВ ===== */
+    #presentation-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      visibility: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: clamp(20px, 4vh, 60px) clamp(20px, 5vw, 80px) 90px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+      scroll-behavior: smooth;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      z-index: 1;
+    }
+
+    /* Темы слайдов */
+    .slide.theme-dark {
+      background-color: var(--bg-dark);
+      color: var(--text-light);
+    }
+
+    .slide.theme-light {
+      background-color: var(--bg-light);
+      color: var(--text-dark);
+    }
+
+    /* ===== ТИПОГРАФИКА И ЗАГОЛОВКИ ===== */
+    .slide-tag {
+      display: inline-block;
+      font-family: var(--ff-header);
+      text-transform: uppercase;
+      font-weight: 600;
+      font-size: clamp(0.85rem, 1.2vw, 1.1rem);
+      letter-spacing: 0.15em;
+      padding: 4px 12px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      width: fit-content;
+    }
+
+    .theme-dark .slide-tag {
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--cyan-accent);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .theme-light .slide-tag {
+      background: rgba(29, 78, 216, 0.1);
+      color: var(--primary);
+      border: 1px solid rgba(29, 78, 216, 0.2);
+    }
+
+    .slide-title {
+      font-family: var(--ff-header);
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      font-weight: 700;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .theme-dark .slide-title { color: var(--text-light); }
+    .theme-light .slide-title { color: var(--text-dark); }
+
+    .slide-subtitle {
+      font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+      line-height: 1.5;
+      margin-bottom: 30px;
+      max-width: 1000px;
+    }
+
+    .theme-dark .slide-subtitle { color: var(--text-muted-light); }
+    .theme-light .slide-subtitle { color: var(--text-muted-dark); }
+
+    /* ===== СЕТКИ И СТРУКТУРА ===== */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+      gap: clamp(16px, 2.5vw, 32px);
+      width: 100%;
+      align-items: start;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: clamp(16px, 2vw, 24px);
+      width: 100%;
+    }
+
+    /* ===== КАРТОЧКИ ===== */
+    .card {
+      border-radius: 12px;
+      padding: clamp(18px, 2.5vw, 28px);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+      position: relative;
+      min-width: 0;
+    }
+
+    .theme-dark .card {
+      background-color: var(--bg-dark-card);
+      border: 1px solid var(--border-dark);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .theme-light .card {
+      background-color: var(--bg-light-card);
+      border: 1px solid var(--border-light);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+    }
+
+    .card-title {
+      font-family: var(--ff-header);
+      font-size: clamp(1.2rem, 2vw, 1.6rem);
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-text {
+      font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+      line-height: 1.6;
+    }
+
+    .theme-dark .card-text { color: #CBD5E1; }
+    .theme-light .card-text { color: #334155; }
+
+    /* ===== ИНТЕРАКТИВНЫЕ ВИДЖЕТЫ ===== */
+    .interactive-container {
+      border-radius: 12px;
+      padding: clamp(16px, 2vw, 24px);
+      margin-top: 15px;
+      min-width: 0;
+    }
+
+    .theme-dark .interactive-container {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .theme-light .interactive-container {
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+    }
+
+    .btn {
+      font-family: var(--ff-body);
+      font-weight: 600;
+      font-size: clamp(0.9rem, 1.2vw, 1rem);
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      min-height: 44px;
+      min-width: 44px;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-accent);
+      color: #FFFFFF;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary);
+    }
+
+    .btn-secondary {
+      background-color: #475569;
+      color: #FFFFFF;
+    }
+
+    .btn-secondary:hover {
+      background-color: #334155;
+    }
+
+    /* ===== ПАНЕЛЬ НАВИГАЦИИ (ПОСТОЯННАЯ) ===== */
+    #nav-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(10, 17, 40, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .nav-btn {
+      background: #1E293B;
+      color: var(--text-light);
+      border: 1px solid #334155;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      transition: all 0.2s ease;
+    }
+
+    .nav-btn:hover:not(:disabled) {
+      background: var(--primary-accent);
+      border-color: var(--primary-accent);
+      transform: scale(1.05);
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    #slide-indicator {
+      font-family: var(--ff-header);
+      font-size: 1.1rem;
+      color: var(--text-light);
+      letter-spacing: 0.05em;
+      min-width: 70px;
+      text-align: center;
+    }
+
+    /* ===== СПЕЦИФИЧЕСКИЕ ДЕМОНСТРАЦИИ ===== */
+    /* Трёхэтапное рукопожатие TCP */
+    .handshake-diagram {
+      display: grid;
+      grid-template-columns: 100px 1fr 100px;
+      gap: 15px;
+      align-items: center;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .node-box {
+      background: var(--bg-dark-card);
+      border: 2px solid var(--primary-accent);
+      padding: 15px 10px;
+      border-radius: 8px;
+      text-align: center;
+      color: #FFF;
+      font-weight: 600;
+    }
+
+    .packet-lane {
+      position: relative;
+      height: 180px;
+      border-left: 2px dashed #475569;
+      border-right: 2px dashed #475569;
+    }
+
+    .anim-packet {
+      position: absolute;
+      width: 80%;
+      left: 10%;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #FFF;
+      text-align: center;
+      opacity: 0;
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    /* Скользящее окно */
+    .window-container {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 15px 5px;
+      margin: 15px 0;
+    }
+
+    .byte-block {
+      min-width: 42px;
+      height: 50px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      background: #334155;
+      color: #94A3B8;
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+    }
+
+    .byte-block.in-window {
+      background: var(--primary-accent);
+      color: #FFF;
+      border-color: var(--cyan-accent);
+    }
+
+    .byte-block.acked {
+      background: var(--success);
+      color: #FFF;
+    }
+
+    /* Инспектор заголовков */
+    .header-grid {
+      display: grid;
+      grid-template-columns: repeat(32, 1fr);
+      gap: 2px;
+      background: #0F172A;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      margin: 15px 0;
+    }
+
+    .header-field {
+      background: #1E293B;
+      color: #E2E8F0;
+      padding: 12px 4px;
+      text-align: center;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+
+    .header-field:hover, .header-field.active {
+      background: var(--primary-accent);
+      color: #FFF;
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+
+    /* Интерактивный тест */
+    .quiz-option {
+      background: var(--bg-dark-card);
+      border: 1px solid var(--border-dark);
+      padding: 14px 18px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      color: var(--text-light);
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .quiz-option:hover {
+      border-color: var(--primary-accent);
+      background: #223055;
+    }
+
+    .quiz-option.correct {
+      background: rgba(16, 185, 129, 0.2) !important;
+      border-color: var(--success) !important;
+      color: #A7F3D0 !important;
+    }
+
+    .quiz-option.incorrect {
+      background: rgba(239, 68, 68, 0.2) !important;
+      border-color: var(--danger) !important;
+      color: #FECACA !important;
+    }
+
+    /* Таблицы */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      margin: 15px 0;
+    }
+
+    .comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+    }
+
+    .comp-table th, .comp-table td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .comp-table th {
+      background-color: rgba(30, 41, 59, 0.8);
+      font-family: var(--ff-header);
+      font-size: 1.1rem;
+      color: var(--cyan-accent);
+    }
+
+    .comp-table tr:hover {
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    /* Поддержка prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    /* Адаптивность для мобильных устройств */
+    @media (max-width: 768px) {
+      .handshake-diagram {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .packet-lane {
+        height: 220px;
+      }
+      .header-grid {
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="progress-bar"></div>
+
+  <nav id="nav-controls" aria-label="Навигация по презентации">
+    <button class="nav-btn" id="btn-prev" title="Предыдущий слайд (Клавиша Left)">←</button>
+    <div id="slide-indicator">1 / 11</div>
+    <button class="nav-btn" id="btn-next" title="Следующий слайд (Клавиша Right)">→</button>
+  </nav>
+
+  <div id="presentation-container">
+
+    <section class="slide theme-dark active" id="slide-0">
+      <div style="max-width: 1100px; margin: auto 0;">
+        <span class="slide-tag">Интерактивный курс • Глава 8</span>
+        <h1 class="slide-title" style="font-size: clamp(2.5rem, 6vw, 4.8rem); color: #FFF;">
+          Транспортный уровень
+        </h1>
+        <p class="slide-subtitle" style="font-size: clamp(1.1rem, 2vw, 1.6rem); color: var(--cyan-accent);">
+          Протоколы TCP и UDP, сегментация, адресация портов и сокетов, трёхэтапное рукопожатие, скользящее окно и управление потоком.
+        </p>
+
+        <div class="grid-3" style="margin-top: 40px;">
+          <div class="card" style="background: rgba(30, 41, 59, 0.6); border-left: 4px solid var(--primary-accent);">
+            <div class="card-title">🔌 Сегментация & Порты</div>
+            <p class="card-text">Разбиение потоков данных на фрагменты, мультиплексирование сеансов и адресация через сокеты.</p>
+          </div>
+          <div class="card" style="background: rgba(30, 41, 59, 0.6); border-left: 4px solid var(--cyan-accent);">
+            <div class="card-title">🤝 Надежный TCP</div>
+            <p class="card-text">Трёхэтапная установка соединения (SYN/ACK), порядковые номера и контроль скользящего окна.</p>
+          </div>
+          <div class="card" style="background: rgba(30, 41, 59, 0.6); border-left: 4px solid var(--yellow-accent);">
+            <div class="card-title">⚡ Скоростной UDP</div>
+            <p class="card-text">Передача датаграмм без установления сеанса: минимальные задержки для VoIP, DNS и мультимедиа.</p>
+          </div>
+        </div>
+
+        <div style="margin-top: 40px; display: flex; gap: 15px; align-items: center;">
+          <button class="btn btn-primary" onclick="goToSlide(1)" style="padding: 14px 28px; font-size: 1.1rem;">
+            Начать изучение →
+          </button>
+          <span style="color: var(--text-muted-light); font-size: 0.9rem;">Используйте стрелки ← / → на клавиатуре</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-light" id="slide-1">
+      <span class="slide-tag">8.1 – 8.2 • Архитектура OSI</span>
+      <h2 class="slide-title">Значение и функции транспортного уровня</h2>
+      <p class="slide-subtitle">
+        Транспортный уровень (4-й уровень модели OSI) связывает прикладной уровень с сетевой инфраструктурой, обеспечивает связь между приложениями на конечных узлах.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--primary);">Ключевые задачи 4-го уровня</div>
+          <ul style="list-style-type: square; padding-left: 20px; line-height: 1.8;" class="card-text">
+            <li><strong>Отслеживание сеансов:</strong> Поддержка нескольких одновременных диалогов между приложениями.</li>
+            <li><strong>Сегментация данных:</strong> Разбиение больших массивов информации на управляемые блоки.</li>
+            <li><strong>Сборка сегментов:</strong> Восстановление исходного порядка данных на стороне получателя.</li>
+            <li><strong>Адресация приложений:</strong> Идентификация процессов через номера портов.</li>
+          </ul>
+        </div>
+
+        <div class="interactive-container" style="text-align: center;">
+          <svg viewBox="0 0 500 280" style="width: 100%; max-height: 260px;">
+            <rect x="50" y="20" width="400" height="40" rx="6" fill="#E2E8F0" stroke="#94A3B8" stroke-width="2"/>
+            <text x="250" y="45" text-anchor="middle" font-family="Inter" font-weight="bold" fill="#1E293B">7. Прикладной уровень (HTTP, DNS, SMTP)</text>
+            
+            <rect x="50" y="80" width="400" height="55" rx="6" fill="#1D4ED8" stroke="#3B82F6" stroke-width="2"/>
+            <text x="250" y="108" text-anchor="middle" font-family="Oswald" font-size="18" font-weight="bold" fill="#FFFFFF">4. ТРАНСПОРТНЫЙ УРОВЕНЬ (TCP / UDP)</text>
+            <text x="250" y="126" text-anchor="middle" font-family="Inter" font-size="12" fill="#93C5FD">Сегментация • Порты • Сеансы • Контроль ошибок</text>
+            
+            <rect x="50" y="155" width="400" height="40" rx="6" fill="#E2E8F0" stroke="#94A3B8" stroke-width="2"/>
+            <text x="250" y="180" text-anchor="middle" font-family="Inter" font-weight="bold" fill="#1E293B">3. Сетевой уровень (IP-адресация, Маршрутизация)</text>
+
+            <rect x="50" y="210" width="400" height="40" rx="6" fill="#CBD5E1" stroke="#94A3B8" stroke-width="2"/>
+            <text x="250" y="235" text-anchor="middle" font-family="Inter" font-weight="bold" fill="#475569">1-2. Канальный и Физический уровни (Ethernet, Wi-Fi)</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-2">
+      <span class="slide-tag">8.2.1 – 8.2.2 • Механизмы передачи</span>
+      <h2 class="slide-title">Сегментация и мультиплексирование</h2>
+      <p class="slide-subtitle">
+        Передача больших файлов одним куском заблокировала бы сеть. Сегментация делит данные на фрагменты (обычно до 1460 байт), а мультиплексирование чередует их в едином канале.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--cyan-accent);">Преимущества сегментации</div>
+          <p class="card-text" style="margin-bottom: 12px;">
+            При передаче файла размером 300 КБ протокол разделяет его примерно на <strong>206 сегментов</strong> (при MSS 1460 байт).
+          </p>
+          <ul style="list-style-type: circle; padding-left: 20px; line-height: 1.6; color: #CBD5E1;">
+            <li>Повышение эффективности использования каналов связи.</li>
+            <li>При ошибке перепосылается только поврежденный сегмент, а не весь файл.</li>
+            <li>Параллельная работа множества сетевых приложений.</li>
+          </ul>
+        </div>
+
+        <div class="interactive-container">
+          <h4 style="color: var(--text-light); margin-bottom: 10px;">Схема мультиплексирования потоков</h4>
+          <svg viewBox="0 0 500 200" style="width: 100%;">
+            <rect x="20" y="20" width="100" height="30" rx="4" fill="#3B82F6"/>
+            <text x="70" y="40" text-anchor="middle" fill="#FFF" font-size="12">Web (80)</text>
+
+            <rect x="20" y="85" width="100" height="30" rx="4" fill="#10B981"/>
+            <text x="70" y="105" text-anchor="middle" fill="#FFF" font-size="12">VoIP (5060)</text>
+
+            <rect x="20" y="150" width="100" height="30" rx="4" fill="#F59E0B"/>
+            <text x="70" y="170" text-anchor="middle" fill="#FFF" font-size="12">Email (25)</text>
+
+            <path d="M 140 35 L 220 85" stroke="#3B82F6" stroke-width="2" stroke-dasharray="4"/>
+            <path d="M 140 100 L 220 100" stroke="#10B981" stroke-width="2"/>
+            <path d="M 140 165 L 220 115" stroke="#F59E0B" stroke-width="2" stroke-dasharray="4"/>
+
+            <rect x="220" y="80" width="160" height="40" rx="6" fill="#1E293B" stroke="#06B6D4" stroke-width="2"/>
+            <rect x="230" y="88" width="25" height="24" rx="3" fill="#3B82F6"/>
+            <rect x="260" y="88" width="25" height="24" rx="3" fill="#10B981"/>
+            <rect x="290" y="88" width="25" height="24" rx="3" fill="#F59E0B"/>
+            <rect x="320" y="88" width="25" height="24" rx="3" fill="#3B82F6"/>
+
+            <text x="300" y="145" text-anchor="middle" fill="#94A3B8" font-size="11">Чередование сегментов в одном IP-канале</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-light" id="slide-3">
+      <span class="slide-tag">8.2.3 • Адресация</span>
+      <h2 class="slide-title">Порты и Сокеты (Sockets)</h2>
+      <p class="slide-subtitle">
+        Для того чтобы доставленный пакет попал в нужное приложение, используются номера портов. Связка IP-адреса и номера порта образует <strong>Сокет</strong>.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--primary);">Категории номеров портов (0–65535)</div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <div style="background: #F1F5F9; padding: 10px; border-radius: 6px; border-left: 4px solid var(--primary);">
+              <strong>Известные (Well-Known): 0 – 1023</strong><br>
+              Зарезервированы для системных служб: HTTP (80), HTTPS (443), SSH (22), DNS (53).
+            </div>
+            <div style="background: #F1F5F9; padding: 10px; border-radius: 6px; border-left: 4px solid var(--cyan-accent);">
+              <strong>Зарегистрированные: 1024 – 49151</strong><br>
+              Назначаются пользовательским приложениям (например, MS SQL 1433, MySQL 3306).
+            </div>
+            <div style="background: #F1F5F9; padding: 10px; border-radius: 6px; border-left: 4px solid var(--yellow-accent);">
+              <strong>Динамические / Динамично-приватные: 49152 – 65535</strong><br>
+              Выделяются клиентам операционной системой на время сеанса.
+            </div>
+          </div>
+        </div>
+
+        <div class="interactive-container">
+          <h4 style="color: var(--text-dark); margin-bottom: 12px;">Конструктор сокетного соединения</h4>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div>
+              <label style="font-size: 0.85rem; font-weight: bold;">Client IP & Port:</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="cli-ip" value="192.168.1.50" style="padding: 6px; border-radius: 4px; border: 1px solid #CBD5E1; flex: 2;">
+                <input type="number" id="cli-port" value="51234" style="padding: 6px; border-radius: 4px; border: 1px solid #CBD5E1; flex: 1;">
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size: 0.85rem; font-weight: bold;">Server IP & Port:</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="srv-ip" value="93.184.216.34" style="padding: 6px; border-radius: 4px; border: 1px solid #CBD5E1; flex: 2;">
+                <input type="number" id="srv-port" value="443" style="padding: 6px; border-radius: 4px; border: 1px solid #CBD5E1; flex: 1;">
+              </div>
+            </div>
+
+            <div id="socket-output" style="background: #1E293B; color: #38BDF8; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.9rem; margin-top: 10px;">
+              Сокет Источника: 192.168.1.50:51234<br>
+              Сокет Назначения: 93.184.216.34:443
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-4">
+      <span class="slide-tag">8.3.1 • Формат TCP</span>
+      <h2 class="slide-title">Структура заголовка TCP и Управляющие флаги</h2>
+      <p class="slide-subtitle">
+        Заголовок TCP имеет переменный размер от 20 до 60 байт. Нажимайте на поля заголовка ниже для просмотра подробного описания назначения каждого бита.
+      </p>
+
+      <div class="interactive-container">
+        <div style="display: flex; justify-content: space-between; color: var(--text-muted-light); font-size: 0.8rem; margin-bottom: 4px;">
+          <span>0-15 бит (2 байта)</span>
+          <span>16-31 бит (2 байта)</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div class="header-field" onclick="inspectTcp('srcPort')">Порт источника (16 бит)</div>
+            <div class="header-field" onclick="inspectTcp('dstPort')">Порт назначения (16 бит)</div>
+          </div>
+
+          <div class="header-field" onclick="inspectTcp('seqNum')">Порядковый номер / Sequence Number (32 бита)</div>
+          <div class="header-field" onclick="inspectTcp('ackNum')">Номер подтверждения / Acknowledgment Number (32 бита)</div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 4px;">
+            <div class="header-field" onclick="inspectTcp('offset')">Смещение (4 б)</div>
+            <div class="header-field" onclick="inspectTcp('flags')">Флаги (6 бит)</div>
+            <div class="header-field" onclick="inspectTcp('window')">Размер окна / Window Size (16 бит)</div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div class="header-field" onclick="inspectTcp('checksum')">Контрольная сумма (16 бит)</div>
+            <div class="header-field" onclick="inspectTcp('urg')">Указатель срочности (16 бит)</div>
+          </div>
+        </div>
+
+        <div id="tcp-info-box" style="margin-top: 15px; background: #1C2541; padding: 14px; border-radius: 6px; border-left: 4px solid var(--primary-accent); min-height: 70px;">
+          <strong style="color: var(--cyan-accent);" id="tcp-info-title">Кликните по любому полю заголовка</strong>
+          <p id="tcp-info-desc" style="font-size: 0.95rem; color: #CBD5E1; margin-top: 4px;">Нажмите на нужный блок заголовка выше, чтобы изучить назначение и объем данных.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-5">
+      <span class="slide-tag">8.3.2 • Сеанс TCP</span>
+      <h2 class="slide-title">Установление соединения: Трёхэтапное рукопожатие</h2>
+      <p class="slide-subtitle">
+        Перед передачей данных TCP производит синхронизацию порядковых номеров и согласование параметров сеанса (Three-Way Handshake).
+      </p>
+
+      <div class="interactive-container">
+        <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="startHandshakeAnim()">▶ Запустить рукопожатие</button>
+          <button class="btn btn-secondary" onclick="resetHandshakeAnim()">↺ Сброс</button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 120px 1fr 120px; gap: 20px; align-items: center; position: relative; min-height: 220px;">
+          <div style="background: #1E293B; border: 2px solid var(--primary-accent); padding: 15px; border-radius: 8px; text-align: center;">
+            <strong style="color: #FFF;">Клиент (A)</strong>
+            <div id="cli-state" style="font-size: 0.8rem; color: var(--yellow-accent); margin-top: 8px;">CLOSED</div>
+          </div>
+
+          <div id="handshake-track" style="position: relative; height: 180px; background: rgba(15, 23, 42, 0.5); border-radius: 8px; overflow: hidden;">
+            <div id="pkt-syn" class="anim-packet" style="top: 20px; background: var(--primary-accent);">
+              1. SYN (seq = 100) →
+            </div>
+            <div id="pkt-synack" class="anim-packet" style="top: 75px; background: var(--cyan-accent); color: #000;">
+              ← 2. SYN + ACK (seq = 300, ack = 101)
+            </div>
+            <div id="pkt-ack" class="anim-packet" style="top: 130px; background: var(--success);">
+              3. ACK (seq = 101, ack = 301) →
+            </div>
+          </div>
+
+          <div style="background: #1E293B; border: 2px solid var(--primary-accent); padding: 15px; border-radius: 8px; text-align: center;">
+            <strong style="color: #FFF;">Сервер (B)</strong>
+            <div id="srv-state" style="font-size: 0.8rem; color: var(--yellow-accent); margin-top: 8px;">LISTEN</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-light" id="slide-6">
+      <span class="slide-tag">8.3.3 • Flow Control</span>
+      <h2 class="slide-title">Скользящее окно и Управление потоком</h2>
+      <p class="slide-subtitle">
+        TCP использует механизм <strong>Sliding Window</strong>, позволяющий отправлять группу сегментов без ожидания подтверждения на каждый из них, динамически регулируя размер окна (Window Size).
+      </p>
+
+      <div class="interactive-container">
+        <div style="display: flex; gap: 15px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+          <label style="font-weight: bold;">Размер окна (Window Size): <span id="win-size-val">3</span> сегмента</label>
+          <input type="range" id="win-slider" min="1" max="5" value="3" onchange="updateWindowSize(this.value)">
+          <button class="btn btn-primary" onclick="sendWindowBatch()">Передать данные</button>
+          <button class="btn btn-secondary" onclick="resetWindowDemo()">Сбросить</button>
+        </div>
+
+        <div class="window-container" id="window-bytes-bar">
+          </div>
+
+        <div style="background: #FFF; padding: 12px; border-radius: 6px; border: 1px solid #CBD5E1; font-size: 0.95rem;" id="window-status">
+          Готово к передаче. Окно определяет, сколько сегментов может быть отправлено в сеть до получения первого ACK.
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-7">
+      <span class="slide-tag">8.3.4 • Закрытие сеанса</span>
+      <h2 class="slide-title">Завершение TCP-соединения (FIN / ACK)</h2>
+      <p class="slide-subtitle">
+        Для корректного освобождения сетевых ресурсов TCP использует четырёхэтапную процедуру разрыва сеанса.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--cyan-accent);">4 Этапа разрыва соединений</div>
+          <ol style="padding-left: 20px; line-height: 1.8; color: #CBD5E1;">
+            <li><strong>FIN от Клиента:</strong> Клиент завершил отправку и посылает сегмент с флагом FIN.</li>
+            <li><strong>ACK от Сервера:</strong> Сервер подтверждает получение FIN (подключение переходит в полузакрытое состояние).</li>
+            <li><strong>FIN от Сервера:</strong> Сервер завершает свои процессы и отправляет свой FIN.</li>
+            <li><strong>ACK от Клиента:</strong> Клиент подтверждает FIN от сервера и после тайм-аута закрывает сокет.</li>
+          </ol>
+        </div>
+
+        <div class="interactive-container">
+          <h4 style="color: #FFF; margin-bottom: 10px;">Симуляция закрытия TCP-сеанса</h4>
+          <button class="btn btn-primary" onclick="runCloseAnim()" style="width: 100%; margin-bottom: 12px;">Запустить завершение сеанса</button>
+          
+          <div id="close-log" style="background: #0F172A; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.85rem; color: var(--cyan-accent); min-height: 120px;">
+            Соединение активно (ESTABLISHED)... Нажмите кнопку выше для старта.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-light" id="slide-8">
+      <span class="slide-tag">8.4 • Протокол UDP</span>
+      <h2 class="slide-title">Протокол UDP (User Datagram Protocol)</h2>
+      <p class="slide-subtitle">
+        UDP — протокол без установления соединения (Connectionless) с минимальным заголовком всего в <strong>8 байт</strong>, оптимизированный для максимальной скорости.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="color: var(--primary);">Характеристики UDP</div>
+          <ul style="list-style-type: square; padding-left: 20px; line-height: 1.7; color: #334155;">
+            <li><strong>Без гарантии доставки:</strong> Потерянные датаграммы не перепосылаются.</li>
+            <li><strong>Без контроля порядка:</strong> Пакеты могут приходить вне изначальной последовательности.</li>
+            <li><strong>Без установления сеанса:</strong> Отправка начинается мгновенно без предварительных рукопожатий.</li>
+            <li><strong>Минимальные задержки:</strong> Отсутствие накладных расходов на поддержание состояния.</li>
+          </ul>
+        </div>
+
+        <div class="interactive-container" style="text-align: center;">
+          <h4 style="margin-bottom: 15px;">Сравнение размеров заголовков</h4>
+          <svg viewBox="0 0 400 160" style="width: 100%;">
+            <rect x="20" y="30" width="360" height="40" rx="6" fill="#1D4ED8"/>
+            <text x="200" y="55" text-anchor="middle" fill="#FFF" font-weight="bold" font-size="14">TCP Header: 20 – 60 БАЙТ (Флаги, Seq, Ack, Window...)</text>
+
+            <rect x="20" y="95" width="120" height="40" rx="6" fill="#F59E0B"/>
+            <text x="80" y="120" text-anchor="middle" fill="#FFF" font-weight="bold" font-size="13">UDP: 8 БАЙТ</text>
+            <text x="260" y="120" text-anchor="start" fill="#64748B" font-size="12">← Только Порты, Длина и Checksum</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-9">
+      <span class="slide-tag">8.5 • Сравнение протоколов</span>
+      <h2 class="slide-title">Сравнительный анализ: TCP vs UDP</h2>
+      <p class="slide-subtitle">
+        Выбор между TCP и UDP зависит от требований конкретного приложения к надежности или скорости.
+      </p>
+
+      <div class="table-responsive">
+        <table class="comp-table">
+          <thead>
+            <tr>
+              <th>Параметр</th>
+              <th>TCP (Transmission Control Protocol)</th>
+              <th>UDP (User Datagram Protocol)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Соединение</strong></td>
+              <td>Устанавливает сеанс (Connection-oriented)</td>
+              <td>Без установки соединения (Connectionless)</td>
+            </tr>
+            <tr>
+              <td><strong>Надежность</strong></td>
+              <td>Гарантирует доставку всех байт</td>
+              <td>Не гарантирует доставку (Best-effort)</td>
+            </tr>
+            <tr>
+              <td><strong>Порядок пакетов</strong></td>
+              <td>Восстанавливает исходный порядок (Seq Num)</td>
+              <td>Не восстанавливает порядок датаграмм</td>
+            </tr>
+            <tr>
+              <td><strong>Управление потоком</strong></td>
+              <td>Есть (Sliding Window, Window Size)</td>
+              <td>Отсутствует</td>
+            </tr>
+            <tr>
+              <td><strong>Повторная передача</strong></td>
+              <td>Автоматическая при потерях</td>
+              <td>Отсутствует (или на уровне приложения)</td>
+            </tr>
+            <tr>
+              <td><strong>Сферы применения</strong></td>
+              <td>Web (HTTP/HTTPS), Email (SMTP), FTP, SSH</td>
+              <td>VoIP, Онлайн-игры, DNS, DHCP, TFTP, Стриминг</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="slide theme-light" id="slide-10">
+      <span class="slide-tag">Итоги главы</span>
+      <h2 class="slide-title">Заключение и Ключевые выводы</h2>
+      
+      <div class="grid-3" style="margin-top: 20px;">
+        <div class="card">
+          <div class="card-title" style="color: var(--primary);">1. Связующее звено</div>
+          <p class="card-text">
+            Транспортный уровень организует взаимодействие между прикладными сервисами и сетевым уровнем IP, сегментируя данные.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="color: var(--primary-accent);">2. Адресация через сокеты</div>
+          <p class="card-text">
+            Связка IP-адреса и порта (Socket) позволяет однозначно идентифицировать конечное приложение на узле назначения.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="color: var(--yellow-accent);">3. TCP vs UDP Баланс</div>
+          <p class="card-text">
+            TCP выбирают ради абсолютной надежности и контроля потока; UDP — ради максимальной скорости и минимальных задержек.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide theme-dark" id="slide-11">
+      <span class="slide-tag">Контроль знаний</span>
+      <h2 class="slide-title">Интерактивное тестирование по Главе 8</h2>
+      <p class="slide-subtitle">
+        Ответьте на вопросы ниже для закрепления пройденного материала.
+      </p>
+
+      <div class="interactive-container" style="max-width: 800px; margin: 0 auto; width: 100%;">
+        <div id="quiz-box">
+          <h4 id="quiz-question" style="color: #FFF; font-size: 1.2rem; margin-bottom: 15px;">Загрузка вопроса...</h4>
+          <div id="quiz-options"></div>
+          <div id="quiz-feedback" style="margin-top: 15px; font-weight: bold; min-height: 24px;"></div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+          <span id="quiz-score" style="color: var(--cyan-accent); font-weight: bold;">Баллы: 0</span>
+          <button class="btn btn-secondary" id="quiz-next-btn" onclick="nextQuestion()" style="display: none;">Следующий вопрос →</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    /* ===== ПЕРЕМЕННЫЕ СОСТОЯНИЯ ===== */
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const indicator = document.getElementById('slide-indicator');
+    const progressBar = document.getElementById('progress-bar');
+
+    /* ===== НАВИГАЦИЯ ПО СЛАЙДАМ ===== */
+    function updateSlideVisibility() {
+      slides.forEach((slide, idx) => {
+        if (idx === currentSlide) {
+          slide.classList.add('active');
+          slide.scrollTop = 0; // Сброс прокрутки при открытии
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      // Обновление индикаторов
+      indicator.textContent = `${currentSlide + 1} / ${totalSlides}`;
+      btnPrev.disabled = (currentSlide === 0);
+      btnNext.disabled = (currentSlide === totalSlides - 1);
+
+      // Прогресс бар
+      const pct = ((currentSlide + 1) / totalSlides) * 100;
+      progressBar.style.width = `${pct}%`;
+
+      // Остановка анимаций на скрытых слайдах
+      stopAllAnimations();
+
+      // Запуск локальных демонстраций
+      if (currentSlide === 6) {
+        initWindowDemo();
+      } else if (currentSlide === 11) {
+        loadQuestion();
+      }
+    }
+
+    function goToSlide(idx) {
+      if (idx >= 0 && idx < totalSlides) {
+        currentSlide = idx;
+        updateSlideVisibility();
+      }
+    }
+
+    btnPrev.addEventListener('click', () => goToSlide(currentSlide - 1));
+    btnNext.addEventListener('click', () => goToSlide(currentSlide + 1));
+
+    // Управление клавиатурой
+    document.addEventListener('keydown', (e) => {
+      // Игнорируем нажатия внутри инпутов
+      const activeTag = document.activeElement.tagName.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+
+      if (e.key === 'ArrowRight' || e.key === 'Space') {
+        if (currentSlide < totalSlides - 1) goToSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft') {
+        if (currentSlide > 0) goToSlide(currentSlide - 1);
+      }
+    });
+
+    function stopAllAnimations() {
+      // Функция очистки глобальных таймеров
+      if (window.handshakeTimer) clearTimeout(window.handshakeTimer);
+      if (window.closeTimer) clearTimeout(window.closeTimer);
+    }
+
+    /* ===== ВИДЖЕТ СОКЕТОВ (СЛАЙД 3) ===== */
+    function updateSocketCalc() {
+      const cliIp = document.getElementById('cli-ip').value || '127.0.0.1';
+      const cliPort = document.getElementById('cli-port').value || '8080';
+      const srvIp = document.getElementById('srv-ip').value || '127.0.0.1';
+      const srvPort = document.getElementById('srv-port').value || '80';
+
+      const out = document.getElementById('socket-output');
+      if (out) {
+        out.innerHTML = `Сокет Источника: ${cliIp}:${cliPort}<br>Сокет Назначения: ${srvIp}:${srvPort}`;
+      }
+    }
+
+    document.getElementById('cli-ip')?.addEventListener('input', updateSocketCalc);
+    document.getElementById('cli-port')?.addEventListener('input', updateSocketCalc);
+    document.getElementById('srv-ip')?.addEventListener('input', updateSocketCalc);
+    document.getElementById('srv-port')?.addEventListener('input', updateSocketCalc);
+
+    /* ===== ИНСПЕКТОР TCP ЗАГОЛОВКА (СЛАЙД 4) ===== */
+    const tcpData = {
+      srcPort: { title: "Порт источника (16 бит)", desc: "Идентифицирует отправляющее приложение на исходном узле." },
+      dstPort: { title: "Порт назначения (16 бит)", desc: "Идентифицирует целевое приложение на узле-получателе (например, 80 для HTTP)." },
+      seqNum: { title: "Порядковый номер / Sequence Number (32 бита)", desc: "Указывает номер первого байта данных в этом сегменте для сбора последовательности." },
+      ackNum: { title: "Номер подтверждения / ACK Number (32 бита)", desc: "Содержит номер СЛЕДУЮЩЕГО байта, который отправитель ожидает получить." },
+      offset: { title: "Смещение данных (4 бита)", desc: "Указывает размер заголовка TCP в 32-битных словах (от 20 до 60 байт)." },
+      flags: { title: "Управляющие флаги (6 бит)", desc: "URG, ACK, PSH, RST, SYN, FIN — управляют состоянием соединения." },
+      window: { title: "Размер окна / Window Size (16 бит)", desc: "Количество байт, которое получатель готов принять без подтверждения." },
+      checksum: { title: "Контрольная сумма (16 бит)", desc: "Используется для проверки целостности заголовка и данных." },
+      urg: { title: "Указатель срочности (16 бит)", desc: "Указывает на конец срочных данных, если установлен флаг URG." }
+    };
+
+    function inspectTcp(key) {
+      const info = tcpData[key];
+      if (info) {
+        document.getElementById('tcp-info-title').textContent = info.title;
+        document.getElementById('tcp-info-desc').textContent = info.desc;
+      }
+    }
+
+    /* ===== ДЕМОНСТРАЦИЯ РУКОПОЖАТИЯ (СЛАЙД 5) ===== */
+    function resetHandshakeAnim() {
+      stopAllAnimations();
+      document.getElementById('pkt-syn').style.opacity = '0';
+      document.getElementById('pkt-synack').style.opacity = '0';
+      document.getElementById('pkt-ack').style.opacity = '0';
+      document.getElementById('cli-state').textContent = 'CLOSED';
+      document.getElementById('srv-state').textContent = 'LISTEN';
+    }
+
+    function startHandshakeAnim() {
+      resetHandshakeAnim();
+
+      // Step 1: SYN
+      document.getElementById('cli-state').textContent = 'SYN-SENT';
+      document.getElementById('pkt-syn').style.opacity = '1';
+
+      window.handshakeTimer = setTimeout(() => {
+        // Step 2: SYN-ACK
+        document.getElementById('srv-state').textContent = 'SYN-RECEIVED';
+        document.getElementById('pkt-synack').style.opacity = '1';
+
+        window.handshakeTimer = setTimeout(() => {
+          // Step 3: ACK
+          document.getElementById('pkt-ack').style.opacity = '1';
+          document.getElementById('cli-state').textContent = 'ESTABLISHED';
+          document.getElementById('srv-state').textContent = 'ESTABLISHED';
+        }, 1000);
+      }, 1000);
+    }
+
+    /* ===== ДЕМОНСТРАЦИЯ СКОЛЬЗЯЩЕГО ОКНА (СЛАЙД 6) ===== */
+    let winSize = 3;
+    let currentAck = 0;
+
+    function initWindowDemo() {
+      const container = document.getElementById('window-bytes-bar');
+      if (!container) return;
+      container.innerHTML = '';
+
+      for (let i = 1; i <= 10; i++) {
+        const blk = document.createElement('div');
+        blk.className = 'byte-block';
+        blk.id = `byte-${i}`;
+        blk.innerHTML = `<span>#${i}</span>`;
+        container.appendChild(blk);
+      }
+      currentAck = 0;
+      updateWindowRender();
+    }
+
+    function updateWindowSize(val) {
+      winSize = parseInt(val, 10);
+      document.getElementById('win-size-val').textContent = winSize;
+      updateWindowRender();
+    }
+
+    function updateWindowRender() {
+      for (let i = 1; i <= 10; i++) {
+        const blk = document.getElementById(`byte-${i}`);
+        if (!blk) continue;
+
+        blk.className = 'byte-block';
+        if (i <= currentAck) {
+          blk.classList.add('acked');
+        } else if (i > currentAck && i <= currentAck + winSize) {
+          blk.classList.add('in-window');
+        }
+      }
+    }
+
+    function sendWindowBatch() {
+      if (currentAck >= 10) return;
+      currentAck = Math.min(10, currentAck + winSize);
+      updateWindowRender();
+
+      const status = document.getElementById('window-status');
+      status.textContent = `Получено подтверждение (ACK) для сегментов до #${currentAck}. Окно сдвинулось вперед!`;
+    }
+
+    function resetWindowDemo() {
+      currentAck = 0;
+      updateWindowRender();
+      document.getElementById('window-status').textContent = 'Демонстрация сброшена. Нажмите "Передать данные".';
+    }
+
+    /* ===== ДЕМОНСТРАЦИЯ ЗАКРЫТИЯ СЕАНСА (СЛАЙД 7) ===== */
+    function runCloseAnim() {
+      const log = document.getElementById('close-log');
+      log.innerHTML = '1. Клиент -> FIN (seq=1000, ack=2000)<br>';
+
+      window.closeTimer = setTimeout(() => {
+        log.innerHTML += '2. Сервер -> ACK (ack=1001)<br>';
+        window.closeTimer = setTimeout(() => {
+          log.innerHTML += '3. Сервер -> FIN (seq=2000, ack=1001)<br>';
+          window.closeTimer = setTimeout(() => {
+            log.innerHTML += '4. Клиент -> ACK (ack=2001)<br><strong style="color:#10B981;">Соединение успешно ЗАКРЫТО.</strong>';
+          }, 800);
+        }, 800);
+      }, 800);
+    }
+
+    /* ===== ИНТЕРАКТИВНЫЙ ТЕСТ (СЛАЙД 11) ===== */
+    const quizData = [
+      {
+        q: "Какова длина фиксированной части заголовка протокола UDP?",
+        options: ["20 байт", "8 байт", "60 байт", "4 байта"],
+        correct: 1,
+        exp: "Правильно! Заголовок UDP содержит всего 4 поля по 2 байта = 8 байт."
+      },
+      {
+        q: "Что образует Сокет (Socket)?",
+        options: ["MAC-адрес и IP-адрес", "IP-адрес и номер порта", "Номер порта и протокол L7", "Имя хоста и URL"],
+        correct: 1,
+        exp: "Верно! Сокет — это комбинация IP-адреса и порта (например, 192.168.1.1:80)."
+      },
+      {
+        q: "Какой флаг TCP используется для инициирования установки соединения?",
+        options: ["FIN", "ACK", "SYN", "RST"],
+        correct: 2,
+        exp: "Правильно! Флаг SYN отправляется для синхронизации порядковых номеров."
+      },
+      {
+        q: "Какая ключевая функция Скользящего окна (Sliding Window)?",
+        options: ["Шифрование данных", "Управление потоком и предотвращение переполнения буфера", "Маршрутизация пакетов", "Преобразование имен в IP"],
+        correct: 1,
+        exp: "Отлично! Скользящее окно регулирует объем передаваемых данных без подтверждения."
+      }
+    ];
+
+    let currentQ = 0;
+    let score = 0;
+
+    function loadQuestion() {
+      if (currentQ >= quizData.length) {
+        document.getElementById('quiz-box').innerHTML = `
+          <h3 style="color:#10B981; font-size:1.5rem; text-align:center;">Тестирование завершено!</h3>
+          <p style="text-align:center; font-size:1.2rem; margin-top:10px; color:#FFF;">Ваш результат: ${score} из ${quizData.length}</p>
+        `;
+        document.getElementById('quiz-next-btn').style.display = 'none';
+        return;
+      }
+
+      const q = quizData[currentQ];
+      document.getElementById('quiz-question').textContent = `${currentQ + 1}. ${q.q}`;
+
+      const optsBox = document.getElementById('quiz-options');
+      optsBox.innerHTML = '';
+      document.getElementById('quiz-feedback').textContent = '';
+      document.getElementById('quiz-next-btn').style.display = 'none';
+
+      q.options.forEach((opt, idx) => {
+        const div = document.createElement('div');
+        div.className = 'quiz-option';
+        div.textContent = opt;
+        div.onclick = () => checkAnswer(idx);
+        optsBox.appendChild(div);
+      });
+    }
+
+    function checkAnswer(chosen) {
+      const q = quizData[currentQ];
+      const options = document.querySelectorAll('.quiz-option');
+
+      options.forEach(opt => opt.style.pointerEvents = 'none');
+
+      if (chosen === q.correct) {
+        options[chosen].classList.add('correct');
+        document.getElementById('quiz-feedback').style.color = '#10B981';
+        document.getElementById('quiz-feedback').textContent = q.exp;
+        score++;
+      } else {
+        options[chosen].classList.add('incorrect');
+        options[q.correct].classList.add('correct');
+        document.getElementById('quiz-feedback').style.color = '#EF4444';
+        document.getElementById('quiz-feedback').textContent = `Неверно. ${q.exp}`;
+      }
+
+      document.getElementById('quiz-score').textContent = `Баллы: ${score}`;
+      document.getElementById('quiz-next-btn').style.display = 'inline-block';
+    }
+
+    function nextQuestion() {
+      currentQ++;
+      loadQuestion();
+    }
+
+    // Инициализация при старте
+    updateSlideVisibility();
+  </script>
+</body>
+</html>

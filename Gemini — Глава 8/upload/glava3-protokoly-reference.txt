@@ -1,0 +1,1136 @@
+ПРИМЕР КОДА. Встроенные base64-ресурсы удалены только из этой текстовой копии. Не копировать маркер вместо ресурса.
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Протоколы и модели · Глава 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Caveat:wght@500;600;700&family=Nunito+Sans:ital,wght@0,400;0,700;0,900;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Ghibli-скрапбук · тёплая палитра (имена токенов сохранены — низкий риск) */
+  --blue:#D2632B; --blue-d:#B24E1E; --yellow:#F5B63C; --white:#FDF8EE;
+  --ink:#3E2D21; --paper:#F7EFDE;
+  --sage:#6E7355; --sage-d:#565B41;
+  --peach:#F5D9B4; --blush:#ECBAC2; --sky:#B9C4DE; --kraft:#DCC9A4;
+  --card:#FFFDF7;
+  --fd:"Fredoka",sans-serif; --fs:"Caveat",cursive; --fb:"Nunito Sans",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:#3f4335;overflow:hidden;-webkit-tap-highlight-color:transparent}
+#stage{position:fixed;inset:0;display:grid;place-items:center;overflow:hidden}
+.deck{width:1920px;height:1080px;position:relative;transform-origin:center;flex:none}
+.slide{position:absolute;inset:0;display:none;overflow:hidden}
+.slide.on{display:block}
+.slide.bg-blue{background:var(--sage)}
+.slide.bg-white{background:var(--paper)}
+/* бумага-в-клетку на светлых слайдах */
+.slide.bg-white::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(62,45,33,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(62,45,33,.055) 1px,transparent 1px);
+  background-size:48px 48px}
+/* крафт-зерно на всех слайдах */
+.slide::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23g)' opacity='0.32'/></svg>")}
+.slide.bg-blue::after{opacity:.35}
+.pad{position:absolute;inset:0;padding:96px 120px;z-index:2}
+
+/* типографика */
+.kick{font-family:var(--fs);font-weight:600;font-size:42px;line-height:1;letter-spacing:.01em}
+.h-d{font-family:var(--fd);font-weight:700;text-transform:uppercase;line-height:.95;letter-spacing:-.01em}
+.h-xl{font-size:150px}.h-lg{font-size:104px}.h-md{font-size:76px}.h-sm{font-size:54px}
+.cover-title{color:var(--blue);-webkit-text-stroke:7px var(--white);paint-order:stroke fill;
+  text-shadow:6px 7px 0 rgba(62,45,33,.22)}
+.cover-title .yl{color:var(--yellow);-webkit-text-stroke:7px var(--ink)}
+.body{font-family:var(--fb);font-weight:400;line-height:1.4}
+.b-xl{font-size:40px}.b-lg{font-size:34px}.b-md{font-size:29px}.b-sm{font-size:24px}
+.on-blue{color:var(--white)} .on-blue .yl{color:var(--yellow)}
+.on-white{color:var(--ink)} .on-white .yl{color:var(--ink);background:var(--yellow);padding:0 .12em;border-radius:.18em}
+.blue{color:var(--blue)} .white{color:var(--white)} .ink{color:var(--ink)} .yellowt{color:var(--yellow)}
+b,strong{font-weight:900}
+.mono-num{font-family:var(--fd);font-weight:600}
+
+/* блоки */
+.lead{max-width:22ch}
+.col{display:flex;flex-direction:column}
+.bullets{list-style:none;display:grid;gap:22px}
+.bullets li{position:relative;padding-left:52px;font-family:var(--fb);line-height:1.34}
+.bullets li::before{content:"";position:absolute;left:0;top:.12em;width:30px;height:30px;background:var(--yellow);
+  clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%)}
+.bullets.dark li::before{background:var(--blue)}
+.steps{list-style:none;display:grid;gap:20px;counter-reset:s}
+.steps li{position:relative;padding-left:78px;font-family:var(--fb);line-height:1.34;min-height:52px;padding-top:6px}
+.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:0;width:56px;height:56px;
+  border-radius:50%;background:var(--blue);color:#fff;font-family:var(--fd);font-weight:700;font-size:32px;
+  display:grid;place-items:center}
+.on-white .steps li::before{background:var(--blue);color:#fff}
+.on-blue .steps li::before{background:var(--yellow);color:var(--ink)}
+
+/* карточка-аналогия — бумажная вырезка со скотчем */
+.card{background:var(--card);border:5px solid var(--blue);border-radius:34px;padding:44px 48px;
+  font-family:var(--fb);color:var(--ink);position:relative;
+  box-shadow:7px 9px 0 rgba(62,45,33,.13);transform:rotate(-.7deg)}
+.card .tag{font-family:var(--fs);font-weight:700;font-size:40px;color:var(--blue);display:block;margin-bottom:10px}
+.card.analogy{background:var(--yellow);border-color:var(--ink);transform:rotate(.8deg)}
+.card.analogy .tag{color:var(--ink)}
+/* washi-скотч в углу карточки */
+.card::after{content:"";position:absolute;top:-15px;left:44px;width:118px;height:34px;
+  background:rgba(245,182,60,.6);transform:rotate(-5deg);box-shadow:0 2px 7px rgba(62,45,33,.14)}
+.card.analogy::after{background:rgba(236,186,194,.72)}
+
+/* определение (callout) */
+.callout{background:var(--card);border-radius:28px;padding:40px 48px 40px 60px;position:relative;overflow:hidden;
+  font-family:var(--fb);color:var(--ink);box-shadow:0 0 0 4px var(--blue) inset,6px 8px 0 rgba(62,45,33,.12)}
+.callout::before{content:"";position:absolute;left:0;top:0;bottom:0;width:22px;background:var(--yellow)}
+.callout .term{font-family:var(--fd);font-weight:700;text-transform:uppercase;color:var(--blue);font-size:46px;margin-bottom:12px;line-height:1}
+.callout .def{font-size:32px;line-height:1.36}
+
+/* мелкие лейблы схем */
+.lab{font-family:var(--fb);font-weight:700;font-size:24px;fill:var(--ink)}
+.lab-s{font-family:var(--fb);font-weight:700;font-size:19px;fill:var(--ink)}
+.note-hand{font-family:var(--fs);font-weight:600;font-size:38px;color:var(--blue)}
+
+/* счётчик и киккер слайда */
+.counter{position:absolute;right:64px;bottom:52px;z-index:5;font-family:var(--fd);font-weight:600;font-size:28px}
+.slide.bg-blue .counter{color:rgba(255,255,255,.72)} .slide.bg-white .counter{color:rgba(29,42,120,.5)}
+.tophint{position:absolute;left:120px;top:60px;z-index:3;font-family:var(--fb);font-weight:700;font-size:23px;
+  letter-spacing:.14em;text-transform:uppercase}
+.slide.bg-blue .tophint{color:var(--yellow)} .slide.bg-white .tophint{color:var(--blue)}
+
+/* таблица «маркерная» */
+.mtable{border-collapse:separate;border-spacing:0;width:100%;font-family:var(--fb);
+  border-radius:20px;overflow:hidden;box-shadow:6px 8px 0 rgba(62,45,33,.13);background:var(--card)}
+.mtable th,.mtable td{text-align:left;padding:22px 28px;font-size:28px;border-bottom:4px solid var(--blue)}
+.mtable th{font-family:var(--fd);font-weight:600;text-transform:uppercase;font-size:26px;color:var(--white);background:var(--blue)}
+.mtable td{color:var(--ink)}
+.mtable tr:last-child td{border-bottom:none}
+.mtable .hot td{background:var(--yellow)}
+
+/* сетки */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center}
+.g2a{display:grid;grid-template-columns:1.05fr .95fr;gap:72px;align-items:center}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:40px}
+
+/* декоративные доп. */
+.divider{height:0;border-top:5px dashed currentColor;opacity:.5}
+svg .rough{filter:url(#rough)}
+.doodle{position:absolute;z-index:1;pointer-events:none}
+
+/* навигация подсказка */
+.hintnav{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:20;color:#b0a892;
+  font-family:var(--fb);font-size:15px;letter-spacing:.12em;text-transform:uppercase;opacity:.6}
+
+@media print{
+  html,body{overflow:visible;background:#fff}
+  @page{size:1920px 1080px;margin:0}
+  #stage{position:static;display:block}
+  .deck{transform:none!important;width:1920px;height:auto}
+  .slide{position:relative!important;display:block!important;width:1920px;height:1080px;page-break-after:always;break-after:page}
+  .hintnav,.counter{--x:0}
+  .hintnav{display:none}
+}
+
+.bitrow{display:flex;gap:10px;flex-wrap:wrap}
+.bitchip{width:58px;height:58px;border-radius:14px;border:4px solid var(--blue);background:#fff;color:var(--blue);
+  font-family:var(--fd);font-weight:700;font-size:32px;cursor:pointer;line-height:1;transition:.12s}
+.bitchip.on{background:var(--blue);color:#fff}
+.bitchip:hover{border-color:var(--ink);transform:translateY(-2px)}
+.minibtn{border:4px solid var(--blue);background:#fff;color:var(--blue);font-family:var(--fd);font-weight:600;
+  font-size:24px;padding:10px 20px;border-radius:14px;cursor:pointer;transition:.12s}
+.minibtn:hover{background:var(--yellow);border-color:var(--ink);color:var(--ink)}
+.modctrl{display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin-bottom:12px}
+.knob{display:flex;align-items:center;gap:14px;font-family:var(--fb);font-weight:700;font-size:24px;color:var(--blue);text-transform:lowercase}
+.knob input[type=range]{-webkit-appearance:none;appearance:none;width:240px;height:8px;border-radius:6px;background:#e8dcc2;outline:none}
+.knob input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:var(--yellow);border:4px solid var(--blue);cursor:pointer}
+.knob input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;background:var(--yellow);border:4px solid var(--blue);cursor:pointer}
+.modsvg,.cmp-am,.cmp-fm,.cmp-pm{background:var(--card);border:4px solid #e6d9bf;border-radius:20px}
+.cmprow{display:flex;align-items:center;gap:18px;margin-top:6px}
+.cmplab{font-family:var(--fd);font-weight:700;font-size:32px;color:var(--blue);width:64px;flex:none}
+.hintlive{font-family:var(--fs);font-weight:600;font-size:30px;color:var(--blue)}
+.castsvg .pkt{filter:drop-shadow(0 0 0 rgba(0,0,0,0))}
+</style>
+
+<!-- ===== SVG DEFS: маркерный фильтр + дудлы ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="rough" x="-6%" y="-30%" width="112%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.014" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="rough2" x="-6%" y="-30%" width="112%" height="160%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- спарк (звезда-вспышка) -->
+    <symbol id="spark" viewBox="0 0 100 100">
+      <path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div id="stage"><div class="deck" id="deck">
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="left:-140px;bottom:-160px;width:820px;height:680px;opacity:.14" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="right:120px;top:120px;width:150px;transform:rotate(-12deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="left:70px;top:360px;width:110px;transform:rotate(8deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <svg class="doodle" style="right:360px;bottom:150px;width:90px;transform:rotate(18deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="kick yellowt" style="margin-bottom:26px">учебная лекция · компьютерные сети</div>
+    <h1 class="h-d h-xl cover-title">ПРОТО<br>КОЛЫ <span class="yl">И</span><br>МОДЕЛИ</h1>
+    <div class="body b-lg" style="margin-top:40px;opacity:.9">Глава 3 · как устройства договариваются, чтобы понять друг друга</div>
+    <div class="kick" style="margin-top:64px;color:var(--white)">Ананко · Качур &nbsp;—&nbsp; VK · TG</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">о чём эта глава</div>
+  <svg class="doodle" style="right:130px;top:110px;width:120px;transform:rotate(14deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <h2 class="h-d h-md blue" style="margin-bottom:54px">ТРИ ВОПРОСА ЭТОЙ ГЛАВЫ</h2>
+    <ul class="steps b-xl ink" style="max-width:40ch;gap:34px">
+      <li>Какие <b>правила обмена</b> сообщениями нужны устройствам</li>
+      <li>Какими бывают <b>способы рассылки</b> — одному, группе, всем</li>
+      <li>Как устроены <b>сетевые модели</b> и протоколы — OSI и TCP/IP</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="right:-160px;top:-160px;width:760px;height:620px;opacity:.13" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="left:120px;bottom:150px;width:140px;transform:rotate(-10deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="right:220px;bottom:240px;width:120px;transform:rotate(12deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="h-d" style="font-size:190px;color:rgba(255,255,255,.18);line-height:.8">1</div>
+    <div class="kick yellowt" style="margin:10px 0 14px">раздел 1</div>
+    <h2 class="h-d h-lg">ЗАЧЕМ НУЖНЫ<br>ПРАВИЛА</h2>
+    <div class="body b-lg" style="margin-top:26px;opacity:.9;max-width:26ch">Сеть существует ради обмена данными — а обмен держится на договорённостях.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">1.1 · зачем правила</div>
+  <div class="pad g2a" style="top:80px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:30px">МАЛО ОБЩЕГО ЯЗЫКА —<br>НУЖНЫ ПРАВИЛА РАЗГОВОРА</h2>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:26px">Сети придуманы ради одной вещи — <b>обмена данными</b>. Чтобы разговор состоялся, двум собеседникам мало общего языка. Нужны негласные правила:</p>
+      <ul class="bullets b-md ink" style="max-width:32ch">
+        <li>кто начинает разговор</li>
+        <li>как понять, что тебя услышали</li>
+        <li>что делать, если фразу заглушил шум</li>
+      </ul>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Один говорит по-русски, другой отвечает азбукой Морзе в темноте — обмена не выйдет, даже если оба очень хотят пообщаться.</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">1.1 · определение</div>
+  <svg class="doodle" style="right:140px;top:130px;width:120px;transform:rotate(-14deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="left:-180px;bottom:-180px;width:660px;height:540px;opacity:.12" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="callout" style="max-width:1400px">
+      <div class="term">Протокол</div>
+      <div class="def">это и «общий язык», и «правила приличия» для устройств одновременно: он задаёт и <b>что</b> передавать, и <b>как</b> себя при этом вести.</div>
+    </div>
+    <p class="body b-lg white" style="margin-top:44px;opacity:.9;max-width:40ch">Протоколов великое множество, и они очень разные по охвату: одни решают крайне узкую задачу, другие применяются глобально.</p>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">1.1 · стандарты</div>
+  <div class="pad" style="top:60px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:16px">ПОЧЕМУ ПОБЕДИЛИ СТАНДАРТЫ</h2>
+    <p class="body b-md ink" style="max-width:60ch;margin-bottom:20px">Сеть по определению соединяет устройства <b>разных производителей</b>. Если бы каждый производитель говорил на своём диалекте, единого интернета не было бы. Стандарт — решение проблемы «вавилонского смешения»: договорились один раз и глобально.</p>
+    <svg viewBox="0 0 1680 470" style="width:100%;height:520px">
+      <g class="rough" fill="none" stroke="var(--blue)" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="70" y="150" width="230" height="170" rx="26"/><rect x="740" y="150" width="230" height="170" rx="26"/>
+        <path d="M300 235 L740 235"/><rect x="410" y="196" width="220" height="80" rx="24" fill="var(--yellow)" stroke="var(--ink)"/>
+      </g>
+      <text x="185" y="245" text-anchor="middle" class="lab">Производитель A</text>
+      <text x="855" y="245" text-anchor="middle" class="lab">Производитель B</text>
+      <text x="520" y="243" text-anchor="middle" class="lab-s">стандартный протокол</text>
+      <text x="520" y="120" text-anchor="middle" class="lab" fill="var(--blue)">СВЯЗЬ УСТАНОВЛЕНА</text>
+      <g class="rough" fill="none" stroke="#a89a86" stroke-width="7" stroke-linejoin="round" stroke-linecap="round">
+        <rect x="1120" y="150" width="200" height="150" rx="24"/><rect x="1470" y="150" width="200" height="150" rx="24"/>
+        <path d="M1330 300 L1460 175" stroke="#B24747" stroke-width="8"/><path d="M1460 300 L1330 175" stroke="#B24747" stroke-width="8"/>
+      </g>
+      <text x="1220" y="240" text-anchor="middle" class="lab-s" fill="#a89a86">свой язык</text>
+      <text x="1570" y="240" text-anchor="middle" class="lab-s" fill="#a89a86">свой язык</text>
+      <text x="1395" y="120" text-anchor="middle" class="lab" fill="#B24747">СВЯЗИ НЕТ</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">1.1 · условия доставки · 1 из 2</div>
+  <div class="pad" style="top:80px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:10px">ПЯТЬ УСЛОВИЙ, ЧТОБЫ СООБЩЕНИЕ ДОШЛО</h2>
+    <p class="body b-sm ink" style="opacity:.75;margin-bottom:40px">Симметрия: 1–2 — про отправителя, 3 — про путь, 4–5 — про получателя.</p>
+    <div class="g2" style="align-items:stretch">
+      <div class="card" style="border-radius:26px;padding:40px 44px">
+        <div class="kick blue" style="font-size:40px;margin-bottom:16px">Отправитель</div>
+        <ul class="steps b-md ink">
+          <li>Знает, <b>кому</b> отправляет — может однозначно опознать получателя</li>
+          <li>Имеет <b>возможность</b> отправить: превратит сообщение в сигналы, при нужде разобьёт на части</li>
+        </ul>
+      </div>
+      <div class="card analogy" style="border-radius:26px;padding:40px 44px">
+        <div class="kick" style="font-size:40px;margin-bottom:16px">Путь</div>
+        <ul class="steps b-md ink" style="counter-reset:s 2">
+          <li>Сеть отправителя <b>принимает</b> сигналы и передаёт дальше — к получателю или в соседнюю сеть по направлению к нему</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">1.1 · условия доставки · 2 из 2</div>
+  <div class="pad" style="top:110px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:40px">…И НА СТОРОНЕ ПОЛУЧАТЕЛЯ</h2>
+    <div class="g2" style="align-items:stretch">
+      <div class="card" style="border-radius:26px;padding:40px 44px">
+        <div class="kick blue" style="font-size:40px;margin-bottom:16px">Сеть получателя</div>
+        <ul class="steps b-md ink" style="counter-reset:s 3">
+          <li>Превращает сообщение в <b>понятные</b> устройству сигналы — если работает на тех же протоколах</li>
+        </ul>
+      </div>
+      <div class="card" style="border-radius:26px;padding:40px 44px">
+        <div class="kick blue" style="font-size:40px;margin-bottom:16px">Устройство получателя</div>
+        <ul class="steps b-md ink" style="counter-reset:s 4">
+          <li>Принимает сигналы, <b>расшифровывает</b>, при нужде собирает из частей и показывает в приложении</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note-hand" style="margin-top:34px">отправитель → сеть → получатель — эту тройку встретим снова и снова</p>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="right:-160px;top:-160px;width:760px;height:620px;opacity:.13" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="left:120px;bottom:150px;width:140px;transform:rotate(-10deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="right:220px;bottom:240px;width:120px;transform:rotate(12deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="h-d" style="font-size:190px;color:rgba(255,255,255,.18);line-height:.8">2</div>
+    <div class="kick yellowt" style="margin:10px 0 14px">раздел 2</div>
+    <h2 class="h-d h-lg">ЧЕТЫРЕ ЗАДАЧИ<br>ПРОТОКОЛОВ</h2>
+    <div class="body b-lg" style="margin-top:26px;opacity:.9;max-width:26ch">Кодирование, форматирование, размер и параметры доставки.</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">2.0 · задачи протоколов</div>
+  <div class="pad" style="top:70px">
+    <h2 class="h-d h-sm" style="margin-bottom:20px">ЧТО ДЕЛАЮТ <span class="yl">ПРОТОКОЛЫ</span></h2>
+    <svg viewBox="0 0 1680 640" style="width:100%;height:680px">
+      <g class="rough">
+        <circle cx="840" cy="320" r="150" fill="var(--yellow)" stroke="var(--ink)" stroke-width="7"/>
+        <g stroke="var(--white)" stroke-width="7" fill="none" stroke-linecap="round">
+          <path d="M690 250 L360 150"/><path d="M690 390 L360 490"/><path d="M990 250 L1320 150"/><path d="M990 390 L1320 490"/>
+        </g>
+        <g fill="var(--white)" stroke="var(--white)" stroke-width="7">
+          <rect x="70" y="90" width="300" height="130" rx="24"/><rect x="70" y="430" width="300" height="130" rx="24"/>
+          <rect x="1310" y="90" width="300" height="130" rx="24"/><rect x="1310" y="430" width="300" height="130" rx="24"/>
+        </g>
+      </g>
+      <text x="840" y="332" text-anchor="middle" class="h-d" style="font-size:44px" fill="var(--ink)">Прото&#8203;колы</text>
+      <text x="220" y="150" text-anchor="middle" class="lab" fill="var(--blue)">Кодирование</text><text x="220" y="182" text-anchor="middle" class="lab" fill="var(--blue)">сообщения</text>
+      <text x="220" y="490" text-anchor="middle" class="lab" fill="var(--blue)">Форматирование</text><text x="220" y="522" text-anchor="middle" class="lab" fill="var(--blue)">и инкапсуляция</text>
+      <text x="1460" y="165" text-anchor="middle" class="lab" fill="var(--blue)">Размер</text><text x="1460" y="197" text-anchor="middle" class="lab" fill="var(--blue)">сообщения</text>
+      <text x="1460" y="490" text-anchor="middle" class="lab" fill="var(--blue)">Параметры</text><text x="1460" y="522" text-anchor="middle" class="lab" fill="var(--blue)">доставки</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.1 · кодирование</div>
+  <div class="pad g2a" style="top:80px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:26px">ТЕКСТ → КОД → ИМПУЛЬСЫ</h2>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Устройствам удобнее всего <b>двоичный</b> код: в основе электроники — «есть напряжение / нет», «есть свет / нет». Два состояния идеально ложатся на 0 и 1.</p>
+      <p class="body b-md ink" style="max-width:34ch">Но одного двоичного мало: под каждую среду нули и единицы перекодируют заново. Кодирование — это <b>цепочка</b>:</p>
+      <div class="note-hand" style="margin-top:18px">текст → двоичный код → импульсы</div>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Переводчик-многостаночник: сначала переводит смысл в буквы, потом буквы — в азбуку Морзе, а если связь по свету — в световые вспышки. Каждый «перевод» — под свою среду.</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">2.1 · модуляция</div>
+  <svg class="doodle" style="right:150px;top:120px;width:120px;transform:rotate(-12deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <div class="pad g2a" style="top:80px">
+    <div class="col">
+      <div class="callout"><div class="term">Модуляция</div><div class="def">изменение одного или нескольких параметров высокочастотного <b>несущего</b> сигнала в соответствии с низкочастотным информационным сигналом.</div></div>
+      <p class="body b-md white" style="opacity:.92;margin-top:30px;max-width:36ch">Несущая сама по себе ничего не сообщает. Модуляция «накладывает» на неё биты так, чтобы сигнал уже нёс информацию и мог пройти через среду.</p>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Несущая — как ровно едущий по трассе грузовик: сам по себе он ничего не сообщает. Модуляция — это когда мы грузим в него ящики-биты по правилу. Теперь по одному взгляду на груз можно прочитать сообщение.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.1 · три ручки несущей</div>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <h2 class="h-d h-sm blue" style="margin-bottom:16px">У ВОЛНЫ ТРИ ПАРАМЕТРА —<br>ТРИ ВИДА МОДУЛЯЦИИ</h2>
+    <p class="body b-md ink" style="max-width:60ch;margin-bottom:40px">У любой синусоидальной несущей можно «крутить» ровно три «ручки». Отсюда и три базовых вида модуляции. Каждый разберём по принципу <b>что меняем → как читается → чем платим</b>.</p>
+    <div class="g3">
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:40px;margin-bottom:8px">Амплитуда</div><p class="body b-sm ink">высота волны → амплитудная модуляция (АМ)</p></div>
+      <div class="card analogy" style="border-radius:26px"><div class="kick" style="font-size:40px;margin-bottom:8px">Частота</div><p class="body b-sm ink">как часто колеблется → частотная (ЧМ)</p></div>
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:40px;margin-bottom:8px">Фаза</div><p class="body b-sm ink">сдвиг во времени → фазовая (ФМ)</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="mod">
+  <div class="tophint">2.1 · АМ · амплитуда · интерактив</div>
+  <div class="pad" style="top:64px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:12px">АМ: МЕНЯЕМ ВЫСОТУ ВОЛНЫ</h2>
+    <div class="modwidget" data-mode="am" data-bits="1010">
+      <div class="modctrl">
+        <div class="bitrow"></div>
+        <button class="minibtn" data-act="rand">перемешать</button>
+        <label class="knob">глубина<input type="range" class="knobrange" min="0.3" max="1" value="1" step="0.05"></label>
+      </div>
+      <svg class="modsvg" viewBox="0 0 1440 240" style="width:100%;height:250px"></svg>
+    </div>
+    <div class="g2a" style="margin-top:20px;align-items:start">
+      <p class="body b-md ink" style="max-width:40ch">Единице — «громкая» волна, нулю — «тихая». Частота и фаза неизменны. Самый простой, но и самый уязвимый к шуму способ.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Как фонарик, которым сигналят яркостью: ярко/тускло. Читать просто, но чужой прожектор во дворе (помеха) может «перекричать» ваш сигнал.</div>
+    </div>
+    <p class="hintlive" style="margin-top:14px">кликай биты 0 ⇄ 1 · крути «глубина» — волна меняется вживую</p>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="mod">
+  <div class="tophint">2.1 · ЧМ · частота · интерактив</div>
+  <div class="pad" style="top:64px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:12px">ЧМ: МЕНЯЕМ ЧАСТОТУ</h2>
+    <div class="modwidget" data-mode="fm" data-bits="1010">
+      <div class="modctrl">
+        <div class="bitrow"></div>
+        <button class="minibtn" data-act="rand">перемешать</button>
+        <label class="knob">разброс частот<input type="range" class="knobrange" min="0.3" max="1.6" value="1" step="0.05"></label>
+      </div>
+      <svg class="modsvg" viewBox="0 0 1440 240" style="width:100%;height:250px"></svg>
+    </div>
+    <div class="g2a" style="margin-top:20px;align-items:start">
+      <p class="body b-md ink" style="max-width:40ch">Амплитуда постоянна, меняется частота: единице — сигнал повыше (частые колебания), нулю — пониже. Приёмник смотрит на «высоту тона», а не на громкость.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Как высота свистка — тонкий против низкого. Даже если свистеть то громче, то тише, тон никуда не денется. За это FM-радио звучит чище, чем AM.</div>
+    </div>
+    <p class="hintlive" style="margin-top:14px">кликай биты 0 ⇄ 1 · крути «разброс частот» — волна меняется вживую</p>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="mod">
+  <div class="tophint">2.1 · ФМ · фаза · интерактив</div>
+  <div class="pad" style="top:64px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:12px">ФМ: СДВИГАЕМ ФАЗУ</h2>
+    <div class="modwidget" data-mode="pm" data-bits="1010">
+      <div class="modctrl">
+        <div class="bitrow"></div>
+        <button class="minibtn" data-act="rand">перемешать</button>
+        <label class="knob">сдвиг фазы<input type="range" class="knobrange" min="0.3" max="1" value="1" step="0.05"></label>
+      </div>
+      <svg class="modsvg" viewBox="0 0 1440 240" style="width:100%;height:250px"></svg>
+    </div>
+    <div class="g2a" style="margin-top:20px;align-items:start">
+      <p class="body b-md ink" style="max-width:40ch">Амплитуда и частота постоянны — мы «переворачиваем» волну. «Фаза как была» — 0, «фаза перевёрнута» — 1. На глаз незаметно, зато техника ловит очень точно.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Хор поёт одну ноту одинаково громко. Договорились: «в такт» с дирижёром — 0, «в противофазе» — 1. Информация — в моменте вступления. Тонко и помехоустойчиво.</div>
+    </div>
+    <p class="hintlive" style="margin-top:14px">кликай биты 0 ⇄ 1 · крути «сдвиг фазы» — волна меняется вживую</p>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="modcompare">
+  <div class="tophint">2.1 · сравнение · интерактив</div>
+  <div class="pad" style="top:56px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:6px">ОДНИ БИТЫ — <span class="yl">ТРИ СПОСОБА</span></h2>
+    <div class="modcompare" data-bits="1010">
+      <div class="modctrl">
+        <div class="bitrow"></div>
+        <button class="minibtn" data-act="rand">перемешать</button>
+        <span class="hintlive">кликай биты — все три волны меняются вместе</span>
+      </div>
+      <div class="cmprow"><span class="cmplab">АМ</span><svg class="cmp-am" viewBox="0 0 1500 190" style="width:100%;height:180px"></svg></div>
+      <div class="cmprow"><span class="cmplab">ЧМ</span><svg class="cmp-fm" viewBox="0 0 1500 190" style="width:100%;height:180px"></svg></div>
+      <div class="cmprow"><span class="cmplab">ФМ</span><svg class="cmp-pm" viewBox="0 0 1500 190" style="width:100%;height:180px"></svg></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.1 · компромисс</div>
+  <svg class="doodle" style="right:120px;top:120px;width:100px;transform:rotate(12deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad g2a" style="top:90px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:26px">ПРОСТОТА<br>ПРОТИВ ЁМКОСТИ</h2>
+      <ul class="bullets b-md ink" style="max-width:34ch">
+        <li>АМ — проще всех, но уязвима к шуму</li>
+        <li>ЧМ и ФМ сложнее, зато держат помеху и вмещают больше бит в один «такт»</li>
+        <li>Системы комбинируют: амплитуда + фаза = <b>QAM</b> (Wi-Fi, сотовая, кабель)</li>
+      </ul>
+    </div>
+    <div class="card b-lg"><span class="tag">Идея уплотнения</span>Если один «такт» различает не 2 состояния (0/1), а <b>16</b>, то за такт передаём <b>4 бита</b> вместо одного. Отсюда — рост скорости без роста частоты.</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">2.1 · рабочий пример</div>
+  <div class="pad" style="top:60px">
+    <h2 class="h-d h-sm" style="margin-bottom:16px">ПЕРЕДАЁМ ЧИСЛО <span class="yl">149</span></h2>
+    <ul class="steps b-md white" style="grid-template-columns:repeat(4,1fr);display:grid;gap:22px;margin-bottom:14px">
+      <li>Кодируем: 149 → <b>10010101</b> <span style="opacity:.8">(128+16+4+1)</span></li>
+      <li>Модулируем: 1 — сигнал есть, 0 — нет <span style="opacity:.8">(on-off keying)</span></li>
+      <li>Передаём вспышки-импульсы сквозь среду</li>
+      <li>Читаем обратно и получаем <b>149</b></li>
+    </ul>
+    <svg viewBox="0 0 1560 500" style="width:100%;height:500px;background:rgba(255,255,255,.06);border-radius:24px">
+      <text x="40" y="90" class="lab" fill="var(--yellow)">несущая</text>
+      <path class="rough" d="M120.0 150.0 L123.0 129.5 L126.0 111.7 L129.0 98.8 L132.0 92.5 L135.0 93.5 L138.0 101.8 L141.0 116.3 L144.0 135.2 L147.0 155.9 L150.0 175.9 L153.0 192.5 L156.0 203.7 L159.0 208.0 L162.0 204.8 L165.0 194.6 L168.0 178.7 L171.0 159.1 L174.0 138.3 L177.0 119.0 L180.0 103.7 L183.0 94.4 L186.0 92.2 L189.0 97.4 L192.0 109.4 L195.0 126.6 L198.0 146.8 L201.0 167.4 L204.0 185.8 L207.0 199.6 L210.0 207.0 L213.0 207.1 L216.0 199.9 L219.0 186.2 L222.0 167.9 L225.0 147.3 L228.0 127.1 L231.0 109.8 L234.0 97.6 L237.0 92.2 L240.0 94.2 L243.0 103.4 L246.0 118.6 L249.0 137.8 L252.0 158.5 L255.0 178.2 L258.0 194.3 L261.0 204.6 L264.0 208.0 L267.0 203.9 L270.0 192.9 L273.0 176.3 L276.0 156.4 L279.0 135.7 L282.0 116.8 L285.0 102.2 L288.0 93.7 L291.0 92.4 L294.0 98.6 L297.0 111.3 L300.0 129.0 L303.0 149.5 L306.0 169.9 L309.0 187.9 L312.0 200.9 L315.0 207.4 L318.0 206.6 L321.0 198.4 L324.0 184.1 L327.0 165.4 L330.0 144.6 L333.0 124.6 L336.0 107.9 L339.0 96.5 L342.0 92.0 L345.0 95.0 L348.0 105.0 L351.0 120.8 L354.0 140.4 L357.0 161.2 L360.0 180.5 L363.0 196.0 L366.0 205.5 L369.0 207.9 L372.0 202.8 L375.0 191.0 L378.0 173.9 L381.0 153.7 L384.0 133.1 L387.0 114.6 L390.0 100.7 L393.0 93.1 L396.0 92.8 L399.0 99.9 L402.0 113.4 L405.0 131.6 L408.0 152.1 L411.0 172.4 L414.0 189.9 L417.0 202.2 L420.0 207.8 L423.0 205.9 L426.0 196.9 L429.0 181.9 L432.0 162.8 L435.0 142.0 L438.0 122.2 L441.0 106.1 L444.0 95.5 L447.0 92.0 L450.0 95.9 L453.0 106.8 L456.0 123.2 L459.0 143.0 L462.0 163.8 L465.0 182.8 L468.0 197.5 L471.0 206.2 L474.0 207.6 L477.0 201.7 L480.0 189.1 L483.0 171.5 L486.0 151.1 L489.0 130.6 L492.0 112.5 L495.0 99.3 L498.0 92.6 L501.0 93.3 L504.0 101.3 L507.0 115.5 L510.0 134.1 L513.0 154.8 L516.0 174.9 L519.0 191.8 L522.0 203.3 L525.0 207.9 L528.0 205.2 L531.0 195.3 L534.0 179.6 L537.0 160.1 L540.0 139.3 L543.0 119.9 L546.0 104.4 L549.0 94.7 L552.0 92.1 L555.0 96.9 L558.0 108.6 L561.0 125.6 L564.0 145.7 L567.0 166.4 L570.0 185.0 L573.0 199.0 L576.0 206.8 L579.0 207.3 L582.0 200.4 L585.0 187.1 L588.0 168.9 L591.0 148.4 L594.0 128.1 L597.0 110.5 L600.0 98.1 L603.0 92.3 L606.0 93.9 L609.0 102.8 L612.0 117.7 L615.0 136.7 L618.0 157.5 L621.0 177.3 L624.0 193.6 L627.0 204.3 L630.0 208.0 L633.0 204.3 L636.0 193.6 L639.0 177.3 L642.0 157.5 L645.0 136.7 L648.0 117.7 L651.0 102.8 L654.0 93.9 L657.0 92.3 L660.0 98.1 L663.0 110.5 L666.0 128.1 L669.0 148.4 L672.0 168.9 L675.0 187.1 L678.0 200.4 L681.0 207.3 L684.0 206.8 L687.0 199.0 L690.0 185.0 L693.0 166.4 L696.0 145.7 L699.0 125.6 L702.0 108.6 L705.0 96.9 L708.0 92.1 L711.0 94.7 L714.0 104.4 L717.0 119.9 L720.0 139.3 L723.0 160.1 L726.0 179.6 L729.0 195.3 L732.0 205.2 L735.0 207.9 L738.0 203.3 L741.0 191.8 L744.0 174.9 L747.0 154.8 L750.0 134.1 L753.0 115.5 L756.0 101.3 L759.0 93.3 L762.0 92.6 L765.0 99.3 L768.0 112.5 L771.0 130.6 L774.0 151.1 L777.0 171.5 L780.0 189.1 L783.0 201.7 L786.0 207.6 L789.0 206.2 L792.0 197.5 L795.0 182.8 L798.0 163.8 L801.0 143.0 L804.0 123.2 L807.0 106.8 L810.0 95.9 L813.0 92.0 L816.0 95.5 L819.0 106.1 L822.0 122.2 L825.0 142.0 L828.0 162.8 L831.0 181.9 L834.0 196.9 L837.0 205.9 L840.0 207.8 L843.0 202.2 L846.0 189.9 L849.0 172.4 L852.0 152.1 L855.0 131.6 L858.0 113.4 L861.0 99.9 L864.0 92.8 L867.0 93.1 L870.0 100.7 L873.0 114.6 L876.0 133.1 L879.0 153.7 L882.0 173.9 L885.0 191.0 L888.0 202.8 L891.0 207.9 L894.0 205.5 L897.0 196.0 L900.0 180.5 L903.0 161.2 L906.0 140.4 L909.0 120.8 L912.0 105.0 L915.0 95.0 L918.0 92.0 L921.0 96.5 L924.0 107.9 L927.0 124.6 L930.0 144.6 L933.0 165.4 L936.0 184.1 L939.0 198.4 L942.0 206.6 L945.0 207.4 L948.0 200.9 L951.0 187.9 L954.0 169.9 L957.0 149.5 L960.0 129.0 L963.0 111.3 L966.0 98.6 L969.0 92.4 L972.0 93.7 L975.0 102.2 L978.0 116.8 L981.0 135.7 L984.0 156.4 L987.0 176.3 L990.0 192.9 L993.0 203.9 L996.0 208.0 L999.0 204.6 L1002.0 194.3 L1005.0 178.2 L1008.0 158.5 L1011.0 137.8 L1014.0 118.6 L1017.0 103.4 L1020.0 94.2 L1023.0 92.2 L1026.0 97.6 L1029.0 109.8 L1032.0 127.1 L1035.0 147.3 L1038.0 167.9 L1041.0 186.2 L1044.0 199.9 L1047.0 207.1 L1050.0 207.0 L1053.0 199.6 L1056.0 185.8 L1059.0 167.4 L1062.0 146.8 L1065.0 126.6 L1068.0 109.4 L1071.0 97.4 L1074.0 92.2 L1077.0 94.4 L1080.0 103.7 L1083.0 119.0 L1086.0 138.3 L1089.0 159.1 L1092.0 178.7 L1095.0 194.6 L1098.0 204.8 L1101.0 208.0 L1104.0 203.7 L1107.0 192.5 L1110.0 175.9 L1113.0 155.9 L1116.0 135.2 L1119.0 116.3 L1122.0 101.8 L1125.0 93.5 L1128.0 92.5 L1131.0 98.8 L1134.0 111.7 L1137.0 129.5 L1140.0 150.0 L1143.0 170.5 L1146.0 188.3 L1149.0 201.2 L1152.0 207.5 L1155.0 206.5 L1158.0 198.2 L1161.0 183.7 L1164.0 164.8 L1167.0 144.1 L1170.0 124.1 L1173.0 107.5 L1176.0 96.3 L1179.0 92.0 L1182.0 95.2 L1185.0 105.4 L1188.0 121.3 L1191.0 140.9 L1194.0 161.7 L1197.0 181.0 L1200.0 196.3 L1203.0 205.6 L1206.0 207.8 L1209.0 202.6 L1212.0 190.6 L1215.0 173.4 L1218.0 153.2 L1221.0 132.6 L1224.0 114.2 L1227.0 100.4 L1230.0 93.0 L1233.0 92.9 L1236.0 100.1 L1239.0 113.8 L1242.0 132.1 L1245.0 152.7 L1248.0 172.9 L1251.0 190.2 L1254.0 202.4 L1257.0 207.8 L1260.0 205.8 L1263.0 196.6 L1266.0 181.4 L1269.0 162.2 L1272.0 141.5 L1275.0 121.8 L1278.0 105.7 L1281.0 95.4 L1284.0 92.0 L1287.0 96.1 L1290.0 107.1 L1293.0 123.7 L1296.0 143.6 L1299.0 164.3 L1302.0 183.2 L1305.0 197.8 L1308.0 206.3 L1311.0 207.6 L1314.0 201.4 L1317.0 188.7 L1320.0 171.0 L1323.0 150.5 L1326.0 130.1 L1329.0 112.1 L1332.0 99.1 L1335.0 92.6 L1338.0 93.4 L1341.0 101.6 L1344.0 115.9 L1347.0 134.6 L1350.0 155.4 L1353.0 175.4 L1356.0 192.1 L1359.0 203.5 L1362.0 208.0 L1365.0 205.0 L1368.0 195.0 L1371.0 179.2 L1374.0 159.6 L1377.0 138.8 L1380.0 119.5 L1383.0 104.0 L1386.0 94.5 L1389.0 92.1 L1392.0 97.2 L1395.0 109.0 L1398.0 126.1 L1401.0 146.3 L1404.0 166.9 L1407.0 185.4 L1410.0 199.3 L1413.0 206.9 L1416.0 207.2 L1419.0 200.1 L1422.0 186.6 L1425.0 168.4 L1428.0 147.9 L1431.0 127.6 L1434.0 110.1 L1437.0 97.8 L1440.0 92.2 L1443.0 94.1 L1446.0 103.1 L1449.0 118.1 L1452.0 137.2 L1455.0 158.0 L1458.0 177.8 L1461.0 193.9 L1464.0 204.5 L1467.0 208.0 L1470.0 204.1 L1473.0 193.2 L1476.0 176.8 L1479.0 157.0" fill="none" stroke="var(--white)" stroke-width="6" stroke-linecap="round"/>
+      <text x="40" y="300" class="lab" fill="var(--yellow)">биты</text>
+      <path class="rough" d="M120.0 380.0 L123.0 367.2 L126.0 355.1 L129.0 344.2 L132.0 335.0 L135.0 328.1 L138.0 323.7 L141.0 322.0 L144.0 323.2 L147.0 327.2 L150.0 333.7 L153.0 342.5 L156.0 353.2 L159.0 365.2 L162.0 377.9 L165.0 390.7 L168.0 402.9 L171.0 414.1 L174.0 423.6 L177.0 430.9 L180.0 435.8 L183.0 437.9 L186.0 437.2 L189.0 433.7 L192.0 427.5 L195.0 419.1 L198.0 408.7 L201.0 396.9 L204.0 384.3 L207.0 371.5 L210.0 359.0 L213.0 347.7 L216.0 337.9 L219.0 330.1 L222.0 324.8 L225.0 322.2 L228.0 322.5 L231.0 325.5 L234.0 331.3 L237.0 339.4 L240.0 349.5 L243.0 361.1 L246.0 373.6 L249.0 386.4 L252.0 398.9 L255.0 410.5 L258.0 420.6 L261.0 428.7 L264.0 434.5 L267.0 437.5 L270.0 437.8 L273.0 435.2 L276.0 429.9 L279.0 422.1 L282.0 412.3 L285.0 401.0 L288.0 388.5 L290.0 380.0 L293.0 380.0 L296.0 380.0 L299.0 380.0 L302.0 380.0 L305.0 380.0 L308.0 380.0 L311.0 380.0 L314.0 380.0 L317.0 380.0 L320.0 380.0 L323.0 380.0 L326.0 380.0 L329.0 380.0 L332.0 380.0 L335.0 380.0 L338.0 380.0 L341.0 380.0 L344.0 380.0 L347.0 380.0 L350.0 380.0 L353.0 380.0 L356.0 380.0 L359.0 380.0 L362.0 380.0 L365.0 380.0 L368.0 380.0 L371.0 380.0 L374.0 380.0 L377.0 380.0 L380.0 380.0 L383.0 380.0 L386.0 380.0 L389.0 380.0 L392.0 380.0 L395.0 380.0 L398.0 380.0 L401.0 380.0 L404.0 380.0 L407.0 380.0 L410.0 380.0 L413.0 380.0 L416.0 380.0 L419.0 380.0 L422.0 380.0 L425.0 380.0 L428.0 380.0 L431.0 380.0 L434.0 380.0 L437.0 380.0 L440.0 380.0 L443.0 380.0 L446.0 380.0 L449.0 380.0 L452.0 380.0 L455.0 380.0 L458.0 380.0 L460.0 380.0 L463.0 380.0 L466.0 380.0 L469.0 380.0 L472.0 380.0 L475.0 380.0 L478.0 380.0 L481.0 380.0 L484.0 380.0 L487.0 380.0 L490.0 380.0 L493.0 380.0 L496.0 380.0 L499.0 380.0 L502.0 380.0 L505.0 380.0 L508.0 380.0 L511.0 380.0 L514.0 380.0 L517.0 380.0 L520.0 380.0 L523.0 380.0 L526.0 380.0 L529.0 380.0 L532.0 380.0 L535.0 380.0 L538.0 380.0 L541.0 380.0 L544.0 380.0 L547.0 380.0 L550.0 380.0 L553.0 380.0 L556.0 380.0 L559.0 380.0 L562.0 380.0 L565.0 380.0 L568.0 380.0 L571.0 380.0 L574.0 380.0 L577.0 380.0 L580.0 380.0 L583.0 380.0 L586.0 380.0 L589.0 380.0 L592.0 380.0 L595.0 380.0 L598.0 380.0 L601.0 380.0 L604.0 380.0 L607.0 380.0 L610.0 380.0 L613.0 380.0 L616.0 380.0 L619.0 380.0 L622.0 380.0 L625.0 380.0 L628.0 380.0 L630.0 380.0 L633.0 367.2 L636.0 355.1 L639.0 344.2 L642.0 335.0 L645.0 328.1 L648.0 323.7 L651.0 322.0 L654.0 323.2 L657.0 327.2 L660.0 333.7 L663.0 342.5 L666.0 353.2 L669.0 365.2 L672.0 377.9 L675.0 390.7 L678.0 402.9 L681.0 414.1 L684.0 423.6 L687.0 430.9 L690.0 435.8 L693.0 437.9 L696.0 437.2 L699.0 433.7 L702.0 427.5 L705.0 419.1 L708.0 408.7 L711.0 396.9 L714.0 384.3 L717.0 371.5 L720.0 359.0 L723.0 347.7 L726.0 337.9 L729.0 330.1 L732.0 324.8 L735.0 322.2 L738.0 322.5 L741.0 325.5 L744.0 331.3 L747.0 339.4 L750.0 349.5 L753.0 361.1 L756.0 373.6 L759.0 386.4 L762.0 398.9 L765.0 410.5 L768.0 420.6 L771.0 428.7 L774.0 434.5 L777.0 437.5 L780.0 437.8 L783.0 435.2 L786.0 429.9 L789.0 422.1 L792.0 412.3 L795.0 401.0 L798.0 388.5 L800.0 380.0 L803.0 380.0 L806.0 380.0 L809.0 380.0 L812.0 380.0 L815.0 380.0 L818.0 380.0 L821.0 380.0 L824.0 380.0 L827.0 380.0 L830.0 380.0 L833.0 380.0 L836.0 380.0 L839.0 380.0 L842.0 380.0 L845.0 380.0 L848.0 380.0 L851.0 380.0 L854.0 380.0 L857.0 380.0 L860.0 380.0 L863.0 380.0 L866.0 380.0 L869.0 380.0 L872.0 380.0 L875.0 380.0 L878.0 380.0 L881.0 380.0 L884.0 380.0 L887.0 380.0 L890.0 380.0 L893.0 380.0 L896.0 380.0 L899.0 380.0 L902.0 380.0 L905.0 380.0 L908.0 380.0 L911.0 380.0 L914.0 380.0 L917.0 380.0 L920.0 380.0 L923.0 380.0 L926.0 380.0 L929.0 380.0 L932.0 380.0 L935.0 380.0 L938.0 380.0 L941.0 380.0 L944.0 380.0 L947.0 380.0 L950.0 380.0 L953.0 380.0 L956.0 380.0 L959.0 380.0 L962.0 380.0 L965.0 380.0 L968.0 380.0 L970.0 380.0 L973.0 367.2 L976.0 355.1 L979.0 344.2 L982.0 335.0 L985.0 328.1 L988.0 323.7 L991.0 322.0 L994.0 323.2 L997.0 327.2 L1000.0 333.7 L1003.0 342.5 L1006.0 353.2 L1009.0 365.2 L1012.0 377.9 L1015.0 390.7 L1018.0 402.9 L1021.0 414.1 L1024.0 423.6 L1027.0 430.9 L1030.0 435.8 L1033.0 437.9 L1036.0 437.2 L1039.0 433.7 L1042.0 427.5 L1045.0 419.1 L1048.0 408.7 L1051.0 396.9 L1054.0 384.3 L1057.0 371.5 L1060.0 359.0 L1063.0 347.7 L1066.0 337.9 L1069.0 330.1 L1072.0 324.8 L1075.0 322.2 L1078.0 322.5 L1081.0 325.5 L1084.0 331.3 L1087.0 339.4 L1090.0 349.5 L1093.0 361.1 L1096.0 373.6 L1099.0 386.4 L1102.0 398.9 L1105.0 410.5 L1108.0 420.6 L1111.0 428.7 L1114.0 434.5 L1117.0 437.5 L1120.0 437.8 L1123.0 435.2 L1126.0 429.9 L1129.0 422.1 L1132.0 412.3 L1135.0 401.0 L1138.0 388.5 L1140.0 380.0 L1143.0 380.0 L1146.0 380.0 L1149.0 380.0 L1152.0 380.0 L1155.0 380.0 L1158.0 380.0 L1161.0 380.0 L1164.0 380.0 L1167.0 380.0 L1170.0 380.0 L1173.0 380.0 L1176.0 380.0 L1179.0 380.0 L1182.0 380.0 L1185.0 380.0 L1188.0 380.0 L1191.0 380.0 L1194.0 380.0 L1197.0 380.0 L1200.0 380.0 L1203.0 380.0 L1206.0 380.0 L1209.0 380.0 L1212.0 380.0 L1215.0 380.0 L1218.0 380.0 L1221.0 380.0 L1224.0 380.0 L1227.0 380.0 L1230.0 380.0 L1233.0 380.0 L1236.0 380.0 L1239.0 380.0 L1242.0 380.0 L1245.0 380.0 L1248.0 380.0 L1251.0 380.0 L1254.0 380.0 L1257.0 380.0 L1260.0 380.0 L1263.0 380.0 L1266.0 380.0 L1269.0 380.0 L1272.0 380.0 L1275.0 380.0 L1278.0 380.0 L1281.0 380.0 L1284.0 380.0 L1287.0 380.0 L1290.0 380.0 L1293.0 380.0 L1296.0 380.0 L1299.0 380.0 L1302.0 380.0 L1305.0 380.0 L1308.0 380.0 L1310.0 380.0 L1313.0 367.2 L1316.0 355.1 L1319.0 344.2 L1322.0 335.0 L1325.0 328.1 L1328.0 323.7 L1331.0 322.0 L1334.0 323.2 L1337.0 327.2 L1340.0 333.7 L1343.0 342.5 L1346.0 353.2 L1349.0 365.2 L1352.0 377.9 L1355.0 390.7 L1358.0 402.9 L1361.0 414.1 L1364.0 423.6 L1367.0 430.9 L1370.0 435.8 L1373.0 437.9 L1376.0 437.2 L1379.0 433.7 L1382.0 427.5 L1385.0 419.1 L1388.0 408.7 L1391.0 396.9 L1394.0 384.3 L1397.0 371.5 L1400.0 359.0 L1403.0 347.7 L1406.0 337.9 L1409.0 330.1 L1412.0 324.8 L1415.0 322.2 L1418.0 322.5 L1421.0 325.5 L1424.0 331.3 L1427.0 339.4 L1430.0 349.5 L1433.0 361.1 L1436.0 373.6 L1439.0 386.4 L1442.0 398.9 L1445.0 410.5 L1448.0 420.6 L1451.0 428.7 L1454.0 434.5 L1457.0 437.5 L1460.0 437.8 L1463.0 435.2 L1466.0 429.9 L1469.0 422.1 L1472.0 412.3 L1475.0 401.0 L1478.0 388.5" fill="none" stroke="var(--yellow)" stroke-width="7" stroke-linecap="round"/>
+      <text x="205" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">1</text><text x="375" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">0</text><text x="545" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">0</text><text x="715" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">1</text><text x="885" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">0</text><text x="1055" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">1</text><text x="1225" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">0</text><text x="1395" y="470" text-anchor="middle" class="h-d" style="font-size:34px" fill="var(--white)">1</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.2 · форматирование</div>
+  <div class="pad g2a" style="top:90px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:26px">СООБЩЕНИЕ О ТОМ,<br>КАК УСТРОЕНО СООБЩЕНИЕ</h2>
+      <p class="body b-md ink" style="max-width:36ch">Кодирование — не «улица с односторонним движением». Если получатель не знает правил, он получит бессмысленный набор сигналов. Значит, рядом с данными едут <b>служебные пометки</b>: какая кодировка, какой протокол, где начало и конец. Технически это <b>заголовки</b>.</p>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Мы делаем то же, когда пишем письмо: указываем язык, ставим знаки препинания, отделяем адрес от текста. На заголовках построена вся идея уровней.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.3 · размер сообщения</div>
+  <svg class="doodle" style="right:130px;top:120px;width:110px;transform:rotate(-10deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <div class="pad" style="top:100px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:16px">ЗАЧЕМ ВВОДИТЬ ПРЕДЕЛ РАЗМЕРА</h2>
+    <p class="body b-md ink" style="max-width:56ch;margin-bottom:44px">Люди дробят длинную мысль на короткие фразы. Так же и устройства ограничивают объём за один раз — из этого вырастет <b>сегментация</b>.</p>
+    <div class="g3">
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:38px;margin-bottom:8px">Экономия сети</div><p class="body b-sm ink">один гигантский «кусок» надолго занял бы канал и мешал остальным</p></div>
+      <div class="card analogy" style="border-radius:26px"><div class="kick" style="font-size:38px;margin-bottom:8px">Оптимизация узлов</div><p class="body b-sm ink">маленькие порции проще обрабатывать и буферизировать</p></div>
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:38px;margin-bottom:8px">Совместимость</div><p class="body b-sm ink">старое оборудование рассчитано на определённые размеры</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">2.4 · временные параметры</div>
+  <div class="pad g2a" style="top:90px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:26px">КОГДА ГОВОРИТЬ<br>И СКОЛЬКО ЖДАТЬ</h2>
+      <ul class="bullets b-md ink" style="max-width:34ch">
+        <li><b>Когда сеть свободна</b> — чтобы не перебивать чужой трафик</li>
+        <li><b>Скорость приёмника</b> — чтобы не завалить его лавиной пакетов</li>
+        <li><b>Время ответа</b> — чтобы понять, что ответа нет, и повторить</li>
+      </ul>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Аналогия</span>Телефонный разговор: мы не говорим одновременно (ждём, пока линия свободна), подстраиваем темп, а если в ответ молчание — переспрашиваем: «Алло, ты меня слышишь?»</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="right:-160px;top:-160px;width:760px;height:620px;opacity:.13" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="left:120px;bottom:150px;width:140px;transform:rotate(-10deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="right:220px;bottom:240px;width:120px;transform:rotate(12deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="h-d" style="font-size:190px;color:rgba(255,255,255,.18);line-height:.8">3</div>
+    <div class="kick yellowt" style="margin:10px 0 14px">раздел 3</div>
+    <h2 class="h-d h-lg">СПОСОБЫ<br>РАССЫЛКИ</h2>
+    <div class="body b-lg" style="margin-top:26px;opacity:.9;max-width:26ch">Одному, группе или всем сразу — три адресных схемы доставки.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="cast">
+  <div class="tophint">3.1 · способы рассылки · unicast</div>
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ОДНОМУ · UNICAST</h2>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель <b>192.168.1.10</b> шлёт сообщение на адрес <b>одного</b> получателя (192.168.1.20). Другие устройства его не получают — точность обеспечивает адресация.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Как личное письмо с точным адресом на конверте — доходит именно тому, кому написано.</div>
+    </div>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="uni" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="cast">
+  <div class="tophint">3.1 · способы рассылки · multicast</div>
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ГРУППЕ · MULTICAST</h2>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Отправитель шлёт на <b>групповой</b> адрес <b>224.0.0.5</b>, который «прослушивают» подписчики. Технически сообщение проходит мимо многих, но обрабатывают его только подписчики группы.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Как объявление в чате: его видят участники канала, но не весь мир.</div>
+    </div>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="multi" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="cast">
+  <div class="tophint">3.1 · способы рассылки · broadcast</div>
+  <div class="pad g2a" style="top:80px;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr)">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ВСЕМ · BROADCAST</h2>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:22px">Сообщение уходит на <b>широковещательный</b> адрес <b>192.168.1.255</b> и обрабатывается всеми устройствами сети без исключения.</p>
+      <div class="card analogy b-md"><span class="tag">Аналогия</span>Как крикнуть в мегафон посреди зала: услышат все, хотят они того или нет.</div>
+      <p class="body b-sm ink" style="opacity:.72;margin-top:14px">Осторожно: «крики на весь зал» снижают работоспособность сети. Но запретить нельзя — на принципе «спросить у всех» держатся <b>ARP</b> и <b>DHCP</b>.</p>
+    </div>
+    <div class="col" style="align-items:center;justify-content:center">
+      <svg class="castsvg" data-kind="bc" viewBox="0 0 900 560" style="width:100%;height:520px"></svg>
+      <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
+        <button class="minibtn castplay">Проиграть ▸</button>
+        <span class="hintlive casthint"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.1 · типы рассылки</div>
+  <div class="pad g2a" style="top:100px;grid-template-columns:1.15fr .85fr">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:24px">КТО ПОЛУЧАЕТ,<br>КТО ОБРАБАТЫВАЕТ</h2>
+      <table class="mtable">
+        <tr><th>Тип рассылки</th><th>Кто получает</th><th>Кто обрабатывает</th></tr>
+        <tr><td>Unicast</td><td>Один узел</td><td>Один получатель</td></tr>
+        <tr class="hot"><td>Multicast</td><td>Все узлы (слышат)</td><td>Группа подписчиков</td></tr>
+        <tr><td>Broadcast</td><td>Все узлы</td><td>Все узлы</td></tr>
+      </table>
+    </div>
+    <div class="card analogy b-md" style="align-self:center"><span class="tag">Компромисс</span>Broadcast — мощный, но «шумный» инструмент. Его нельзя запретить, но и злоупотреблять им нельзя. Удобство против нагрузки — этот компромисс встретится ещё не раз.</div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">3.2 · сегментация · мультиплексирование</div>
+  <div class="pad" style="top:60px">
+    <h2 class="h-d h-sm" style="margin-bottom:14px">ПОЧЕМУ ВКОНТАКТЕ И РУТЬЮБ <span class="yl">НЕ ПУТАЮТСЯ</span></h2>
+    <p class="body b-sm white" style="opacity:.9;max-width:74ch;margin-bottom:14px">Сообщение делится на <b>сегменты</b>, каждый помечен портами: из какого приложения пришёл и какому предназначен. Метки едут вместе с данными до получателя.</p>
+    <svg viewBox="0 0 1620 440" style="width:100%;height:440px;background:rgba(255,255,255,.06);border-radius:24px">
+      <g class="rough" fill="none" stroke="var(--white)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="60" y="120" width="220" height="200" rx="24"/><rect x="1340" y="50" width="220" height="140" rx="24"/><rect x="1340" y="250" width="220" height="140" rx="24"/>
+        <rect x="720" y="170" width="180" height="100" rx="22" fill="var(--yellow)" stroke="var(--ink)"/>
+        <path d="M280 220 L720 220"/><path d="M900 200 L1340 120"/><path d="M900 245 L1340 320"/>
+      </g>
+      <text x="170" y="225" text-anchor="middle" class="lab" fill="var(--blue)">ноутбук</text>
+      <text x="810" y="228" text-anchor="middle" class="lab-s" fill="var(--ink)">маршрутизатор</text>
+      <text x="1450" y="128" text-anchor="middle" class="lab" fill="var(--blue)">сервер A</text>
+      <text x="1450" y="328" text-anchor="middle" class="lab" fill="var(--blue)">сервер B</text>
+    </svg>
+    <p class="note-hand" style="color:var(--yellow);margin-top:12px">дом = IP-адрес, квартира = порт · одна дорога, у каждой машины номер квартиры</p>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="right:-160px;top:-160px;width:760px;height:620px;opacity:.13" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="left:120px;bottom:150px;width:140px;transform:rotate(-10deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="right:220px;bottom:240px;width:120px;transform:rotate(12deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="h-d" style="font-size:190px;color:rgba(255,255,255,.18);line-height:.8">4</div>
+    <div class="kick yellowt" style="margin:10px 0 14px">раздел 4</div>
+    <h2 class="h-d h-lg">СЕТЕВЫЕ<br>МОДЕЛИ</h2>
+    <div class="body b-lg" style="margin-top:26px;opacity:.9;max-width:26ch">Почему одного протокола мало — и как из множества выросли стеки OSI и TCP/IP.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.1 · стеки протоколов</div>
+  <div class="pad g2a" style="top:90px">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:24px">ПОЧЕМУ ОДНОГО<br>ПРОТОКОЛА МАЛО</h2>
+      <p class="body b-md ink" style="max-width:32ch;margin-bottom:18px">«Протокол на всё» потребовал бы трёх жёстких условий:</p>
+      <ul class="steps b-md ink">
+        <li>одно и то же приложение у обоих</li>
+        <li>устройства от одного производителя</li>
+        <li>один канал связи, без промежуточных устройств</li>
+      </ul>
+    </div>
+    <div class="card b-md"><span class="tag">Проблема → решение</span>Так уже пробовали — это будущий <b>TCP</b>. От идеи отказались: удобнее много узких протоколов, упорядоченных по уровням. Наборы протоколов называют <b>стеками</b> — OSI и TCP/IP.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · модель OSI</div>
+  <div class="pad g2a" style="top:60px;grid-template-columns:.95fr 1.05fr">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">МОДЕЛЬ OSI:<br>СЕМЬ УРОВНЕЙ</h2>
+      <p class="body b-md ink" style="max-width:32ch;margin-bottom:26px">OSI (Open Systems Interconnection) — концептуальная модель, разделённая на <b>семь уровней</b>, пронумерованных снизу вверх.</p>
+      <div class="callout"><div class="def" style="font-size:30px">Чем <b>выше</b> уровень — тем ближе к человеку. Чем <b>ниже</b> — тем ближе к среде (кабелю, эфиру).</div></div>
+      <p class="note-hand" style="margin-top:20px">сквозная аналогия: пересылаем книгу по почте</p>
+    </div>
+    <svg viewBox="0 0 860 900" style="width:100%;height:900px">
+      <text x="430" y="40" text-anchor="middle" class="lab" fill="var(--blue)">↑ ближе к человеку</text>
+      <rect class="rough" x="70" y="70" width="720" height="96" rx="20" fill="var(--yellow)" stroke="var(--ink)" stroke-width="6"/><text x="120" y="132" class="h-d" style="font-size:40px" fill="var(--blue)">L7</text><text x="240" y="130" class="lab" style="font-size:30px" fill="var(--ink)">Приложений</text><rect class="rough" x="70" y="188" width="720" height="96" rx="20" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="120" y="250" class="h-d" style="font-size:40px" fill="var(--blue)">L6</text><text x="240" y="248" class="lab" style="font-size:30px" fill="var(--ink)">Представления</text><rect class="rough" x="70" y="306" width="720" height="96" rx="20" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="120" y="368" class="h-d" style="font-size:40px" fill="var(--blue)">L5</text><text x="240" y="366" class="lab" style="font-size:30px" fill="var(--ink)">Сеансовый</text><rect class="rough" x="70" y="424" width="720" height="96" rx="20" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="120" y="486" class="h-d" style="font-size:40px" fill="var(--blue)">L4</text><text x="240" y="484" class="lab" style="font-size:30px" fill="var(--ink)">Транспортный</text><rect class="rough" x="70" y="542" width="720" height="96" rx="20" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="120" y="604" class="h-d" style="font-size:40px" fill="var(--blue)">L3</text><text x="240" y="602" class="lab" style="font-size:30px" fill="var(--ink)">Сетевой</text><rect class="rough" x="70" y="660" width="720" height="96" rx="20" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="120" y="722" class="h-d" style="font-size:40px" fill="var(--blue)">L2</text><text x="240" y="720" class="lab" style="font-size:30px" fill="var(--ink)">Канальный</text><rect class="rough" x="70" y="778" width="720" height="96" rx="20" fill="var(--yellow)" stroke="var(--ink)" stroke-width="6"/><text x="120" y="840" class="h-d" style="font-size:40px" fill="var(--blue)">L1</text><text x="240" y="838" class="lab" style="font-size:30px" fill="var(--ink)">Физический</text>
+      <text x="430" y="890" text-anchor="middle" class="lab" fill="var(--blue)">↓ ближе к среде</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L7 · Уровень приложений</div>
+  <div class="pad g2a" style="top:70px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L7 · Уровень приложений</div>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ЗДЕСЬ РОЖДАЕТСЯ СООБЩЕНИЕ</h2>
+      <p class="body b-md ink" style="max-width:34ch">Пользователь взаимодействует с устройством — именно тут рождается сообщение. Набрали в браузере слово «сеть» — сформировали запрос к поисковому серверу (Google, Yandex).</p>
+    </div>
+    <div class="col">
+      
+      <div class="card analogy b-lg"><span class="tag">Книга по почте</span>Это сам текст книги — то, что мы хотим передать.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L6 · Уровень представления</div>
+  <div class="pad g2a" style="top:70px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L6 · Уровень представления</div>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">ОТКРЫТО ИЛИ ЗАШИФРОВАТЬ</h2>
+      <p class="body b-md ink" style="max-width:34ch">Приложение решает: передавать данные открыто или зашифровать. <b>HTTP</b> отдаёт страницы без шифрования, <b>HTTPS</b> — с шифрованием. Форматирование и кодирование живут здесь.</p>
+    </div>
+    <div class="col">
+      
+      <div class="card analogy b-lg"><span class="tag">Книга по почте</span>Это шрифт, размер и формат страницы — то, как текст оформлен и «упакован» для чтения.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L5 · Сеансовый уровень</div>
+  <div class="pad g2a" style="top:70px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L5 · Сеансовый уровень</div>
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">НУЖЕН ЛИ СЕАНС СВЯЗИ</h2>
+      <p class="body b-md ink" style="max-width:34ch">Сеанс — передача большого сообщения по частям с подтверждением каждой. Даёт две гарантии: доставку <b>полностью</b> и <b>в нужном порядке</b>. Для голоса и видео сеанс не устанавливают — там важнее минимум задержки.</p><p class="note-hand" style="margin-top:14px">компромисс: надёжность против скорости</p>
+    </div>
+    <div class="col">
+      
+      <div class="card analogy b-lg"><span class="tag">Книга по почте</span>Сеанс нужен, потому что страницы книги должны собраться в правильном порядке.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L4 · Транспортный</div>
+  <div class="pad g2a" style="top:66px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L4 · Транспортный</div>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:18px">Сообщение делится на равные отрезки (обычно по <b>1500 байт</b> — связано с размером кадра Ethernet, MTU). К каждому добавляется заголовок с портами источника и назначения.</p>
+      <div class="callout"><div class="term" style="font-size:38px">Сегмент</div><div class="def" style="font-size:28px">отрезок данных с заголовком транспортного уровня L4.</div></div>
+    </div>
+    <div class="col">
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="20" y="16" width="500" height="328" rx="24" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="34" y="26" width="70" height="34" rx="11" fill="#6E7355"/><text x="69" y="49" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="64" y="68" width="412" height="252" rx="22" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="78" y="78" width="86" height="34" rx="11" fill="#D2632B"/><text x="121" y="101" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="108" y="120" width="324" height="150" rx="20" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="207" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:36px;fill:#3E2D21">Данные</text>
+      </svg>
+      <div class="card analogy b-md"><span class="tag">Книга по почте</span>Каждую страницу копируем на лист А4, вкладываем в конверт и подписываем: название книги, номер страницы и общее число страниц.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L3 · Сетевой</div>
+  <div class="pad g2a" style="top:66px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L3 · Сетевой</div>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:18px">Сегмент готов, но куда его слать? Нужен <b>IP-адрес</b> получателя (по названию протокола IP, Internet Protocol). Каждый сегмент получает заголовок L3 с IP-адресами отправителя и получателя.</p>
+      <div class="callout"><div class="term" style="font-size:38px">Пакет</div><div class="def" style="font-size:28px">единица данных L3: сегмент плюс заголовок сетевого уровня.</div></div>
+    </div>
+    <div class="col">
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="16" y="12" width="508" height="336" rx="24" fill="rgba(86,91,65,.14)" stroke="#565B41" stroke-width="4"/>
+        <rect x="30" y="22" width="52" height="34" rx="11" fill="#565B41"/><text x="56" y="45" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">IP</text>
+        <rect x="54" y="60" width="432" height="256" rx="22" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="68" y="70" width="70" height="34" rx="11" fill="#6E7355"/><text x="103" y="93" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="92" y="108" width="356" height="176" rx="20" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="106" y="118" width="86" height="34" rx="11" fill="#D2632B"/><text x="149" y="141" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="130" y="156" width="280" height="100" rx="18" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="214" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:32px;fill:#3E2D21">Данные</text>
+      </svg>
+      <div class="card analogy b-md"><span class="tag">Книга по почте</span>Конверт-сегмент вкладывают в конверт побольше, на котором пишут город, улицу и номер дома получателя — и такие же данные отправителя.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.2 · путь книги · L2 · Канальный</div>
+  <div class="pad g2a" style="top:66px">
+    <div class="col">
+      <div class="kick blue" style="font-size:44px;margin-bottom:10px">L2 · Канальный</div>
+      <p class="body b-md ink" style="max-width:34ch;margin-bottom:18px">Под каждую среду — своя сетевая карта со своим аппаратным <b>MAC-адресом</b>. MAC источника и назначения пишут в заголовок L2. Он зависит от среды: <b>Ethernet</b> по кабелю или <b>Wi-Fi</b> «по воздуху».</p>
+      <div class="callout"><div class="term" style="font-size:38px">Кадр</div><div class="def" style="font-size:28px">единица данных L2: пакет плюс заголовок канального уровня. MAC = Media Access Control.</div></div>
+    </div>
+    <div class="col">
+      <svg viewBox="0 0 540 360" style="width:100%;height:340px;margin-bottom:20px">
+        <rect x="12" y="10" width="516" height="340" rx="24" fill="rgba(86,91,65,.14)" stroke="#565B41" stroke-width="4"/>
+        <rect x="26" y="20" width="118" height="34" rx="11" fill="#565B41"/><text x="85" y="43" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">Ethernet</text>
+        <rect x="46" y="58" width="448" height="264" rx="22" fill="rgba(110,115,85,.13)" stroke="#6E7355" stroke-width="4"/>
+        <rect x="60" y="68" width="52" height="34" rx="11" fill="#6E7355"/><text x="86" y="91" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">IP</text>
+        <rect x="80" y="106" width="380" height="192" rx="20" fill="rgba(178,78,30,.12)" stroke="#B24E1E" stroke-width="4"/>
+        <rect x="94" y="116" width="70" height="34" rx="11" fill="#B24E1E"/><text x="129" y="139" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">TCP</text>
+        <rect x="114" y="154" width="312" height="120" rx="18" fill="rgba(210,99,43,.12)" stroke="#D2632B" stroke-width="4"/>
+        <rect x="128" y="164" width="86" height="34" rx="11" fill="#D2632B"/><text x="171" y="187" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:22px;fill:#fff">HTTP</text>
+        <rect x="148" y="204" width="244" height="52" rx="14" fill="var(--yellow)" stroke="#B24E1E" stroke-width="4"/>
+        <text x="270" y="238" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:#3E2D21">Данные</text>
+      </svg>
+      <div class="card analogy b-md"><span class="tag">Книга по почте</span>Пакет кладут в самый большой конверт и относят на почту, где ставят индексы отправляющего и принимающего отделений.</div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <div class="tophint">3.2.2 · путь книги · L1 · Физический</div>
+  <div class="pad g2a" style="top:80px">
+    <div class="col">
+      <div class="kick yellowt" style="font-size:44px;margin-bottom:10px">L1 · Физический</div>
+      <p class="body b-md white" style="opacity:.92;max-width:34ch;margin-bottom:22px">Всё содержимое кадра переводится в <b>биты</b> и уходит в среду: электрические колебания, радиоволны или свет. На L1 кадры превращаются в биты для отправки.</p>
+      <div class="callout"><div class="term" style="font-size:38px">PDU</div><div class="def" style="font-size:28px">данные, сегменты, пакеты, кадры — это одно сообщение на разных уровнях, «одетое» в разное число заголовков. Общее имя — Protocol Data Unit.</div></div>
+    </div>
+    <div class="card analogy b-lg"><span class="tag">Книга по почте</span>Как именно доставлять — самолётом, грузовиком или поездом (то есть в какой физической среде) — решает уже почтовая служба.</div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white" data-init="encap">
+  <div class="tophint">3.2.2 · инкапсуляция · декапсуляция</div>
+  <div class="pad g2a" style="top:66px;grid-template-columns:1.1fr .9fr">
+    <div class="col">
+      <div class="callout" style="margin-bottom:22px"><div class="term" style="font-size:36px">Инкапсуляция</div><div class="def" style="font-size:27px">формирование блоков нижних уровней из блоков верхних путём <b>добавления</b> заголовков.</div></div>
+      <div class="callout"><div class="term" style="font-size:36px">Декапсуляция</div><div class="def" style="font-size:27px">восстановление блоков верхних уровней путём <b>удаления</b> заголовков нижних. У получателя всё зеркально.</div></div>
+      <p class="note-hand" style="margin-top:20px">образ — матрёшка: данные внутри HTTP, внутри TCP, внутри IP, внутри Ethernet</p>
+    </div>
+    <svg class="encapsvg" viewBox="0 0 560 600" style="width:100%;height:560px"></svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.3 · стек TCP/IP</div>
+  <div class="pad g2a" style="top:56px;grid-template-columns:.85fr 1.15fr">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:22px">СТЕК TCP/IP:<br>ЧЕТЫРЕ УРОВНЯ</h2>
+      <p class="body b-md ink" style="max-width:30ch;margin-bottom:24px">Более практичный, чем OSI: заточен под реальные сети. Название — от двух главных протоколов, <b>TCP</b> и <b>IP</b>. Из «одного на всё» выросло целое семейство.</p>
+      <div class="card analogy b-md"><span class="tag">Надёжность против скорости</span>TCP гарантирует доставку и порядок. UDP жертвует гарантиями ради минимальной задержки. Выбор диктует приложение.</div>
+    </div>
+    <svg viewBox="0 0 560 780" style="width:100%;height:820px"><rect class="rough" x="60" y="60" width="470" height="150" rx="24" fill="var(--yellow)" stroke="var(--blue)" stroke-width="6"/><text x="95" y="130" class="h-d" style="font-size:36px" fill="var(--blue)">Приложений</text><text x="95" y="172" class="lab-s" fill="var(--ink)">DNS · DHCP · HTTP/HTTPS · SMTP · POP · IMAP</text><rect class="rough" x="60" y="240" width="470" height="150" rx="24" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="95" y="310" class="h-d" style="font-size:36px" fill="var(--blue)">Транспортный</text><text x="95" y="352" class="lab-s" fill="var(--ink)">TCP — надёжно · UDP — быстро</text><rect class="rough" x="60" y="420" width="470" height="150" rx="24" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="95" y="490" class="h-d" style="font-size:36px" fill="var(--blue)">Интернет</text><text x="95" y="532" class="lab-s" fill="var(--ink)">IPv4 · IPv6 · ICMP · OSPF</text><rect class="rough" x="60" y="600" width="470" height="150" rx="24" fill="var(--white)" stroke="var(--blue)" stroke-width="6"/><text x="95" y="670" class="h-d" style="font-size:36px" fill="var(--blue)">Сетевого доступа</text><text x="95" y="712" class="lab-s" fill="var(--ink)">ARP · Ethernet · PPP</text></svg>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.3 · протоколы · уровень приложений</div>
+  <div class="pad" style="top:80px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:34px">ПРОТОКОЛЫ УРОВНЯ ПРИЛОЖЕНИЙ</h2>
+    <table class="mtable">
+      <tr><th>Протокол</th><th>Что делает</th></tr>
+      <tr><td>DNS</td><td>сообщает IP-адрес сайта по его имени</td></tr>
+      <tr class="hot"><td>DHCP</td><td>автоматически выдаёт устройству IP-адрес и параметры</td></tr>
+      <tr><td>HTTP / HTTPS</td><td>передача гипертекста — без шифрования и с шифрованием</td></tr>
+      <tr><td>SMTP</td><td>отправка исходящего письма и подтверждение доставки</td></tr>
+      <tr><td>POP / IMAP</td><td>получение почты: POP очищает ящик, IMAP хранит копии на сервере</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.3 · протоколы · нижние уровни</div>
+  <div class="pad" style="top:70px">
+    <h2 class="h-d h-sm blue" style="margin-bottom:30px">ТРАНСПОРТ · ИНТЕРНЕТ · ДОСТУП</h2>
+    <div class="g3" style="align-items:start">
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:34px;margin-bottom:10px">Транспортный</div>
+        <ul class="bullets b-sm ink" style="gap:12px"><li><b>TCP</b> — надёжно: текст, фото, видео, музыка</li><li><b>UDP</b> — быстро без контроля: стриминг, голос</li></ul></div>
+      <div class="card analogy" style="border-radius:26px"><div class="kick" style="font-size:34px;margin-bottom:10px">Интернет</div>
+        <ul class="bullets dark b-sm ink" style="gap:12px"><li><b>IPv4 / IPv6</b> — негарантированная доставка</li><li><b>ICMP</b> — проверка связности (ping, traceroute)</li><li><b>OSPF</b> — динамическая маршрутизация</li></ul></div>
+      <div class="card" style="border-radius:26px"><div class="kick blue" style="font-size:34px;margin-bottom:10px">Сетевого доступа</div>
+        <ul class="bullets b-sm ink" style="gap:12px"><li><b>ARP</b> — MAC по IP («спросить у всех»)</li><li><b>Ethernet</b> — по медному кабелю</li><li><b>PPP</b> — по телефонному кабелю</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="slide bg-white on-white">
+  <div class="tophint">3.2.4 · OSI против TCP/IP</div>
+  <div class="pad g2a" style="top:56px;grid-template-columns:1.05fr .95fr">
+    <div class="col">
+      <h2 class="h-d h-sm blue" style="margin-bottom:20px">ОДНА РАБОТА —<br>РАЗНАЯ ДЕТАЛИЗАЦИЯ</h2>
+      <ul class="bullets b-md ink" style="max-width:34ch;gap:16px">
+        <li>L1+L2 OSI → <b>сетевой доступ</b> TCP/IP</li>
+        <li>L3 OSI → <b>интернет</b>-уровень</li>
+        <li>L4 → <b>транспортный</b>, роль та же</li>
+        <li>L5+L6+L7 → единый <b>уровень приложений</b></li>
+      </ul>
+      <p class="body b-sm ink" style="opacity:.8;margin-top:22px;max-width:36ch">OSI — подробная схема на 7 ролей, удобно учиться. TCP/IP — та же работа, ужатая до 4 ролей.</p>
+    </div>
+    <svg viewBox="0 0 720 830" style="width:100%;height:820px">
+      <text x="150" y="40" text-anchor="middle" class="lab" fill="var(--blue)">OSI · 7</text>
+      <text x="560" y="40" text-anchor="middle" class="lab" fill="var(--ink)">TCP/IP · 4</text>
+      <rect class="rough" x="10" y="70" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="126" class="lab" fill="var(--blue)">L7 Приложений</text><rect class="rough" x="10" y="174" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="230" class="lab" fill="var(--blue)">L6 Представления</text><rect class="rough" x="10" y="278" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="334" class="lab" fill="var(--blue)">L5 Сеансовый</text><rect class="rough" x="10" y="382" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="438" class="lab" fill="var(--blue)">L4 Транспортный</text><rect class="rough" x="10" y="486" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="542" class="lab" fill="var(--blue)">L3 Сетевой</text><rect class="rough" x="10" y="590" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="646" class="lab" fill="var(--blue)">L2 Канальный</text><rect class="rough" x="10" y="694" width="300" height="86" rx="18" fill="none" stroke="var(--blue)" stroke-width="5"/><text x="34" y="750" class="lab" fill="var(--blue)">L1 Физический</text><rect class="rough" x="390" y="70" width="320" height="294" rx="18" fill="var(--yellow)" stroke="var(--ink)" stroke-width="5"/><text x="550" y="227.0" text-anchor="middle" class="lab" fill="var(--ink)">Приложений</text><rect class="rough" x="390" y="382" width="320" height="86" rx="18" fill="var(--yellow)" stroke="var(--ink)" stroke-width="5"/><text x="550" y="435.0" text-anchor="middle" class="lab" fill="var(--ink)">Транспортный</text><rect class="rough" x="390" y="486" width="320" height="86" rx="18" fill="var(--yellow)" stroke="var(--ink)" stroke-width="5"/><text x="550" y="539.0" text-anchor="middle" class="lab" fill="var(--ink)">Интернет</text><rect class="rough" x="390" y="590" width="320" height="190" rx="18" fill="var(--yellow)" stroke="var(--ink)" stroke-width="5"/><text x="550" y="695.0" text-anchor="middle" class="lab" fill="var(--ink)">Сетевого доступа</text>
+    </svg>
+  </div>
+</section>
+
+<section class="slide bg-blue on-blue">
+  <svg class="doodle" style="right:-160px;bottom:-160px;width:780px;height:640px;opacity:.14" viewBox="0 0 600 500" preserveAspectRatio="none"><path d="M60,180 C40,80 160,20 300,30 C460,40 590,70 560,220 C540,340 590,470 420,470 C280,470 120,500 70,400 C30,320 80,270 60,180 Z" fill="var(--white)"/></svg>
+  <svg class="doodle" style="left:120px;top:150px;width:150px;transform:rotate(-12deg)" viewBox="0 0 100 100"><use href="#spark" fill="var(--yellow)"/></svg>
+  <svg class="doodle" style="right:200px;top:260px;width:120px;transform:rotate(14deg)" viewBox="0 0 100 100"><path d="M50 2 L60 40 L98 50 L60 60 L50 98 L40 60 L2 50 L40 40 Z" fill="none" stroke="var(--yellow)" stroke-width="6" stroke-linejoin="round"/></svg>
+  <div class="pad" style="display:flex;flex-direction:column;justify-content:center">
+    <div class="kick yellowt" style="margin-bottom:20px">итог главы 3</div>
+    <h2 class="h-d h-lg">ОДИН ПУТЬ<br>ДАННЫХ — <span class="yl">ДВЕ</span><br>МОДЕЛИ</h2>
+    <p class="body b-lg white" style="margin-top:34px;opacity:.92;max-width:40ch">Обе модели описывают одну и ту же дорогу сообщения — просто с разной детализацией.</p>
+    <div class="kick white" style="margin-top:56px">Дальше — глава 4: адресация в многоуровневой модели</div>
+  </div>
+</section>
+</div></div>
+<div class="hintnav">← → · пробел · F — весь экран</div>
+<script>
+(function(){
+  var deck=document.getElementById('deck');
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var n=slides.length, i=0, curRaf=null, inits={};
+  slides.forEach(function(s,k){ var c=document.createElement('div'); c.className='counter'; c.textContent=(k+1)+' / '+n; s.appendChild(c); });
+  function fit(){ var s=Math.min(window.innerWidth/1920, window.innerHeight/1080); if(!(s>0)||!isFinite(s))s=1; deck.style.transform='scale('+s+')'; }
+  // авто-подгонка контента слайда под кадр 1920×1080 — чтобы на любом ПК/шрифте ничего не обрезалось
+  function fitSlide(sl){
+    if(!sl)return; var pad=sl.querySelector('.pad'); if(!pad)return;
+    pad.style.transform='none';
+    var dr=deck.getBoundingClientRect(), sc=dr.width/1920; if(!(sc>0))return;
+    var CT=1e9,CB=-1e9,CL=1e9,CR=-1e9, any=false;
+    [].forEach.call(pad.children,function(c){
+      var r=c.getBoundingClientRect(); if(r.width===0&&r.height===0)return; any=true;
+      var t=(r.top-dr.top)/sc,b=(r.bottom-dr.top)/sc,l=(r.left-dr.left)/sc,rr=(r.right-dr.left)/sc;
+      if(t<CT)CT=t; if(b>CB)CB=b; if(l<CL)CL=l; if(rr>CR)CR=rr;
+    });
+    if(!any)return;
+    var availB=1080-20, availR=1920-20;
+    if(CB<=availB && CR<=availR)return;
+    var sh=Math.min((availB-CT)/(CB-CT),(availR-CL)/(CR-CL),1);
+    if(sh<0.999){ pad.style.transformOrigin=CL+'px '+CT+'px'; pad.style.transform='scale('+sh.toFixed(4)+')'; }
+  }
+  function stopAnim(){ if(curRaf){cancelAnimationFrame(curRaf);curRaf=null;} }
+  function show(k){ i=(k+n)%n; stopAnim(); slides.forEach(function(s,j){s.classList.toggle('on',j===i)}); var sl=slides[i], key=sl.dataset.init; if(key&&inits[key])inits[key](sl); fitSlide(sl); }
+  function relayout(){ fit(); fitSlide(slides[i]); }
+  window.addEventListener('resize',relayout); window.addEventListener('load',relayout);
+  document.addEventListener('fullscreenchange',relayout);
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(relayout);
+  if(window.ResizeObserver){new ResizeObserver(relayout).observe(document.documentElement);}
+  addEventListener('keydown',function(e){
+    var t=e.target.tagName; if(t==='INPUT'||t==='BUTTON'){ if(e.key===' ')return; }
+    if(['ArrowRight',' ','PageDown'].indexOf(e.key)>=0){e.preventDefault();show(i+1);}
+    else if(['ArrowLeft','PageUp'].indexOf(e.key)>=0){e.preventDefault();show(i-1);}
+    else if(e.key==='Home')show(0); else if(e.key==='End')show(n-1);
+    else if(e.key==='f'||e.key==='F'){ if(!document.fullscreenElement)document.documentElement.requestFullscreen(); else document.exitFullscreen(); }
+  });
+  var x0=null;
+  addEventListener('touchstart',function(e){x0=e.touches[0].clientX},{passive:true});
+  addEventListener('touchend',function(e){ if(x0===null)return; var dx=e.changedTouches[0].clientX-x0; if(Math.abs(dx)>60)show(i+(dx<0?1:-1)); x0=null; });
+
+  // ---- генератор волны ----
+  function waveBits(x0,y0,segw,amp,bits,mode,cyc,opt){
+    opt=opt||{}; var pts=[],x=x0,bi,b,a,c,i2,ph;
+    for(bi=0;bi<bits.length;bi++){ b=bits[bi];
+      if(mode==='am'){a=(b==='1')?amp:amp*(1-0.62*(opt.depth==null?1:opt.depth)); c=cyc;}
+      else if(mode==='onoff'){a=(b==='1')?amp:0; c=cyc;}
+      else if(mode==='fm'){a=amp; c=(b==='1')?cyc*(1+(opt.spread==null?1:opt.spread)):cyc;}
+      else {a=amp; c=cyc;}
+      for(i2=0;i2<=segw;i2+=3){ ph=2*Math.PI*c*i2/segw + ((mode==='pm'&&b==='1')?Math.PI*(opt.phase==null?1:opt.phase):0); pts.push([x+i2, y0-a*Math.sin(ph)]); }
+      x+=segw;
+    }
+    return 'M'+pts.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1)}).join(' L');
+  }
+  function drawWave(svg,bits,mode,opt){
+    var vb=svg.viewBox.baseVal, W=vb.width||1440, H=vb.height||240;
+    var pad=70, segw=(W-pad*2)/bits.length, amp=H*0.30, mid=H*0.56;
+    var d=waveBits(pad,mid,segw,amp,bits,mode,2,opt), marks='', labels='';
+    for(var k=0;k<bits.length;k++){ var cx=pad+segw*k+segw/2;
+      labels+='<text x="'+cx+'" y="'+(mid-amp-14)+'" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:30px;fill:#3E2D21">'+bits[k]+'</text>';
+      if(k>0){ var mx=pad+segw*k; marks+='<line x1="'+mx+'" y1="'+(mid-amp-6)+'" x2="'+mx+'" y2="'+(mid+amp+6)+'" stroke="#F5B63C" stroke-width="4" stroke-dasharray="6 8"/>'; } }
+    svg.innerHTML=labels+marks+'<path class="rough" d="'+d+'" fill="none" stroke="#D2632B" stroke-width="8" stroke-linecap="round"/>';
+  }
+  function buildChips(row,bits,onflip){
+    row.innerHTML='';
+    bits.forEach(function(b,idx){ var c=document.createElement('button'); c.className='bitchip'+(b==='1'?' on':''); c.textContent=b; c.onclick=function(){onflip(idx)}; row.appendChild(c); });
+  }
+  inits.mod=function(sl){
+    var w=sl.querySelector('.modwidget'); if(!w)return;
+    if(!w._bits) w._bits=(w.dataset.bits||'1010').split('');
+    var mode=w.dataset.mode, svg=w.querySelector('.modsvg'), row=w.querySelector('.bitrow'), knob=w.querySelector('.knobrange'); w._opt={};
+    function draw(){ if(knob){ var v=+knob.value; if(mode==='am')w._opt.depth=v; else if(mode==='fm')w._opt.spread=v; else w._opt.phase=v; } drawWave(svg,w._bits,mode,w._opt); }
+    function redraw(){ buildChips(row,w._bits,function(idx){ w._bits[idx]=(w._bits[idx]==='1')?'0':'1'; redraw(); }); draw(); }
+    var rb=w.querySelector('[data-act=rand]'); if(rb)rb.onclick=function(){ w._bits=w._bits.map(function(){return Math.random()<0.5?'0':'1'}); redraw(); };
+    if(knob)knob.oninput=draw;
+    redraw();
+  };
+  inits.modcompare=function(sl){
+    var w=sl.querySelector('.modcompare'); if(!w)return;
+    if(!w._bits) w._bits=(w.dataset.bits||'1010').split('');
+    var row=w.querySelector('.bitrow');
+    function draw(){ ['am','fm','pm'].forEach(function(m){ var svg=w.querySelector('.cmp-'+m); if(svg)drawWave(svg,w._bits,m,{}); }); }
+    function redraw(){ buildChips(row,w._bits,function(idx){ w._bits[idx]=(w._bits[idx]==='1')?'0':'1'; redraw(); }); draw(); }
+    var rb=w.querySelector('[data-act=rand]'); if(rb)rb.onclick=function(){ w._bits=w._bits.map(function(){return Math.random()<0.5?'0':'1'}); redraw(); };
+    redraw();
+  };
+  // ---- анимация рассылки: коммутатор + кто обрабатывает / откидывает ----
+  inits.cast=function(sl){
+    var svg=sl.querySelector('.castsvg'); if(!svg)return;
+    var kind=svg.dataset.kind, hintEl=sl.querySelector('.casthint');
+    var src=[120,280], sw=[450,280], dst=[[780,110],[780,280],[780,450]];
+    var GROUP=[0,2], names=['192.168.1.20','192.168.1.21','192.168.1.22'];
+    var timers=[];
+    function targets(){ return kind==='uni'?[0] : (kind==='multi'?GROUP.slice() : [0,1,2]); }
+    function statusLbl(inT){
+      if(kind==='uni')   return inT?'обрабатываю':'не мне · игнор';
+      if(kind==='multi') return inT?'в группе · обрабатываю':'не в группе · откидываю';
+      return 'обрабатываю';
+    }
+    var hintTxt = kind==='uni'?'один → одному: кадр берёт только адресат'
+      : (kind==='multi'?'многим сразу, но обрабатывают лишь члены группы 224.0.0.5'
+      : 'на 192.168.1.255 — получают и обрабатывают все');
+
+    function nodeBox(x,y,name,active,status){
+      var w=190,h=76, fill=active?'#6E7355':'#FFFDF7', tcol=active?'#fff':'#3E2D21', stroke=active?'#565B41':'#3E2D21';
+      var s='<rect x="'+(x-w/2)+'" y="'+(y-h/2)+'" width="'+w+'" height="'+h+'" rx="16" fill="'+fill+'" stroke="'+stroke+'" stroke-width="5"/>'
+        +'<text x="'+x+'" y="'+(y+9)+'" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:26px;fill:'+tcol+'">'+name+'</text>';
+      if(status){ var scol=active?'#565B41':'#a89a86';
+        s+='<text x="'+x+'" y="'+(y+h/2+30)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:22px;fill:'+scol+'">'+status+'</text>'; }
+      return s;
+    }
+    function switchBox(sub){
+      var x=sw[0],y=sw[1],w=210,h=112;
+      var s='<rect x="'+(x-w/2)+'" y="'+(y-h/2)+'" width="'+w+'" height="'+h+'" rx="20" fill="#3E2D21"/>'
+        +'<text x="'+x+'" y="'+(y-2)+'" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:#fff">КОММУТАТОР</text>';
+      if(sub)s+='<text x="'+x+'" y="'+(y+32)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:21px;fill:#F5B63C">'+sub+'</text>';
+      return s;
+    }
+    function base(st){
+      st=st||{};
+      var s='<g stroke="#a89a86" stroke-width="5" stroke-linecap="round">';
+      s+='<line x1="'+(src[0]+95)+'" y1="'+src[1]+'" x2="'+(sw[0]-105)+'" y2="'+sw[1]+'"/>';
+      dst.forEach(function(d){ s+='<line x1="'+(sw[0]+105)+'" y1="'+sw[1]+'" x2="'+(d[0]-95)+'" y2="'+d[1]+'"/>'; });
+      s+='</g>';
+      s+=switchBox(st.sw||'');
+      s+=nodeBox(src[0],src[1],'ПК1',false,st.srcS||'');
+      s+='<text x="'+src[0]+'" y="'+(src[1]-52)+'" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:20px;fill:#D2632B">отправитель · 192.168.1.10</text>';
+      dst.forEach(function(d,k){ var ok=st.pc&&st.pc[k]==='ok'; s+=nodeBox(d[0],d[1],names[k],ok,(st.pcL&&st.pcL[k])||''); });
+      s+='<g id="pk"></g>';
+      return s;
+    }
+    function pkAnim(segs,done){
+      var t0=null;
+      function frame(ts){ if(t0===null)t0=ts; var f=Math.min((ts-t0)/850,1);
+        var g=svg.querySelector('#pk'); if(!g){ return; }
+        var inner='';
+        segs.forEach(function(sg){ var x=sg.a[0]+(sg.b[0]-sg.a[0])*f, y=sg.a[1]+(sg.b[1]-sg.a[1])*f;
+          inner+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="13" fill="#F5B63C" stroke="#3E2D21" stroke-width="4"/>'; });
+        g.innerHTML=inner;
+        if(f<1){ curRaf=requestAnimationFrame(frame); } else { g.innerHTML=''; if(done)done(); }
+      }
+      curRaf=requestAnimationFrame(frame);
+    }
+    function play(){
+      timers.forEach(clearTimeout); timers=[]; stopAnim();
+      var st={sw:'', srcS:'отправляю кадр', pc:['','',''], pcL:['','','']};
+      svg.innerHTML=base(st);
+      pkAnim([{a:src,b:sw}], function(){
+        st.srcS=''; st.sw='принимаю → обрабатываю'; svg.innerHTML=base(st);
+        timers.push(setTimeout(function(){
+          st.sw='рассылаю'; svg.innerHTML=base(st);
+          var tg=targets(), segs=tg.map(function(k){ return {a:sw,b:dst[k]}; });
+          pkAnim(segs, function(){
+            st.sw='';
+            dst.forEach(function(d,k){ var inT=tg.indexOf(k)>=0; st.pc[k]=inT?'ok':''; st.pcL[k]=statusLbl(inT); });
+            svg.innerHTML=base(st);
+          });
+        },650));
+      });
+      if(hintEl)hintEl.textContent=hintTxt;
+    }
+    var btn=sl.querySelector('.castplay'); if(btn)btn.onclick=play;
+    play();
+  };
+  // ---- инкапсуляция / декапсуляция (анимация как «путь по уровням») ----
+  inits.encap=function(sl){
+    var svg=sl.querySelector('.encapsvg'); if(!svg)return;
+    var L=[
+      {y:104,nm:'Приложение',pr:'HTTP',c:'#D2632B'},
+      {y:196,nm:'Транспорт',pr:'TCP',c:'#B24E1E'},
+      {y:288,nm:'Сеть',pr:'IP',c:'#6E7355'},
+      {y:380,nm:'Канальный',pr:'Ethernet',c:'#565B41'},
+      {y:486,nm:'Физический',pr:'биты',c:'#3E2D21'}
+    ];
+    var HDR={'HTTP':'#D2632B','TCP':'#B24E1E','IP':'#6E7355','Eth':'#565B41'};
+    var stops=[
+      {li:0,h:['HTTP']},
+      {li:1,h:['TCP','HTTP']},
+      {li:2,h:['IP','TCP','HTTP']},
+      {li:3,h:['Eth','IP','TCP','HTTP']},
+      {li:4,h:['Eth','IP','TCP','HTTP'],bits:true},
+      {li:4,h:['Eth','IP','TCP','HTTP'],bits:true},
+      {li:3,h:['IP','TCP','HTTP']},
+      {li:2,h:['TCP','HTTP']},
+      {li:1,h:['HTTP']},
+      {li:0,h:[]}
+    ];
+    var CX=372;
+    function bg(){
+      var s='';
+      L.forEach(function(l){
+        s+='<rect x="188" y="'+(l.y-38)+'" width="360" height="76" rx="16" fill="#FBF6EA" stroke="'+l.c+'" stroke-width="2.5"/>';
+        s+='<text x="26" y="'+(l.y-3)+'" style="font-family:Fredoka;font-weight:700;font-size:27px;fill:'+l.c+'">'+l.pr+'</text>';
+        s+='<text x="26" y="'+(l.y+24)+'" style="font-family:Nunito Sans;font-weight:700;font-size:16px;fill:#8a7d6b">'+l.nm+'</text>';
+      });
+      return s;
+    }
+    function barSVG(hdrs,bits){
+      var chipW=54,dataW=110,total=hdrs.length*chipW+dataW,x=CX-total/2,s='';
+      hdrs.forEach(function(k){
+        s+='<rect x="'+x+'" y="-27" width="'+chipW+'" height="54" rx="9" fill="'+HDR[k]+'"/>';
+        s+='<text x="'+(x+chipW/2)+'" y="8" text-anchor="middle" style="font-family:Fredoka;font-weight:600;font-size:19px;fill:#fff">'+k+'</text>';
+        x+=chipW;
+      });
+      s+='<rect x="'+x+'" y="-27" width="'+dataW+'" height="54" rx="9" fill="#F5B63C" stroke="#B24E1E" stroke-width="2.5"/>';
+      s+='<text x="'+(x+dataW/2)+'" y="9" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:21px;fill:#3E2D21">Данные</text>';
+      if(bits)s+='<text x="'+CX+'" y="48" text-anchor="middle" style="font-family:Nunito Sans;font-weight:700;font-size:16px;fill:#3E2D21;letter-spacing:3px">10110100 01101001 …</text>';
+      return s;
+    }
+    function render(seg,f){
+      var a=stops[seg],b=stops[(seg+1)%stops.length];
+      var y=L[a.li].y+(L[b.li].y-L[a.li].y)*f;
+      var enc=seg<5, phase=enc?'ОТПРАВИТЕЛЬ · инкапсуляция ↓':'ПОЛУЧАТЕЛЬ · декапсуляция ↑';
+      var s=bg();
+      s+='<text x="372" y="52" text-anchor="middle" style="font-family:Fredoka;font-weight:700;font-size:26px;fill:'+(enc?'#D2632B':'#6E7355')+'">'+phase+'</text>';
+      s+='<g transform="translate(0,'+y.toFixed(1)+')">'+barSVG(a.h,a.bits)+'</g>';
+      svg.innerHTML=s;
+    }
+    var start=null,SEG=1150;
+    function loop(ts){
+      if(start===null)start=ts;
+      var e=ts-start, seg=Math.floor(e/SEG)%stops.length, f=(e%SEG)/SEG;
+      var m=Math.min(f/0.72,1); m=m<0.5?2*m*m:1-Math.pow(-2*m+2,2)/2;
+      render(seg,m);
+      curRaf=requestAnimationFrame(loop);
+    }
+    render(0,0);
+    curRaf=requestAnimationFrame(loop);
+  };
+
+  fit(); show(0);
+})();
+</script>

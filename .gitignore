@@ -28,3 +28,6 @@ err.txt
 _dump*.txt
 _slidemap.txt
 _imgs.json
+
+__pycache__/
+*.zip
