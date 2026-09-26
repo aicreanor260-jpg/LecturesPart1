@@ -36,3 +36,43 @@
 .flow .frmS text{font-size:12px}
 @media (max-width:1279px){.steps{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:2rem}.stp::after{display:none}}
 @media (max-width:767px){.steps{grid-template-columns:minmax(0,1fr)}}
+.topo .nd.hl .dev{filter:drop-shadow(0 0 12px rgba(247,220,140,1))}
+.topo .nd.hl .lbl{fill:var(--gold-2)}
+.tree{display:grid;gap:.6rem;text-align:center}
+.tree .tr0,.tree .tr1,.tree .tr2,.tree .tr3{display:grid;gap:.8rem}
+.tree .tr1{grid-template-columns:2fr 1fr}.tree .tr2,.tree .tr3{grid-template-columns:repeat(3,1fr)}
+.tree span{border:1px solid var(--gold);border-radius:10px;padding:.55rem .6rem;background:rgba(6,30,25,.85);box-shadow:0 0 12px rgba(232,200,122,.12)}
+.tree .nd0{justify-self:center;padding:.6rem 1.6rem;font-weight:700;color:var(--gold-2);font-size:1.15rem}
+.tree .nd1{color:var(--gold)}.tree .nd1.t,.tree .nd2.t{border-color:var(--teal);color:var(--teal)}
+.tree .nd2 small{color:var(--dim)}
+.tree .tr3 span{border:0;background:none;box-shadow:none;display:flex;gap:.5rem;justify-content:center;padding:0}
+.tree .tr3 b{border:1px solid var(--gold-2);border-radius:8px;padding:.35rem .9rem;color:#fff;background:rgba(232,200,122,.12)}
+.tree .tr3 b.t{border-color:var(--teal);background:rgba(79,214,196,.12)}
+.tree .trl .cap{border:0;background:none;box-shadow:none;color:var(--dim);font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;padding:0}
+.dvgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.7rem}
+.dvm{padding:.6rem .6rem}.dvm .ph{justify-content:space-between;flex-wrap:wrap;gap:.2rem}.dvm h3{font-size:1.15rem}.dvm .dvk{font-size:.62rem}
+.dvm .mini td{font-size:.62rem;white-space:nowrap}.dvm .mini th{font-size:.66rem}.mh{font-size:.78rem;color:var(--gold);margin:.35rem 0 .1rem}
+.dvk{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.exw{min-height:4.2rem;position:relative}
+.ex{position:absolute;inset:1rem 1.25rem;font-size:1.15rem;opacity:0;transition:opacity .35s}.ex.on{opacity:1}
+.chip{transition:background .3s,color .3s,box-shadow .3s}.chip.fx0{opacity:.35}.chip.on{opacity:1;background:rgba(232,200,122,.2);box-shadow:0 0 10px rgba(232,200,122,.35)}
+@media (max-width:1279px){.dvgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:767px){.dvgrid{grid-template-columns:minmax(0,1fr)}.tree .tr1,.tree .tr2,.tree .tr3{grid-template-columns:1fr}}
+.lvh{display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:.9rem;color:var(--gold)}.lvh span:last-child{text-align:right}
+.lvr{display:grid;grid-template-columns:9rem 9rem 1fr 9rem;gap:.6rem;align-items:center}
+.lvr span{border:1px solid var(--gold);border-radius:8px;padding:.4rem .5rem;text-align:center;font-size:.95rem;background:rgba(6,30,25,.85)}
+.lvr .lk1{border-color:#6fa8dc;color:#cfe3f7}.lvr .lk2{font-family:var(--mono);color:var(--gold-2)}
+.lvr .lka{border:0;background:none;position:relative;font-size:.8rem;color:var(--dim)}
+.lvr .lka::after{content:"";position:absolute;left:0;right:.2rem;bottom:-.1rem;height:1px;background:var(--gold)}
+.lvr .lk3{border-color:#8fe07a;color:#c9f3bf}
+.lvr .lk1.o{border-color:#e0a25f;color:#f6d4ae}.lvr .lk2.v{border-color:#b89be6;color:#e2d4fb;font-family:var(--f)}
+.lvx{display:flex;flex-direction:column;gap:.3rem;font-family:var(--mono);font-size:.9rem}
+.frm{flex-wrap:nowrap}.frm>div{min-width:0;flex:1 1 0;padding:.35rem .4rem}.frm b{font-size:.82rem;white-space:nowrap}
+.dvgrid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+.dvm .mini td{font-size:.72rem}.dvm .mini th{font-size:.72rem}
+.bits{font-size:1.3rem;gap:.55rem;padding:1.1rem 1.4rem}
+.trn label{color:var(--dim)}
+@media (max-width:767px){.lvr{grid-template-columns:1fr 1fr}.lvr .lka{display:none}.frm{flex-wrap:wrap}.dvgrid{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:1279px){.two{grid-template-columns:minmax(0,1fr)!important}}
+@media (max-width:767px){.gr{grid-template-columns:minmax(0,1fr)!important}.big-f{font-size:1.15rem}.ik{align-items:flex-start}.ico.big{width:3rem;height:3rem}
+  .bits{font-size:.8rem;padding:.7rem}.bits .bn{white-space:normal;word-break:break-all}#dvc{top:12px;right:12px;bottom:70px;width:calc(100% - 24px)}}

@@ -293,7 +293,7 @@ main{position:fixed;inset:0;z-index:2}
 .ct{display:flex;align-items:center;gap:.4rem;padding:.35rem .7rem;border-bottom:1px solid rgba(232,200,122,.25);background:rgba(232,200,122,.06);font-size:.85rem;color:var(--dim)}
 .ct i{width:.55rem;height:.55rem;border-radius:50%;border:1px solid var(--gold-dim)}.ct span{margin-left:.4rem}
 .con pre{font-family:var(--mono);font-size:.8rem;line-height:1.45;color:#d6e4da;padding:.7rem .9rem;overflow-x:auto;white-space:pre}
-.cl{display:block}.cl.h{background:rgba(232,200,122,.16);box-shadow:inset 3px 0 0 var(--gold);color:#fff}
+.cl{display:block;min-height:1.45em}.cl.h{background:rgba(232,200,122,.16);box-shadow:inset 3px 0 0 var(--gold);color:#fff}
 .cp{color:var(--gold)}.cc{color:#fff;font-weight:700}.cd{color:var(--gold-2)}
 /* ---- фото ---- */
 .fig{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 0 16px rgba(232,200,122,.12)}
@@ -623,7 +623,7 @@ var slides=$$('.slide'), N=slides.length, cur=0, tm=null;
 slides.forEach(function(sl){ sl._snap=$$('.scn',sl).map(function(s){return s.innerHTML}); if(sl.dataset.tl){ try{ sl._tl=JSON.parse(sl.dataset.tl); }catch(e){ sl._tl=null; } } });
 function reset(sl){ $$('.scn',sl).forEach(function(s,i){ s.innerHTML=sl._snap[i]; }); }
 function show(sl){
-  stopAll(); reset(sl); var els=$$('[data-s]',sl);
+  stopAll(); reset(sl); var els=$$('[data-s]',sl); els.forEach(function(e,i){ if(!e.style.getPropertyValue('--dl')) e.style.setProperty('--dl',Math.min((i+1)*60,720)+'ms'); });
   els.forEach(function(e){e.classList.remove('in')}); sl.classList.add('ni'); void sl.offsetWidth; sl.classList.remove('ni');
   tm=setTimeout(function(){ els.forEach(function(e){e.classList.add('in')}); later(function(){ runTL(sl); }, 420); if(sl._init) sl._init(sl); },40);
 }
@@ -705,13 +705,14 @@ def _auto_dl(body):
     return re.sub(r'<[a-z0-9]+ [^>]*data-s="1"[^>]*>', rep, body)
 
 def render(out_path, title, extra_js=""):
-    sky = pic("image2.jpeg", (0, 640, 1672, 941), w=1280, q=46)
+    sky = pic("image2.jpeg", (0, 640, 1672, 941), w=1000, q=38)
     css = CSS.replace("__F_REG__", _font("PT_Serif-Web-Regular.ttf")).replace("__F_BOLD__", _font("PT_Serif-Web-Bold.ttf"))
+    css = re.sub(r"\n\s*", "", css)
     out = ['<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
            f'<title>{title}</title><style>' + css + '</style></head><body>' + deco(sky) + '<div id="prog"><i></i></div><main>']
     for label, body, cls, tl in S:
         t = f" data-tl='{html.escape(json.dumps(tl, ensure_ascii=False), quote=True)}'" if tl else ""
-        out.append(f'<section class="slide {cls}" data-label="{html.escape(label)}"{t}><div class="sc"><div class="wrap">{_auto_dl(body)}</div></div></section>')
+        out.append(f'<section class="slide {cls}" data-label="{html.escape(label)}"{t}><div class="sc"><div class="wrap">{body}</div></div></section>')
     out.append('</main><nav id="nav" aria-label="Навигация">'
                f'<button id="b-prev" type="button" aria-label="Предыдущий слайд">{ICON_L}</button><span id="ind"></span>'
                f'<button id="b-next" type="button" aria-label="Следующий слайд">{ICON_R}</button><span class="nsep"></span>'
@@ -719,6 +720,7 @@ def render(out_path, title, extra_js=""):
                '<button id="b-ov" type="button" title="Esc"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span class="lbl2">Содержание</span></button></nav>'
                '<div id="lb" hidden role="dialog" aria-label="Изображение во весь экран"><img alt=""></div><div id="ov" hidden><h2>Содержание</h2><div class="ovg"></div></div><aside id="dvc" hidden aria-label="Карточка устройства"></aside>')
     topo_js = json.dumps(TOPO, ensure_ascii=False, separators=(",", ":"))
-    out.append('<script>' + JS.replace("__TOPO__", topo_js).replace("__DEV__", json.dumps(DEV, ensure_ascii=False, separators=(",", ":"))).replace("__EXTRA__", extra_js) + '</script></body></html>')
+    extra_js = re.sub(r"\n\s+", "\n", extra_js)
+    out.append('<script>' + re.sub(r"\n\s+", "\n", JS).replace("__TOPO__", topo_js).replace("__DEV__", json.dumps(DEV, ensure_ascii=False, separators=(",", ":"))).replace("__EXTRA__", extra_js) + '</script></body></html>')
     pathlib.Path(out_path).write_text("".join(out), encoding="utf-8")
     print(len(S), "slides", pathlib.Path(out_path).stat().st_size, "bytes")
