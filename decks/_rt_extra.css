@@ -1,0 +1,38 @@
+/* компоненты слайдов деки «Маршрутизация» */
+.ifb{display:flex;gap:.7rem;align-items:flex-start;padding:.6rem .8rem;font-size:.95rem;line-height:1.35}
+.ifb small{color:var(--dim);font-size:.85rem}
+.led{flex:none;width:1.1rem;height:1.1rem;border-radius:50%;margin-top:.2rem;background:#335a4f;transition:background .4s,box-shadow .4s}
+.led.on{background:#8fe07a;box-shadow:0 0 10px #8fe07a}
+.upt{color:#8fe07a;opacity:.25;transition:opacity .4s}.upt.on{opacity:1}
+.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.3rem;position:relative}
+.stp{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.55rem;padding-top:1.9rem;transition:box-shadow .5s,border-color .5s}
+.stp .nc{position:absolute;top:-1.35rem;left:50%;transform:translateX(-50%)}
+.stp h3{font-size:1.15rem;margin:0;min-height:2.6em;display:flex;align-items:center}
+.stp p{font-size:.92rem;color:var(--ink)}
+.stp.act{border-color:var(--gold-2);box-shadow:0 0 22px rgba(247,220,140,.35),inset 0 0 26px rgba(232,200,122,.12)}
+.stp:not(:last-child)::after{content:"";position:absolute;right:-1.15rem;top:50%;width:.9rem;height:.9rem;border-top:2px solid var(--gold);border-right:2px solid var(--gold);transform:translateY(-50%) rotate(45deg);opacity:.8}
+.stv{min-height:7.2rem;width:100%;display:grid;place-items:center;border:1px solid rgba(232,200,122,.35);border-radius:10px;background:rgba(3,18,14,.55);padding:.5rem}
+.pkin{display:flex;gap:.5rem;align-items:center}
+.cube{width:1.9rem;height:1.9rem;background:linear-gradient(135deg,#bff6ff,#3fb8d2);border:1px solid #d9fbff;transform:rotate(45deg) skew(-8deg,-8deg);box-shadow:0 0 12px rgba(120,230,250,.8)}
+.pkin.out .cube{width:1.4rem;height:1.4rem}
+.hdr{display:grid;width:100%;font-size:.82rem;border:1px solid rgba(143,233,247,.6);border-radius:6px;overflow:hidden}
+.hdr span{padding:.2rem .4rem;color:var(--dim);border-bottom:1px solid rgba(143,233,247,.3);text-align:left}
+.hdr span.on{color:#fff;background:rgba(79,214,196,.15)}.hdr b{font-family:var(--mono);font-size:.95rem}
+.mini{width:100%;border-collapse:collapse;font-size:.75rem}.mini th,.mini td{border-bottom:1px solid rgba(232,200,122,.3);padding:.15rem .2rem;font-family:var(--mono);font-weight:400}
+.mini th{font-family:var(--f);color:var(--dim)}
+.cand{display:grid;gap:.25rem;width:100%;font-size:.85rem;text-align:left}.cand small{color:var(--dim)}.cand b{color:#fff;font-family:var(--mono)}
+.cand span{font-family:var(--mono);display:flex;justify-content:space-between;padding:.15rem .4rem;border:1px solid rgba(232,200,122,.25);border-radius:5px;color:var(--dim)}
+.cand span i{font-style:normal;width:1rem;height:1rem;border:1px solid var(--dim);border-radius:50%;display:inline-grid;place-items:center;font-size:.7rem}
+.cand span.win.on{border-color:var(--gold-2);color:#fff;box-shadow:0 0 12px rgba(232,200,122,.4)}.cand span.win.on i{border-color:var(--gold-2);color:var(--gold-2)}
+.flow{width:100%;height:auto;display:block;font-family:var(--f)}
+.flow .fb rect,.flow .fd path{fill:rgba(6,30,25,.9);stroke:var(--gold);stroke-width:1.2}
+.flow .fd path{fill:rgba(20,82,74,.35)}
+.flow .fb.r rect{stroke:#ef8c78}
+.flow text{fill:var(--ink);font-size:14px;text-anchor:middle}
+.flow .sm{font-size:12px;fill:var(--dim)}
+.flow .fl path{fill:none;stroke:var(--gold);stroke-width:1.5}
+.flow .fyn text,.flow text.fyn{fill:var(--gold-2);font-weight:700;font-size:13px}
+.flow .frmS rect{fill:rgba(79,214,196,.08);stroke:rgba(143,233,247,.7)}.flow .frmS rect.k{fill:rgba(232,200,122,.25);stroke:var(--gold-2)}
+.flow .frmS text{font-size:12px}
+@media (max-width:1279px){.steps{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:2rem}.stp::after{display:none}}
+@media (max-width:767px){.steps{grid-template-columns:minmax(0,1fr)}}
