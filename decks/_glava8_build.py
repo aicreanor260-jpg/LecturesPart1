@@ -632,15 +632,106 @@ slide("Рукопожатие: номера", "Установка соедине
 
 slide("Wireshark", "Установка соединения", "Установка TCP-соединения в Wireshark", ws_cards())
 
-slide("Порядковые номера", "Установка соединения", "Передача данных: порядковые номера", """
+HANDNUM = seqsvg(540, "ПК1", "ПК2",
+    A2B(110, 175, "c-ind", 1, '<tspan class="b">SYN</tspan>   Seq = 5000', lcls="mono")
+  + B2A(215, 280, "c-blue", 2, '<tspan class="b">SYN, ACK</tspan>   Seq = 9000   Ack = 5001', lcls="mono")
+  + A2B(320, 385, "c-ind", 3, '<tspan class="b">ACK</tspan>   Seq = 5001   Ack = 9001', lcls="mono")
+  + plate(380, 420, "Соединение установлено", 4, "okp", 400, 'data-w="900"')
+  + '<g data-s="5"><text class="mono dgc" x="380" y="505" text-anchor="middle">'
+    'первый байт данных ПК1 — 5001,   ПК2 — 9001</text></g>')
+
+SEQDATA = seqsvg(620, "ПК1", "ПК2",
+    A2B(110, 170, "c-ind", 1, 'Seq = a+1   Ack = b+1   12 байт', lcls="mono")
+  + B2A(210, 270, "c-blue", 2, '<tspan class="b">ACK</tspan>   Seq = b+1   Ack = a+13   0 байт', lcls="mono")
+  + A2B(310, 370, "c-ind", 3, 'Seq = a+13   Ack = b+1   66 байт', lcls="mono")
+  + B2A(410, 470, "c-blue", 4, '<tspan class="b">ACK</tspan>   Seq = b+1   Ack = a+79   0 байт', lcls="mono")
+  + '<g data-s="5"><text class="mono dgc" x="380" y="540" text-anchor="middle">'
+    'сегмент 1: байты a+1 … a+12   →   следующий a+13</text>'
+    '<text class="mono dgc" x="380" y="574" text-anchor="middle">'
+    'сегмент 2: байты a+13 … a+78   →   следующий a+79</text></g>')
+
+NUMEX = seqsvg(560, "ПК1", "ПК2",
+    A2B(105, 160, "c-ind", 1, 'Seq = 1001   20 байт   →   1001 … 1020', lcls="mono")
+  + B2A(200, 255, "c-blue", 2, '<tspan class="b">ACK</tspan>   Seq = 5001   Ack = 1021', lcls="mono")
+  + A2B(295, 350, "c-ind", 3, 'Seq = 1021   50 байт   →   1021 … 1070', lcls="mono")
+  + B2A(390, 445, "c-blue", 4, '<tspan class="b">ACK</tspan>   Seq = 5001   Ack = 1071', lcls="mono")
+  + '<g data-s="5"><text class="mono dgc" x="380" y="512" text-anchor="middle">'
+    'нумерация ПК1 → ПК2 и ПК2 → ПК1 ведётся независимо</text></g>')
+
+def minitbl(step, head, rows, cls=""):
+    th = "".join(f"<th>{h}</th>" for h in head)
+    tb = "".join("<tr>" + "".join(f'<td class="mono">{c}</td>' for c in r) + "</tr>" for r in rows)
+    return (f'<div class="tw card {cls}" data-s="{step}"><table class="tbl num">'
+            f'<thead><tr>{th}</tr></thead><tbody>{tb}</tbody></table></div>')
+
+slide("Рукопожатие: числа", "Установка соединения", "Трёхстороннее рукопожатие: как считаются Seq и Ack", """
 <div class="two">
-  <div><p class="p">Предположим, что ПК1 необходимо отправить сегменты данных на ПК2. Процесс передачи будет следующим:</p>""" + steps([
-    "ПК1 нумерует каждый байт, отправляемый через TCP-соединение. Предположим, что номер первого байта равен <b class='mono'>a+1</b>. Номер второго байта будет равен <b class='mono'>a+2</b>, третьего байта – <b class='mono'>a+3</b> и так далее.",
-    "ПК1 использует номер первого байта каждого сегмента данных в качестве порядкового номера и отправляет TCP-сегмент.",
-    "После получения сегмента ПК2 необходимо подтвердить его и запросить следующий: порядковый номер (<b class='mono'>a+1</b>) + длина полезной нагрузки = порядковый номер первого байта следующего сегмента (<b class='mono'>a+1+12</b>).",
-    "ПК1 обнаруживает, что номер подтверждения равен <b class='mono'>a+1+12</b>, что указывает на получение сегментов от <b class='mono'>a+1</b> до <b class='mono'>a+12</b>. Порядковый номер будущего сегмента должен быть <b class='mono'>a+1+12</b>."], cls="sm") + """
-  <p class="p sm note2" data-s="5">Чтобы повысить эффективность отправки, отправитель может отправлять несколько сегментов данных одновременно, которые затем по очереди будет подтверждать получатель.</p></div>
-  <figure class="figx">""" + f'<img src="{_jpg(_dl("fY8Kij7O"))}" alt="Рукопожатие и полезная нагрузка">' + """</figure>
+  <div>
+    <p class="p sm">Перед передачей данных ПК1 и ПК2 устанавливают TCP-соединение. Процесс состоит из трёх сообщений: <b class="mono">SYN → SYN/ACK → ACK</b>.</p>
+    <ol class="steps sm">
+      <li data-s="1"><span class="badge">1</span><div><b>ПК1 отправляет SYN.</b> Источник <b class="mono">1.1.1.1:1024</b>, назначение <b class="mono">2.2.2.2:23</b>, <b class="mono">SYN = 1</b>, <b class="mono">Seq = a</b>, поле Ack пока не используется. Число <b class="mono">a</b> — начальный порядковый номер, выбранный ПК1.
+        <span class="say">«Я хочу установить соединение. Мой начальный порядковый номер — a».</span></div></li>
+      <li data-s="2"><span class="badge">2</span><div><b>ПК2 отвечает SYN/ACK.</b> <b class="mono">SYN = 1</b>, <b class="mono">ACK = 1</b>, <b class="mono">Seq = b</b>, <b class="mono">Ack = a + 1</b>. Число <b class="mono">b</b> — собственный начальный номер ПК2, а <b class="mono">Ack = a + 1</b> подтверждает получение SYN от ПК1.
+        <span class="say">«Запрос получил. Ожидаю от тебя номер a + 1. Мой начальный номер — b».</span></div></li>
+      <li data-s="3"><span class="badge">3</span><div><b>ПК1 отправляет ACK.</b> <b class="mono">ACK = 1</b>, <b class="mono">Seq = a + 1</b>, <b class="mono">Ack = b + 1</b>. После этого TCP-соединение установлено и стороны могут передавать данные.
+        <span class="say">«Твой SYN получил. Ожидаю от тебя номер b + 1».</span></div></li>
+    </ol>
+    <p class="p sm callout" data-s="4"><b>Важно:</b> хотя SYN обычно не содержит пользовательских данных, он занимает один порядковый номер — поэтому подтверждается значением <b class="mono">a + 1</b>.</p>
+  </div>
+  <div class="vstack gap">
+    <div class="card dgcard">""" + HANDNUM + """</div>
+    <p class="p sm dimh" data-s="5">Числовой пример: ПК1 выбрал <b class="mono">Seq = 5000</b>, ПК2 — <b class="mono">Seq = 9000</b>.</p>""" +
+    minitbl(5, ["Шаг", "Направление", "Флаги", "Seq", "Ack"],
+            [["1", "ПК1 → ПК2", "SYN", "5000", "—"],
+             ["2", "ПК2 → ПК1", "SYN, ACK", "9000", "5001"],
+             ["3", "ПК1 → ПК2", "ACK", "5001", "9001"]]) + """
+    <p class="p sm callout" data-s="6">Если ПК1 отправит <b class="mono">100</b> байт с <b class="mono">Seq = 5001</b>, они получат номера <b class="mono">5001 … 5100</b>. ПК2 подтвердит их так: <b class="mono">Ack = 5001 + 100 = 5101</b>.</p>
+  </div>
+</div>""")
+
+slide("Передача: Seq и Ack", "Установка соединения", "Передача данных по TCP после установления соединения", """
+<div class="two">
+  <div>
+    <p class="p sm">TCP обеспечивает надёжную и упорядоченную передачу благодаря двум полям: <b class="mono">Seq</b> — номер первого байта данных в сегменте, <b class="mono">Ack</b> — номер следующего байта, который получатель ожидает получить. Каждое направление соединения имеет собственную, независимую нумерацию.</p>
+    <ol class="steps sm">
+      <li data-s="1"><span class="badge">1</span><div><b>ПК1 отправляет первый сегмент:</b> <b class="mono">Seq = a + 1</b>, <b class="mono">Ack = b + 1</b>, полезная нагрузка — <b class="mono">12</b> байт. Байты получают номера <b class="mono">a+1, a+2, …, a+12</b>, поэтому следующий сегмент начнётся с <b class="mono">a + 1 + 12 = a + 13</b>.</div></li>
+      <li data-s="2"><span class="badge">2</span><div><b>ПК2 подтверждает получение:</b> <b class="mono">Seq = b + 1</b>, <b class="mono">Ack = a + 13</b>, полезная нагрузка — <b class="mono">0</b> байт.
+        <span class="say">«Байты до a + 12 включительно получены. Теперь ожидаю байт a + 13».</span></div></li>
+      <li data-s="3"><span class="badge">3</span><div><b>ПК1 отправляет следующий сегмент:</b> <b class="mono">Seq = a + 13</b>, <b class="mono">Ack = b + 1</b>, полезная нагрузка — <b class="mono">66</b> байт. Сегмент содержит байты <b class="mono">a+13, a+14, …, a+78</b>, следующий ожидаемый байт — <b class="mono">a + 13 + 66 = a + 79</b>.</div></li>
+      <li data-s="4"><span class="badge">4</span><div><b>ПК2 подтверждает второй сегмент:</b> <b class="mono">Seq = b + 1</b>, <b class="mono">Ack = a + 79</b>, полезная нагрузка — <b class="mono">0</b> байт.</div></li>
+    </ol>
+  </div>
+  <div class="vstack gap">
+    <div class="card dgcard">""" + SEQDATA + """</div>
+    <p class="p sm callout warn" data-s="5"><b>Осторожно с исходной схемой:</b> значение <b class="mono">Ack = a + 12 + 66</b> ошибочно. Правильно <b class="mono">Ack = a + 13 + 66 = a + 79</b>. Это накопительное подтверждение: ПК2 получил все байты до <b class="mono">a + 78</b> включительно и теперь ожидает <b class="mono">a + 79</b>.</p>
+    <div class="card qbox" data-s="6"><h3>Почему Seq у ПК2 не увеличивается?</h3>
+      <p class="p sm">ПК2 отправляет только подтверждения без данных: и первое, и второе с <b class="mono">Seq = b + 1</b>. Пустой ACK не занимает место в пространстве порядковых номеров. Seq растёт на количество переданных <b>байт данных</b>; дополнительно по одному номеру расходуют только управляющие флаги <b class="mono">SYN</b> и <b class="mono">FIN</b>.</p></div>
+  </div>
+</div>""")
+
+slide("Передача: числовой пример", "Установка соединения", "Передача данных: числовой пример", """
+<div class="two">
+  <div>
+    <p class="p sm">Пусть после установления соединения следующий номер ПК1 — <b class="mono">Seq = 1001</b>, а следующий номер ПК2 — <b class="mono">Seq = 5001</b>.</p>
+    <h3 data-s="1">Первый сегмент — ПК1 отправляет 20 байт</h3>""" +
+    minitbl(1, ["Направление", "Seq", "Ack", "Данные"],
+            [["ПК1 → ПК2", "1001", "5001", "20 байт"]]) + """
+    <p class="p sm" data-s="2">Переданы байты <b class="mono">1001 … 1020</b>, поэтому ПК2 отвечает:</p>""" +
+    minitbl(2, ["Направление", "Seq", "Ack", "Данные"],
+            [["ПК2 → ПК1", "5001", "1021", "0 байт"]]) + """
+    <p class="p sm dimh" data-s="2"><b class="mono">Ack = 1021</b> означает: «Получено всё до байта 1020, ожидаю байт 1021».</p>
+    <h3 data-s="3">Второй сегмент — ПК1 отправляет ещё 50 байт</h3>""" +
+    minitbl(3, ["Направление", "Seq", "Ack", "Данные"],
+            [["ПК1 → ПК2", "1021", "5001", "50 байт"]]) + """
+    <p class="p sm" data-s="4">Переданы байты <b class="mono">1021 … 1070</b>, ПК2 подтверждает:</p>""" +
+    minitbl(4, ["Направление", "Seq", "Ack", "Данные"],
+            [["ПК2 → ПК1", "5001", "1071", "0 байт"]]) + """
+  </div>
+  <div class="vstack gap">
+    <div class="card dgcard">""" + NUMEX + """</div>
+    <div class="formula card" data-s="5"><span class="mono">Ack = Seq + количество байт данных</span></div>
+    <p class="p sm callout" data-s="6"><b>Главная идея:</b> <b class="mono">Seq</b> показывает номер первого передаваемого байта, а <b class="mono">Ack</b> — номер <b>следующего ожидаемого</b> байта, а не номер последнего полученного.</p>
+  </div>
 </div>""")
 
 slide("Окно: принцип", "Надёжность TCP", "Подтверждение и размер окна", """<div class="two">""" + steps([
@@ -939,6 +1030,21 @@ rect.src{fill:#fff;stroke:var(--c);stroke-width:2.4}.dg .srct{font-size:21px;fon
 .hchip .hcf{font-size:.9rem;color:var(--dim)}
 .hchip .hcd{font-size:.95rem;font-weight:700;color:var(--c);justify-self:end;grid-row:2}
 .dimh{color:var(--dim);font-weight:600}
+.say{display:block;margin-top:.35rem;padding-left:.7rem;border-left:3px solid var(--indigo);color:var(--dim);font-style:italic}
+.vstack.gap{gap:.8rem}
+.vstack.gap .dg{max-height:32vh}
+.vstack.gap .qbox .p,.vstack.gap .callout{font-size:.95rem;line-height:1.4}
+.vstack.gap .qbox h3{font-size:1rem}
+.vstack.gap .dgcard{padding:.6rem .8rem}
+.vstack.gap .callout,.vstack.gap .qbox{padding:.6rem .85rem}
+.vstack.gap .p{margin-bottom:0}
+.callout.warn{background:#fdeaf1;border-left:4px solid var(--crimson)}
+.qbox{padding:.9rem 1.1rem}
+.qbox h3{margin-bottom:.4rem}
+.qbox .p{margin-bottom:0}
+.formula{padding:.9rem 1.1rem;text-align:center;font-size:1.25rem;font-weight:700;color:var(--navy);background:var(--tint)}
+.tbl.num td{font-size:1rem;white-space:nowrap}
+.tbl.num th{font-size:.9rem}
 /* title */
 .tslide .sc{padding-left:clamp(16px,10vw,220px)}
 .title h1{font-size:clamp(2.4rem,6.5vw,5.6rem);line-height:1;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:-.02em;max-width:14ch;margin:.3rem 0 1.4rem}
@@ -1355,6 +1461,7 @@ from PIL import Image as _Im
 DL = r"C:/Users/anank/Downloads/"
 PP = r"C:/Users/anank/AppData/Local/Temp/claude/p8/"
 def _jpg(path, w=2400, q=92):
+    if not pathlib.Path(path).exists(): return ""   # слайд всё равно заменяется вёрсткой ниже
     im = _Im.open(path).convert("RGB")
     if im.width > w: im = im.resize((w, round(im.height*w/im.width)), _Im.LANCZOS)
     b = io.BytesIO(); im.save(b, "JPEG", quality=q, optimize=True, progressive=True, subsampling=0)
@@ -1465,6 +1572,6 @@ for k, it in enumerate(S):
                 '<p class="p sm figcap">При установке соединения в заголовке TCP выставлен только флаг SYN, остальные флаги сброшены.</p>', "figs")
 
 ANIM_LOOP = set()
-ANIM_ONCE = {"Мультиплексирование", "Адресация", "Сегментация", "Сокеты", "Рукопожатие", "Рукопожатие: номера", "Порядковые номера", "Окно: принцип", "Окно: пример", "Потеря данных", "Завершение сеанса", "Завершение: детали", "Управление потоком", "UDP: функции", "UDP: датаграммы", "Окно: схема", "Завершение: номера"}
+ANIM_ONCE = {"Мультиплексирование", "Адресация", "Сегментация", "Сокеты", "Рукопожатие", "Рукопожатие: номера", "Рукопожатие: числа", "Передача: Seq и Ack", "Передача: числовой пример", "Окно: принцип", "Окно: пример", "Потеря данных", "Завершение сеанса", "Завершение: детали", "Управление потоком", "UDP: функции", "UDP: датаграммы", "Окно: схема", "Завершение: номера"}
 
 render()
