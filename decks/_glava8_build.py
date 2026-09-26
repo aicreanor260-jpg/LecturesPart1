@@ -185,7 +185,7 @@ REORD = ('<svg class="dg" viewBox="0 0 760 330" role="img">'
 def dgram(i):
     x = 180 + i * 64
     k = ' data-k="3"' if i == 2 else ""
-    return (f'<g class="mv" data-m="2" data-w="1300" style="--dx:430px;--dl:{(4-i)*90}ms;--md:1000ms">'
+    return (f'<g class="mv" data-m="2" data-w="1300" style="--dx:360px;--dl:{(4-i)*90}ms;--md:1000ms">'
             f'<g class="dgm"{k}><rect class="rseg" x="{x}" y="96" width="52" height="46" rx="8"/></g></g>')
 
 UDPS = ('<svg class="dg c-ind" viewBox="0 0 1000 230" role="img">'
@@ -195,6 +195,213 @@ UDPS = ('<svg class="dg c-ind" viewBox="0 0 1000 230" role="img">'
   '<g data-s="1">' + "".join(dgram(i) for i in range(5)) + '</g>'
   '<text class="lostt" data-s="3" x="500" y="214" text-anchor="middle">потерянная датаграмма повторно не отправляется</text>'
   '</svg>')
+
+# ------------------------------------------------- большие схемы «как на фото»
+def harr(x1, x2, y, col, step, w=900):
+    d = 1 if x2 > x1 else -1
+    ex = x2 - d * 14
+    head = f'<polygon class="head" points="{x2},{y} {x2-d*22},{y-9} {x2-d*22},{y+9}"/>'
+    return (f'<g class="arr {col}" data-s="{step}" data-w="{w}">'
+            f'<path class="draw" pathLength="1" d="M{x1} {y}L{ex} {y}"/>{head}</g>')
+
+def ftxt(parts, y, step, dl=0):
+    s = f'<g data-s="{step}" style="--dl:{dl}ms">'
+    for x, t, c in parts:
+        s += f'<text class="{c}" x="{x}" y="{y}">{t}</text>'
+    return s + "</g>"
+
+def bdg(cx, cy, n, step=None, r=20, col="bdgc", fs=20):
+    a = f' data-s="{step}"' if step else ""
+    return (f'<g{a}><circle class="{col}" cx="{cx}" cy="{cy}" r="{r}"/>'
+            f'<text class="bdgt" x="{cx}" y="{cy+fs*0.35:.0f}" text-anchor="middle" style="font-size:{fs}px">{n}</text></g>')
+
+def monitor(cx, y):
+    return (f'<g><rect class="mon" x="{cx-54}" y="{y}" width="108" height="72" rx="9"/>'
+            f'<rect class="monsc" x="{cx-44}" y="{y+10}" width="88" height="46" rx="5"/>'
+            f'<rect class="mon" x="{cx-17}" y="{y+72}" width="34" height="13"/>'
+            f'<rect class="mon" x="{cx-36}" y="{y+85}" width="72" height="10" rx="5"/></g>')
+
+# ---- Слайд «Установление TCP-соединения и передача данных» (схема из ЛК)
+STAGES = [(["ТРЁХСТОРОННЕЕ", "КВИТИРОВАНИЕ"], ["Установка", "соединения"]),
+          (["ПЕРЕДАЧА", "ДАННЫХ"], ["Отправка сегментов", "с данными"]),
+          (["ДАННЫЕ", "ПОЛУЧЕНЫ"], ["Сегменты приняты", "и помещены в буфер"]),
+          (["ПОДТВЕРЖДЕНИЕ", "ПОЛУЧЕНИЯ"], ["Отправка ACK", "(подтверждения)"]),
+          (["ПРОДОЛЖЕНИЕ", "ПЕРЕДАЧИ"], ["Дальнейшая передача", "данных"])]
+
+def stage_g(i, step):
+    y = 232 + i * 128
+    t, s = STAGES[i]
+    g = f'<g data-s="{step}"><rect class="stagec" x="272" y="{y}" width="230" height="115" rx="14"/>'
+    g += f'<text class="stagt" x="292" y="{y+32}">{t[0]}</text><text class="stagt" x="292" y="{y+54}">{t[1]}</text>'
+    g += f'<text class="stags" x="292" y="{y+80}">{s[0]}</text><text class="stags" x="292" y="{y+100}">{s[1]}</text></g>'
+    g += bdg(252, y + 26, i + 1, step, 19, "bdgc", 19)
+    return g
+
+def bcells(y, filled, step, dl=0):
+    g = f'<g data-s="{step}" style="--dl:{dl}ms">'
+    for i in range(3):
+        cls = "cellf" if i < filled else "celle"
+        g += f'<rect class="{cls}" x="{1320+i*90}" y="{y}" width="74" height="54" rx="8"/>'
+    return g + "</g>"
+
+def bracket(y1, y2, step):
+    return f'<g data-s="{step}"><path class="brc" d="M548 {y1} H528 V{y2} H548"/></g>'
+
+XP1, XP2 = 580, 1180
+TCPFLOW = ('<svg class="dg" viewBox="0 0 1660 900" role="img" aria-label="Установление TCP-соединения и передача данных">'
+  '<g data-s="1">'
+  f'<text class="nname" x="{XP1}" y="46" text-anchor="middle">ПК1</text>'
+  f'<text class="nsub" x="{XP1}" y="74" text-anchor="middle">(отправитель)</text>' + monitor(XP1, 92) +
+  f'<text class="nname" x="{XP2}" y="46" text-anchor="middle">ПК2</text>'
+  f'<text class="nsub" x="{XP2}" y="74" text-anchor="middle">(получатель)</text>' + monitor(XP2, 92) +
+  f'<line class="ll" x1="{XP1}" y1="200" x2="{XP1}" y2="872"/><line class="ll" x1="{XP2}" y1="200" x2="{XP2}" y2="872"/>'
+  '<line class="spine" x1="252" y1="232" x2="252" y2="859"/>'
+  '<rect class="qcard" x="20" y="232" width="200" height="380" rx="16"/>'
+  '<text class="stagt" x="120" y="282" text-anchor="middle">ДАННЫЕ ДЛЯ</text>'
+  '<text class="stagt" x="120" y="306" text-anchor="middle">ОТПРАВКИ</text>'
+  + "".join(f'<rect class="sheet" x="{46+i*12}" y="{348+i*14}" width="104" height="132" rx="8"/>' for i in range(4))
+  + '<rect class="qcard" x="1300" y="220" width="320" height="150" rx="16"/>'
+    '<text class="stagt" x="1460" y="266" text-anchor="middle">БУФЕР ПОЛУЧАТЕЛЯ</text>'
+  + "".join(f'<rect class="celle" x="{1320+i*90}" y="290" width="74" height="54" rx="8"/>' for i in range(3))
+  + '</g>'
+  + stage_g(0, 2) + bracket(250, 446, 2)
+  + harr(595, 1165, 268, "c-ind", 3) + ftxt([(620, "seq=100", "fl"), (780, "win=3", "fv"), (910, "flags=SYN", "fl")], 252, 3)
+  + harr(1165, 595, 348, "c-blue", 4) + ftxt([(595, "seq=200", "fl"), (745, "Ack=101", "fa"), (895, "win=3", "fv"), (995, "flags=SYN, ACK", "fl")], 332, 4)
+  + harr(595, 1165, 428, "c-ind", 5) + ftxt([(620, "seq=101", "fl"), (770, "Ack=201", "fa"), (920, "win=3", "fv"), (1020, "flags=ACK", "fl")], 412, 5)
+  + stage_g(1, 6) + bracket(500, 676, 6)
+  + harr(595, 1165, 520, "c-ind", 7) + ftxt([(620, "seq=101", "fl"), (780, "win=3", "fv")], 504, 7) + bcells(430, 1, 7, 500)
+  + harr(595, 1165, 588, "c-ind", 8) + ftxt([(620, "seq=102", "fl"), (780, "win=3", "fv")], 572, 8) + bcells(498, 2, 8, 500)
+  + harr(595, 1165, 656, "c-ind", 9) + ftxt([(620, "seq=103", "fl"), (780, "win=3", "fv")], 640, 9) + bcells(566, 3, 9, 500)
+  + stage_g(2, 9) + bdg(1600, 498, 3, 9, 22, "bdgb", 22)
+  + stage_g(3, 10) + bracket(720, 838, 10)
+  + harr(1165, 595, 740, "c-blue", 10) + ftxt([(810, "Ack=104", "fa"), (950, "win=1", "fv"), (1050, "ctl=ACK", "fl")], 724, 10)
+  + '<g data-s="10" style="--dl:500ms"><rect class="celle" x="1320" y="650" width="74" height="54" rx="8"/>'
+    '<rect class="cellf" x="1410" y="650" width="74" height="54" rx="8"/>'
+    '<rect class="celle" x="1500" y="650" width="74" height="54" rx="8"/></g>'
+  + bdg(1600, 677, 4, 10, 22, "bdgb", 22)
+  + stage_g(4, 11)
+  + harr(595, 1165, 818, "c-ind", 11) + ftxt([(620, "seq=104", "fl"), (780, "win=3", "fv")], 802, 11)
+  + '<g data-s="12"><rect class="qcard" x="1300" y="720" width="320" height="160" rx="16"/>'
+  + bdg(1336, 758, "?", None, 20, "bdgc", 22)
+  + '<text class="stagt" x="1368" y="766">ВОПРОС</text>'
+  + '<text class="qline" x="1318" y="802">Почему значение поля</text>'
+    '<text class="qline" x="1318" y="824">подтверждения (Ack) в сегменте,</text>'
+    '<text class="qline" x="1318" y="846">отправленном узлом А,</text>'
+    '<text class="qline" x="1318" y="868">не увеличивается?</text></g>'
+  + '</svg>')
+
+TCPFLOW_LEG = ('<div class="dleg">'
+  '<span><b class="mono">seq</b> — порядковый номер <i>(sequence number)</i></span>'
+  '<span><b class="mono fa2">Ack</b> — номер подтверждения <i>(acknowledgment number)</i></span>'
+  '<span><b class="mono fv2">win</b> — размер окна <i>(window size)</i></span>'
+  '<span><b class="mono">flags</b> — управляющие флаги</span>'
+  '<span><b class="mono">ctl</b> — управляющее поле</span></div>')
+
+# ---- Слайд «Выключение TCP — четырёхстороннее квитирование» (схема из ЛК)
+def dashline(x1, x2, y, step):
+    d = 1 if x2 > x1 else -1
+    return (f'<g data-s="{step}" style="--dl:200ms"><path class="dash" d="M{x1+d*16} {y}H{x2-d*16}"/>'
+            f'<polygon class="dhead" points="{x1},{y} {x1+d*16},{y-8} {x1+d*16},{y+8}"/>'
+            f'<polygon class="dhead" points="{x2},{y} {x2-d*16},{y-8} {x2-d*16},{y+8}"/></g>')
+
+def fnode(x, name, ip):
+    cx = x + 125
+    return (f'<g data-s="1"><rect class="qcard" x="{x}" y="30" width="250" height="290" rx="16"/>'
+            f'<rect class="chipr" x="{cx-85}" y="50" width="170" height="46" rx="12"/>'
+            f'<text class="chipt" x="{cx}" y="81" text-anchor="middle">{name}</text>'
+            + monitor(cx, 120) +
+            f'<rect class="ipb" x="{cx-100}" y="252" width="200" height="46" rx="11"/>'
+            f'<text class="ipt" x="{cx}" y="282" text-anchor="middle">{ip}</text></g>')
+
+FINROWS = [
+    (1, "c-ind", 1, "Seq = 101   Ack = 301", "(флаг: FIN)",
+     ["Узел А отправляет", "запрос на выключение", "соединения (FIN)."],
+     ["Узел В получает", "запрос и отвечает", "подтверждением (ACK)."]),
+    (2, "c-cr", -1, "Seq = 301   Ack = 102", "(флаг: ACK)",
+     ["Узел А получает", "подтверждение (ACK)", "от узла В."],
+     ["Узел В отправляет", "подтверждение (ACK)", "для узла А."]),
+    (3, "c-cr", -1, "Seq = 302   Ack = 102", "(флаг: FIN)",
+     ["Узел А получает", "запрос на выключение", "соединения (FIN)."],
+     ["Узел В отправляет", "запрос на выключение", "соединения (FIN)."]),
+    (4, "c-ind", 1, "Seq = 102   Ack = 303", "(флаг: ACK)",
+     ["Узел А отправляет", "подтверждение (ACK)", "для узла В."],
+     ["Узел В получает ACK.", "TCP-соединение", "выключено."]),
+]
+
+def finrow(i, step):
+    n, col, dr, hdr, flg, lt, rt = FINROWS[i]
+    yc = 380 + i * 120
+    top = yc - 50
+    g = f'<g data-s="{step}"><rect class="hplate {col}" x="560" y="{top}" width="340" height="100" rx="12"/>'
+    g += f'<path class="hbar {col}" d="M572 {top} H888 a12 12 0 0 1 12 12 V{top+28} H560 V{top+12} a12 12 0 0 1 12 -12 z"/>'
+    g += f'<text class="hbart" x="730" y="{top+20}" text-anchor="middle">TCP-заголовок</text>'
+    g += f'<text class="hseq" x="730" y="{top+62}" text-anchor="middle">{hdr}</text>'
+    g += f'<text class="hflg" x="730" y="{top+88}" text-anchor="middle">{flg}</text></g>'
+    if dr > 0:
+        g += harr(330, 545, yc, col, step) + harr(915, 1060, yc, col, step)
+    else:
+        g += harr(545, 330, yc, col, step) + harr(1060, 915, yc, col, step)
+    bc = "bdgc" if col == "c-ind" else "bdgr"
+    g += bdg(40, yc - 34, n, step, 18, bc, 18)
+    g += f'<g data-s="{step}">' + "".join(
+        f'<text class="rowt" x="74" y="{yc-28+k*23}">{t}</text>' for k, t in enumerate(lt)) + '</g>'
+    g += bdg(1090, yc - 34, n, step + 1, 18, bc, 18)
+    g += f'<g data-s="{step+1}">' + "".join(
+        f'<text class="rowt" x="1124" y="{yc-28+k*23}">{t}</text>' for k, t in enumerate(rt)) + '</g>'
+    return g
+
+FINFLOW = ('<svg class="dg" viewBox="0 0 1660 880" role="img" aria-label="Выключение TCP: четырёхстороннее квитирование">'
+  + fnode(30, "УЗЕЛ А", "IP: 1.1.1.1:1024") + fnode(1090, "УЗЕЛ В", "IP: 2.2.2.2:23")
+  + '<g data-s="2"><rect class="statb" x="430" y="50" width="520" height="72" rx="14"/>'
+  + bdg(478, 86, 1, None, 18, "bdgc", 18)
+  + '<text class="statt" x="512" y="94">Установлено TCP-соединение</text></g>'
+  + dashline(290, 420, 86, 2) + dashline(1080, 960, 86, 2)
+  + '<g data-s="3"><rect class="statb" x="430" y="142" width="520" height="72" rx="14"/>'
+  + bdg(478, 178, 2, None, 18, "bdgc", 18)
+  + '<text class="statt" x="512" y="186">Обмен сегментами TCP</text></g>'
+  + dashline(290, 420, 178, 3) + dashline(1080, 960, 178, 3)
+  + "".join(finrow(i, 4 + i * 2) for i in range(4))
+  + '<g data-s="1"><rect class="qcard" x="1370" y="120" width="260" height="420" rx="16"/>'
+    '<text class="stagt" x="1500" y="168" text-anchor="middle">Обозначения</text>'
+  + harr(1395, 1455, 215, "c-ind", 1, 400)
+  + '<text class="legt" x="1470" y="222">Отправка от узла А</text>'
+  + harr(1395, 1455, 275, "c-cr", 1, 400)
+  + '<text class="legt" x="1470" y="282">Отправка от узла В</text>'
+  + '<text class="legk fa2" x="1395" y="355">FIN</text>'
+    '<text class="legt" x="1395" y="382">– запрос на выключение</text>'
+    '<text class="legt" x="1395" y="404">соединения</text>'
+    '<text class="legk fc2" x="1395" y="455">ACK</text>'
+    '<text class="legt" x="1395" y="482">– подтверждение</text>'
+    '<text class="legt" x="1395" y="504">получения</text></g>'
+  + '<g data-s="12"><rect class="banner" x="30" y="790" width="1310" height="70" rx="14"/>'
+  + bdg(84, 825, "!", None, 24, "bdgc", 26)
+  + '<text class="bannert" x="132" y="835">TCP-соединение выключено после шага 4.</text></g>'
+  + '</svg>')
+
+def finchips():
+    s = '<div class="hchips">'
+    for i, (n, col, dr, hdr, flg, lt, rt) in enumerate(FINROWS):
+        s += (f'<div class="hchip {col}" data-s="{5+i}"><span class="hct">TCP-заголовок</span>'
+              f'<b class="mono">{hdr}</b><span class="hcf">{flg}</span>'
+              f'<span class="hcd mono">{"А → В" if dr > 0 else "В → А"}</span></div>')
+    return s + "</div>"
+
+def stagecards():
+    s = '<div class="stgs">'
+    for i, (t, sub) in enumerate(STAGES):
+        s += (f'<div class="stg" data-s="{6+i}"><span class="badge">{i+1}</span>'
+              f'<div><b>{" ".join(t)}</b><span>{" ".join(sub)}</span></div></div>')
+    return s + "</div>"
+
+# ---- UDP: пример движения датаграмм (в стиле слайда про Seq/Ack)
+UDPSEQ = seqsvg(520, "Узел А", "Узел Б",
+    A2B(110, 165, "c-vio", 4, '<tspan class="b">датаграмма 1</tspan>   заголовок 8 байт', lcls="mono")
+  + A2B(195, 250, "c-vio", 5, '<tspan class="b">датаграмма 2</tspan>', lcls="mono")
+  + A2B(280, 335, "c-vio", 6, '<tspan class="b">датаграмма 3</tspan>', half=True, k=7, lcls="mono")
+  + '<g data-s="7" data-w="900"><path class="xmark" d="M366 294 l28 28 M394 294 l-28 28"/>'
+    '<text class="lostt" x="420" y="316">потеряна</text></g>'
+  + A2B(365, 420, "c-vio", 8, '<tspan class="b">датаграмма 4</tspan>', lcls="mono")
+  + plate(380, 440, "ACK не отправляется, повтора нет", 9, "okp", 470, 'data-w="900"'))
 
 # ---------------------------------------------------------------- data
 PORTS = [("HTTP", 80), ("SSH", 22), ("DNS", 53), ("POP3", 110), ("IMAP", 143), ("FTP (команды)", 21),
@@ -422,6 +629,9 @@ slide("Рукопожатие: номера", "Установка соедине
   <div class="card dgcard">""" + HANDSEQ + """</div>
 </div>""")
 
+
+slide("Wireshark", "Установка соединения", "Установка TCP-соединения в Wireshark", ws_cards())
+
 slide("Порядковые номера", "Установка соединения", "Передача данных: порядковые номера", """
 <div class="two">
   <div><p class="p">Предположим, что ПК1 необходимо отправить сегменты данных на ПК2. Процесс передачи будет следующим:</p>""" + steps([
@@ -433,14 +643,14 @@ slide("Порядковые номера", "Установка соединен�
   <figure class="figx">""" + f'<img src="{_jpg(_dl("fY8Kij7O"))}" alt="Рукопожатие и полезная нагрузка">' + """</figure>
 </div>""")
 
-slide("Wireshark", "Установка соединения", "Установка TCP-соединения в Wireshark", ws_cards())
-
-slide("Окно: принцип", "Надёжность TCP", "Подтверждение и размер окна", steps([
+slide("Окно: принцип", "Надёжность TCP", "Подтверждение и размер окна", """<div class="two">""" + steps([
     "При трехстороннем квитировании в TCP-соединении обе стороны уведомляют друг друга о максимальном количестве байтов (размере буфера), которые могут быть получены локальной стороной с помощью поля <b>Окно</b>.",
     "После установления TCP-соединения отправитель отправляет данные указанного количества байтов на основе размера окна, заявленного получателем.",
     "После получения данных получатель хранит данные в буфере и ожидает получения буферизированных данных приложением верхнего уровня. После получения данных приложением верхнего уровня освобождается соответствующее пространство в буфере.",
     "Получатель сообщает текущий приемлемый размер данных (окна) в соответствии с его размером буфера.",
-    "Отправитель отправляет определенный объем данных в зависимости от текущего размера окна получателя."], cls="cols"))
+    "Отправитель отправляет определенный объем данных в зависимости от текущего размера окна получателя."], cls="sm") + """
+  <div><p class="p sm dimh" data-s="6">Этапы, которые мы разберём на следующем слайде:</p>""" + stagecards() + """</div>
+</div>""")
 
 slide("Окно: пример", "Надёжность TCP", "Размер окна: пример передачи", """
 <div class="two">
@@ -467,11 +677,13 @@ slide("Завершение сеанса", "Надёжность TCP", "Заве
   <div class="card dgcard">""" + FIN + """</div>
 </div>""")
 
-slide("Завершение: детали", "Надёжность TCP", "Завершение TCP-сеанса: ПК1 и ПК2", steps([
+slide("Завершение: детали", "Надёжность TCP", "Завершение TCP-сеанса: ПК1 и ПК2", """<div class="two">""" + steps([
     "ПК1 отправляет TCP-сегмент с установленным флагом <b>FIN</b>. Сегмент не содержит данных.",
     "После получения ПК1 сегмента TCP ПК2 отвечает сегментом TCP с установленным флагом <b>ACK</b>.",
     "ПК2 проверяет необходимость отправки данных. Если необходимо, ПК2 отправляет данные, а затем TCP-сегмент с флагом <b>FIN</b> для закрытия соединения. Если нет, ПК2 напрямую отправляет TCP-сегмент с установленным флагом FIN.",
-    "После получения TCP-сегмента с установленным флагом FIN ПК1 отвечает сегментом с флагом <b>ACK</b>. Затем TCP-соединение разрывается в обоих направлениях."], cls="cols"))
+    "После получения TCP-сегмента с установленным флагом FIN ПК1 отвечает сегментом с флагом <b>ACK</b>. Затем TCP-соединение разрывается в обоих направлениях."], cls="sm") + """
+  <div><p class="p sm dimh" data-s="5">Seq и Ack на каждом шаге — подробнее на следующем слайде:</p>""" + finchips() + """</div>
+</div>""")
 
 slide("Управление потоком", "Надёжность TCP", "Установление TCP-соединения и управление потоком", """
 <div class="two">
@@ -486,7 +698,10 @@ slide("Управление потоком", "Надёжность TCP", "Уст
 
 slide("UDP: функции", "Протокол UDP", "Функции протокола UDP", """
 <p class="p wide">Протокол UDP так же, как и TCP, использует сегментацию данных, при этом не задействует процессы, отвечающие за уведомление об успешном получении сегмента, что позволяет значительно быстрее передавать данные. Пользуясь преимуществом в скорости и отсутствием подтверждения полученной информации, протокол UDP используется при передаче данных которые могут перенести кратковременные потери во время передачи, например, потоковой видео и звуковой информации, где потеря одной или нескольких датаграмм, т.е. с незначительными перебоями, может не повлиять на общую ситуацию в целом во время передачи.</p>
-<div class="card dgcard wide2">""" + UDPS + "</div>")
+<div class="two">
+  <div class="card dgcard wide2">""" + UDPS + """</div>
+  <div class="card dgcard">""" + UDPSEQ + """</div>
+</div>""")
 
 slide("UDP: датаграммы", "Протокол UDP", "Основные характеристики протокола UDP", """
 <div class="two">
@@ -600,6 +815,8 @@ h3{font-size:1.1rem;color:var(--navy);font-weight:700;margin-bottom:.7rem;line-h
 .dgcard{padding:1rem 1.2rem}
 .dg{display:block;width:100%;height:auto;max-height:66vh;overflow:visible}
 .wide2 .dg{max-height:46vh}
+.bigdg .dg{max-height:68vh}
+.bigdg{padding:.7rem .9rem}
 /* steps & badges */
 .steps{list-style:none;display:flex;flex-direction:column;gap:1rem}
 .steps li{display:flex;gap:1rem;align-items:flex-start;font-size:1.2rem;line-height:1.45}
@@ -671,6 +888,57 @@ rect.src{fill:#fff;stroke:var(--c);stroke-width:2.4}.dg .srct{font-size:21px;fon
 .waitl{stroke:var(--crimson);stroke-width:5;stroke-dasharray:8 7}.dg .waitt{fill:var(--crimson);font-size:19px;font-weight:600}
 .xmark{stroke:var(--crimson);stroke-width:5;stroke-linecap:round;fill:none}.dg .lostt{fill:var(--crimson);font-size:20px;font-weight:700}
 .frame{fill:var(--tint);stroke:var(--line);stroke-width:2}.dg .framet{fill:var(--dim);font-size:19px}
+/* --- крупные схемы «как на фото» --- */
+.dg .nname{font-size:30px;font-weight:800;fill:var(--navy)}
+.dg .nsub{font-size:19px;fill:var(--dim)}
+.mon{fill:var(--navy)}.monsc{fill:var(--indigo)}
+.spine{stroke:var(--line);stroke-width:3}
+.qcard{fill:var(--card);stroke:var(--line);stroke-width:2}
+.stagec{fill:var(--card);stroke:var(--line);stroke-width:2}
+.dg .stagt{font-size:19px;font-weight:800;fill:var(--navy);letter-spacing:.01em}
+.dg .stags{font-size:15px;fill:var(--dim)}
+.sheet{fill:var(--tint);stroke:var(--indigo);stroke-width:2}
+.bdgc{fill:var(--indigo)}.bdgb{fill:var(--blue)}.bdgr{fill:var(--crimson)}
+.dg .bdgt{fill:#fff;font-weight:800}
+.celle{fill:var(--card);stroke:var(--line);stroke-width:2.4}
+.cellf{fill:var(--blue)}
+.brc{fill:none;stroke:var(--line);stroke-width:2.4}
+.dg .fl{font-size:21px;fill:var(--ink);font-family:var(--mono)}
+.dg .fv{font-size:21px;fill:var(--violet);font-weight:700;font-family:var(--mono)}
+.dg .fa{font-size:21px;fill:var(--blue);font-weight:700;font-family:var(--mono)}
+.dg .qline{font-size:15px;fill:var(--dim)}
+.chipr{fill:var(--indigo)}.dg .chipt{fill:#fff;font-weight:800;font-size:21px}
+.ipb{fill:var(--tint);stroke:var(--line);stroke-width:2}
+.dg .ipt{font-family:var(--mono);font-size:19px;fill:var(--navy);font-weight:700}
+.statb{fill:var(--card);stroke:var(--line);stroke-width:2}
+.dg .statt{font-size:21px;font-weight:600;fill:var(--navy)}
+.dash{fill:none;stroke:var(--indigo);stroke-width:2.6;stroke-dasharray:11 9;opacity:.75}
+.dhead{fill:var(--indigo);opacity:.75}
+.hplate{fill:var(--card);stroke:var(--c);stroke-width:2.4}
+.hbar{fill:var(--c)}
+.dg .hbart{fill:#fff;font-size:17px;font-weight:700}
+.dg .hseq{font-family:var(--mono);font-size:22px;font-weight:700;fill:var(--navy)}
+.dg .hflg{font-size:18px;fill:var(--dim)}
+.dg .rowt{font-size:18px;fill:var(--ink)}
+.dg .legt{font-size:16px;fill:var(--ink)}
+.dg .legk{font-size:20px;font-weight:800}
+.dg .fa2{fill:var(--indigo)}.dg .fc2{fill:var(--crimson)}
+.banner{fill:var(--tint);stroke:var(--line);stroke-width:2}
+.dg .bannert{font-size:24px;font-weight:700;fill:var(--navy)}
+.dleg{display:flex;flex-wrap:wrap;gap:.5rem 1.8rem;margin-top:.9rem;font-size:.92rem;color:var(--dim);justify-content:center}
+.dleg i{font-style:normal;opacity:.75}
+.dleg b.fa2{color:var(--blue)}.dleg b.fv2{color:var(--violet)}
+.stgs{display:flex;flex-direction:column;gap:.7rem}
+.stg{display:flex;gap:.9rem;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:.7rem .9rem;box-shadow:var(--sh)}
+.stg b{display:block;font-size:.98rem;color:var(--navy);text-transform:uppercase;letter-spacing:.01em}
+.stg span:last-child{display:block;font-size:.88rem;color:var(--dim);margin-top:.15rem}
+.hchips{display:flex;flex-direction:column;gap:.7rem}
+.hchip{border:2px solid var(--c);border-radius:var(--r);padding:.55rem .9rem;background:var(--card);display:grid;grid-template-columns:auto 1fr auto;gap:.2rem .8rem;align-items:center;box-shadow:var(--sh)}
+.hchip .hct{grid-column:1/-1;font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.hchip b{font-size:1.1rem;color:var(--navy)}
+.hchip .hcf{font-size:.9rem;color:var(--dim)}
+.hchip .hcd{font-size:.95rem;font-weight:700;color:var(--c);justify-self:end;grid-row:2}
+.dimh{color:var(--dim);font-weight:600}
 /* title */
 .tslide .sc{padding-left:clamp(16px,10vw,220px)}
 .title h1{font-size:clamp(2.4rem,6.5vw,5.6rem);line-height:1;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:-.02em;max-width:14ch;margin:.3rem 0 1.4rem}
@@ -1101,11 +1369,13 @@ FIGS = [("Сегментация", figslide("Сегментация: схема"
   ("Флаги 1", figslide("Флаги в Wireshark", "Протокол TCP", "Флаги TCP-заголовка в Wireshark", PP + "s12_1.png", "При установке соединения в заголовке TCP выставлен флаг SYN, остальные флаги сброшены.")),
  ("Рукопожатие", figslide("Рукопожатие: схема", "Установка соединения", "Трёхстороннее рукопожатие во времени", _dl("4xVcPsGf"))),
  ("Рукопожатие: номера", figslide("Рукопожатие: заголовки", "Установка соединения", "Трёхстороннее рукопожатие: IP- и TCP-заголовки", _dl("lLmE7XF3"))),
-  ("Окно: принцип", figslide("Окно: схема", "Надёжность TCP", "Установление соединения и передача данных", _dl("iXnA9OHk"))),
+  ("Окно: принцип", ("Окно: схема", "Надёжность TCP", "Установление TCP-соединения и передача данных",
+   '<div class="card dgcard bigdg">' + TCPFLOW + '</div>' + TCPFLOW_LEG, "figs")),
  ("Окно: пример", figslide("Окно: обмен", "Надёжность TCP", "Обмен данными между двумя узлами: окно 3000 байт", _dl("MlkLqTqd"))),
  ("Потеря данных", figslide("Потеря: схема", "Надёжность TCP", "Обмен данными: ожидание подтверждения", _dl("ZyaE-uFR"))),
  ("Завершение сеанса", figslide("Завершение: схема", "Надёжность TCP", "Выключение TCP: четырёхстороннее квитирование", _dl("lf2Fo-i-"))),
- ("Завершение: детали", figslide("Завершение: номера", "Надёжность TCP", "Выключение TCP: Seq и Ack на каждом шаге", _dl("DdFGAzhZ"))),
+ ("Завершение: детали", ("Завершение: номера", "Надёжность TCP", "Выключение TCP: четырёхстороннее квитирование",
+   '<div class="card dgcard bigdg">' + FINFLOW + '</div>', "figs")),
  ("UDP: датаграммы", figslide("UDP: заголовок", "Протокол UDP", "Структура UDP-датаграммы", _dl("RChew0hT"))),
 ]
 WSX = [("Первый этап рукопожатия (SYN)", PP + "s16_1.png", [
@@ -1195,6 +1465,6 @@ for k, it in enumerate(S):
                 '<p class="p sm figcap">При установке соединения в заголовке TCP выставлен только флаг SYN, остальные флаги сброшены.</p>', "figs")
 
 ANIM_LOOP = set()
-ANIM_ONCE = {"Мультиплексирование", "Адресация", "Сегментация", "Сокеты", "Рукопожатие", "Рукопожатие: номера", "Порядковые номера", "Окно: принцип", "Окно: пример", "Потеря данных", "Завершение сеанса", "Завершение: детали", "Управление потоком", "UDP: датаграммы"}
+ANIM_ONCE = {"Мультиплексирование", "Адресация", "Сегментация", "Сокеты", "Рукопожатие", "Рукопожатие: номера", "Порядковые номера", "Окно: принцип", "Окно: пример", "Потеря данных", "Завершение сеанса", "Завершение: детали", "Управление потоком", "UDP: функции", "UDP: датаграммы", "Окно: схема", "Завершение: номера"}
 
 render()
