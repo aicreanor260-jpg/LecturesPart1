@@ -80,7 +80,48 @@ html{font-size:clamp(14px,min(1vw,1.82vh),30px)}
 .pl .dir.l::after{left:-2px;border-right:8px solid var(--dim)}.pl .dir.r::after{right:-2px;border-left:8px solid var(--dim)}
 .g-tr{right:-3rem;top:-8rem;width:22rem}.g-r{right:-2rem;top:-6rem;width:28rem}.g-c{inset:0;margin:auto;width:16rem;position:absolute}
 .lrow.bad{border-color:rgba(255,92,110,.6);background:rgba(60,14,20,.45)}.lrow.bad b{color:var(--red)}
+.lrow .hn,.lrow .nb,.lrow .badge{display:grid!important;place-items:center;color:#03120f!important;font-weight:700;line-height:1}
+.lrow .hn{font-size:.95rem!important}.lrow .nb{font-size:1.15rem!important}
 .lrow.plain2{border:0;background:none;clip-path:none;padding:.3rem 0;font-size:.86rem;color:#d3f0ea}
 .pn.big h3{font-size:1.5rem}
 .fan1,.fan2{transform-origin:left}.fan1{transform:rotate(-9deg)}.fan2{transform:rotate(9deg)}
+"""
+
+CSS3 += """
+/* ---- интерактивная структура заголовка (наведение открывает описание) ---- */
+.dhdrcard{padding:1.1rem 1.3rem;clip-path:none!important;overflow:visible}
+.ruler{display:flex;justify-content:space-between;color:var(--dim);font-size:.78rem;margin-bottom:.35rem}
+.dhdr{display:flex;flex-direction:column;gap:.35rem}
+.dhrow{display:grid;grid-template-columns:repeat(var(--n,1),minmax(0,1fr));gap:.3rem}
+.dfld{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:.1rem;
+  min-height:3.4rem;padding:.35rem;border:1.5px solid var(--c,var(--cyan));background:rgba(46,230,200,.07);cursor:help;outline:none;transition:background .15s,box-shadow .15s}
+.dfld.f-cy{--c:var(--cyan)}.dfld.f-bl{--c:var(--blue)}.dfld.f-am{--c:var(--amber)}.dfld.f-vi{--c:var(--violet)}
+.dfld.f-rd{--c:var(--red)}.dfld.f-gr{--c:var(--green)}.dfld.f-dm{--c:rgba(143,184,176,.55)}
+.dfld b{font-family:var(--hf);font-size:1.02rem;line-height:1.1;color:#fff;text-transform:uppercase}
+.dfld .mono{font-size:.72rem!important;color:var(--dim)}
+.dfld:hover,.dfld:focus-visible{background:rgba(46,230,200,.2);box-shadow:0 0 16px rgba(46,230,200,.35);z-index:6}
+.tip{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translate(-50%,6px);width:min(26rem,78vw);background:#06201d;border:1px solid var(--edge);
+  color:#eafffb;font-family:var(--f);font-size:.9rem;line-height:1.45;text-transform:none;text-align:left;padding:.7rem .85rem;clip-path:var(--cut6);
+  opacity:0;pointer-events:none;transition:opacity .15s,transform .15s;z-index:7;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.dhrow:first-child .tip{bottom:auto;top:calc(100% + 10px);transform:translate(-50%,-6px)}
+.dfld:hover .tip,.dfld:focus-visible .tip{opacity:1;transform:translate(-50%,0)}
+@media (max-width:1100px){.dfld b{font-size:.82rem}.dfld{min-height:2.9rem}}
+"""
+
+CSS3 += """
+/* ---- захваты Wireshark: перенос строк, чтобы текст не обрезался ---- */
+.ws.wsw{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;line-height:1.7;padding:.7rem .9rem}
+.ws.wsw .rd,.ws.wsw .hl{-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:0 .12em}
+"""
+
+CSS3 += """
+/* ---- «веер» широковещательных запросов: ровные горизонтальные стрелки ---- */
+.fanw{display:flex;flex-direction:column;gap:.55rem;justify-content:center}
+.fanlab{text-align:center;font-family:var(--hf);line-height:1.25;margin-bottom:.45rem}
+.fanlab small{display:block;font-size:.78rem;opacity:.85}
+.fanl{display:flex;align-items:center;height:2.2rem}
+.fanl .mline{flex:1;margin:0}
+.fansrv{display:flex;flex-direction:column;gap:.55rem;align-items:center;justify-content:center}
+.fang{column-gap:.9rem}
+.card.red .alert{margin-top:.7rem}
 """

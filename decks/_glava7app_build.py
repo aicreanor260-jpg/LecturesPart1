@@ -677,7 +677,7 @@ def bitrow(flags, s):
             f'<div class="bdesc" aria-live="polite"><b>{flags[0][0]}</b><span>{esc(flags[0][2])}</span></div></div>')
 slide("Заголовок DNS", "Структура", "заголовка DNS", two(
     p("Заголовок состоит из следующих полей (каждое по 16 бит):", cls="p sm") +
-    '<div class="hdr">' + "".join(f'<div data-s="{i+1}" class="{"w2" if i < 2 else ""}"><b>{n}</b><span>{w}</span></div>' for i, (n, w, d, _) in enumerate(HDR)) + '</div>' +
+    '<div class="dhdr">' + "".join(f'<div data-s="{i+1}" class="{"w2" if i < 2 else ""}"><b>{n}</b><span>{w}</span></div>' for i, (n, w, d, _) in enumerate(HDR)) + '</div>' +
     dia([f"<b>{n}</b> — {d};" for n, w, d, _ in HDR], "", 7) + thumb("s22_1"),
     bitrow(FLAGS, 7)))
 
@@ -933,10 +933,15 @@ def render():
                f'<button id="b-next" type="button" aria-label="Следующий слайд">{ICON_R}</button><span class="nsep"></span>'
                '<button id="b-play" type="button" title="Клавиша R"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v5h5"/></svg><span class="lbl2">Повторить анимацию</span></button>'
                '<button id="b-ov" type="button" title="Esc"><svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg><span class="lbl2">Меню</span></button></nav>'
-               '<div id="lb" hidden role="dialog" aria-label="Фото во весь экран"><img alt=""></div><div id="ov" hidden><h2>Содержание</h2><div class="ovg"></div></div>')
+               '<div id="lb" hidden role="dialog" aria-label="Фото во весь экран"><img alt=""></div>'
+               '<div id="zl" hidden role="dialog" aria-label="Приближенный элемент"><div id="zi"></div><div class="zhint">Клик или Esc — закрыть</div></div><div id="ov" hidden><h2>Содержание</h2><div class="ovg"></div></div>')
     js = (JS.replace("__SCENES__", json.dumps(SCENES, ensure_ascii=False, separators=(",", ":")))
             .replace("__QUIZ__", json.dumps(QUIZ, ensure_ascii=False)).replace("__TRAIN__", json.dumps(TRAIN, ensure_ascii=False)))
-    out.append('<script>' + js + '</script></body></html>')
+    out.append('<script>' + js + '</script>')
+    tm = HERE / "_thumbmenu.js"
+    if tm.exists():
+        out.append('<script data-thumbmenu>' + tm.read_text(encoding="utf-8") + '</script>')
+    out.append('</body></html>')
     OUT.write_text("".join(out), encoding="utf-8")
     print(len(S), "slides", OUT.stat().st_size, "bytes")
 
@@ -1104,8 +1109,8 @@ slide("FTP: ASCII и бинарный", "", "", G("minmax(0,.8fr) minmax(0,1fr) 
     pnl("Режим <span class='hl'>ASCII</span>", '<div class="frow">' + ftile("TXT") + ftile("LOG") + ftile("CFG") + '</div><p class="p sm" style="text-align:center;margin:.4rem 0 0">Текстовые файлы</p>', "", 1),
     pnl("<span class='hl'>Бинарный</span> режим", '<div class="frow">' + ftile("EXE", "blue") + ftile("BIN", "blue") + ftile("PNG", "blue") + '</div><p class="p sm" style="text-align:center;margin:.4rem 0 0">Нетекстовые файлы</p>', "", 1), cls="ac") +
     G("minmax(0,.7fr) minmax(0,2fr) minmax(0,.7fr)", devbox("laptop", "FTP-клиент", "", "folder", "12rem"),
-      f'<div class="lane"><small>Загрузка файлов на сервер</small><div class="lanebar c-teal">{FILES_UP}{mline("r", "teal")}</div>'
-      f'<div class="lanebar c-blue">{FILES_DN}{mline("l", "blue")}</div><small>Выгрузка файлов с сервера</small></div>',
+      f'<div class="lane"><small data-s="2">Загрузка файлов на сервер</small><div class="lanebar c-teal" data-s="2" data-w="1400">{FILES_UP}{mline("r", "teal")}</div>'
+      f'<div class="lanebar c-blue" data-s="3" data-w="1400">{FILES_DN}{mline("l", "blue")}</div><small data-s="3">Выгрузка файлов с сервера</small></div>',
       devbox("server", "FTP-сервер", "", "", "8rem"), cls="ac", style="margin:.8rem 0") +
     G("minmax(0,1fr) minmax(0,1fr)",
       pnl("", '<div class="pnh">' + hexicon("file", "hx") + '<p class="p sm" style="margin:0"><b class="hl">ASCII</b> — отправитель преобразовывает символы в код ASCII перед отправкой, получатель — обратно в символы. Подходит для TXT, LOG, CFG: файлов конфигурации и лог-файлов сетевых устройств.</p></div>', "", 4),
@@ -1138,15 +1143,15 @@ def ftp_mode(mode):
     ports = pnl("Ключевые порты", '<div class="ports">' + (
         '<div><span class="pb">21</span>Управляющее соединение (от клиента к серверу)</div><div><span class="pb blue">20</span>Соединение для передачи данных (от сервера к клиенту)</div>' if act else
         '<div><span class="pb">21</span>Управляющее соединение (от клиента к серверу)</div><div><span class="pb blue">N</span>Порт для передачи данных (открывает сервер, &gt; 1024)</div>') +
-        '<div><span class="pb blue">P</span>Случайный порт клиента (&gt; 1024)</div></div>', "", n + 1, ic="gear")
+        '<div><span class="pb blue">P</span>Случайный порт клиента (&gt; 1024)</div></div>', "", 0, ic="gear")
     mid = (pnl("Порядок работы", steps(["Клиент подключается к порту 21 сервера.", "Выполняется аутентификация.", "Клиент сообщает серверу порт P с помощью команды PORT.",
-                                       "Сервер подключается с порта 20 на порт P клиента.", "Передаются данные."], n + 1), "", n + 1, ic="check") if act else
+                                       "Сервер подключается с порта 20 на порт P клиента.", "Передаются данные."], 0), "", 0, ic="check") if act else
            pnl("Преимущества", bul(["Работает, если клиент находится за NAT (клиент инициирует соединение).", "Не требует открытия входящих соединений на клиенте.",
-                                    "Упрощает прохождение через межсетевые экраны на стороне клиента."]), "", n + 1, ic="check"))
+                                    "Упрощает прохождение через межсетевые экраны на стороне клиента."]), "", 0, ic="check"))
     lim = (pnl("Особенности", bul(["Для передачи данных сервер инициирует соединение.", "Клиент должен быть доступен извне (открыт порт P).",
-                                   "Используются разные порты для управления и передачи данных.", "Подходит для простых сетей, может быть ограничен межсетевыми экранами."]), "", n + 1, ic="file") if act else
+                                   "Используются разные порты для управления и передачи данных.", "Подходит для простых сетей, может быть ограничен межсетевыми экранами."]), "", 0, ic="file") if act else
            pnl("Возможные ограничения", bul(["Если FTP-сервер во внутренней сети за межсетевым экраном и недоступен для входящих соединений от клиента, соединение не устанавливается.",
-                                             "Требуется, чтобы клиент мог устанавливать соединения к открытым портам сервера."]), "amb", n + 1, ic="warn"))
+                                             "Требуется, чтобы клиент мог устанавливать соединения к открытым портам сервера."]), "amb", 0, ic="warn"))
     return (G("minmax(0,1fr) minmax(0,1.3fr)", head, inf, cls="ac") +
             G("minmax(0,.55fr) minmax(0,2fr) minmax(0,.55fr)",
               '<div class="col-dev">' + devsvg("laptop", "folder", "11rem") + '<span class="chip">Порт P (&gt; 1024)</span><span class="dvbl">FTP-клиент</span></div>',
@@ -1157,13 +1162,13 @@ slide("FTP: активный режим", "", "", ftp_mode("a"))
 slide("FTP: активный — диаграмма", "", "", G("minmax(0,.6fr) minmax(0,1.8fr)",
     '<div>' + ih("Активный режим", "по портам", "кто кому открывает соединение",
        "Каждая вертикальная линия — отдельный порт. Смотрите на направление пятой стрелки: соединение для данных открывает <b class='hl'>сервер</b> с порта 20.") +
-    pnl("Лекция", p("В активном режиме клиент FTP использует случайный порт (больше 1024) для запроса на соединение на порт 21 FTP-сервера. FTP-клиент прослушивает порт Р и командой PORT уведомляет сервер. Когда необходимо передать данные, FTP-сервер отправляет запрос на соединение с порта 20 на порт P FTP-клиента.", cls="p sm"), "", 0) + '</div>',
+    pnl("Как это работает", p("В активном режиме клиент FTP использует случайный порт (больше 1024) для запроса на соединение на порт 21 FTP-сервера. FTP-клиент прослушивает порт Р и командой PORT уведомляет сервер. Когда необходимо передать данные, FTP-сервер отправляет запрос на соединение с порта 20 на порт P FTP-клиента.", cls="p sm"), "", 0) + '</div>',
     FTPA, cls="ac"))
 slide("FTP: пассивный режим", "", "", ftp_mode("p"))
 slide("FTP: пассивный — диаграмма", "", "", G("minmax(0,.6fr) minmax(0,1.8fr)",
     '<div>' + ih("Пассивный режим", "по портам", "кто кому открывает соединение",
        "Сравните с активным режимом: теперь соединение для данных открывает <b class='hl'>клиент</b> — с порта P на порт N сервера.") +
-    pnl("Лекция", p("После получения команды PASV FTP-сервер включает порт N (случайный порт больше 1024) и с помощью команды Enter PASV уведомляет FTP-клиент об открытом номере порта. Когда необходимо передать данные, FTP-клиент отправляет запрос на соединение с порта Р на порт N на FTP-сервере.", cls="p sm"), "", 0) + '</div>',
+    pnl("Как это работает", p("После получения команды PASV FTP-сервер включает порт N (случайный порт больше 1024) и с помощью команды Enter PASV уведомляет FTP-клиент об открытом номере порта. Когда необходимо передать данные, FTP-клиент отправляет запрос на соединение с порта Р на порт N на FTP-сервере.", cls="p sm"), "", 0) + '</div>',
     FTPP, cls="ac"))
 
 slide("FTP: NAT и межсетевой экран", "", "", ih("Проблемы", "активного и пассивного режимов", "", "Активный режим и пассивный режим различаются способами передачи данных и имеют свои преимущества и недостатки.") +
@@ -1211,30 +1216,26 @@ slide("Telnet", "", "", G("minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr)",
       pnl("Ограничения", bul(["Передаёт данные в открытом виде (без шифрования)", "Ниже уровень безопасности по сравнению с SSH", "Не рекомендуется использовать в незащищённых сетях"]) +
           qt("Telnet — это удобно, но помните о безопасности вашей сети.", 2), "amb", 2, ic="warn"), style="margin-top:.8rem"))
 
-# 19 ---------------------------------------------------------------- WWW (s15)
+# 19 ---------------------------------------------------------------- WWW (s15) — без анимации
 def _wmap():
     pts = [(120, 90), (360, 60), (560, 110), (620, 250), (420, 290), (170, 250), (300, 210)]
     b = ['<path class="wmap" d="M40 120l60-40 80 10 40-30 70 20 30-30 90 10 60 40 90-10 40 50-30 60-80 20-40 60-70 10-40-40-60 20-50 70-60-20-10-60-70-10-40-50z"/>']
-    els = {}
     for i, (x, y) in enumerate(pts):
         b.append(f'<g transform="translate({x} {y}) scale(.5)">{dev("laptop", "page")}</g>')
-        eid = f"wm{i}"
-        b.append(f'<g class="arw" data-id="{eid}"><path class="dr wt dsh" pathLength="1" d="M380 170Q{(380 + x) / 2} {min(y, 170) - 60} {x} {y - 20}"/></g>')
-        els[eid] = {"c": {0: "", 1 + i // 2: "on"}}
+        b.append(f'<g class="arw on" data-id="wm{i}"><path class="dr wt dsh" pathLength="1" d="M380 170Q{(380 + x) / 2} {min(y, 170) - 60} {x} {y - 20}"/></g>')
     b.append(f'<g transform="translate(380 175) scale(1.5)">{dev("cloud", "WWW")}</g>')
-    sc = scene("wmap", 4, els, {i: 700 for i in range(5)})
-    return f'<div {sc}><svg class="mini" viewBox="0 0 720 330" aria-hidden="true">{"".join(b)}</svg></div>'
+    return f'<div><svg class="mini" viewBox="0 0 720 330" aria-hidden="true">{"".join(b)}</svg></div>'
 slide("WWW", "", "", G("minmax(0,.8fr) minmax(0,1.7fr)",
     '<div>' + ih("WWW", "всемирная паутина", "", "<b class='hl'>Глобальный доступ к информации.</b> На начальном этапе развития Интернета для обмена документами предлагалось использовать Всемирную паутину (World Wide Web, WWW).", big=True) +
-    G("repeat(3,minmax(0,1fr))", tile("globe", "Глобальный доступ", "", "plain"), tile("link", "Объединяет людей", "", "plain"), tile("shield", "Основа Интернета", "", "plain")) + '</div>',
+    G("repeat(3,minmax(0,1fr))", tile("globe", "Глобальный доступ", "", "plain", 0), tile("link", "Объединяет людей", "", "plain", 0), tile("shield", "Основа Интернета", "", "plain", 0)) + '</div>',
     pnl("Мировая сеть в действии", _wmap() + '<div class="rtag">Документы доступны повсюду</div>', "", 0), cls="as") +
     G("minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1fr)",
-      pnl("Из чего состоит WWW?", '<div class="plus">' + tile("file", "HTML", "язык гипертекстовой разметки для отображения документа в браузере", "amb", 2) + '<span>+</span>' +
-          tile("file", "HTTP", "протокол передачи документов по сети", "blue", 2, 150) + '<span>+</span>' + tile("link", "URL", "адреса для указания местоположения документов", "vio", 2, 300) + '</div>', "", 2),
-      pnl("Как это работает?", steps(["Пользователь вводит URL-адрес в браузере.", "Браузер отправляет HTTP-запрос на веб-сервер.", "Веб-сервер обрабатывает запрос и отправляет ответ (HTML-страницу, изображения).", "Браузер получает данные и отображает веб-страницу."], 3), "", 3),
+      pnl("Из чего состоит WWW?", '<div class="plus">' + tile("file", "HTML", "язык гипертекстовой разметки для отображения документа в браузере", "amb", 0) + '<span>+</span>' +
+          tile("file", "HTTP", "протокол передачи документов по сети", "blue", 0) + '<span>+</span>' + tile("link", "URL", "адреса для указания местоположения документов", "vio", 0) + '</div>', "", 0),
+      pnl("Как это работает?", steps(["Пользователь вводит URL-адрес в браузере.", "Браузер отправляет HTTP-запрос на веб-сервер.", "Веб-сервер обрабатывает запрос и отправляет ответ (HTML-страницу, изображения).", "Браузер получает данные и отображает веб-страницу."], 0), "", 0),
       pnl("Что такое WWW сейчас", '<p class="p sm">WWW на самом деле было названием клиентского приложения для просмотра HTML-документов, а теперь представляет собой набор технологий <b>(HTML + HTTP + URL-адрес)</b> и широко известен как Интернет.</p>' +
-          '<div class="urlbar"><i></i><i></i><i></i>https://www.example.com/index.html</div>', "", 3), style="margin-top:.8rem") +
-    '<div class="mt">' + qt("Всемирная паутина делает знания, информацию и возможности доступными для каждого — в любой точке мира.", 4) + '</div>')
+          '<div class="urlbar"><i></i><i></i><i></i>https://www.example.com/index.html</div>', "", 0), style="margin-top:.8rem") +
+    '<div class="mt">' + qt("Всемирная паутина делает знания, информацию и возможности доступными для каждого — в любой точке мира.", 0) + '</div>')
 
 # 20 ---------------------------------------------------------------- HTTP доступ к веб-страницам (s14)
 HTTPW = ('<svg class="mini" viewBox="0 0 760 300" aria-hidden="true">'
@@ -1288,7 +1289,7 @@ slide("HTTP: методы", "", "", G("minmax(0,.9fr) minmax(0,1.2fr) minmax(0,.
       pnl("Порты и протоколы", '<div class="ports"><div><span class="pb">80</span><b>HTTP</b> — передача данных без шифрования</div><div><span class="pb blue">443</span><b>HTTPS</b> — безопасная передача (шифрование TLS)</div></div>' +
           '<div class="mt">' + qt("HTTPS — тот же HTTP, но с защитой.", 5) + '</div>', "", 5)))
 slide("HTTPS: перехват", "", "", G("minmax(0,.8fr) minmax(0,1.5fr)",
-    ih("HTTP небезопасен,", "HTTPS — решение", "анимация перехвата",
+    ih("HTTP небезопасен,", "HTTPS — решение", "перехват",
        "К сожалению, протокол HTTP не обеспечивает безопасности: сообщения передаются открытым текстом без шифрования. Для защищённого обмена была придумана модификация HTTPS (HTTP Secure) — аутентификация и шифрование данных между узлами."),
     HTTPS, cls="ac"))
 
@@ -1421,20 +1422,35 @@ slide("Структура пакета DNS", "", "", ih("Структура", "�
           f'<div class="dsrow" data-s="{i+1}" data-w="900"><div class="slab {"hi" if c == "blue" else ""}" style="--dl:0ms">{hexicon(ic, "hx sm")}<b>{n}</b></div><span class="dsl"></span>'
           f'<div class="ibox" style="display:block"><b style="color:var(--cyan)">{t}</b><div>{d}</div></div></div>' for i, (n, ic, t, d, c) in enumerate(DSEC2)) + '</div></div>')
 
-# 31 ---------------------------------------------------------------- заголовок DNS (s22)
-def cbox(t, d, s):
-    return f'<div class="cbox" data-s="{s}"><b>{t}</b><span>{d}</span></div>'
-HT = ('<div class="htab" data-s="1"><div class="hr full"><b>ID</b><small>16 бит</small></div><div class="hr bits8">' +
-      "".join(f'<div style="flex:{w}"><b>{n}</b><small>{w} бит{"а" if w in (3, 4) else ""}</small></div>' for n, w in (("QR", 1), ("Opcode", 4), ("AA", 1), ("TC", 1), ("RD", 1), ("RA", 1), ("Z", 3), ("Rcode", 4))) +
-      '</div>' + "".join(f'<div class="hr full"><b>{n}</b><small>16 бит</small></div>' for n in ("QDCOUNT", "ANCOUNT", "NSCOUNT", "ARCOUNT")) + '</div>')
-slide("Заголовок DNS", "", "", G("minmax(0,1fr) minmax(0,1.2fr)", ih("Структура", "заголовка DNS", big=True), '<p class="p">Заголовок DNS содержит служебную информацию о запросе или ответе.</p>', cls="ac") +
-      G("minmax(0,.6fr) minmax(0,2fr) minmax(0,.6fr)",
-        '<div class="lst">' + cbox("ID", "Уникальный идентификатор транзакции: пакет принадлежит одной сессии «запрос-ответ».", 2) + cbox("QR", "Тип сообщения: 0 — запрос, 1 — ответ.", 2) +
-        cbox("Opcode", "Код операции (тип запроса).", 2) + cbox("QDCOUNT", "Количество записей в разделе запросов.", 3) + cbox("ANCOUNT", "Количество записей в разделе ответов.", 3) + '</div>',
-        '<div>' + G("repeat(6,minmax(0,1fr))", cbox("AA", "Является ли сервер авторитетным для домена.", 2), cbox("TC", "Флаг усечения (сообщение усечено).", 2), cbox("RD", "Запрашивает рекурсивное разрешение.", 2),
-                    cbox("RA", "Поддерживает ли сервер рекурсию.", 2), cbox("Z", "Зарезервированные биты (равны 0).", 2), cbox("Rcode", "Код ответа (результат запроса).", 2)) +
-        '<div class="mt">' + HT + '</div>' + info("Структура заголовка используется как в запросах, так и в ответах. После заголовка следуют секции с данными (вопросы, ответы, дополнительные записи).", "file", 4) + '</div>',
-        '<div class="lst" style="justify-content:flex-end">' + cbox("NSCOUNT", "Количество записей, связанных с именем сервера (уполномоченные серверы).", 3) + cbox("ARCOUNT", "Количество записей в Additional Record Section.", 3) + '</div>', cls="as"))
+# 31 ---------------------------------------------------------------- заголовок DNS (s22) — наведение на поле
+DNS_HDR = [
+    [("ID", "16 бит", 1, "cy", "Уникальный идентификатор транзакции: по нему запрос и ответ связываются в одну сессию «запрос-ответ».")],
+    [("QR", "1 бит", 1, "bl", "Тип сообщения: 0 — запрос, 1 — ответ."),
+     ("Opcode", "4 бита", 4, "cy", "Код операции (тип запроса): 0 — стандартный, 1 — инверсный, 2 — запрос статуса сервера."),
+     ("AA", "1 бит", 1, "am", "Authoritative Answer: ответ пришёл от авторитетного (доверенного) сервера зоны."),
+     ("TC", "1 бит", 1, "am", "Truncation: сообщение усечено — сервер не смог поместить всю информацию в пакет."),
+     ("RD", "1 бит", 1, "vi", "Recursion Desired: клиент просит вернуть сразу конечный IP-адрес, без промежуточных ответов."),
+     ("RA", "1 бит", 1, "vi", "Recursion Available: сервер поддерживает рекурсивные запросы."),
+     ("Z", "3 бита", 3, "dm", "Зарезервированное поле, всегда равно нулю."),
+     ("Rcode", "4 бита", 4, "rd", "Response code: результат запроса — успешно или с ошибкой.")],
+    [("QDCOUNT", "16 бит", 1, "cy", "Количество записей в разделе запросов (Question Section).")],
+    [("ANCOUNT", "16 бит", 1, "gr", "Количество записей в разделе ответов (Answer Section).")],
+    [("NSCOUNT", "16 бит", 1, "bl", "Количество записей, связанных с именем сервера — уполномоченные (авторитетные) серверы.")],
+    [("ARCOUNT", "16 бит", 1, "vi", "Количество записей в разделе дополнительной информации (Additional Record Section).")],
+]
+def dnshdr():
+    rows = []
+    for r, row in enumerate(DNS_HDR):
+        n = sum(w for _, _, w, _, _ in row)
+        cells = "".join(f'<div class="dfld f-{c}" tabindex="0" style="grid-column:span {w}"><b>{nm}</b>'
+                        f'<span class="mono">{bits}</span><span class="tip">{tip}</span></div>' for nm, bits, w, c, tip in row)
+        rows.append(f'<div class="dhrow" style="--n:{n}" data-s="0">{cells}</div>')
+    return '<div class="card dhdrcard"><div class="ruler mono"><span>0</span><span>8</span><span>16</span><span>24</span><span>31</span></div>' +            '<div class="dhdr">' + "".join(rows) + '</div></div>'
+slide("Заголовок DNS", "", "",
+      G("minmax(0,1fr) minmax(0,1.6fr)", ih("Структура", "заголовка DNS", big=True),
+        '<p class="p">Заголовок DNS содержит служебную информацию о запросе или ответе. <b class="hl">Наведите курсор на поле</b>, чтобы увидеть его назначение.</p>', cls="ac") +
+      dnshdr() +
+      '<div class="mt">' + info("Структура заголовка одинакова для запросов и ответов. После заголовка следуют секции с данными: вопросы, ответы, уполномоченные серверы и дополнительные записи.", "file", 0) + '</div>')
 
 # 32 ---------------------------------------------------------------- флаги (s24) и RFC 5395 (s25)
 FL_IC = {"QR": "link", "Opcode": "file", "AA": "shield", "TC": "cross", "RD": "target", "RA": "server", "Z": "cross", "Rcode": "file", "AD": "check", "CD": "info"}
@@ -1463,12 +1479,12 @@ WSA = ('<div class="ws" data-s="1">▾ Queries\n    arc-emea.msn.com: type A, cl
        '  ▸ arc-emea.trafficmanager.net: type CNAME, class IN, …\n  ▾ iris-de-prod-azsc-v2-frc.francecentral.cloudapp.az…\n        Type: A (Host Address) (1)\n        Class: IN (0x0001)\n'
        '        <span class="rd">Time to live: 10 (10 seconds)</span>\n        Data length: 4\n        <span class="rd">Address: 20.199.58.43</span></div>')
 slide("DNS-запрос в Wireshark", "", "", G("minmax(0,1fr) minmax(0,1.2fr)",
-    '<div>' + ih("DNS-запрос", "в Wireshark", "рисунок 7.3.1.3") +
+    '<div>' + ih("DNS-запрос", "в Wireshark") +
     pnl("Что видно в захвате", bul(["Компьютер поручает DNS-серверу найти адрес IPv4: <b>Type = A</b>.", "Имя ресурса: <b>arc-emea.msn.com</b> (поле Name).", "Класс адресов Internet: <b>Class = IN</b>.",
                                     "В поле Flags единицей отмечено <b>Recursion Desired</b>: нужно сразу предоставить конечный IP-адрес без промежуточных адресов доменов."]), "", 2) + '</div>',
     WSQ, cls="ac"))
 slide("DNS-ответ и типы записей", "", "", G("minmax(0,1fr) minmax(0,1.2fr)",
-    '<div>' + ih("DNS-ответ", "и типы записей", "рисунок 7.3.1.6") +
+    '<div>' + ih("DNS-ответ", "и типы записей") +
     pnl("Что видно в захвате", bul(["По запросу для arc-emea.msn.com найдено три записи.", "Одна из них — адрес IPv4 <b>20.199.58.43</b>, действительна ещё <b>10 секунд</b>.", "Тип <b>CNAME</b> — каноническое имя: псевдоним привязан к действительному доменному имени."]), "", 2) +
     pnl("Типы записей", '<div class="lst">' + lrow("pc", "A", "IPv4-адрес конечного устройства", 3) + lrow("pc", "AAAA", "IPv6-адрес конечного устройства", 3) + lrow("server", "NS", "доверенный сервер имён", 3) +
         lrow("mail", "MX", "запись обмена почтовыми сообщениями", 3) + lrow("link", "CNAME", "каноническое имя (псевдоним)", 3) + '</div>', "", 3) + '</div>',
@@ -1500,7 +1516,7 @@ slide("Структура доменного имени", "", "", G("minmax(0,.7
     '<div>' + info("<b>FQDN (Fully Qualified Domain Name)</b> — формат доменного имени:<br><span class='mono hl'>hostname.second-level domain.top-level domain.root domain.</span>", "info", 0) + _tree() +
     '<div class="ibox" data-s="0">' + hexicon("globe", "hx") + '<div>Пример полного доменного имени (FQDN): <span class="chip" style="font-size:1.2rem">www.mail.example.ru.</span></div></div></div>',
     '<div class="lst">' + pnl("TLD географического типа", '<div class="pns">принадлежность к территории, обычно две буквы</div><table class="tbl2"><tr><th>TLD</th><th>Страна</th></tr>' +
-                              "".join(f"<tr><td>{a}</td><td>{b_}</td></tr>" for a, b_ in (("ru", "Россия"), ("рф", "Россия"), ("kz", "Казахстан"), ("su", "Страны СНГ"), ("uk", "Великобритания"), ("de", "Германия"))) + '</table>', "", 1, ic="globe") +
+                              "".join(f"<tr><td>{a}</td><td>{b_}</td></tr>" for a, b_ in (("ru", "Россия"), ("kz", "Казахстан"), ("su", "Страны СНГ"), ("uk", "Великобритания"), ("de", "Германия"))) + '</table>', "", 1, ic="globe") +
     pnl("TLD административного типа", '<div class="pns">тип организации, обычно три буквы</div><table class="tbl2"><tr><th>TLD</th><th>Тип организации</th></tr>' +
         "".join(f"<tr><td>{a}</td><td>{b_}</td></tr>" for a, b_ in (("com", "Коммерческая"), ("edu", "Образовательная"), ("net", "Коммуникационная"), ("org", "Некоммерческая"), ("int", "Международная"))) + '</table>', "", 2, ic="book") +
     info("У одного домена второго уровня может быть несколько поддоменов: <b>mail</b> и <b>support</b> в www.mail.example.ru и www.support.example.ru — поддомены домена example.ru.", "folder", 3) + '</div>', cls="as"))
@@ -1683,12 +1699,12 @@ slide("DHCP: четыре этапа", "", "", G("minmax(0,1.5fr) minmax(0,1fr)"
 
 # 46 ---------------------------------------------------------------- Wireshark DHCP
 def wsd(title, lines, s):
-    return pnl(title, '<div class="ws" style="font-size:.72rem">' + "\n".join(lines) + '</div>', "", s)
+    return pnl(title, '<div class="ws wsw">' + "\n".join(lines) + '</div>', "", s)
 slide("Wireshark: DHCP", "", "", ih("Анализ DHCP", "с помощью Wireshark", "по четырём захватам лекции", inline=True) +
       table(["Сообщение", "MAC назначения", "IP источника", "IP назначения", "Порты UDP"], [
           ["DHCPDISCOVER", "ff:ff:ff:ff:ff:ff", "0.0.0.0", "255.255.255.255", "68 ▸ 67"], ["DHCPOFFER", "ff:ff:ff:ff:ff:ff", "10.10.1.1", "255.255.255.255", "67 ▸ 68"],
           ["DHCPREQUEST", "ff:ff:ff:ff:ff:ff", "0.0.0.0", "255.255.255.255", "68 ▸ 67"], ["DHCPACK", "ff:ff:ff:ff:ff:ff", "10.10.1.1", "255.255.255.255", "67 ▸ 68"]], "mono") +
-      G("repeat(4,minmax(0,1fr))",
+      G("repeat(2,minmax(0,1fr))",
         wsd("DHCPDISCOVER", ['<span class="rd">Info: DHCP Discover</span>', "Ethernet II, Src: EltexEnt_1f:f4:80", '<span class="rd">Destination: Broadcast (ff:ff:ff:ff:ff:ff)</span>', '<span class="rd">IPv4, Src: 0.0.0.0, Dst: 255.255.255.255</span>', "UDP, Src Port: 68, Dst Port: 67"], 2),
         wsd("DHCPOFFER", ['<span class="rd">Info: DHCP Offer</span>', '<span class="rd">Destination: Broadcast (ff:ff:ff:ff:ff:ff)</span>', "Source: D-LinkIn_d1:26:5a", '<span class="rd">IPv4, Src: 10.10.1.1, Dst: 255.255.255.255</span>', '<span class="rd">Your (client) IP address: 10.10.1.13</span>', "Option: (51) IP Address Lease Time"], 2),
         wsd("DHCPREQUEST", ['<span class="rd">Info: DHCP Request</span>', "Destination: Broadcast", '<span class="rd">IPv4, Src: 0.0.0.0, Dst: 255.255.255.255</span>', "UDP, Src Port: 68, Dst Port: 67", "Option: (54) DHCP Server Identifier (10.10.1.1)", '<span class="rd">Option: (50) Requested IP Address (10.10.1.13)</span>'], 3),
@@ -1716,8 +1732,10 @@ slide("Конфликт IP-адресов", "", "", G("minmax(0,1.3fr) minmax(0,
 # 48 ---------------------------------------------------------------- продление аренды (s38)
 def lease_panel(n, t, sub, body, s, cls=""):
     return f'<div class="card pn {cls}" data-s="{s}" data-w="1800"><div class="pnh"><span class="nb" style="width:3.2rem;height:2.8rem;font-size:1.5rem">{n}</span><div><h3 style="margin:0;text-transform:uppercase">{t}</h3><div class="pns" style="margin:0">{sub}</div></div></div>{body}</div>'
-def fan(col, lab, sub):
-    return f'<div class="ar c-{col}" style="text-align:center;font-family:var(--hf)">{lab}<br><small>{sub}</small>{mline("r", col)}{mline("r", col, "fan1")}{mline("r", col, "fan2")}</div>'
+def fan(col, n=3):
+    return f'<div class="ar c-{col} fanw">' + "".join(f'<div class="fanl">{mline("r", col)}</div>' for _ in range(n)) + '</div>'
+def fanlab(col, lab, sub):
+    return f'<div class="fanlab c-{col}">{lab} <small>{sub}</small></div>'
 LT = ('<div class="tl" data-s="1"><div class="ln"></div>'
       '<div class="pt" style="left:0;color:var(--cyan)"><i></i>Получение<br>IP-адреса</div><div class="pt" style="left:50%;color:var(--green)"><i></i>T0<br>(50% аренды)</div>'
       '<div class="pt" style="left:87.5%;color:var(--amber)"><i></i>T1<br>(87,5% аренды)</div><div class="pt" style="left:100%;color:var(--red)"><i></i>Истечение<br>аренды</div></div>')
@@ -1732,13 +1750,13 @@ slide("Продление аренды", "", "", G("minmax(0,1.3fr) minmax(0,1fr
                   info("Сервер продлевает аренду, сбрасывает таймеры, а клиент обновляет T0 и T1, продолжая использовать свой IP-адрес.", "check", 1), 1),
       '<div class="lst">' +
       lease_panel(2, "Нет ответа. Наступление T1", "Попытка продления широковещательной рассылкой",
-                  '<div class="G ac" style="--gc:auto 1fr auto">' + devsvg("laptop", "", "5rem") + fan("red", "DHCPREQUEST", "(широковещательная рассылка)") +
-                  '<div class="lst" style="gap:.2rem">' + "".join(devsvg("server", "", "2rem") for _ in range(3)) + '</div></div>' +
+                  fanlab("red", "DHCPREQUEST", "(широковещательная рассылка)") + '<div class="G ac fang" style="--gc:auto 1fr auto">' + devsvg("laptop", "", "5rem") + fan("red", 3) +
+                  '<div class="fansrv">' + "".join(devsvg("server", "", "2.2rem") for _ in range(3)) + '</div></div>' +
                   '<div class="alert">' + hexicon("warn", "hx sm") + 'Если ответа нет, клиент продолжает использовать IP-адрес до окончания аренды — вдруг у сервера просто сменился адрес.</div>', 2, "red") +
       lease_panel(3, "Нет ответа. Истечение аренды", "Начало нового цикла получения IP-адреса",
-                  '<div class="G ac" style="--gc:auto 1fr auto 1fr">' + devsvg("laptop", "", "5rem") + fan("red", "DHCPDISCOVER", "(широковещательная рассылка)") +
-                  '<div class="lst" style="gap:.2rem">' + "".join(devsvg("server", "", "2rem") for _ in range(2)) + '</div>' +
-                  '<div class="alert" style="font-size:.8rem">Если сервер отказывает в продлении (DHCPNACK) или не отвечает — новый цикл с DHCPDISCOVER.</div></div>', 3, "red") + '</div>', cls="as") +
+                  fanlab("red", "DHCPDISCOVER", "(широковещательная рассылка)") + '<div class="G ac fang" style="--gc:auto 1fr auto">' + devsvg("laptop", "", "5rem") + fan("red", 2) +
+                  '<div class="fansrv">' + "".join(devsvg("server", "", "2.2rem") for _ in range(2)) + '</div></div>' +
+                  '<div class="alert">' + hexicon("warn", "hx sm") + 'Если сервер отказывает в продлении (DHCPNAK) или не отвечает — начинается новый цикл с DHCPDISCOVER.</div>', 3, "red") + '</div>', cls="as") +
     '<div class="mt">' + LEASE + '</div>')
 
 # 49 ---------------------------------------------------------------- DHCP relay (s43)
@@ -1784,11 +1802,12 @@ slide("SMB", "", "", G("minmax(0,1fr) minmax(0,1fr)",
     G("minmax(0,1.6fr) minmax(0,1fr)", f'<div class="card pn" data-s="0"><div {SMBV_SC}>{SMBV}</div><div class="G" style="--gc:1fr 1fr;text-align:center"><span class="dvbl">Узел 1 (SMB-клиент)</span><span class="dvbl">Узел 2 (SMB-сервер)</span></div></div>',
       pnl("Что можно делать с помощью SMB?", '<div class="lst">' + lrow("user", "Запускать, аутентифицировать и завершать сеансы") + lrow("folder", "Управлять доступом к файлам, каталогам и т.д.") +
           lrow("printer", "Использовать общие принтеры и другие ресурсы") + lrow("gear", "Разрешать приложению отправлять данные на другое устройство") + '</div>', "", 1), cls="as") +
-    G("minmax(0,1fr) minmax(0,.8fr) minmax(0,1fr)",
-      pnl("Как работает SMB?", SMB, "", 2),
-      pnl("Совместные ресурсы", '<div class="lst">' + lrow("folder", "Файлы и каталоги", "", 2) + lrow("printer", "Принтеры", "", 2) + lrow("gear", "Приложения", "", 2) + lrow("user", "Другие сетевые ресурсы", "", 2) + '</div>', "", 2),
+    G("minmax(0,1.9fr) minmax(0,1fr)",
+      pnl("Как работает SMB?", SMB, "smbseq", 2),
+      '<div class="lst">' +
+      pnl("Совместные ресурсы", '<div class="lst">' + lrow("folder", "Файлы и каталоги", "", 2) + lrow("printer", "Принтеры", "", 2) + lrow("gear", "Приложения", "", 2) + lrow("user", "Другие сетевые ресурсы", "", 2) + '</div>', "", 2) +
       pnl("Особенности SMB", '<div class="lst">' + lrow("link", "Долговременное подключение", "В отличие от FTP — постоянный сеанс: с удалёнными файлами работают как с локальными.", 3) +
-          lrow("shield", "Безопасность", "Аутентификация пользователей и управление правами доступа.", 3) + lrow("layers", "Широкое применение", "Корпоративные и домашние сети.", 3) + '</div>', "", 3), style="margin-top:.8rem") +
+          lrow("shield", "Безопасность", "Аутентификация пользователей и управление правами доступа.", 3) + lrow("layers", "Широкое применение", "Корпоративные и домашние сети.", 3) + '</div>', "", 3) + '</div>', style="margin-top:.8rem") +
     '<div class="mt">' + qt("SMB делает совместную работу в сети такой же удобной, как работу с локальными файлами.", 4) + '</div>')
 
 # 51 ---------------------------------------------------------------- почтовые протоколы (s45)
