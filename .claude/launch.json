@@ -1,11 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "deck-preview",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8742", "--directory", "decks"],
-      "port": 8742
-    }
+    { "name": "decks", "runtimeExecutable": "python", "runtimeArgs": ["-m","http.server","8777"], "port": 8777 }
   ]
 }
