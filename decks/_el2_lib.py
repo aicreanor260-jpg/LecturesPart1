@@ -172,15 +172,34 @@ function fitPad(sl){
 function go(i,end){
   i=Math.max(0,Math.min(N-1,i));
   slides.forEach(function(s){s.classList.remove('on')});cur=i;slides[cur].classList.add('on');
-  setStep(RM.matches||end?slides[cur]._m:0,true);
+  stopCasc();
+  setStep(RM.matches||end||slides[cur].dataset.auto==='1'?slides[cur]._m:0,true);
   fitPad(slides[cur]);
+  if(slides[cur].dataset.auto==='1'&&!end&&!RM.matches) cascade();
   try{history.replaceState(null,'','#'+(cur+1))}catch(e){}
 }
-function next(){if(step<slides[cur]._m){setStep(step+1)}else if(cur<N-1){go(cur+1)}}
-function prev(){if(step>0){setStep(step-1,true)}else if(cur>0){go(cur-1,true)}}
+var casc=null;
+function stopCasc(){ if(casc){clearTimeout(casc);casc=null;} }
+function cascade(){
+  stopCasc();
+  var sl=slides[cur]; if(!sl._m) return;
+  if(RM.matches){ setStep(sl._m,true); return; }
+  setStep(0,true);
+  (function tick(){ if(step>=sl._m){casc=null;return;} setStep(step+1); casc=setTimeout(tick,130); })();
+}
+function isAuto(){ return slides[cur].dataset.auto==='1'; }
+function next(){
+  if(isAuto()){ if(casc){ stopCasc(); setStep(slides[cur]._m,true); return; } if(cur<N-1) go(cur+1); return; }
+  if(step<slides[cur]._m){setStep(step+1)}else if(cur<N-1){go(cur+1)}
+}
+function prev(){
+  if(isAuto()){ stopCasc(); if(cur>0) go(cur-1,true); return; }
+  if(step>0){setStep(step-1,true)}else if(cur>0){go(cur-1,true)}
+}
 function ui(){
   var m=slides[cur]._m;
-  $('#ind').innerHTML='слайд '+(cur+1)+' / '+N+(m?'<span class="st">шаг '+step+' / '+m+'</span>':'');
+  var auto=slides[cur].dataset.auto==='1';
+  $('#ind').innerHTML='слайд '+(cur+1)+' / '+N+((m&&!auto)?'<span class="st">шаг '+step+' / '+m+'</span>':'');
   $('#prog i').style.width=((cur+1)/N*100)+'%';
 }
 $('#b-prev').onclick=prev;$('#b-next').onclick=next;
@@ -314,7 +333,7 @@ def build(slides, out, bg="assets/bg.jpg", ftl="assets/frost_tl.png", fbr="asset
         p = root / rel
         data = base64.b64encode(p.read_bytes()).decode()
         ext = p.suffix.lower()
-        mt = {".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2"}.get(ext, "image/jpeg")
+        mt = {".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".webp": "image/webp"}.get(ext, "image/jpeg")
         u = f"data:{mt};base64,{data}"
         cache[rel] = u
         return u
@@ -326,9 +345,12 @@ def build(slides, out, bg="assets/bg.jpg", ftl="assets/frost_tl.png", fbr="asset
                    ("__F_MO7__", "mono700.woff2")):
         css = css.replace(ph, b64(fn))
     body = []
-    for label, html in slides:
+    for item in slides:
+        label, html = item[0], item[1]
+        auto = item[2] if len(item) > 2 else "1"
         html = re.sub(r'src="assets/([^"]+)"', lambda m: f'src="{b64(m.group(1))}"', html)
-        body.append(f'<section class="slide" data-label="{label}"><div class="pad">{html}</div></section>')
+        body.append(f'<section class="slide" data-label="{label}" data-auto="{auto}">'
+                    f'<div class="pad">{html}</div></section>')
     doc = ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
            '<title>Сетевые устройства 2.1</title><style>' + css + '</style></head><body>'
