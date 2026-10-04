@@ -13,7 +13,7 @@ import io
 import json
 import os
 
-from _eltex_lib import blocks, clean, mark, render
+from _eltex_lib import blocks, clean, render_all
 from _eltex_meta import DROP, TITLES
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +103,9 @@ def build_slide(n, paras, media):
             continue
         if len(t) <= 46 and norm(t).rstrip(":") in drop:
             continue
+        # подписи со стрелками дублируют схему на картинке слайда
+        if ("->" in t or "→" in t) and len(t) < 110:
+            continue
         body += blocks(t)
 
     head = []
@@ -112,7 +115,7 @@ def build_slide(n, paras, media):
     head.append('<div class="sub">%s</div>' % latin)
 
     shot = "".join(img_tag(m["f"]) for m in media)
-    txt = "".join(render(b) for b in body)
+    txt = render_all(body)
 
     cls = "slide"
     if not shot:
