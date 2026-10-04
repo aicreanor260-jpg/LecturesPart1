@@ -26,8 +26,8 @@ html,body{height:100%;overflow:hidden;background:#dfe9fb;font-family:var(--f);co
 .slide{position:absolute;inset:0;display:none;overflow:hidden;
   background:url(__BG__) center/cover no-repeat}
 .slide::before,.slide::after{content:"";position:absolute;pointer-events:none;mix-blend-mode:multiply;opacity:.85;z-index:0}
-.slide::before{left:0;top:0;width:330px;height:330px;background:url(__FTL__) left top/cover no-repeat}
-.slide::after{right:0;bottom:0;width:330px;height:340px;background:url(__FBR__) right bottom/cover no-repeat}
+.slide::before{left:0;top:0;width:330px;height:330px;background:url(__FTL__) left top/cover no-repeat;-webkit-mask-image:radial-gradient(130% 130% at 0% 0%,#000 48%,transparent 82%);mask-image:radial-gradient(130% 130% at 0% 0%,#000 48%,transparent 82%)}
+.slide::after{right:0;bottom:0;width:330px;height:340px;background:url(__FBR__) right bottom/cover no-repeat;-webkit-mask-image:radial-gradient(130% 130% at 100% 100%,#000 48%,transparent 82%);mask-image:radial-gradient(130% 130% at 100% 100%,#000 48%,transparent 82%)}
 .slide.on{display:block}
 .pad{position:absolute;inset:0;z-index:2}
 .ab{position:absolute}
