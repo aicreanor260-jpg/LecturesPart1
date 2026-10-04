@@ -24,6 +24,6 @@ for name in mods:
 order = [r for r in ORDER if r in found] + sorted(r for r in found if r not in ORDER)
 slides = [found[r] for r in order]
 n, size = build(slides, str(HERE / "eltex-devices-2.html"),
-                assets_dir=str(HERE / "_el2assets"), bg="bg.jpg", ftl="frost_tl.jpg", fbr="frost_br.jpg")
+                assets_dir=str(HERE / "_el2assets"), bg="bg.jpg", ftl="frost_tl.png", fbr="frost_br.png")
 print(f"{n} слайдов, {size/1024/1024:.1f} МБ")
 print("нет в ORDER:", [r for r in found if r not in ORDER])

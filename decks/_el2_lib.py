@@ -8,15 +8,22 @@
 PAL = dict(navy="#12245e", blue="#2a6bf2", deep="#0e1b45", ice="#eaf2ff")
 
 CSS = r"""
+@font-face{font-family:ElHead;src:url(__F_OS7__) format("woff2");font-weight:700;font-display:block}
+@font-face{font-family:ElHead;src:url(__F_OS5__) format("woff2");font-weight:500;font-display:block}
+@font-face{font-family:ElText;src:url(__F_IN4__) format("woff2");font-weight:400;font-display:block}
+@font-face{font-family:ElText;src:url(__F_IN6__) format("woff2");font-weight:600;font-display:block}
+@font-face{font-family:ElText;src:url(__F_IN8__) format("woff2");font-weight:800;font-display:block}
+@font-face{font-family:ElMono;src:url(__F_MO4__) format("woff2");font-weight:400;font-display:block}
+@font-face{font-family:ElMono;src:url(__F_MO7__) format("woff2");font-weight:700;font-display:block}
 :root{
-  --navy:#12245e;--navy2:#0e1b45;--blue:#2a6bf2;--blue2:#1d4fd8;--sky:#6ea8ff;
+  --navy:#0f1f56;--navy2:#0b1736;--blue:#2a6bf2;--blue2:#1d4fd8;--sky:#6ea8ff;
   --ice:#eaf2ff;--mint:#e9f6ee;--cream:#fdf1e4;--rose:#fdeaf1;
-  --ink:#16245c;--dim:#5b6b96;--line:rgba(110,150,220,.35);
-  --card:rgba(255,255,255,.62);--card2:rgba(255,255,255,.80);
-  --f:"Golos Text","Inter","Manrope","Segoe UI",system-ui,sans-serif;
-  --mono:"JetBrains Mono","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
+  --ink:#14214d;--dim:#5a6b96;--line:rgba(110,150,220,.35);
+  --card:rgba(255,255,255,.74);--card2:rgba(255,255,255,.88);
+  --f:ElText,"Inter","Segoe UI",system-ui,sans-serif;--fh:ElHead,"Oswald","Segoe UI",sans-serif;
+  --mono:ElMono,"IBM Plex Mono","Consolas",ui-monospace,monospace;
   --ez:cubic-bezier(.22,.7,.3,1);--sp:1;
-  --sh:0 2px 6px rgba(26,52,120,.07),0 14px 38px rgba(26,52,120,.10);
+  --sh:0 1px 0 rgba(255,255,255,.9) inset,0 2px 8px rgba(30,60,140,.06),0 16px 40px rgba(30,60,140,.10);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:#dfe9fb;font-family:var(--f);color:var(--ink)}
@@ -25,9 +32,9 @@ html,body{height:100%;overflow:hidden;background:#dfe9fb;font-family:var(--f);co
 #deck{width:1920px;height:1080px;position:absolute;left:50%;top:50%;transform-origin:center;transform:translate(-50%,-50%)}
 .slide{position:absolute;inset:0;display:none;overflow:hidden;
   background:url(__BG__) center/cover no-repeat}
-.slide::before,.slide::after{content:"";position:absolute;pointer-events:none;mix-blend-mode:multiply;opacity:.85;z-index:0}
-.slide::before{left:0;top:0;width:330px;height:330px;background:url(__FTL__) left top/cover no-repeat;-webkit-mask-image:radial-gradient(130% 130% at 0% 0%,#000 48%,transparent 82%);mask-image:radial-gradient(130% 130% at 0% 0%,#000 48%,transparent 82%)}
-.slide::after{right:0;bottom:0;width:330px;height:340px;background:url(__FBR__) right bottom/cover no-repeat;-webkit-mask-image:radial-gradient(130% 130% at 100% 100%,#000 48%,transparent 82%);mask-image:radial-gradient(130% 130% at 100% 100%,#000 48%,transparent 82%)}
+.slide::before,.slide::after{content:"";position:absolute;pointer-events:none;opacity:.92;z-index:0}
+.slide::before{left:0;top:0;width:520px;height:520px;background:url(__FTL__) left top/contain no-repeat}
+.slide::after{right:0;bottom:0;width:520px;height:520px;background:url(__FBR__) right bottom/contain no-repeat}
 .slide.on{display:block}
 .pad{position:absolute;inset:0;z-index:2}
 .ab{position:absolute}
@@ -35,41 +42,43 @@ html,body{height:100%;overflow:hidden;background:#dfe9fb;font-family:var(--f);co
 [data-s].ctr-x{transform:translateX(-50%) translateY(10px)}
 [data-s].ctr-x.in{transform:translateX(-50%)}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+[style*="text-transform:uppercase"]{font-family:var(--fh);letter-spacing:.3px}
+[style*="text-transform:uppercase"].mono{font-family:var(--mono)}
 /* --- заголовки --- */
-h1.t{font-size:64px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.5px;text-align:center;line-height:1.04}
+h1.t{font-family:var(--fh);font-size:66px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.6px;text-align:center;line-height:1.02}
 h1.t .lt{color:var(--blue)}
 h1.t.left{text-align:left}
-.sub{font-size:24px;color:var(--blue);text-align:center;letter-spacing:4px;text-transform:uppercase;margin-top:8px;font-weight:600}
+.sub{font-family:var(--fh);font-size:26px;color:var(--blue);text-align:center;letter-spacing:5px;text-transform:uppercase;margin-top:10px;font-weight:500}
 .sub.n{color:var(--dim);letter-spacing:1px;text-transform:none}
-.big{font-size:86px;font-weight:800;color:var(--navy);line-height:1;letter-spacing:-1px}
+.big{font-family:var(--fh);font-size:92px;font-weight:700;color:var(--navy);line-height:.98;letter-spacing:0}
 .big .lt{color:var(--blue)}
-.kick{font-size:26px;font-weight:700;color:var(--blue);letter-spacing:5px;text-transform:uppercase}
+.kick{font-family:var(--fh);font-size:28px;font-weight:500;color:var(--blue);letter-spacing:6px;text-transform:uppercase}
 /* --- карточки --- */
-.card{background:var(--card);border:1px solid rgba(255,255,255,.92);border-radius:22px;box-shadow:var(--sh);
+.card{background:var(--card);border:1px solid rgba(255,255,255,.95);border-radius:20px;box-shadow:var(--sh);
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);padding:26px 30px;position:relative}
 .card.ab{position:absolute}
 .card.solid{background:var(--card2)}
 .card.mint{background:rgba(233,246,238,.85)}
 .card.cream{background:rgba(253,241,228,.88)}
 .card.rose{background:rgba(253,234,241,.85)}
-.ch{display:flex;align-items:center;gap:14px;font-size:30px;font-weight:800;color:var(--navy);text-transform:uppercase;margin-bottom:18px;line-height:1.1}
+.ch{display:flex;align-items:center;gap:14px;font-family:var(--fh);font-size:32px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;margin-bottom:18px;line-height:1.08}
 .ch::before{content:"";width:7px;height:30px;border-radius:4px;background:var(--blue);flex:none}
 .ch.nb::before{display:none}
 .ch.sm{font-size:24px}
-p.b{font-size:22px;line-height:1.45;color:var(--ink)}
+p.b{font-size:22px;line-height:1.5;color:var(--ink)}
 p.b.sm{font-size:19px}
 p.b.dim{color:var(--dim)}
 .lead{font-size:26px;line-height:1.45}
 /* --- элементы --- */
-.chip{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.92);border:1.5px solid var(--line);
+.chip{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.96);border:1px solid rgba(140,175,235,.45);
   border-radius:12px;padding:10px 18px;font-family:var(--mono);font-size:24px;color:var(--navy);font-weight:600}
 .chip.key{min-width:76px;justify-content:center;font-weight:700;
   background:linear-gradient(180deg,#fff,#e8f0ff);box-shadow:0 3px 0 rgba(130,165,225,.35)}
-.cmd{display:inline-block;background:#16254f;color:#eaf2ff;border-radius:12px;padding:12px 22px;
+.cmd{display:inline-block;background:#13224d;color:#eaf2ff;border-radius:12px;padding:12px 22px;
   font-family:var(--mono);font-size:26px;letter-spacing:.5px;box-shadow:0 6px 18px rgba(16,37,90,.25)}
 .cmd .a{color:#7fb0ff}
 .num{font-family:var(--mono);font-size:56px;font-weight:800;color:#b9cdf0;line-height:1}
-.badge{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:var(--blue);color:#fff;
+.badge{display:grid;place-items:center;width:46px;height:46px;border-radius:13px;background:linear-gradient(160deg,#4b83f7,#1f49cf);color:#fff;
   font-weight:800;font-size:24px;font-family:var(--mono);flex:none;box-shadow:0 6px 16px rgba(42,107,242,.35)}
 .badge.o{background:#fff;color:var(--blue);border:2px solid var(--blue);box-shadow:none}
 .ico{display:grid;place-items:center;width:78px;height:78px;flex:none;border-radius:20px;
@@ -96,7 +105,7 @@ p.b.dim{color:var(--dim)}
 .ctr{align-items:center}.btw{justify-content:space-between}
 .gr{flex:1}
 img.ph{display:block;width:100%;height:auto;border-radius:16px}
-img.cut{display:block;width:100%;height:auto;filter:drop-shadow(0 18px 30px rgba(30,60,130,.18))}
+img.cut{display:block;width:100%;height:auto;filter:drop-shadow(0 18px 30px rgba(30,60,130,.16));-webkit-mask-image:radial-gradient(125% 125% at 50% 50%,#000 72%,transparent 99%);mask-image:radial-gradient(125% 125% at 50% 50%,#000 72%,transparent 99%)}
 /* --- шаги --- */
 [data-s]{opacity:0;transform:translateY(10px);
   transition:opacity calc(260ms/var(--sp)) var(--ez) calc(var(--dl,0ms)/var(--sp)),transform calc(260ms/var(--sp)) var(--ez) calc(var(--dl,0ms)/var(--sp))}
@@ -294,7 +303,7 @@ def arrow_svg(x1, y1, x2, y2, step=None, col="var(--blue)", w=4, dash=False):
             f'<polygon class="hd" points="{x2},{y2} {bx+nx*8:.1f},{by+ny*8:.1f} {bx-nx*8:.1f},{by-ny*8:.1f}" fill="{col}"/></g>')
 
 
-def build(slides, out, bg="assets/bg.jpg", ftl="assets/frost_tl.jpg", fbr="assets/frost_br.jpg", assets_dir="."):
+def build(slides, out, bg="assets/bg.jpg", ftl="assets/frost_tl.png", fbr="assets/frost_br.png", assets_dir="."):
     """slides: список (label, html). Картинки src="assets/..." инлайнятся в base64."""
     import base64, os, re, pathlib
     root = pathlib.Path(assets_dir)
@@ -304,12 +313,18 @@ def build(slides, out, bg="assets/bg.jpg", ftl="assets/frost_tl.jpg", fbr="asset
         if rel in cache: return cache[rel]
         p = root / rel
         data = base64.b64encode(p.read_bytes()).decode()
-        mt = "image/png" if p.suffix.lower() == ".png" else ("image/svg+xml" if p.suffix.lower() == ".svg" else "image/jpeg")
+        ext = p.suffix.lower()
+        mt = {".png": "image/png", ".svg": "image/svg+xml", ".woff2": "font/woff2"}.get(ext, "image/jpeg")
         u = f"data:{mt};base64,{data}"
         cache[rel] = u
         return u
 
     css = CSS.replace("__BG__", b64(bg)).replace("__FTL__", b64(ftl)).replace("__FBR__", b64(fbr))
+    for ph, fn in (("__F_OS7__", "oswald700.woff2"), ("__F_OS5__", "oswald500.woff2"),
+                   ("__F_IN4__", "inter400.woff2"), ("__F_IN6__", "inter600.woff2"),
+                   ("__F_IN8__", "inter800.woff2"), ("__F_MO4__", "mono400.woff2"),
+                   ("__F_MO7__", "mono700.woff2")):
+        css = css.replace(ph, b64(fn))
     body = []
     for label, html in slides:
         html = re.sub(r'src="assets/([^"]+)"', lambda m: f'src="{b64(m.group(1))}"', html)
