@@ -259,6 +259,7 @@ NUM = re.compile(
     r"точек доступа|пользовател(?:ь|я|ей)))")
 
 LEAD_MIN = 60
+LEAD_MAX = 230
 
 
 def mark(s):
@@ -282,17 +283,17 @@ def render(bl, idx=None):
     if t == "lead":
         return '<p class="lead step">%s</p>' % mark(bl["v"])
     if t == "term":
-        num = '<div class="cnum">%02d</div>' % idx if idx else ""
+        num = '<div class="tnum">%02d</div>' % idx if idx else ""
         body = bl["v"]
         body = body[0].upper() + body[1:] if body else body
         code = bl.get("code")
         name = html.escape(bl["ru"]) if code else html.escape(bl["ru"]).upper()
+        lat = bl["lat"] or ("cli" if code else "")
+        lat = '<div class="tlat">%s</div>' % html.escape(lat).upper() if lat else ""
         return ('<div class="term%s step">'
-                '<div class="chead">%s<div class="clab">%s</div></div>'
-                '<h4>%s</h4><p>%s</p></div>') % (
-            " mono" if code else "", num,
-            html.escape(bl["lat"] or ("cli" if code else "определение")).upper(),
-            name, mark(body))
+                '<div class="thead">%s<div><h4>%s</h4>%s</div></div>'
+                '<p>%s</p></div>') % (
+            " mono" if code else "", num, name, lat, mark(body))
     if t == "link":
         u = html.escape(bl["v"])
         return ('<a class="link step" href="%s" target="_blank" rel="noopener">'
@@ -321,7 +322,7 @@ def render_all(bls):
             lead_done = True
             out.append(render(bl, term_no))
             continue
-        if bl["t"] == "p" and not lead_done and len(bl["v"]) >= LEAD_MIN:
+        if bl["t"] == "p" and not lead_done and LEAD_MIN <= len(bl["v"]) <= LEAD_MAX:
             lead_done = True
             out.append(render({"t": "lead", "v": bl["v"]}))
             continue

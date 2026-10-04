@@ -41,6 +41,16 @@ body{
 .shead h2{
   margin:0;font-size:clamp(20px,2.05vw,34px);line-height:1.1;
   font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);
+  display:flex;align-items:center;gap:16px;
+}
+.shead h2 span{flex:0 1 auto}
+.shead h2 .rule{
+  flex:1 1 auto;min-width:24px;height:1px;
+  background:linear-gradient(90deg,rgba(91,139,201,.55),rgba(143,180,220,.12));
+}
+.shead h2 .dia{
+  flex:0 0 auto;width:7px;height:7px;transform:rotate(45deg);
+  border:1.3px solid var(--accent);background:rgba(255,255,255,.7);
 }
 .sub{
   margin-top:7px;font-size:10px;font-weight:700;color:var(--ice);
@@ -74,16 +84,43 @@ body{
 .txt a{color:var(--steel);word-break:break-all}
 
 /* лид — первая мысль слайда */
-.lead{font-size:16.5px!important;line-height:1.46!important;color:var(--navy);font-weight:600;
-  padding-left:14px;border-left:3px solid var(--accent)}
+.lead{
+  position:relative;font-size:16.5px!important;line-height:1.5!important;
+  color:var(--navy);font-weight:600;padding:2px 0 2px 16px;margin-bottom:1.1em!important;
+}
+.lead::before{
+  content:"";position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:3px;
+  background:linear-gradient(180deg,#6f97cd,rgba(143,180,220,0));
+}
 
 /* карточка термина */
-.term{border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.74);
-  padding:12px 14px 13px;margin:0 0 .95em;box-shadow:0 3px 14px rgba(80,120,180,.08)}
-.term .chead{margin-bottom:9px}
-.term h4{margin:0 0 7px;font-size:13.5px;font-weight:900;color:var(--navy);letter-spacing:.03em}
-.term p{margin:0;font-size:13.5px;line-height:1.52}
-.term.mono h4{font-family:var(--mono);font-size:14px;text-transform:none;letter-spacing:0}
+.term{
+  position:relative;border:1px solid #e3ecf9;border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(246,250,255,.86));
+  padding:15px 18px 16px;margin:0 0 1.05em;
+  box-shadow:0 6px 20px rgba(70,110,170,.09),inset 0 1px 0 #fff;
+  transition:.22s var(--ease);
+}
+.term:hover{box-shadow:0 10px 26px rgba(70,110,170,.15);transform:translateY(-1px)}
+.term::after{
+  content:"";position:absolute;left:18px;right:18px;top:52px;height:1px;
+  background:linear-gradient(90deg,rgba(143,180,220,.5),rgba(143,180,220,0));
+}
+.thead{display:flex;align-items:center;gap:13px;margin-bottom:17px}
+.tnum{
+  width:34px;height:34px;border-radius:11px;flex:0 0 auto;
+  background:linear-gradient(155deg,#7ba2d6,#3f6499);color:#fff;
+  font-size:12.5px;font-weight:800;letter-spacing:.02em;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 12px rgba(63,100,153,.3);
+}
+.term h4{
+  margin:0;font-size:14px;font-weight:900;color:var(--navy);letter-spacing:.045em;line-height:1.2;
+}
+.tlat{font-size:9px;letter-spacing:.26em;color:var(--ice);font-weight:700;
+  text-transform:uppercase;margin-top:4px}
+.term p{margin:0;font-size:13.5px;line-height:1.56;color:var(--ink)}
+.term.mono h4{font-family:var(--mono);font-size:14.5px;text-transform:none;letter-spacing:0}
 
 /* ссылка-источник */
 .link{display:block;margin:0 0 .95em;padding:9px 13px;border-radius:10px;text-decoration:none;
@@ -94,14 +131,29 @@ body{
 .link span{font-size:12.5px;color:var(--steel);word-break:break-all}
 
 /* врезки */
-.note{margin:0 0 .95em;padding:10px 13px;border-radius:0 10px 10px 0;
-  background:rgba(255,255,255,.72);border-left:3px solid var(--accent)}
-.note i{display:block;font-style:normal;font-size:9px;font-weight:800;letter-spacing:.24em;
-  color:var(--steel);margin-bottom:5px}
-.note p{margin:0!important;font-size:13.5px}
-.note.warn{border-left-color:#c98f73}
+.note{
+  display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:start;
+  margin:0 0 1.05em;padding:13px 16px 14px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(236,244,254,.95),rgba(255,255,255,.7));
+  border:1px solid #dfe9f8;
+}
+.note::before{
+  content:"";grid-row:1 / span 2;width:26px;height:26px;border-radius:50%;
+  border:1.4px solid var(--accent);
+  background:radial-gradient(circle at 50% 50%,var(--accent) 0 4px,transparent 5px);
+}
+.note i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.24em;
+  color:var(--steel);align-self:center}
+.note p{margin:0!important;font-size:13.5px;line-height:1.56}
+.note.warn{background:linear-gradient(135deg,rgba(253,243,235,.95),rgba(255,255,255,.7));
+  border-color:#efdccd}
+.note.warn::before{border-color:#c98f73;
+  background:radial-gradient(circle at 50% 50%,#c98f73 0 4px,transparent 5px)}
 .note.warn i{color:#b4784f}
-.note.sum{border-left-color:#7fae92}
+.note.sum{background:linear-gradient(135deg,rgba(235,249,241,.95),rgba(255,255,255,.7));
+  border-color:#cfe7da}
+.note.sum::before{border-color:#7fae92;
+  background:radial-gradient(circle at 50% 50%,#7fae92 0 4px,transparent 5px)}
 .note.sum i{color:#4f8a69}
 
 /* количественные величины */

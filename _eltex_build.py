@@ -33,6 +33,8 @@ FROST = """
    <path d="M0 -30 L-14 -48 M0 -30 L14 -48 M0 -56 L-11 -72 M0 -56 L11 -72 M0 -82 L-7 -94 M0 -82 L7 -94"
          stroke="#9bbde3" stroke-width=".7" fill="none" opacity=".6"/>
   </g>
+  <path id="hex" d="M26 0 L13 22 L-13 22 L-26 0 L-13 -22 L13 -22 Z"
+        fill="none" stroke="#bcd4ee" stroke-width="1.1"/>
   <g id="flake" stroke="#a9c6e8" stroke-width="1" fill="none">
    <path d="M0 -22 L0 22 M-19 -11 L19 11 M-19 11 L19 -11"/>
    <path d="M0 -14 l-5 -5 M0 -14 l5 -5 M0 14 l-5 5 M0 14 l5 5"/>
@@ -50,6 +52,15 @@ FROST = """
   <use href="#leaf" x="1520" y="570" transform="rotate(30 1520 570)"/>
   <use href="#leaf" x="1570" y="750" transform="rotate(-24 1570 750)"/>
   <use href="#leaf" x="1486" y="898" transform="rotate(8 1486 898)"/>
+ </g>
+ <g opacity=".42">
+  <use href="#hex" x="248" y="118"/>
+  <use href="#hex" x="196" y="206"/>
+  <use href="#hex" x="300" y="206"/>
+  <use href="#hex" x="1352" y="742"/>
+  <use href="#hex" x="1404" y="830"/>
+  <use href="#hex" x="1300" y="830"/>
+  <use href="#hex" x="1498" y="318" transform="scale(.7) translate(640 136)"/>
  </g>
  <g opacity=".5">
   <use href="#flake" x="196" y="160"/>
@@ -111,7 +122,7 @@ def build_slide(n, paras, media):
     head = []
     if kicker:
         head.append('<div class="kicker">%s</div>' % kicker)
-    head.append("<h2>%s</h2>" % title)
+    head.append('<h2><span>%s</span><em class="rule"></em><i class="dia"></i></h2>' % title)
     head.append('<div class="sub">%s</div>' % latin)
 
     shot = "".join(img_tag(m["f"]) for m in media)
