@@ -17,8 +17,12 @@ def ab(l, t, w=None, extra=""):
 
 
 def dev(name, l, t, w, extra=""):
-    return (f'<img src="assets/dev/{name}" style="position:absolute;left:{l}px;top:{t}px;width:{w}px;'
-            f'filter:drop-shadow(0 20px 34px rgba(30,60,130,.20));{extra}">')
+    """Фото устройства с мягкой подставкой-бликом, как в soft-3D стиле."""
+    return (f'<span style="position:absolute;left:{l}px;top:{t}px;width:{w}px">'
+            f'<span style="position:absolute;left:8%;right:8%;bottom:-6%;height:16%;border-radius:50%;'
+            f'background:radial-gradient(ellipse at center,rgba(60,100,180,.22),transparent 70%);filter:blur(10px)"></span>'
+            f'<img src="assets/dev/{name}" style="position:relative;display:block;width:100%;'
+            f'filter:drop-shadow(0 18px 30px rgba(30,60,130,.18));{extra}"></span>')
 
 
 def layer(*parts):
@@ -186,7 +190,7 @@ def esr_line():
                [("speed", "Высокая производительность"), ("gear", "Многоядерный процессор"), ("globe", "Для операторов и крупных компаний")])]
     for i, (name, sub, img, iw, feats) in enumerate(models):
         l = 90 + i * 590
-        o.append(f'<div class="card" data-s="{2 + i}" style="{ab(l, 330, 550)}height:520px;padding:28px 32px">'
+        o.append(f'<div class="card" data-s="{2 + i}" style="{ab(l, 330, 550)}padding:28px 32px 34px">'
                  f'<div style="font-size:40px;font-weight:700;color:var(--navy);font-family:var(--fh)">{name}</div>'
                  f'<p class="b" style="font-size:20px;color:var(--dim);margin-top:6px">{sub}</p>'
                  f'<div style="position:relative;height:230px;margin-top:14px">{dev(img, (550 - 64 - iw) // 2, 30, iw)}</div>'
@@ -194,17 +198,20 @@ def esr_line():
                            f'<p class="b" style="font-size:19px">{t}</p></div>' for icn, t in feats)
                  + '</div>')
 
-    o.append(f'<div class="card" data-s="5" style="{ab(90, 880, 1740)}height:160px;padding:26px 34px">'
-             '<div class="ab" style="left:36px;top:34px;width:400px;font-size:30px;font-weight:700;color:var(--navy);'
-             'font-family:var(--fh);text-transform:uppercase;line-height:1.1">Ключевые отличия моделей</div>'
-             + "".join(f'<div class="ab" style="left:{470 + i * 240}px;top:46px;width:230px;display:flex;gap:12px;'
-                       f'align-items:center">{ico(icn, "sm")}'
+    feats = [("net", "Набор интерфейсов"), ("gear", "Центральный процессор"), ("chart", "Производительность")]
+    o.append(f'<div class="card" data-s="5" style="{ab(90, 960, 1740)}padding:30px 36px;display:flex;'
+             f'align-items:center;gap:36px">'
+             '<div style="width:300px;font-size:30px;font-weight:700;color:var(--navy);font-family:var(--fh);'
+             'text-transform:uppercase;line-height:1.1">Ключевые отличия моделей</div>'
+             '<div style="display:flex;gap:30px">'
+             + "".join(f'<div style="display:flex;gap:12px;align-items:center;width:210px">{ico(icn, "sm")}'
                        f'<div style="font-size:19px;font-weight:600;color:var(--navy);line-height:1.25">{t}</div></div>'
-                       for i, (icn, t) in enumerate([("net", "Набор интерфейсов"), ("gear", "Центральный процессор"),
-                                                     ("chart", "Производительность")]))
-             + '<p class="b ab" style="left:1200px;top:38px;width:500px;font-size:20px">'
-             'Все устройства серии ESR имеют единый набор функциональных возможностей. Разница между моделями '
-             'заключается в объёме трафика, который они могут обрабатывать.</p></div>')
+                       for icn, t in feats)
+             + '</div>'
+             '<p class="b" style="flex:1;font-size:20px">Все устройства серии ESR имеют единый набор функциональных '
+             'возможностей. Разница между моделями заключается в объёме трафика, который они могут обрабатывать.</p>'
+             '</div>')
+
     return "".join(o)
 
 
