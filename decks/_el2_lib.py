@@ -159,7 +159,13 @@ function autofit(pad){
   var box=cards.map(function(c){var r=c.getBoundingClientRect();
     return {el:c,l:r.left-pr.left,r:r.right-pr.left,t:r.top-pr.top,b:r.bottom-pr.top,d:0,
             abs:getComputedStyle(c).position==='absolute'};});
-  // 2) абсолютные дети не растягивают карточку — дотягиваем её до содержимого
+  // 2a) карточка, выросшая по потоку выше авторской высоты, — это тоже прирост,
+  //     но он УЖЕ попал в замер, поэтому авторский низ поднимаем обратно
+  box.forEach(function(o){
+    var mh=parseFloat(o.el.style.minHeight);
+    if(mh>0){ var dd=o.el.getBoundingClientRect().height-mh; if(dd>1){ o.d=dd; o.b-=dd; } }
+  });
+  // 2b) абсолютные дети не растягивают карточку — дотягиваем её до содержимого
   box.forEach(function(o){
     var cr=o.el.getBoundingClientRect(), max=0, kids=o.el.querySelectorAll('*');
     for(var k=0;k<kids.length;k++){
@@ -168,8 +174,9 @@ function autofit(pad){
     }
     var pb=parseFloat(getComputedStyle(o.el).paddingBottom)||0;
     var need=Math.ceil(max+pb);
-    if(need>cr.height+1){ o.d=need-cr.height; o.el.style.minHeight=need+'px'; }
+    if(need>cr.height+1){ o.d+=need-cr.height; o.el.style.minHeight=need+'px'; }
   });
+
   // 3) то, что стояло строго ПОД выросшей карточкой в той же колонке, опускаем на прирост
   box.sort(function(a,b){return a.t-b.t});
   for(var i=0;i<box.length;i++){
