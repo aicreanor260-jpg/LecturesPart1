@@ -40,6 +40,6 @@ for r in order:
     label, html = found[r]
     slides.append((label, bump(html), "0" if r in MANUAL else "1"))
 n, size = build(slides, str(HERE / "eltex-devices-2.html"),
-                assets_dir=str(HERE / "_el2assets"), bg="bg.jpg", ftl="frost_tl.png", fbr="frost_br.png")
+                assets_dir=str(HERE / "_el2assets"), bg="bg.jpg", ftl="aura_tl.png", fbr="aura_br.png")
 print(f"{n} слайдов, {size/1024/1024:.1f} МБ")
 print("нет в ORDER:", [r for r in found if r not in ORDER])
