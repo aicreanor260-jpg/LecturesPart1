@@ -540,11 +540,12 @@ def esr_functions():
             ("shield", "Производительность Firewall и VPN"), ("stack", "Поддерживаемые протоколы"),
             ("lock", "Безопасность"), ("reload", "Резервирование")]
     o.append('<div class="ch sm ab" style="left:1480px;top:184px">Ключевые критерии выбора</div>')
+    # одна колонка: в две по 170px длинные названия не помещались
     for i, (icn, t) in enumerate(crit):
-        o.append(f'<div class="card" data-s="{8 + i // 2}" style="{ab(1480 + (i % 2) * 180, 236 + (i // 2) * 170, 170)}'
-                 f'height:150px;padding:14px;text-align:center;--dl:{(i % 2) * 80}ms">'
-                 f'<div style="display:flex;justify-content:center">{ico(icn, "sm")}</div>'
-                 f'<div style="margin-top:8px;font-size:18px;font-weight:600;color:var(--navy);line-height:1.25">{t}</div></div>')
+        o.append(f'<div class="card" data-s="{8 + i // 2}" style="{ab(1480, 236 + i * 88, 350)}'
+                 f'min-height:76px;padding:8px 16px;display:flex;gap:16px;align-items:center;'
+                 f'--dl:{(i % 2) * 80}ms">{ico(icn, "sm")}'
+                 f'<div style="font-size:20px;font-weight:600;color:var(--navy);line-height:1.2">{t}</div></div>')
 
     # нижняя полоса: схема вместо вклеенной картинки
     nodes = [("globe", "Интернет / WAN", 140), ("shield", "Защита сети", 430), ("lock", "VPN-туннели", 700),

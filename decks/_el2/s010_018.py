@@ -148,14 +148,15 @@ def indicators():
          '<p class="b sm ab" style="left:80px;top:230px;width:640px">Маршрутизаторы имеют несколько интерфейсов, '
          'которые используются для подключения к нескольким сетям. Каждый интерфейс является участником отдельной '
          'IP-сети. Для каждого интерфейса необходимо настроить IP-адрес и маску подсети соответствующей сети.</p>',
-         f'<img class="cut ab" src="assets/p014_router.jpg" style="{ab(800, 90, 1050)}">']
+         f'<img class="ab" src="assets/dev/esr-3150.webp" style="{ab(820, 110, 1020)}'
+         f'filter:drop-shadow(0 14px 26px rgba(110,100,165,.22))">']
 
     o.append(f'<div class="card" data-s="1" style="{ab(80, 380, 480)}height:470px">'
              '<div class="ch sm" style="justify-content:center">Разъём RJ-45</div>'
              '<div style="display:flex;justify-content:space-between;padding:0 40px">'
              '<span class="b sm" style="color:#1d8a5b;font-weight:700">LINK/ACT</span>'
              '<span class="b sm" style="color:#d08a1b;font-weight:700">SPEED</span></div>'
-             '<img class="cut ab" src="assets/p014_rj45.jpg" style="left:90px;top:120px;width:300px">'
+             '<img class="cut ab" src="assets/p014_rj45.jpg" style="left:95px;top:120px;width:290px">'
              '<p class="b sm dim ab" style="left:30px;top:390px;width:420px;text-align:center">'
              'Расположение индикаторов разъёма RJ-45</p></div>')
 

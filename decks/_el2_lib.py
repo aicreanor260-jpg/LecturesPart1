@@ -108,7 +108,7 @@ p.b.dim{color:var(--dim)}
 .ctr{align-items:center}.btw{justify-content:space-between}
 .gr{flex:1}
 img.ph{display:block;width:100%;height:auto;border-radius:26px;box-shadow:0 6px 14px rgba(118,112,170,.12),0 20px 40px rgba(118,112,170,.18)}
-img.cut{display:block;width:100%;height:auto;filter:drop-shadow(0 18px 30px rgba(110,100,165,.20));-webkit-mask-image:radial-gradient(125% 125% at 50% 50%,#000 72%,transparent 99%);mask-image:radial-gradient(125% 125% at 50% 50%,#000 72%,transparent 99%)}
+img.cut{display:block;width:100%;height:auto;mix-blend-mode:multiply;filter:drop-shadow(0 14px 24px rgba(110,100,165,.16))}
 /* --- шаги --- */
 [data-s]{opacity:0;transform:translateY(10px);
   transition:opacity calc(260ms/var(--sp)) var(--ez) calc(var(--dl,0ms)/var(--sp)),transform calc(260ms/var(--sp)) var(--ez) calc(var(--dl,0ms)/var(--sp))}
