@@ -62,7 +62,7 @@ def configs():
         df = 20 if big else 18
         return (f'<div class="card"{sd(s)} style="{ab(l, t, w)}height:{h}px;text-align:center;padding:0">'
                 f'<div class="ab" style="right:22px;top:20px">{ico(icn, "" if big else "sm")}</div>'
-                f'<div class="ab" style="left:14px;right:14px;top:{118 if big else 92}px;font-size:{nf}px;font-weight:800;'
+                f'<div class="ab" style="left:14px;right:14px;top:{118 if big else 78}px;font-size:{nf}px;font-weight:800;'
                 f'color:var(--navy);line-height:1.12">{name}</div>'
                 f'<div class="ab b dim" style="left:20px;right:20px;bottom:{26 if big else 18}px;font-size:{df}px;'
                 f'line-height:1.3">{desc}</div></div>')
@@ -93,9 +93,10 @@ def configs():
     o.append(f'<div class="card"{sd(4)} style="{ab(50, 470, 1820)}height:285px"></div>')
     o.append(f'<div class="card solid"{sd(4)} style="{ab(865, 512, 190)}height:190px;transform:rotate(45deg);'
              f'border-radius:30px"></div>')
-    o.append(f'<div{sd(4)} style="{ab(845, 560, 230)}height:100px;display:flex;align-items:center;justify-content:center;'
-             f'text-align:center;font-size:25px;font-weight:800;color:var(--navy);line-height:1.15">'
-             f'Введена<br>команда<br><span class="mono">confirm</span>?</div>')
+    o.append(f'<div{sd(4)} style="{ab(845, 545, 230)}height:130px;display:flex;align-items:center;justify-content:center;'
+             f'text-align:center;font-size:25px;font-weight:800;color:var(--navy);line-height:1.3;'
+             f'flex-direction:column">'
+             f'<div>Введена команда</div><div class="mono">confirm?</div></div>')
     o.append(layer(
         arrow_svg(972, 436, 972, 474, 4, w=5),
         arrow_svg(822, 607, 552, 607, 5, col=GREEN, w=5),
@@ -123,9 +124,9 @@ def configs():
     o.append(layer(arrow_svg(412, 285, 808, 285, 3, w=9), arrow_svg(1140, 285, 1494, 285, 2, w=9)))
 
     # rollback
-    o.append(f'<div class="card"{sd(7)} style="{ab(50, 775, 1160)}height:275px"></div>')
-    o.append(doc(80, 795, 290, 235, "doc", "candidate-<br>configuration", "Новые, ещё не применённые настройки", 7, False))
-    o.append(doc(890, 795, 290, 235, "gear", "running-<br>configuration", "Текущая рабочая конфигурация", 7, False))
+    o.append(f'<div class="card"{sd(7)} style="{ab(50, 775, 1160)}height:310px"></div>')
+    o.append(doc(80, 795, 290, 270, "doc", "candidate-<br>configuration", "Новые, ещё не применённые настройки", 7, False))
+    o.append(doc(890, 795, 290, 270, "gear", "running-<br>configuration", "Текущая рабочая конфигурация", 7, False))
     o.append(f'<div class="ab mono" data-s="7" style="left:500px;top:795px;font-size:36px;font-weight:800;color:#fff;'
              f'padding:8px 28px;border-radius:12px;background:linear-gradient(90deg,#5a47c4,#3c2f93)">'
              f'<span style="color:#b9b0ff">&gt;</span> rollback</div>')

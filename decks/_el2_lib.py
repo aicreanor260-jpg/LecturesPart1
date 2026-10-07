@@ -158,7 +158,8 @@ function autofit(pad){
   var pr=pad.getBoundingClientRect();
   var box=cards.map(function(c){var r=c.getBoundingClientRect();
     return {el:c,l:r.left-pr.left,r:r.right-pr.left,t:r.top-pr.top,b:r.bottom-pr.top,d:0,
-            abs:getComputedStyle(c).position==='absolute'};});
+            abs:getComputedStyle(c).position==='absolute',
+            top:!c.parentNode.closest('.card')};});   // вложенные карточки в раздвигании не участвуют
   // 2a) карточка, выросшая по потоку выше авторской высоты, — это тоже прирост,
   //     но он УЖЕ попал в замер, поэтому авторский низ поднимаем обратно
   box.forEach(function(o){
@@ -177,18 +178,21 @@ function autofit(pad){
     if(need>cr.height+1){ o.d+=need-cr.height; o.el.style.minHeight=need+'px'; }
   });
 
-  // 3) то, что стояло строго ПОД выросшей карточкой в той же колонке, опускаем на прирост
+  // 3) карточки ниже выросшей опускаются ровно настолько, чтобы не перекрыться
   box.sort(function(a,b){return a.t-b.t});
-  for(var i=0;i<box.length;i++){
-    if(box[i].d<=0) continue;
-    var A=box[i];
-    for(var j=i+1;j<box.length;j++){
-      var B=box[j];
-      if(!B.abs) continue;
-      if(B.t<A.b-2) continue;                                  // не ниже — не трогаем
+  for(var i=0;i<box.length;i++) box[i].h2=box[i].el.getBoundingClientRect().height;
+  for(var j=0;j<box.length;j++){
+    var B=box[j]; B.shift=B.shift||0;
+    if(!B.abs||!B.top) continue;
+    for(var i=0;i<j;i++){
+      var A=box[i];
+      if(!A.top||A.d<=0) continue;
+      if(B.t<A.t+6) continue;                                    // не ниже
       var ox=Math.min(A.r,B.r)-Math.max(A.l,B.l);
-      if(ox<Math.min(A.r-A.l,B.r-B.l)*0.55) continue;          // другая колонка
-      B.shift=(B.shift||0)+A.d; B.t+=A.d; B.b+=A.d;
+      if(ox<Math.min(A.r-A.l,B.r-B.l)*0.45) continue;            // другая колонка
+      var gap=Math.max(24,B.t-A.b);                              // авторский зазор
+      var need=(A.t+(A.shift||0)+A.h2+gap)-(B.t+B.shift);
+      if(need>0) B.shift+=need;
     }
   }
   box.forEach(function(o){ if(o.shift>0){

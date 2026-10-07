@@ -411,11 +411,11 @@ def _rows(items, fs):
     out = ""
     bd = "border-bottom:1.5px solid rgba(150,180,230,.35);"
     for k, v, hl in items:
-        h = (f'<span style="background:#d8f3e6;color:#1f8a54;font-weight:700;border-radius:8px;padding:2px 7px;'
-             f'font-size:12px;white-space:nowrap">{hl}</span>') if hl else ""
+        h = (f'<span style="display:inline-block;background:#dcf1e4;color:#1f8a54;font-weight:700;border-radius:8px;'
+             f'padding:3px 8px;font-size:12px;line-height:1.2">{hl}</span>') if hl else ""
         out += (f'<tr><td style="padding:6px 8px;font-size:{fs}px;line-height:1.2;{bd}">{k}:</td>'
                 f'<td style="padding:6px 6px;font-size:{fs}px;font-weight:700;line-height:1.2;{bd}">{v}</td>'
-                f'<td style="padding:3px 6px;text-align:right;{bd}">{h}</td></tr>')
+                f'<td style="padding:3px 6px;text-align:right;width:28%;{bd}">{h}</td></tr>')
     return ('<table style="border-collapse:separate;border-spacing:0;background:rgba(255,255,255,.8);border-radius:10px;'
             'overflow:hidden;width:100%;table-layout:fixed">' + out + '</table>')
 
@@ -477,7 +477,7 @@ def p050():
                  ("Стоимость порта", "300 ÷ 48 = 6,25 единицы", "")]
     right_rows = [("Место в стойке", "1 RU", "−1 RU"), ("Розетки 220 В", "1", "−1 розетка"),
                   ("Абонентские порты", "1 × 48 = 48", ""), ("Суммарная скорость портов", "48 × 100 Мбит/с = 4,8 Гбит/с", ""),
-                  ("Условная стоимость", "250 единиц", "−50 единиц"), ("Стоимость порта", "250 ÷ 48 = 5,21 единицы", "−1,04 единицы за порт")]
+                  ("Условная стоимость", "250 единиц", "−50 единиц"), ("Стоимость порта", "250 ÷ 48 = 5,21 единицы", "−1,04 за порт")]
     L = (H("2 × 24-портовых коммутатора", 27, extra="margin-bottom:10px")
          + '<img class="ab" src="assets/p050_24x2.jpg" alt="" style="left:6px;top:69px;width:297px">'
          + '<div style="margin-left:312px">' + _rows(left_rows, 16) + '</div>')

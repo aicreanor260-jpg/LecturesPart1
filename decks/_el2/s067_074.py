@@ -171,20 +171,21 @@ def post_boot():
                 f'<div><div style="font-size:25px;font-weight:800;color:var(--navy)">{name}</div>'
                 f'<div style="font-size:21px;color:var(--blue)">{sub}</div></div></div>')
         pic = chipimg(chip, (w - cw) / 2, 84, cw, ch)
-        body = f'<div class="ab" style="{ab(22, 162, 400 if i == 0 else w - 40)}">{bullets(bl, 17.5 if len(bl) > 6 else 18, 3, 1.17)}</div>'
+        body = f'<div class="ab" style="{ab(22, 162, w - 44)}">{bullets(bl, 17.5 if len(bl) > 6 else 18, 3, 1.17)}'
         if err:
-            body += (f'<div class="ab" style="{ab(18, 388, w - 36)}border-radius:12px;background:rgba(253,226,234,.9);'
+            body += (f'<div style="margin-top:14px;border-radius:12px;background:rgba(253,226,234,.9);'
                      f'padding:8px 12px;display:flex;gap:10px;align-items:center;font-size:17px;font-weight:600;'
                      f'color:var(--navy)"><span style="display:grid;place-items:center;flex:none;width:24px;height:24px;'
                      f'border-radius:50%;background:{RED};color:#fff;font-size:16px;font-weight:800">!</span><div>{err}</div></div>')
         else:
-            body += (f'<div class="ab" style="{ab(18, 346, w - 36)}border-radius:14px;background:rgba(210,244,226,.95);'
+            body += (f'<div style="margin-top:16px;border-radius:14px;background:rgba(210,244,226,.95);'
                      f'padding:10px 16px;display:flex;gap:14px;align-items:center;font-size:23px;font-weight:800;'
                      f'color:#12805a;line-height:1.15;border:1.5px solid rgba(60,190,140,.45)">'
                      f'<span style="display:grid;place-items:center;flex:none;width:42px;height:42px;border-radius:50%;'
                      f'background:#22b27a;color:#fff"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" '
                      f'stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'
                      f'<div>КОММУТАТОР<br>ГОТОВ К РАБОТЕ</div></div>')
+        body += '</div>'
         o.append(kcard(l, 469, w, 436, s, "card", head + pic + body, "padding:0"))
     for i, (ax, lc, st_) in enumerate([(442, 449, 4), (912, 920, 5), (1406, 1412, 6)]):
         o.append(f'<div class="ab" data-s="{st_}" style="{ab(lc - 90, 549, 180)}text-align:center;font-size:15px;'
@@ -193,18 +194,22 @@ def post_boot():
                  f'<defs><linearGradient id="bg{i}" x1="0" x2="1"><stop offset="0" stop-color="#9cc3ff"/><stop offset="1" stop-color="#2a6bf2"/></linearGradient></defs>'
                  f'<path d="M0 18h62V0l48 36-48 36V54H0z" fill="url(#bg{i})"/></svg>')
 
-    flow = [("p067_rom.jpg", 521, 110, 56, "ROM", "(BOOTLOADER)"), ("p067_booton.jpg", 793, 112, 60, "Booton", "(ПЕРВИЧНЫЙ ЗАГРУЗЧИК)"),
-            ("p067_uboot.jpg", 1097, 112, 60, "U-Boot", "(УНИВЕРСАЛЬНЫЙ ЗАГРУЗЧИК)"),
-            ("p067_fw.jpg", 1385, 58, 54, "Firmware", "(ФАЙЛ ПРОШИВКИ)"), ("p067_cfg.jpg", 1691, 56, 54, "Конфигурация", "")]
-    bar = hd("Общая схема загрузки", 26, "var(--navy)", "position:absolute;left:30px;top:40px;width:300px")
-    o.append(kcard(34, 933, 1778, 118, 7, "card", bar, "padding:0"))
+    flow = [("p067_rom.jpg", 521, 110, 56, "ROM", "(загрузчик ПЗУ)"), ("p067_booton.jpg", 793, 112, 60, "Booton", "(первичный)"),
+            ("p067_uboot.jpg", 1097, 112, 60, "U-Boot", "(универсальный)"),
+            ("p067_fw.jpg", 1385, 58, 54, "Firmware", "(файл прошивки)"), ("p067_cfg.jpg", 1691, 56, 54, "Конфигурация", "")]
+    bar = hd("Общая схема загрузки", 26, "var(--navy)", "position:absolute;left:30px;top:26px;width:300px")
+    L0, T0 = 34, 933                       # координаты карточки: содержимое считаем от неё
+    inner = [bar]
     for im, cxx, w, h, lab, sub in flow:
-        o.append(chipimg(im, cxx - w / 2, 938, w, h, 7))
-        o.append(f'<div class="ab" data-s="7" style="{ab(cxx - 170, 1006, 340)}text-align:center;line-height:1.1">'
-                 f'<div style="font-size:20px;font-weight:800;color:var(--navy)">{lab}</div>'
-                 f'<div style="font-size:14px;color:var(--navy)">{sub}</div></div>')
-    arrs = "".join(f'<g data-s="7">{arrow_svg(x, 972, x + 60, 972, None, w=5)}</g>' for x in (636, 934, 1240, 1518))
-    o.append(layer(arrs))
+        inner.append(chipimg(im, cxx - w / 2 - L0, 5, w, h))
+        inner.append(f'<div class="ab" style="{ab(cxx - 120 - L0, 73, 240)}text-align:center;line-height:1.15">'
+                     f'<div style="font-size:20px;font-weight:800;color:var(--navy)">{lab}</div>'
+                     f'<div style="font-size:14px;color:var(--navy)">{sub}</div></div>')
+    inner.append('<svg class="ab" style="left:0;top:0;width:1778px;height:150px;overflow:visible" '
+                 'viewBox="0 0 1778 150">'
+                 + "".join(arrow_svg(x - L0, 39, x - L0 + 60, 39, None, w=5) for x in (636, 934, 1240, 1518))
+                 + '</svg>')
+    o.append(kcard(L0, T0, 1778, 150, 7, "card", "".join(inner), "padding:0"))
     return "".join(o)
 
 
@@ -547,7 +552,7 @@ def post_self():
     o.append(img("p074_device.jpg", 1097, 185, 823, 220, 1))
 
     o.append(f'<div class="ab" data-s="2" style="{ab(59, 420, 700)}font-size:30px;font-weight:800;color:var(--navy);text-transform:uppercase">Этапы загрузки устройства</div>')
-    o.append(f'<div class="ab" data-s="2" style="{ab(1108, 410, 790)}font-size:17px;line-height:1.35;color:var(--navy)">'
+    o.append(f'<div class="ab" data-s="2" style="{ab(1108, 404, 800)}font-size:17px;line-height:1.3;color:var(--navy)">'
              f'На каждом этапе происходит инициализация, выбор или поиск и проверка хеша и подлинности. '
              f'Если все условия этапа удовлетворяются — происходит переход к следующему этапу.</div>')
 
@@ -574,16 +579,16 @@ def post_self():
                 f'<div><div style="font-size:22px;font-weight:800;color:#33458a;line-height:1.1">{nm}</div>'
                 f'<div style="font-size:20px;color:#4f6199">{sb}</div></div></div>')
         pic = chipimg(im, (w - iw) / 2, 78, iw, ih)
-        pl = (f'<div class="ab card solid" style="{ab((w - 300) / 2, 170, 300, 46)}border-radius:23px;padding:0;display:flex;gap:12px;'
+        pl = (f'<div class="ab card solid" style="{ab((w - 300) / 2, 202, 300, 46)}border-radius:23px;padding:0;display:flex;gap:12px;'
               f'align-items:center;justify-content:center;font-size:19px;font-weight:700;color:var(--navy)">'
               f'<span style="color:var(--blue);display:inline-flex"><svg viewBox="0 0 24 24" style="width:26px;height:26px" fill="none" stroke="currentColor" '
               f'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">{icons[picn]}</svg></span>{pill}</div>')
         fs = 16.5 if len(bl) > 5 else 17.5
-        inner = (f'<div class="ab" style="{ab(14, 226, w - 28, 218)}border-radius:14px;background:rgba(255,255,255,.5)"></div>'
-                 f'<div class="ab" style="{ab(28, 236, w - 52)}">{bullets(bl, fs, 3, 1.2)}</div>')
-        o.append(kcard(l, 463, w, 461, s, "card", head + pic + pl + inner, "padding:0;border-radius:22px"))
-    arrs = "".join(f'<g data-s="{s}">{arrow_svg(a, 588, b, 588, None, w=6)}</g>' for a, b, s in [(478, 548, 4), (938, 1006, 5), (1386, 1456, 6)])
-    o.append(layer(arrs))
+        inner = (f'<div class="ab" style="{ab(14, 258, w - 28, 240)}border-radius:14px;background:rgba(255,255,255,.5)"></div>'
+                 f'<div class="ab" style="{ab(28, 268, w - 52)}">{bullets(bl, fs, 3, 1.2)}</div>')
+        o.append(kcard(l, 500, w, 480, s, "card", head + pic + pl + inner, "padding:0;border-radius:22px"))
+    # карточки этапов стоят вплотную — стрелки между ними не помещались и
+    # рисовались обрубками, последовательность читается по номерам 01-04
 
     o.append(kcard(48, 943, 1129, 99, 7, "card",
                    '<div class="ab" style="left:24px;top:6px;font-size:90px;font-family:Georgia,serif;font-weight:800;color:#5f86e6;line-height:1">“</div>'

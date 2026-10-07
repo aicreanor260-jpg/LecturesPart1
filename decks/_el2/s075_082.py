@@ -131,7 +131,7 @@ def p076():
              + prow("5 ГГц", "36 – 64, 132 – 144, 149 – 165", True) + '</div>')
 
     def small(x0, x1, icn, title, body, s):
-        return (f'<div class="card" data-s="{s}" style="{R(x0, 405, x1, 495)}padding:16px 22px">'
+        return (f'<div class="card" data-s="{s}" style="{R(x0, 428, x1, 522)}padding:16px 22px">'
                 f'<div style="display:flex;gap:16px;align-items:center">{ico(icn, "sm hex")}'
                 f'<div style="{HEAD}font-size:22px;line-height:1.1">{title}</div></div>{body}</div>')
 
@@ -179,7 +179,7 @@ def p077():
          'К имеющимся <b>Status, Alarm, Power</b> и <b>FAN</b> добавляются ещё: <b>VPN, Mastr, RPS</b> и <b>Flash.</b></p></div>',
          '<img class="ab" data-s="1" src="assets/p077_device.jpg" style="left:0;top:706px;width:691px;'
          'filter:drop-shadow(0 12px 22px rgba(30,60,130,.2))">']
-    o.append(f'<div class="card" data-s="1" style="{R(313, 40, 572, 405, Y)}padding:0">'
+    o.append(f'<div class="card" data-s="1" style="{R(313, 40, 572, 472, Y)}padding:0">'
              '<div class="ab" style="left:28px;top:20px;font-size:30px;font-weight:800;color:var(--blue);text-transform:uppercase">Средние модели</div>'
              '<div class="ab" style="left:28px;top:62px;font-size:20px;color:var(--dim)">4 основных индикатора</div>'
              '<img class="ab" src="assets/p077_mid.jpg" style="right:22px;top:26px;width:150px"></div>')
@@ -190,11 +190,11 @@ def p077():
         w = px(x1_of[x0]) - px(x0) - 36
         lamp = lamp or led(c, 42)
         return (f'<div class="card solid" data-s="{s}" style="position:absolute;left:{px(x0) + 18}px;top:{pz(y0)}px;width:{w}px;'
-                f'height:{h}px;padding:0 16px;display:flex;align-items:center;border-radius:16px">'
-                f'<div style="display:flex;gap:14px;align-items:center;width:37%;flex:none">{lamp}'
-                f'<div><div style="font-size:21px;font-weight:800;color:var(--navy)">{name}</div>'
-                f'<div style="font-size:15px;color:var(--dim);line-height:1.25">{desc}</div></div></div>'
-                f'<div style="display:flex;flex-direction:column;gap:5px;flex:1">{"".join(bullets)}</div></div>')
+                f'height:{h}px;padding:12px 16px;display:flex;align-items:center;gap:12px;border-radius:16px">'
+                f'<div style="display:flex;gap:14px;align-items:center;width:43%;flex:none;min-width:0">{lamp}'
+                f'<div style="min-width:0"><div style="font-size:21px;font-weight:800;color:var(--navy)">{name}</div>'
+                f'<div style="font-size:19px;color:var(--dim);line-height:1.25">{desc}</div></div></div>'
+                f'<div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">{"".join(bullets)}</div></div>')
 
     pw = [bl("g", "Основной источник питания в норме."),
           bl("o", "Неработоспособность основного источника питания, авария или отсутствие первичной сети."),
@@ -208,7 +208,7 @@ def p077():
            (334, 398, "g", "FAN", "Состояние вентиляторов", fan)]
     for i, (a, b, c, n, d, bu) in enumerate(mid):
         o.append(row(313, a, b, c, n, d, bu, 2 + i // 2))
-    o.append(f'<div class="card" data-s="4" style="{R(585, 40, 880, 530, Y)}padding:0">'
+    o.append(f'<div class="card" data-s="4" style="{R(585, 40, 880, 624, Y)}padding:0">'
              '<div class="ab" style="left:28px;top:20px;font-size:30px;font-weight:800;color:var(--blue);text-transform:uppercase">Старшие модели</div>'
              '<div class="ab" style="left:28px;top:62px;font-size:20px;color:var(--dim)">8 индикаторов</div>'
              '<img class="ab" src="assets/p077_senior.jpg" style="right:22px;top:14px;width:120px"></div>')
@@ -231,7 +231,7 @@ def p077():
             [bl("g", "Выполнение операций чтение и записи по команде «copy».")], "sd")]
     for i, (a, b, c, n, d, bu, icn) in enumerate(sen):
         o.append(row(585, a, b, c, n, d, bu, 5 + i // 4, bic(icn) if icn else None))
-    o.append(f'<div class="card solid" data-s="7" style="{R(297, 500, 515, 567, Y)}padding:16px 22px;display:flex;gap:16px;align-items:center;border-radius:18px">'
+    o.append(f'<div class="card solid" data-s="7" style="{R(297, 505, 515, 580, Y)}padding:16px 22px;display:flex;gap:16px;align-items:center;border-radius:18px">'
              '<span style="font-size:60px;line-height:.6;color:var(--blue);font-weight:800;font-family:Georgia,serif">&ldquo;</span>'
              '<p class="b sm" style="font-size:19px">Индикаторы помогают быстро оценить состояние устройства и своевременно выявить неисправности.</p></div>')
     return "".join(o)
