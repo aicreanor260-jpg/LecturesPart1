@@ -246,32 +246,44 @@ SLIDES.append(("p051", "Сервисные маршрутизаторы ESR", es
 
 
 # ======================================================= панели устройств
+def _ratio(name):
+    """Реальная пропорция фото: высота / ширина. Без неё выноски уходят мимо."""
+    from PIL import Image
+    p = pathlib.Path(__file__).parent.parent / "_el2assets" / "dev" / name
+    w, h = Image.open(p).size
+    return h / w
+
+
 def panel(name, kick, img, iw, img_top, callouts, note=None):
     """callouts: [(доля ширины фото, заголовок, текст, иконка)] — выноски вниз к карточкам."""
     il = (1920 - iw) // 2
-    ib = img_top + int(iw * 0.34)
+    ib = img_top + round(iw * _ratio(img))
     o = [f'<div class="ab" style="left:90px;top:52px"><div class="big">{name}</div>'
          f'<div class="kick" style="margin-top:8px">{kick}</div></div>',
          dev(img, il, img_top, iw)]
     n = len(callouts)
-    cw = min(460, (1740 - (n - 1) * 40) // n)
-    y = 700
+    cw = min(520 if n <= 2 else 460, (1740 - (n - 1) * 40) // n)
+    x0 = (1920 - (n * cw + (n - 1) * 40)) // 2      # ряд выносок по центру холста
+    y = ib + 90                                      # карточки всегда ниже фотографии
     lines = []
     for i, (fx, title, text, icn) in enumerate(callouts):
-        cx = 90 + i * (cw + 40) + cw // 2
+        cx = x0 + i * (cw + 40) + cw // 2
         px = il + int(iw * fx)
-        o.append(f'<div class="card" data-s="{i + 1}" style="{ab(90 + i * (cw + 40), y, cw)}padding:22px 24px">'
+        o.append(f'<div class="card" data-s="{i + 1}" style="{ab(x0 + i * (cw + 40), y, cw)}padding:22px 24px">'
                  f'<div style="display:flex;gap:14px;align-items:center">'
                  f'<span class="badge">{i + 1}</span>'
                  f'<div style="font-size:23px;font-weight:700;color:var(--navy);font-family:var(--fh);'
                  f'text-transform:uppercase;line-height:1.15">{title}</div></div>'
                  f'<div style="display:flex;gap:14px;align-items:flex-start;margin-top:14px">{ico(icn, "sm")}'
                  f'<p class="b" style="font-size:19px">{text}</p></div></div>')
-        lines.append(f'<path class="dr" data-s="{i + 1}" pathLength="1" d="M{px} {ib} L{px} {ib + 40} '
-                     f'L{cx} {ib + 40} L{cx} {y}" stroke="var(--blue)" stroke-width="3.5" fill="none"/>')
+        lines.append(f'<g data-s="{i + 1}">'
+                     f'<circle class="hd" cx="{px}" cy="{ib - 14}" r="8" fill="none" stroke="var(--blue)" '
+                     f'stroke-width="3"/>'
+                     f'<path class="dr" pathLength="1" d="M{px} {ib - 4} L{px} {ib + 40} '
+                     f'L{cx} {ib + 40} L{cx} {y}" stroke="var(--blue)" stroke-width="3.5" fill="none"/></g>')
     o.append(layer(*lines))
     if note:
-        o.append(f'<div class="card" data-s="{n + 1}" style="{ab(90, y + 260, 1740)}padding:20px 28px;'
+        o.append(f'<div class="card" data-s="{n + 1}" style="{ab(90, y + 280, 1740)}padding:20px 28px;'
                  f'display:flex;gap:18px;align-items:center">{ico("info", "sm")}'
                  f'<p class="b" style="font-size:20px">{note}</p></div>')
     return "".join(o)

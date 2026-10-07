@@ -39,6 +39,20 @@ def mi(name, size=38, glyph=24):
     return f'<span class="ico sm" style="width:{size}px;height:{size}px;border-radius:10px">{s}</span>'
 
 
+def devfit(name, cx, top, maxw, maxh, s=None):
+    """Официальный рендер на прозрачном фоне: вписать в бокс, мягкая тень."""
+    w, h = Image.open(ASSETS / name).size
+    k = min(maxw / w, maxh / h)
+    W, H = round(w * k), round(h * k)
+    st = f' data-s="{s}"' if s else ""
+    # у снятых с производства моделей рендера нет — там кроп с выбеленным фоном,
+    # его кладём через multiply, чтобы белое слилось с карточкой
+    blend = "" if Image.open(ASSETS / name).mode in ("RGBA", "LA", "P") else "mix-blend-mode:multiply;"
+    return (f'<img class="ab"{st} src="assets/{name}" '
+            f'style="left:{round(cx - W / 2)}px;top:{round(top + (maxh - H) / 2)}px;width:{W}px;{blend}'
+            f'filter:drop-shadow(0 10px 18px rgba(110,100,165,.22))">')
+
+
 def fit(name, cx, top, maxw, maxh, s=None, cls="cut", extra="mix-blend-mode:multiply;"):
     """Картинка по центру cx, вписанная в maxw x maxh, верх = top."""
     w, h = Image.open(ASSETS / name).size
@@ -379,24 +393,25 @@ def esr_line():
             for ci, (img, lab) in enumerate(r):
                 cx = l + 290 if len(r) == 1 else l + 150 + ci * 280
                 t = top + ri * pitch
-                h.append(fit(img, cx, t, 240, pitch - 34, s))
+                h.append(devfit(img, cx, t, 250, pitch - 40, s))
                 h.append(f'<div class="ab mono" data-s="{s}" style="left:{cx - 120}px;top:{t + pitch - 32}px;width:240px;'
                          f'text-align:center;font-size:17px;font-weight:800;color:var(--navy)">{lab}</div>')
         return "".join(h)
 
+    D = "dev/%s.webp".__mod__
     o.append(column(60, "01", "Младшие модели", "Компактность, гибкость, удобство", "router", 1, [
-        [("p064_esr15.jpg", "ESR-15"), ("p064_esr15r.jpg", "ESR-15R")],
-        [("p064_esr14vf.jpg", "ESR-14VF"), ("p064_esr12vf.jpg", "ESR-12VF")],
-        [("p064_esr12v.jpg", "ESR-12V"), ("p064_esr10.jpg", "ESR-10")]]))
+        [(D("esr-15"), "ESR-15"), (D("esr-15r"), "ESR-15R")],
+        [(D("esr-14vf"), "ESR-14VF"), (D("esr-12vf"), "ESR-12VF")],
+        [(D("esr-12v"), "ESR-12V"), (D("esr-10"), "ESR-10")]]))
     o.append(column(670, "02", "Средние модели", "Оптимальный баланс возможностей", "server", 2, [
-        [("p064_esr30.jpg", "ESR-30"), ("p064_esr21.jpg", "ESR-21")],
-        [("p064_esr20.jpg", "ESR-20"), ("p064_esr200.jpg", "ESR-200")],
-        [("p064_esr100.jpg", "ESR-100")]]))
+        [(D("esr-30"), "ESR-30"), (D("esr-21"), "ESR-21")],
+        [(D("esr-20"), "ESR-20"), (D("esr-200"), "ESR-200")],
+        [(D("esr-100"), "ESR-100")]]))
     o.append(column(1280, "03", "Старшие модели", "Максимальная производительность", "stack", 3, [
-        [("p064_esr3100.jpg", "ESR-3100"), ("p064_esr3200.jpg", "ESR-3200")],
-        [("p064_esr1700.jpg", "ESR-1700")],
-        [("p064_esr1500.jpg", "ESR-1500"), ("p064_esr1511.jpg", "ESR-1511")],
-        [("p064_esr1000.jpg", "ESR-1000"), ("p064_esr1200.jpg", "ESR-1200")]]))
+        [(D("esr-3100"), "ESR-3100"), (D("esr-3200"), "ESR-3200")],
+        [(D("esr-1700"), "ESR-1700")],
+        [(D("esr-1500"), "ESR-1500"), (D("esr-1511"), "ESR-1511")],
+        [(D("esr-1000"), "ESR-1000"), (D("esr-1200"), "ESR-1200")]]))
 
     descs = [("01", "Младшие модели", "gear",
               "ESR-10, ESR-12, ESR-14, ESR-15, ESR-15R построены на одном процессоре и отличаются набором интерфейсов. "
