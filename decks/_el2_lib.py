@@ -152,9 +152,47 @@ var $=function(s,r){return (r||document).querySelector(s)},$$=function(s,r){retu
 var deck=$('#deck'),slides=$$('.slide'),N=slides.length,cur=0,step=0,RM=matchMedia('(prefers-reduced-motion: reduce)');
 slides.forEach(function(s){var e=$$('[data-s]',s),m=0;e.forEach(function(x){var v=+x.dataset.s||0;if(v>m)m=v});s._e=e;s._m=m});
 var stage=$('#stage'),scaler=$('#scaler'),K=1;
+function autofit(pad){
+  // 1) замеряем авторскую геометрию карточек ДО изменений
+  var cards=[].slice.call(pad.querySelectorAll('.card'));
+  var pr=pad.getBoundingClientRect();
+  var box=cards.map(function(c){var r=c.getBoundingClientRect();
+    return {el:c,l:r.left-pr.left,r:r.right-pr.left,t:r.top-pr.top,b:r.bottom-pr.top,d:0,
+            abs:getComputedStyle(c).position==='absolute'};});
+  // 2) абсолютные дети не растягивают карточку — дотягиваем её до содержимого
+  box.forEach(function(o){
+    var cr=o.el.getBoundingClientRect(), max=0, kids=o.el.querySelectorAll('*');
+    for(var k=0;k<kids.length;k++){
+      var r=kids[k].getBoundingClientRect(); if(!r.width&&!r.height) continue;
+      var bb=r.bottom-cr.top; if(bb>max) max=bb;
+    }
+    var pb=parseFloat(getComputedStyle(o.el).paddingBottom)||0;
+    var need=Math.ceil(max+pb);
+    if(need>cr.height+1){ o.d=need-cr.height; o.el.style.minHeight=need+'px'; }
+  });
+  // 3) то, что стояло строго ПОД выросшей карточкой в той же колонке, опускаем на прирост
+  box.sort(function(a,b){return a.t-b.t});
+  for(var i=0;i<box.length;i++){
+    if(box[i].d<=0) continue;
+    var A=box[i];
+    for(var j=i+1;j<box.length;j++){
+      var B=box[j];
+      if(!B.abs) continue;
+      if(B.t<A.b-2) continue;                                  // не ниже — не трогаем
+      var ox=Math.min(A.r,B.r)-Math.max(A.l,B.l);
+      if(ox<Math.min(A.r-A.l,B.r-B.l)*0.55) continue;          // другая колонка
+      B.shift=(B.shift||0)+A.d; B.t+=A.d; B.b+=A.d;
+    }
+  }
+  box.forEach(function(o){ if(o.shift>0){
+    var cur=parseFloat(getComputedStyle(o.el).top)||0;
+    o.el.style.top=Math.round(cur+o.shift)+'px';
+  }});
+}
 function slideH(sl){
   var pad=sl.querySelector('.pad'), prev=deck.style.transform;
   deck.style.transform='none';
+  if(!sl._grown){ autofit(pad); sl._grown=1; }
   var top=pad.getBoundingClientRect().top, mb=1080;
   var all=pad.querySelectorAll('*');
   for(var i=0;i<all.length;i++){
@@ -164,6 +202,9 @@ function slideH(sl){
   }
   deck.style.transform=prev;
   sl._h=Math.max(1080,Math.ceil(mb)+110);
+  // абсолютные карточки не растягивают .pad — задаём высоту явно, иначе overflow:hidden режет
+  sl.style.height=sl._h+'px';
+  pad.style.minHeight=sl._h+'px';
   return sl._h;
 }
 function fit(){

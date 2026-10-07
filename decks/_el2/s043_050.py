@@ -413,11 +413,11 @@ def _rows(items, fs):
     for k, v, hl in items:
         h = (f'<span style="background:#d8f3e6;color:#1f8a54;font-weight:700;border-radius:8px;padding:2px 7px;'
              f'font-size:12px;white-space:nowrap">{hl}</span>') if hl else ""
-        out += (f'<tr><td style="padding:6px 8px;font-size:{fs}px;white-space:nowrap;{bd}">{k}:</td>'
-                f'<td style="padding:6px 6px;font-size:{fs}px;font-weight:700;white-space:nowrap;{bd}">{v}</td>'
+        out += (f'<tr><td style="padding:6px 8px;font-size:{fs}px;line-height:1.2;{bd}">{k}:</td>'
+                f'<td style="padding:6px 6px;font-size:{fs}px;font-weight:700;line-height:1.2;{bd}">{v}</td>'
                 f'<td style="padding:3px 6px;text-align:right;{bd}">{h}</td></tr>')
     return ('<table style="border-collapse:separate;border-spacing:0;background:rgba(255,255,255,.8);border-radius:10px;'
-            'overflow:hidden;width:100%">' + out + '</table>')
+            'overflow:hidden;width:100%;table-layout:fixed">' + out + '</table>')
 
 
 def p050():
@@ -480,11 +480,11 @@ def p050():
                   ("Условная стоимость", "250 единиц", "−50 единиц"), ("Стоимость порта", "250 ÷ 48 = 5,21 единицы", "−1,04 единицы за порт")]
     L = (H("2 × 24-портовых коммутатора", 27, extra="margin-bottom:10px")
          + '<img class="ab" src="assets/p050_24x2.jpg" alt="" style="left:6px;top:69px;width:297px">'
-         + '<div style="margin-left:318px">' + _rows(left_rows, 16) + '</div>')
+         + '<div style="margin-left:312px">' + _rows(left_rows, 16) + '</div>')
     o.append(card(T(18, 292, 440, 428), f'<div style="position:relative;height:100%">{L}</div>', 3, "card", pad="16px 22px"))
     R = (H("1 × 48-портовый коммутатор", 27, extra="margin-bottom:10px")
          + '<img class="ab" src="assets/p050_48.jpg" alt="" style="left:6px;top:133px;width:299px">'
-         + '<div style="margin-left:318px">' + _rows(right_rows, 14) + '</div>')
+         + '<div style="margin-left:312px">' + _rows(right_rows, 14) + '</div>')
     o.append(card(T(450, 292, 885, 428), f'<div style="position:relative;height:100%">{R}</div>', 4, "card", pad="16px 22px"))
 
     o.append(icard(T(15, 432, 408, 492), "layers3", "Плотность портов",

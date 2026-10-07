@@ -64,13 +64,13 @@ def devices():
              '<div class="ab" style="left:36px;top:30px;width:330px">'
              '<div style="font-size:36px;font-weight:700;color:var(--navy);font-family:var(--fh);'
              'text-transform:uppercase;line-height:1.05">Настройка<br>и доступ</div></div>'
-             '<p class="b ab" style="left:400px;top:34px;width:760px;font-size:21px">'
+             '<p class="b ab" style="left:400px;top:34px;width:720px;font-size:21px">'
              'Чтобы компьютерная сеть функционировала, мало собрать и подключить сетевые устройства через кабели '
              'и подключить к интернет-провайдеру: на каждом сетевом устройстве необходимо выполнить определённую '
              'настройку. Чтобы выполнить настройку, нужно получить доступ к сетевому устройству.</p>'
-             + "".join(f'<div class="ab" style="left:{1230 + i * 200}px;top:46px;width:190px;text-align:center">'
+             + "".join(f'<div class="ab" style="left:{1192 + i * 196}px;top:40px;width:184px;text-align:center">'
                        f'<div style="display:flex;justify-content:center">{ico(icn, "sm")}</div>'
-                       f'<div style="margin-top:10px;font-size:18px;font-weight:600;color:var(--navy);line-height:1.3">{t}</div></div>'
+                       f'<div style="margin-top:10px;font-size:19px;font-weight:600;color:var(--navy);line-height:1.25">{t}</div></div>'
                        for i, (icn, t) in enumerate([("gear", "Настройка параметров"), ("mon", "Доступ к устройству"),
                                                      ("globe", "Стабильная работа сети")]))
              + '</div>')
@@ -82,87 +82,114 @@ SLIDES.append(("p066", "Сетевые устройства", devices()))
 
 # ======================================================= доступ к устройству (p056)
 def access():
-    o = ['<div class="ab" style="left:90px;top:56px;width:720px">'
-         '<div class="big" style="font-size:76px;line-height:1.02">Доступ<br>к сетевому<br>устройству</div>'
-         '<p class="b" style="margin-top:26px;font-size:23px">Для доступа к сетевому устройству есть несколько '
-         'способов подключения: по консольному порту с помощью консольного кабеля и через протоколы удалённого '
-         'доступа Telnet или SSH.</p></div>',
-         dev("esr-30.webp", 1010, 120, 760)]
+    """Доступ к устройству: выноски указывают на реальные разъёмы ESR-30."""
+    # фото esr-30.webp: консольный разъём на 38.5% ширины / 90% высоты,
+    # блок медных портов — на 71% / 84%; отсюда координаты выносок
+    DX, DY, DW = 980, 70, 820
+    DH = DW * 506 / 1100
+    con_x, con_y = DX + 0.385 * DW, DY + 0.90 * DH
+    eth_x, eth_y = DX + 0.7125 * DW, DY + 0.84 * DH
 
-    # выноски к устройству
-    o.append(f'<div class="card ab" data-s="1" style="{ab(960, 50, 320)}padding:12px 18px;text-align:center">'
-             '<div style="font-size:20px;font-weight:600;color:var(--navy)">Порты для подключения</div>'
-             '<div class="mono" style="font-size:19px;color:var(--blue)">Telnet / SSH</div></div>')
-    o.append(f'<div class="card ab" data-s="2" style="{ab(1510, 50, 300)}padding:12px 18px;text-align:center">'
-             '<div style="font-size:20px;font-weight:600;color:var(--navy)">Консольный порт</div>'
-             '<div class="mono" style="font-size:19px;color:var(--blue)">Console</div></div>')
-    o.append(layer('<path class="dr" data-s="1" pathLength="1" d="M1120 120 L1120 215 L1250 215 L1250 290" '
-                   'stroke="var(--blue)" stroke-width="3.5" fill="none"/>',
-                   '<path class="dr" data-s="2" pathLength="1" d="M1660 120 L1660 215 L1600 215 L1600 300" '
-                   'stroke="var(--blue)" stroke-width="3.5" fill="none"/>'))
+    o = ['<div class="ab" style="left:90px;top:56px;width:770px">'
+         '<div class="big" style="font-size:76px;line-height:1.02">Доступ<br>к сетевому<br>устройству</div>'
+         '<p class="b" style="margin-top:26px;font-size:25px;line-height:1.45">Для доступа к сетевому устройству '
+         'есть несколько способов подключения: по консольному порту с помощью консольного кабеля '
+         'и через протоколы удалённого доступа Telnet или SSH.</p></div>',
+         dev("esr-30.webp", DX, DY, DW)]
+
+    # два типа доступа — коротко, слева под лидом
+    for k, (ttl, txt) in enumerate([
+            ("Внеполосный доступ (out-of-band)",
+             "Отдельный выделенный канал только для администрирования и обслуживания устройства."),
+            ("Внутриполосный доступ (in-band)",
+             "Общий канал передачи данных; нужен настроенный IP-адрес на интерфейсе."),
+    ]):
+        o.append(f'<div class="card ab" data-s="{5 + k}" style="left:90px;top:{476 + k * 140}px;width:770px;'
+                 f'padding:20px 26px">'
+                 f'<div style="font-size:24px;font-weight:700;color:var(--navy)">{ttl}</div>'
+                 f'<p class="b" style="font-size:21px;line-height:1.4;margin-top:6px">{txt}</p></div>')
+
+    # выноски: точка на разъёме, линия вниз, подпись под устройством
+    o.append(f'<div class="card ab" data-s="1" style="{ab(1120, 500, 300)}padding:14px 20px;text-align:center">'
+             '<div style="font-size:22px;font-weight:700;color:var(--navy)">Консольный порт</div>'
+             '<div class="mono" style="font-size:21px;color:var(--blue)">Console</div></div>')
+    o.append(f'<div class="card ab" data-s="2" style="{ab(1470, 500, 340)}padding:14px 20px;text-align:center">'
+             '<div style="font-size:22px;font-weight:700;color:var(--navy)">Порты для подключения</div>'
+             '<div class="mono" style="font-size:21px;color:var(--blue)">Telnet / SSH</div></div>')
+    o.append(layer(
+        f'<g data-s="1"><circle class="hd" cx="{con_x:.0f}" cy="{con_y:.0f}" r="9" fill="none" '
+        f'stroke="var(--blue)" stroke-width="3.5"/>'
+        f'<path class="dr" pathLength="1" d="M{con_x:.0f} {con_y + 10:.0f} L{con_x:.0f} 474 L1270 474 L1270 500" '
+        f'stroke="var(--blue)" stroke-width="3.5" fill="none"/></g>',
+        f'<g data-s="2"><circle class="hd" cx="{eth_x:.0f}" cy="{eth_y:.0f}" r="9" fill="none" '
+        f'stroke="var(--blue)" stroke-width="3.5"/>'
+        f'<path class="dr" pathLength="1" d="M{eth_x:.0f} {eth_y + 10:.0f} L{eth_x:.0f} 474 L1640 474 L1640 500" '
+        f'stroke="var(--blue)" stroke-width="3.5" fill="none"/></g>'))
 
     # --- 01 консоль: SVG разъёма RJ-45, кабеля и USB
     rj45 = ('<svg viewBox="0 0 320 150" style="width:300px;height:140px">'
             '<defs><linearGradient id="mt" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0" stop-color="#fdfefe"/><stop offset="1" stop-color="#cfdcee"/></linearGradient></defs>'
-            '<rect x="12" y="26" width="120" height="96" rx="9" fill="url(#mt)" stroke="#8fa6c8" stroke-width="2.5"/>'
-            '<rect x="40" y="10" width="64" height="30" rx="7" fill="url(#mt)" stroke="#8fa6c8" stroke-width="2.5"/>'
-            '<g fill="#b9c8de">' + "".join(f'<rect x="{46 + i * 11}" y="46" width="7" height="34" rx="2"/>' for i in range(8)) + '</g>'
-            '<rect x="30" y="92" width="84" height="18" rx="5" fill="#eaf1fb" stroke="#9fb3d2" stroke-width="2"/>'
-            '<path d="M132 74 C190 74 200 54 250 54" stroke="#9db6dc" stroke-width="16" fill="none" stroke-linecap="round"/>'
-            '<path d="M132 74 C190 74 200 54 250 54" stroke="#d9e6f8" stroke-width="9" fill="none" stroke-linecap="round"/>'
-            '<rect x="246" y="34" width="62" height="40" rx="8" fill="url(#mt)" stroke="#8fa6c8" stroke-width="2.5"/>'
-            '<rect x="256" y="44" width="42" height="8" rx="3" fill="#b9c8de"/>'
-            '<text x="72" y="140" text-anchor="middle" font-family="var(--mono)" font-size="19" fill="#5a6b96">RJ-45</text>'
-            '<text x="277" y="140" text-anchor="middle" font-family="var(--mono)" font-size="19" fill="#5a6b96">USB</text>'
+            '<stop offset="0" stop-color="#fdfefe"/><stop offset="1" stop-color="#ddd6f4"/></linearGradient></defs>'
+            '<rect x="12" y="26" width="120" height="96" rx="9" fill="url(#mt)" stroke="#9d93c6" stroke-width="2.5"/>'
+            '<rect x="40" y="10" width="64" height="30" rx="7" fill="url(#mt)" stroke="#9d93c6" stroke-width="2.5"/>'
+            '<g fill="#c3bbe2">' + "".join(f'<rect x="{46 + i * 11}" y="46" width="7" height="34" rx="2"/>' for i in range(8)) + '</g>'
+            '<rect x="30" y="92" width="84" height="18" rx="5" fill="#f2effc" stroke="#aaa0d0" stroke-width="2"/>'
+            '<path d="M132 74 C190 74 200 54 250 54" stroke="#a9a0d8" stroke-width="16" fill="none" stroke-linecap="round"/>'
+            '<path d="M132 74 C190 74 200 54 250 54" stroke="#e4defa" stroke-width="9" fill="none" stroke-linecap="round"/>'
+            '<rect x="246" y="34" width="62" height="40" rx="8" fill="url(#mt)" stroke="#9d93c6" stroke-width="2.5"/>'
+            '<rect x="256" y="44" width="42" height="8" rx="3" fill="#c3bbe2"/>'
+            '<text x="72" y="142" text-anchor="middle" font-size="20" fill="#6b7196">RJ-45</text>'
+            '<text x="277" y="142" text-anchor="middle" font-size="20" fill="#6b7196">USB</text>'
             '</svg>')
     items1 = ["Консольный порт (Console) — это интерфейс управления устройством, использует внеполосный доступ.",
-              "Внеполосный доступ (out-of-band) — доступ через специальный выделенный канал, предназначенный только "
-              "для администрирования и технического обслуживания устройства.",
               "Позволяет выполнить первоначальное конфигурирование и может быть единственным способом доступа, "
               "когда доступ по протоколам удалённого подключения невозможен или запрещён.",
-              "Консольное подключение не зависит от настроек на сетевом устройстве."]
-    o.append(f'<div class="card" data-s="3" style="{ab(90, 430, 560)}height:625px;padding:26px 30px">'
+              "Консольное подключение не зависит от настроек на сетевом устройстве.",
+              "Скорость подключения в программе эмуляции терминала — 115200 бит/с."]
+    o.append(f'<div class="card" data-s="3" style="{ab(90, 800, 560)}min-height:560px;padding:30px 34px">'
              '<div style="display:flex;align-items:center;gap:18px">'
-             '<span class="mono" style="font-size:44px;font-weight:700;color:#b9cdf0">01</span>'
-             '<div style="font-size:30px;font-weight:700;color:var(--navy);font-family:var(--fh);'
+             '<span class="mono" style="font-size:46px;font-weight:700;color:#c6c0e8">01</span>'
+             '<div style="font-size:32px;font-weight:700;color:var(--navy);font-family:var(--fh);'
              'text-transform:uppercase;line-height:1.05">Консольное<br>подключение</div></div>'
-             f'<div style="display:flex;justify-content:center;margin:14px 0 6px">{rj45}</div>'
-             + "".join(f'<p class="b" style="font-size:18.5px;line-height:1.4;margin-bottom:10px">{t}</p>' for t in items1)
+             f'<div style="display:flex;justify-content:center;margin:16px 0 10px">{rj45}</div>'
+             + "".join(f'<p class="b" style="font-size:21px;line-height:1.45;margin-bottom:14px">{t}</p>' for t in items1)
              + '</div>')
 
-    def term(cmd, prompt_extra=""):
-        return ('<div style="background:#13224d;border-radius:14px;padding:16px 20px;box-shadow:var(--sh)">'
-                f'<div class="mono" style="color:#eaf2ff;font-size:19px">{cmd}</div>'
-                f'<div class="mono" style="color:#7fb0ff;font-size:19px;margin-top:6px">{prompt_extra}'
-                '<span style="display:inline-block;width:11px;height:20px;background:#7fb0ff;vertical-align:-4px"></span></div></div>')
+    def term(cmd):
+        return ('<div style="background:linear-gradient(168deg,#3b3566,#241f45);border-radius:18px;'
+                'padding:18px 22px;box-shadow:var(--sh)">'
+                f'<div class="mono" style="color:#f0ecff;font-size:21px">{cmd}</div>'
+                '<div class="mono" style="color:#a9b9ff;font-size:21px;margin-top:6px">'
+                '<span style="display:inline-block;width:11px;height:21px;background:#a9b9ff;'
+                'vertical-align:-4px"></span></div></div>')
 
     cards = [
         ("02", "Telnet", "Удалённый незащищённый доступ", term("C:\\&gt; telnet 192.168.1.1"), "порт 23",
          ["Telnet — это протокол для установления удалённого незащищённого подключения к интерфейсу командной строки (CLI).",
           "Подключение по Telnet считается внутриполосным доступом (in-band) — через общий канал.",
-          "Требует наличия минимум одного настроенного IP-адреса и включения возможности использования протокола "
-          "Telnet на сетевом устройстве (ip telnet server).",
-          "Если необходимо использовать нестандартный номер порта, то используется команда ip telnet port."]),
+          "Требует минимум одного настроенного IP-адреса и включения протокола на устройстве "
+          "(<span class=\"mono\">ip telnet server</span>).",
+          "Нестандартный номер порта задаётся командой <span class=\"mono\">ip telnet port</span>."]),
         ("03", "SSH", "Удалённый защищённый доступ", term("C:\\&gt; ssh admin@192.168.1.1"), "порт 22",
          ["SSH (Secure Shell) — это протокол для установления удалённого защищённого внутриполосного подключения "
           "к интерфейсу CLI сетевого устройства.",
-          "Защищённое подключение возможно благодаря использованию аутентификации на основе пароля и шифрования "
-          "данных пользователя, но это несёт дополнительную нагрузку на сетевое устройство и канал.",
-          "Требует наличия минимум одного настроенного IP-адреса и включения возможности использования протокола "
-          "SSH на сетевом устройстве (ip ssh server).",
-          "Если необходимо использовать нестандартный номер порта, то используется команда ip ssh port."]),
+          "Защищённое подключение возможно благодаря аутентификации на основе пароля и шифрованию данных, "
+          "но это несёт дополнительную нагрузку на устройство и канал.",
+          "Требует минимум одного настроенного IP-адреса и включения протокола на устройстве "
+          "(<span class=\"mono\">ip ssh server</span>).",
+          "Нестандартный номер порта задаётся командой <span class=\"mono\">ip ssh port</span>."]),
     ]
     for i, (n, name, sub, tm, port, items) in enumerate(cards):
-        o.append(f'<div class="card" data-s="{4 + i}" style="{ab(690 + i * 590, 430, 560)}height:625px;padding:26px 30px">'
+        o.append(f'<div class="card" data-s="{4 + i}" style="{ab(690 + i * 590, 800, 560)}min-height:560px;'
+                 f'padding:30px 34px">'
                  f'<div style="display:flex;align-items:center;gap:18px">'
-                 f'<span class="mono" style="font-size:44px;font-weight:700;color:#b9cdf0">{n}</span>'
-                 f'<div><div style="font-size:34px;font-weight:700;color:var(--navy);font-family:var(--fh);'
+                 f'<span class="mono" style="font-size:46px;font-weight:700;color:#c6c0e8">{n}</span>'
+                 f'<div><div style="font-size:36px;font-weight:700;color:var(--navy);font-family:var(--fh);'
                  f'text-transform:uppercase;line-height:1">{name}</div>'
-                 f'<div class="b" style="font-size:18px;color:var(--dim)">{sub}</div></div>'
-                 f'<span class="chip mono" style="margin-left:auto;font-size:18px;padding:7px 14px">{port}</span></div>'
-                 f'<div style="margin:16px 0 14px">{tm}</div>'
-                 + "".join(f'<p class="b" style="font-size:18.5px;line-height:1.4;margin-bottom:10px">{t}</p>' for t in items)
+                 f'<div class="b" style="font-size:20px;color:var(--dim)">{sub}</div></div>'
+                 f'<span class="chip mono" style="margin-left:auto;font-size:20px;padding:8px 16px">{port}</span></div>'
+                 f'<div style="margin:18px 0 16px">{tm}</div>'
+                 + "".join(f'<p class="b" style="font-size:21px;line-height:1.45;margin-bottom:14px">{t}</p>' for t in items)
                  + '</div>')
     return "".join(o)
 

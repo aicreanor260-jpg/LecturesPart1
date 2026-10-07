@@ -27,11 +27,35 @@ MANUAL = {"p020", "p054", "p045", "p001", "p016", "p060", "p024", "p058", "p059"
           "p039", "p009", "p019", "p072", "p029", "p034", "p033", "p036"}
 
 import re
+
+MINPX = 21.0   # нижняя граница кегля на холсте 1920 (на экране 1280 это ~14px)
+
+
+def _grow(v):
+    """мелкое поднимаем до MINPX, среднее — чуть увеличиваем, крупное не трогаем"""
+    if v < MINPX:
+        return MINPX
+    if v < 26:
+        return round(v + 1.5, 1)
+    return v
+
+
 def bump(html):
-    """мелкий текст крупнее: всё, что меньше 18px, поднимаем"""
-    return re.sub(r'font-size:(\d+(?:\.\d+)?)px',
-                  lambda m: 'font-size:%spx' % (max(18.0, float(m.group(1))) if float(m.group(1)) < 18 else m.group(1)),
-                  html)
+    """Крупнее мелкий и средний текст: мелкий кегль на проекторе не читается."""
+    html = re.sub(r'font-size:(\d+(?:\.\d+)?)px',
+                  lambda m: 'font-size:%gpx' % _grow(float(m.group(1))), html)
+    # кегли в SVG-подписях задаются атрибутом
+    html = re.sub(r'font-size="(\d+(?:\.\d+)?)"',
+                  lambda m: 'font-size="%g"' % _grow(float(m.group(1))), html)
+    # жёсткая высота карточки режет выросший текст — пускаем её расти вниз
+    def _soft(tag):
+        t = tag.group(0)
+        if 'class="card' not in t:
+            return t
+        return re.sub(r'(?<![a-z-])height:(\d+)px', r'min-height:\1px', t)
+
+    html = re.sub(r'<div\s[^>]*>', _soft, html)
+    return html
 
 SKIP = {"p037"}  # заменён титулом
 order = [r for r in ORDER if r in found] + sorted(r for r in found if r not in ORDER and r not in SKIP)
