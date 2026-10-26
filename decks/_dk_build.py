@@ -223,7 +223,7 @@ def build(key):
     css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key] + _dk_kit.CSS + _vl_fig.CSS + _bs_fig.CSS
     html_sl = recolor("\n".join(slides), fn)
     hud = _sw_build.HUD
-    js = recolor(JS + _sw_fig.JS, fn)
+    js = recolor(JS + _sw_fig.JS + _dk_kit.JS, fn)
     html = (
         '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'

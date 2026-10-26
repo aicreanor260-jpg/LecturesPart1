@@ -124,3 +124,53 @@ p.sub{font-size:clamp(13px,1.1vw,21px)!important}
 .tw.mt td,.tw.mt th{font-family:var(--m)}
 pre.cli.term{background:#05060a;color:#e8e8e8;border-color:#666}
 """
+
+
+# ---------------------------------------------------------------- тренажёр CLI
+def clitrain(tid, task_html, expected, hint=""):
+    """Студент вводит команды построчно; проверка по каждой строке.
+    expected — список строк; варианты одной строки через '||'. Приглашение (switch(config)#) вводить не нужно."""
+    ans = "\n".join(expected).replace('"', "&quot;")
+    sol = "\n".join(e.split("||")[0] for e in expected)
+    h = '<div class="ct-hint">%s</div>' % hint if hint else ""
+    return ('<div class="q ct" data-ct="%s" data-ans="%s"><div class="qt">%s</div>%s'
+            '<textarea spellcheck="false" placeholder="по одной команде в строке, без приглашения"></textarea>'
+            '<div class="inrow"><button data-act="ctcheck">Проверить</button>'
+            '<button class="sec" data-act="ctshow">Показать решение</button></div>'
+            '<div class="ct-res"></div><pre class="cli ct-sol">%s</pre></div>'
+            % (tid, ans, task_html, h, _esc(sol)))
+
+
+JS = r"""
+(function(){
+  function norm(s){
+    s=(s||'').toLowerCase().replace(/^\s*(switch|console)[^#>]*[#>]\s*/,'').replace(/^\s*\([^)]*\)[#>]\s*/,'');
+    s=s.replace(/gigabitethernet\s*/g,'gi').replace(/\bgi\s+(?=\d)/g,'gi').replace(/\s+/g,' ').replace(/\s*,\s*/g,',').trim();
+    return s;
+  }
+  document.addEventListener('click',function(e){
+    var b=e.target.closest('[data-act="ctcheck"],[data-act="ctshow"]'); if(!b) return;
+    var box=b.closest('.ct'); var exp=box.dataset.ans.split('\n');
+    if(b.dataset.act==='ctshow'){box.classList.add('shown');return;}
+    var got=box.querySelector('textarea').value.split('\n').map(norm).filter(Boolean);
+    var html=[],ok=0;
+    exp.forEach(function(line,i){
+      var vars=line.split('||').map(norm), g=got[i]||'';
+      var hit=vars.indexOf(g)>=0; if(hit) ok++;
+      html.push('<div class="'+(hit?'ok':'no')+'">'+(hit?'✓ ':'✗ ')+(g||'(нет строки)')+(hit?'':' <i>→ ожидалось: '+line.split('||')[0]+'</i>')+'</div>');
+    });
+    if(got.length>exp.length) html.push('<div class="no">✗ лишние строки: '+(got.length-exp.length)+'</div>');
+    box.querySelector('.ct-res').innerHTML='<b>'+ok+' / '+exp.length+'</b>'+html.join('');
+  });
+})();
+"""
+
+CSS += r"""
+.ct textarea{width:100%;min-height:150px;font:600 clamp(13px,1.05vw,20px)/1.5 var(--m);color:#e8ffe8;background:#05060a;
+ border:3px solid #3fae3a;padding:10px 12px;resize:vertical;outline:none}
+.th-base .ct textarea{border-color:#ff2e93;border-radius:6px}
+.ct-hint{font:600 clamp(12px,.9vw,17px)/1.4 var(--f);color:var(--soft);margin-bottom:6px}
+.ct-res{margin-top:8px;font:600 clamp(12px,.95vw,18px)/1.45 var(--m)}
+.ct-res .ok{color:#7dff9a}.ct-res .no{color:#ff8a8a}.ct-res i{color:var(--soft);font-style:normal}
+.ct-sol{display:none;margin-top:8px}.ct.shown .ct-sol{display:block}
+"""

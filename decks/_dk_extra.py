@@ -278,3 +278,7 @@ def vlan_tail():
         "Протоколы STP / RSTP / MSTP — защита от петель L2.",
         "Маршрутизация между VLAN на L3-коммутаторе.",
         "Агрегация каналов LAG / LACP."])
+
+
+# финальные блоки (тесты, задачи, тренажёры CLI) — в _dk_final
+from _dk_final import base_tail, vlan_tail  # noqa: E402,F811
