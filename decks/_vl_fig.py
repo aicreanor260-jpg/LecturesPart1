@@ -56,8 +56,8 @@ def arp_tree(mode):
     seg = mode in ("seg", "segflood")
     cols = [RED, BLUE, GRN]
     xs = [200, 600, 1000]
-    ips = [["10.10.1.1", "10.10.1.2", "10.10.1.3"], ["10.10.1.7", "10.10.1.8", "10.10.1.9"],
-           ["10.10.1.4", "10.10.1.6", "10.10.1.5"]]
+    # в pptx подписаны только отправитель и искомый узел
+    ips = [["", "", ""], ["", "", ""], ["", "10.10.1.6", "10.10.1.5"]]
     if seg:
         for i, x in enumerate(xs):
             o.append('<rect x="%g" y="160" width="370" height="370" fill="%s" fill-opacity=".16" stroke="%s" '
@@ -67,10 +67,10 @@ def arp_tree(mode):
         o.append(T(600, 66, "L3", 20, "#ffe14a", 900))
         o.append(T(600, 86, "маршрутизатор", 10.5, "#fff", 700))
     else:
-        o.append(sw(600, 62, "Центральный L2-коммутатор", 120))
+        o.append(sw(600, 62, "SW L2", 120))
     for i, x in enumerate(xs):
         o.append(wire(600, 100, x, 225, cols[i] if seg else "#dfe8ff"))
-        o.append(sw(x, 245, "SW L2 доступа %d" % (i + 1)))
+        o.append(sw(x, 245, "SW L2"))
         for j, dx in enumerate((-115, 0, 115)):
             ip = ips[i][j]
             o.append(wire(x, 265, x + dx, 380, cols[i] if seg else "#dfe8ff"))
@@ -89,7 +89,8 @@ def arp_tree(mode):
     if mode == "segflood":
         for dx in (-115, 0):
             o.append(env(1000 + dx * .55, 330))
-        o.append(bubble(600, 140, "ARP-запрос не выходит за пределы сегмента 3", GRN, 440))
+        o.append(env(800, 160))
+        o.append(bubble(600, 140, "Запрос доходит до устройства L3 и дальше не передаётся", GRN, 520))
     return S.fig("".join(o), "0 0 1200 560")
 
 

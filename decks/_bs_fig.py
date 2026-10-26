@@ -55,7 +55,8 @@ def dot(x, y, col="#ff2e93"):
 # ------------------------------------------------ подключение по SSH (рисунок 2.6.1.2.1)
 def ssh_topo():
     o = [wire(190, 210, 330, 330), wire(470, 330, 610, 330), wire(700, 330, 880, 330, "#ff7a3d", 9),
-         '<path class="lnk" d="M190 230 Q 520 520 900 360" stroke="%s" stroke-width="5" fill="none" stroke-dasharray="14 9"/>' % CYAN]
+         '<path d="M200 250 L350 360 Q 520 450 700 390 L 880 360" stroke="%s" stroke-width="5" fill="none" '
+         'stroke-dasharray="14 9" marker-end="url(#ah)" class="flow"/>' % CYAN]
     o.append(lap(150, 60, "Admin", 130))
     o.append('<ellipse cx="400" cy="330" rx="80" ry="46" fill="#fff" stroke="%s" stroke-width="3"/>' % INK)
     o.append(T(400, 336, "Internet", 17, INK, 800))
@@ -64,6 +65,9 @@ def ssh_topo():
     o.append(swi(990, 330, 280))
     o.append(T(990, 400, "SW-1", 18, "#fff", 900))
     o.append(dot(880, 330))
+    o.append(dot(704, 330))
+    o.append(wire(990, 290, 990, 175, PINK, 4))
+    o.append(dot(990, 175))
     o.append(tagbox(700, 360, ["Gi1/0/1.20", "IP add: 10.10.1.1"]))
     o.append(tagbox(830, 230, ["Gi1/0/24"], CYAN))
     o.append(tagbox(1190, 120, ["VLAN20", "IP add: 10.10.1.28 /24", "DefGW: 10.10.1.1"], PINK, "end"))
@@ -79,6 +83,8 @@ def web_first():
     o.append(tagbox(700, 230, ["Gi1/0/1"], CYAN))
     o.append(swi(1000, 300, 300))
     o.append(T(1000, 372, "SW-1", 18, "#fff", 900))
+    o.append(wire(1000, 260, 1000, 160, PINK, 4))
+    o.append(dot(1000, 160))
     o.append(tagbox(1190, 80, ["VLAN 1", "IP add: 192.169.1.239 /24"], PINK, "end"))
     return S.fig("".join(o), "0 0 1200 460")
 
@@ -92,6 +98,8 @@ def web_work():
     o.append(tagbox(720, 230, ["Gi1/0/2"], CYAN))
     o.append(swi(1000, 300, 300))
     o.append(T(1000, 372, "SW-1", 18, "#fff", 900))
+    o.append(wire(1000, 260, 1000, 160, PINK, 4))
+    o.append(dot(1000, 160))
     o.append(tagbox(1190, 60, ["VLAN20", "IP add: 10.10.1.28 /24", "DefGW: 10.10.1.1"], PINK, "end"))
     return S.fig("".join(o), "0 0 1200 460")
 

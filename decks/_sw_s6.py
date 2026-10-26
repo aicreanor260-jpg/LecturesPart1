@@ -444,11 +444,10 @@ def _scene_trunk():
 def _scene_native():
     o = []
     sw, pts = S.switch(300, 250, 600, 84, 6, "Коммутатор",
-                       names=["access", "trunk A", "trunk B", "1/0/4", "1/0/5", "1/0/6"])
+                       names=["access", "trunk", "1/0/3", "1/0/4", "1/0/5", "1/0/6"])
     o.append(sw)
     o.append(S.badge(pts[0][0], 226, "access VLAN 10", S.LM, ph=0))
-    o.append(S.badge(pts[1][0] + 40, 192, "trunk A: 10, 20 · native 30", S.AM, ph=0))
-    o.append(S.badge(pts[2][0] + 150, 158, "trunk B: 10, 20 · native 30", S.MG, ph=0))
+    o.append(S.badge(pts[1][0] + 40, 192, "trunk: A10, A20 · native 30", S.AM, ph=0))
 
     rows = [
         ("Кадр VLAN 10", pts[0][0], S.LM, "без тега", 1),
@@ -468,7 +467,7 @@ def _scene_native():
         "Значит native VLAN должна совпадать на обоих концах магистрали!"], S.AM, ph=5, w=740, only=True))
     o.append(S.badge(600, 110, "Рекомендация: не держать native VLAN равной 1", S.RD, ph=5, only=True))
 
-    caps = ["Порт доступа и два транка с native VLAN 30",
+    caps = ["Порт доступа и транк: A10, A20, native VLAN 30",
             "Выход кадра VLAN 10 с порта доступа",
             "Выход кадра VLAN 10 с транка",
             "Выход кадра VLAN 20 с транка",
@@ -482,7 +481,7 @@ def _scene_general():
     sw, pts = S.switch(420, 280, 420, 84, 4, "Коммутатор",
                        names=["general", "1/0/2", "1/0/3", "uplink"])
     o.append(sw)
-    o.append(S.badge(pts[0][0], 256, "general · PVID 10 · allowed 20 tagged", S.AM, ph=0))
+    o.append(S.badge(pts[0][0], 256, "general · PVID 10 · 10 untagged · 20 tagged", S.AM, ph=0))
 
     o.append(S.box(90, 120, 230, 130, S.CY))
     o.append(S.txt(205, 152, "IP-телефон", 16, S.CY, 800))

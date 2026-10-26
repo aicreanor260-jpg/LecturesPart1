@@ -185,46 +185,49 @@ def vlan_head():
 
 
 def vlan_tail():
+    # шпаргалка — только команды из pptx, в том же синтаксисе
     slide("Шпаргалка команд", sc(
-        head("Шпаргалка <em>команд</em>", "VLAN и режимы портов на Eltex."),
+        head("Шпаргалка <em>команд</em>", "Все команды лекции — как в слайдах."),
         grow("g2",
              col(step(cli([
-                 "<span class=\"p\">(config)#</span> <span class=\"k\">vlan</span> 10,20",
-                 "<span class=\"p\">(config)#</span> <span class=\"k\">vlan</span> 20 name Management",
-                 "<span class=\"p\">(config)#</span> <span class=\"k\">no vlan</span> 20",
-                 "<span class=\"p\">(config)#</span> interface gi1/0/1",
-                 "<span class=\"p\">(config-if)#</span> <span class=\"k\">switchport mode access</span>",
-                 "<span class=\"p\">(config-if)#</span> switchport access vlan 10",
-                 "<span class=\"p\">#</span> show vlan",
-             ], "Создание VLAN · access"))),
+                 "switch(config)# vlan 10", "switch(config-vlan)# name IT",
+                 "switch(config)# no vlan 10", "switch# show vlan",
+                 "switch(config)#interface gigabitethernet 1/0/1",
+                 "switch(config-if)#switchport mode access",
+                 "switch(config-if)#switchport access vlan 10",
+                 "switch(config)#interface range gigabitethernet 1/0/1-4",
+                 "switch(config-if)# no switchport access vlan",
+                 "switch# show interfaces switchport gigabitethernet 1/0/1",
+             ], "VLAN · access"))),
              col(step(cli([
-                 "<span class=\"p\">(config-if)#</span> <span class=\"k\">switchport mode trunk</span>",
-                 "<span class=\"p\">(config-if)#</span> switchport trunk allowed vlan add 10,20",
-                 "<span class=\"p\">(config-if)#</span> switchport trunk native vlan 30",
-                 "<span class=\"p\">(config-if)#</span> <span class=\"k\">switchport mode general</span>",
-                 "<span class=\"p\">(config-if)#</span> switchport general allowed vlan add 100 tagged",
-                 "<span class=\"p\">(config-if)#</span> switchport general pvid 20",
-                 "<span class=\"p\">(config-if)#</span> <span class=\"k\">switchport mode customer</span>",
-                 "<span class=\"p\">#</span> show interfaces switchport gi1/0/24",
-             ], "Trunk · general · customer")))),
+                 "switch(config-if)# switchport mode trunk",
+                 "switch(config-if)# switchport trunk allowed vlan add Num1,Num2,…,NumX",
+                 "switch(config-if)# switchport trunk allowed vlan remove Num1,Num2,…,NumX",
+                 "switch(config-if)# switchport trunk native vlan Num",
+                 "switch(config-if)#switchport mode general",
+                 "switch(config-if)#switchport general pvid 10",
+                 "switch(config-if)#switchport general allowed vlan add 10 untagged",
+                 "switch(config-if)#switchport general allowed vlan add 10,20 tagged",
+                 "switch(config-if)# selective-qinq list ingress add_vlan 25",
+                 "switch(config-if)# switchport general map macs-group 1 vlan 10",
+             ], "Trunk · general · Q-in-Q · MAC-based")))),
     ))
     slide("Итоговые задачи", sc(
-        head("Итоговые <em>задачи</em>", "Рассуждаем и вводим ответ."),
+        head("Итоговые <em>задачи</em>", "По материалу лекции. Вводим ответ."),
         grow("g2",
              col(task("vz1", "На коммутаторе VLAN 10 (порты 1–8) и VLAN 20 (порты 9–16). "
                              "Сколько широковещательных доменов?",
                       "2|два",
-                      "Каждая VLAN — отдельный широковещательный домен: их <b>два</b>.", "число"),
-                 task("vz2", "Сколько рабочих значений VLAN ID даёт поле в 12 бит (без 0 и 4095)?",
-                      "4094",
-                      "2¹² = 4096 значений, 0 и 4095 зарезервированы — остаётся <b>4094</b>.", "число")),
-             col(task("vz3", "На SW1 native VLAN транка 30, на SW2 — 1. В какую VLAN попадёт на SW2 трафик VLAN 30?",
+                      "Все порты в VLAN с одним номером — один широковещательный домен. VLAN две — доменов <b>два</b>.", "число"),
+                 task("vz2", "Какое шестнадцатеричное значение появляется в поле TPID при тегировании по 802.1Q?",
+                      "0x8100|8100",
+                      "TPID = <b>0x8100</b> (1000 0001 0000 0000).", "значение")),
+             col(task("vz3", "Транк: разрешены VLAN 10 и 20, нативная VLAN 30. С тегом или без уйдёт кадр VLAN 30?",
+                      "без|без тега|без метки",
+                      "На выходе транкового порта идентификатор нативной VLAN удаляется — кадр уходит <b>без тега</b>.", "с / без"),
+                 task("vz4", "Какой номер VLAN на Eltex нельзя создать или удалить, потому что это VLAN по умолчанию?",
                       "1|vlan 1",
-                      "SW1 отправит кадр VLAN 30 <b>без тега</b>, SW2 положит его в свою native — <b>VLAN 1</b>. "
-                      "Это ошибка native VLAN mismatch.", "номер VLAN"),
-                 task("vz4", "Кадр 1518 байт получил метку 802.1Q. Какой стала его длина?",
-                      "1522",
-                      "Метка занимает 4 байта: 1518 + 4 = <b>1522</b> байта, FCS пересчитывается.", "байт")))
+                      "<b>VLAN 1</b> — Default VLAN; вместе с 4095 она зарезервирована.", "номер")))
     ))
     _qslide("Тест · 1", "Выберите один вариант.", [
         quiz("Сколько байт занимает метка 802.1Q?", ["2", "4", "6", "8"], 1,
@@ -235,7 +238,7 @@ def vlan_tail():
         quiz("Какое значение у TPID?", ["0x0800", "0x86DD", "0x8100", "0x88A8"], 2,
              "TPID = 0x8100 — признак тегированного кадра 802.1Q."),
         quiz("Сколько бит занимает VLAN ID?", ["3", "8", "12", "16"], 2,
-             "VLAN ID — 12 бит, рабочие значения 1–4094."),
+             "VLAN ID — 12 бит, значения от 1 до 4095; на Eltex 1 и 4095 зарезервированы."),
     ])
     _qslide("Тест · 2", "Режимы портов.", [
         quiz("Какие кадры передаёт порт доступа (access)?",
@@ -252,7 +255,7 @@ def vlan_tail():
         quiz("Для чего режим customer?",
              ["подключение IP-телефона", "Q-in-Q: внешняя метка провайдера",
               "агрегация каналов", "зеркалирование"], 1,
-             "К кадру клиента (C-VLAN) добавляется внешний тег провайдера (S-VLAN)."),
+             "customer — Q-in-Q интерфейс: к кадру клиента (C-VLAN) добавляется внешний SPVLAN провайдера."),
     ])
     slide("Что запомнить", sc(
         head("Что <em>запомнить</em>", "Короткая выжимка лекции."),
