@@ -2,7 +2,8 @@
 """Титул, цель и финал деки RIP 2.5.1: шпаргалка → задачи → тренажёры → тренажёр CLI → тест → итоги → финал.
 Все ответы — строго по материалу pptx."""
 
-from _sw_lib import slide, head, sc, grow, col, card, p, li, step, task, quiz, tags, tag
+from _sw_lib import slide, head, sc, grow, col, p, li, step, task, quiz, tags, tag
+from _rp1_canvas import card
 from _rp1_deck import conf
 
 
@@ -20,12 +21,18 @@ def sim(pool):
 
 
 def head_slides():
-    slide("Титул", sc(
-        '<div class="cover"><div class="big">Протокол<br><em>RIP</em></div>'
-        '<div class="lead" style="font-size:clamp(12px,.95vw,17px)">← → шаги · ↑ ↓ слайды · Esc — содержание · '
-        'в сценах кнопки «Назад / Вперёд»</div></div>'), cover=True)
-    slide("Цель главы", sc(head("Цель <em>главы</em>"), grow("g",
-        col(step(card("Цель главы", p("изучить принцип работы «Дистанционно-векторных» протоколов;"), "cy"))))))
+    """pptx 1–2: титул и цель главы — на подложке инфографики со схемой R1–R4."""
+    from _rp1_canvas import slide as cslide, h1, at, panel, pill
+    cslide("Титул", "general2", [
+        h1(95, 50, 420, "Протокол<br>RIP", 86),
+        pill(632, 198, 148, 54, "Обновления RIP", "g", 15), pill(714, 305, 148, 54, "Обновления RIP", "v", 15),
+        pill(1135, 200, 145, 54, "Обновления RIP", "p", 15), pill(1180, 312, 145, 54, "Обновления RIP", "v", 15),
+        at(345, 880, 1280, "← → шаги · ↑ ↓ слайды · Esc — содержание · в сценах кнопки «Назад / Вперёд»", "cv-txt",
+           style="font-size:16px;color:#2c7357;text-align:center"),
+        panel(25, 478, 1622, 382, "Цель главы",
+              '<div class="cv-txt" style="font-size:44px;line-height:1.3;font-weight:600">изучить принцип работы '
+              '<b>«Дистанционно-векторных»</b> протоколов;</div>', step=True, tsize=40),
+    ])
 
 
 def _qs(title, qs):
