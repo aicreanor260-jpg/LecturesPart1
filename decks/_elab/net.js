@@ -5,13 +5,12 @@
   var EL = G.EL, IP = EL.ip, H = EL.hosts;
 
   // каталог: только модели с CLI, совместимым с движком (MES14xx/24xx/3400/37xx — одна ветка ПО 10.4.x)
-  var MODELS = {
-    'MES2428':  { type: 'mes', ports: 28, group: 'Коммутаторы доступа', note: '24 × 10/100/1000BASE-T + 4 × Combo' },
-    'MES2428B': { type: 'mes', ports: 28, group: 'Коммутаторы доступа', note: '24 × 10/100/1000BASE-T + 4 × Combo, резервное питание 12 В' },
-    'vESR':     { type: 'esr', ports: 8,  group: 'Маршрутизаторы ESR', note: 'Виртуальный сервисный маршрутизатор, 8 × gigabitethernet' },
-    'VPC':      { type: 'vpc', ports: 1,  group: 'Конечные узлы', note: 'Виртуальный ПК (как VPCS в pnetlab)' },
-    'Debian':   { type: 'deb', ports: 1,  group: 'Конечные узлы', note: 'Компьютер с Debian 11: ip, ifup, nano, ping, ssh' }
-  };
+  // коммутаторы — из каталога eltex.ru (catalog.js, ветка ПО 10.x: тот же CLI, что у движка); нумерация портов упрощена до gi1/0/1–N
+  var MODELS = {};
+  Object.keys(EL.CATALOG || {}).forEach(function (k) { MODELS[k] = EL.CATALOG[k]; });
+  MODELS.vESR = { type: 'esr', ports: 8, group: 'Маршрутизаторы ESR', note: 'Виртуальный сервисный маршрутизатор, 8 × gigabitethernet' };
+  MODELS.VPC = { type: 'vpc', ports: 1, group: 'Конечные узлы', note: 'Виртуальный ПК (как VPCS в pnetlab)' };
+  MODELS.Debian = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Компьютер с Debian 11: ip, ifup, nano, ping, ssh' };
 
   function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; }
   var P = Net.prototype;

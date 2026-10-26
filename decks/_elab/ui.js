@@ -17,16 +17,25 @@
   }
   // ------------------------------------------------------------------ палитра
   function buildPalette() {
-    var g = {}, h = '';
+    var g = {}, h = '<input id="palQ" placeholder="Поиск модели…" spellcheck="false">';
+    var ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Маршрутизаторы ESR', 'Конечные узлы'];
     Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
-    Object.keys(g).forEach(function (gr) {
+    Object.keys(g).sort(function (a, b) { return (ORD.indexOf(a) + 99) % 99 - (ORD.indexOf(b) + 99) % 99; }).forEach(function (gr) {
+      g[gr].sort();
       h += '<h4>' + gr + '</h4>';
       g[gr].forEach(function (k) { var m = EL.MODELS[k];
-        h += '<button class="pi" data-model="' + k + '">' + icon(m.type) + '<span><b>' + k + '</b><small>' + m.note + '</small></span></button>'; });
+        h += '<button class="pi" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + icon(m.type) + '<span><b>' + k + '</b><small>' + m.note + '</small></span></button>'; });
     });
-    h += '<p class="note">Коммутаторы — CLI MES24xx (ПО 10.4), маршрутизатор — CLI ESR. Модели берутся из каталога и даташитов Eltex; поведение — модель по документации, не прошивка.</p>';
+    var oth = EL.CATALOG_OTHER || {};
+    h += '<p class="note">Коммутаторы — все модели каталога eltex.ru с ПО 10.x (CLI MES14xx/24xx/3400/37xx). Порты нумеруются gi1/0/1–N. ' +
+      'Пока не эмулируются (другой CLI): ' + Object.keys(oth).map(function (k) { return k + ' — ' + oth[k].length + ' моделей'; }).join(', ') +
+      '. Маршрутизатор — CLI ESR. Это модель по документации, не прошивка.</p>';
     $('pal').innerHTML = h;
   }
+  $('pal').addEventListener('input', function (e) {
+    if (e.target.id !== 'palQ') return; var q = e.target.value.trim().toLowerCase();
+    [].forEach.call(this.querySelectorAll('.pi'), function (b) { b.style.display = !q || b.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none'; });
+  });
   $('pal').addEventListener('click', function (e) {
     var b = e.target.closest('[data-model]'); if (!b) return;
     var n = net.list().length, d = net.add(b.dataset.model, null, 130 + (n % 5) * 180, 110 + Math.floor(n / 5) % 3 * 190);
