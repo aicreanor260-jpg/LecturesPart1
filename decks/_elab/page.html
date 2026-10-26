@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сетевая лаборатория Eltex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f2f0e9; --paper2:#e8e5db; --card:#fffdf7; --ink:#14161a; --ink2:#4a4f58; --line:#c9c4b5;
+  --blue:#1756f5; --blue2:#0b3bb8; --ok:#178a4c; --bad:#d3312a; --arp:#d98c00; --term:#0d0f12; --termtx:#e6e6e6;
+  --f:'Onest',system-ui,sans-serif; --m:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --fs:clamp(14px,.95vw,18px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:500 var(--fs)/1.45 var(--f)}
+button{font:inherit;cursor:pointer}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+/* ---------- шапка */
+header{display:flex;align-items:stretch;gap:0;background:var(--ink);color:#fff;min-height:58px}
+.brand{display:flex;align-items:center;gap:12px;padding:0 22px;border-right:1px solid #2c3038}
+.brand b{font:800 1.15em/1 var(--f);letter-spacing:.06em}
+.brand i{font-style:normal;font:500 .78em/1.2 var(--f);color:#9aa3b5;max-width:150px}
+.brand .dot{width:14px;height:14px;background:var(--blue);transform:rotate(45deg)}
+nav{display:flex}
+nav button{background:none;border:0;color:#c6ccd8;padding:0 22px;font-weight:700;border-bottom:4px solid transparent;letter-spacing:.02em}
+nav button:hover{color:#fff;background:#1d2027}
+nav button.on{color:#fff;border-bottom-color:var(--blue);background:#1d2027}
+.hbtns{margin-left:auto;display:flex;align-items:center;gap:8px;padding:0 14px}
+.hbtns button{background:#22262e;color:#e8ebf1;border:1px solid #363b45;padding:8px 14px;border-radius:3px}
+.hbtns button:hover{border-color:var(--blue);color:#fff}
+/* ---------- основная сетка */
+main{display:grid;grid-template-columns:220px minmax(0,1fr) minmax(380px,44%);min-height:0}
+.pal{border-right:2px solid var(--ink);overflow:auto;padding:14px 12px;background:var(--paper2)}
+.pal h4{margin:16px 4px 6px;font:800 .72em/1 var(--f);text-transform:uppercase;letter-spacing:.12em;color:var(--ink2)}
+.pal h4:first-child{margin-top:2px}
+.pi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+    padding:8px 10px;margin-bottom:6px;border-radius:3px;transition:transform .12s,box-shadow .12s}
+.pi:hover{transform:translateX(3px);box-shadow:-3px 0 0 var(--blue);border-color:var(--ink)}
+.pi svg{flex:0 0 38px;height:28px}
+.pi b{display:block;font-weight:800}.pi small{display:block;color:var(--ink2);font-size:.74em;line-height:1.25}
+.pal .note{font-size:.76em;color:var(--ink2);margin:14px 4px;line-height:1.4}
+/* ---------- холст */
+.stage{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column}
+.tools{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center;background:var(--paper)}
+.tools button{background:var(--card);border:1px solid var(--ink);padding:6px 12px;border-radius:3px;font-weight:700}
+.tools button.on{background:var(--ink);color:#fff}
+.tools button:hover{box-shadow:2px 2px 0 var(--ink)}
+.tools .sp{flex:1}
+.tools .hint{color:var(--ink2);font-size:.85em}
+.pingbar{display:flex;gap:6px;align-items:center}
+.pingbar select,.pingbar input{font:600 .95em var(--m);padding:5px 6px;border:1px solid var(--ink);border-radius:3px;background:var(--card);max-width:150px}
+#cv{flex:1;min-height:0;width:100%;display:block;
+  background-color:var(--card);
+  background-image:linear-gradient(var(--paper2) 1px,transparent 1px),linear-gradient(90deg,var(--paper2) 1px,transparent 1px);
+  background-size:24px 24px}
+.dev{cursor:grab}.dev:active{cursor:grabbing}
+.dev .box{fill:#fff;stroke:var(--ink);stroke-width:2}
+.dev.sel .box{stroke:var(--blue);stroke-width:3.5}
+.dev .lbl{font:800 15px var(--f);fill:var(--ink);text-anchor:middle}
+.dev .mdl{font:500 11px var(--f);fill:var(--ink2);text-anchor:middle}
+.dev.pick .box{stroke:var(--arp);stroke-width:4}
+.lnk{stroke:var(--ink);stroke-width:2.5;cursor:pointer}
+.lnk:hover,.lnk.sel{stroke:var(--blue);stroke-width:4}
+.pl rect{fill:var(--paper);stroke:var(--ink);stroke-width:1}
+.pl text{font:700 14px var(--m);fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+.pkt circle{stroke:#fff;stroke-width:2}
+.pkt text{font:800 15px var(--m);fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:3}
+.ring{fill:none;stroke:var(--bad);stroke-width:4;animation:ring 1s ease-out both}
+@keyframes ring{from{opacity:1;transform:scale(.7)}to{opacity:0;transform:scale(1.6)}}
+/* всплывающий выбор порта */
+.pop{position:absolute;z-index:20;background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:8px;max-height:280px;overflow:auto;min-width:170px}
+.pop b{display:block;margin:0 4px 6px}
+.pop button{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 8px;font:600 .95em var(--m)}
+.pop button:hover{background:var(--blue);color:#fff}
+/* трасса пакета */
+.trace{border-top:2px solid var(--ink);background:var(--paper);padding:8px 12px;display:none;gap:12px;align-items:flex-start}
+.trace.on{display:flex}
+.trace .ctl{display:flex;gap:4px}
+.trace .ctl button{width:36px;height:32px;border:1px solid var(--ink);background:var(--card);border-radius:3px;font-weight:800}
+.trace .ctl button:hover{background:var(--ink);color:#fff}
+.trace .txt{flex:1;min-width:0}
+.trace .n{font:800 .78em var(--f);text-transform:uppercase;letter-spacing:.1em;color:var(--ink2)}
+.trace .t{font-weight:600}
+.trace .t.arp{color:#8a5a00}.trace .t.drop{color:var(--bad)}.trace .t.ok{color:var(--ok)}.trace .t.ip{color:var(--blue2)}
+.trace .notes{font-size:.85em;color:var(--bad);margin-top:2px}
+.trace .x{border:0;background:none;font-size:1.3em;line-height:1}
+/* ---------- правая колонка */
+.side{border-left:2px solid var(--ink);display:flex;flex-direction:column;min-height:0;background:var(--paper)}
+.lab{border-bottom:2px solid var(--ink);padding:12px 16px;overflow:auto;max-height:46%;background:var(--card);display:none}
+.lab.on{display:block}
+.lab .k{font:800 .74em/1 var(--f);text-transform:uppercase;letter-spacing:.14em;color:var(--blue)}
+.lab h2{margin:4px 0 6px;font:800 1.25em/1.2 var(--f)}
+.lab p{margin:0 0 8px;color:var(--ink2)}
+.lab ol{margin:0 0 8px;padding-left:1.4em}
+.lab li{margin:3px 0;padding-left:4px}
+.lab li.ok{color:var(--ok)}.lab li.ok::marker{content:'✓ '}
+.lab .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.lab .row button{border:1px solid var(--ink);background:var(--card);padding:6px 12px;border-radius:3px;font-weight:700}
+.lab .row button.pri{background:var(--blue);border-color:var(--blue2);color:#fff}
+.lab .row button:hover{box-shadow:2px 2px 0 var(--ink)}
+.lab pre{background:var(--term);color:var(--termtx);padding:10px 12px;font:500 .88em/1.45 var(--m);white-space:pre-wrap;margin:8px 0;border-radius:3px}
+.lab .sum{font-weight:800;margin-top:6px}.lab .sum.ok{color:var(--ok)}
+.lab .hintbox{background:#fff4d6;border-left:4px solid var(--arp);padding:6px 10px;margin:6px 0}
+.lab .labs{display:grid;gap:6px}
+.lab .labs button{text-align:left;border:1px solid var(--line);background:var(--paper);padding:8px 10px;border-radius:3px}
+.lab .labs button:hover{border-color:var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.lab .labs b{color:var(--blue);margin-right:8px}
+.lab .send div{padding:3px 0}.lab .send .ok{color:var(--ok)}.lab .send .no{color:var(--bad)}.lab .send .exp{color:#8a5a00}
+.tabs{display:flex;gap:0;overflow-x:auto;background:var(--paper2);border-bottom:1px solid var(--ink)}
+.tabs button{border:0;border-right:1px solid var(--line);background:none;padding:8px 14px;font-weight:700;white-space:nowrap;color:var(--ink2)}
+.tabs button.on{background:var(--term);color:#fff}
+.term{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--term)}
+.out{flex:1;overflow:auto;padding:10px 14px;font:500 clamp(14px,1vw,19px)/1.45 var(--m);color:var(--termtx);white-space:pre-wrap;word-break:break-word}
+.out .c{color:#fff}.out .e{color:#ff8f87}.out .s{color:#7d8799}.out .h{color:#9ec1ff}
+.inp{display:flex;align-items:center;padding:8px 14px;border-top:1px solid #262a31;font:700 clamp(14px,1vw,19px)/1 var(--m)}
+.inp span{color:#7ee2a0;white-space:pre}
+.inp input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:inherit;caret-color:#7ee2a0}
+.empty{color:#7d8799;padding:24px;font:500 1em/1.5 var(--f)}
+/* ---------- редактор nano и справка */
+.modal{position:fixed;inset:0;background:rgba(10,12,16,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.modal.on{display:flex}
+.nano{width:min(900px,94vw);background:var(--term);color:var(--termtx);border:2px solid #fff;display:flex;flex-direction:column;height:min(620px,86vh)}
+.nano .bar{background:#e6e6e6;color:#111;font:700 .9em var(--m);padding:4px 10px;text-align:center}
+.nano textarea{flex:1;background:none;color:var(--termtx);border:0;outline:0;padding:10px;font:500 1em/1.45 var(--m);resize:none}
+.nano .keys{display:flex;gap:18px;padding:6px 10px;font:600 .85em var(--m)}
+.nano .keys button{background:#e6e6e6;border:0;font:700 1em var(--m);padding:2px 8px}
+.help{width:min(1100px,96vw);max-height:90vh;overflow:auto;background:var(--card);border:2px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:24px 30px}
+.help h1{font:800 1.8em/1.1 var(--f);margin:0 0 4px}.help h2{font:800 1.15em/1.2 var(--f);margin:22px 0 6px;border-bottom:2px solid var(--ink);padding-bottom:4px}
+.help .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 26px}
+.help code,.help pre{font:500 .92em var(--m)}.help pre{background:var(--term);color:var(--termtx);padding:10px 12px;white-space:pre-wrap;border-radius:3px}
+.help table{border-collapse:collapse;width:100%}.help td{border-bottom:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.help td:first-child{font:600 .92em var(--m);white-space:nowrap}
+.help .close{float:right;border:2px solid var(--ink);background:var(--card);padding:6px 14px;font-weight:800}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:3px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:1100px){main{grid-template-columns:1fr;grid-template-rows:auto 56vh auto}.pal{display:flex;gap:6px;overflow-x:auto;border-right:0;border-bottom:2px solid var(--ink)}
+  .pal h4,.pal .note{display:none}.pi{min-width:170px}.side{border-left:0;border-top:2px solid var(--ink);min-height:70vh}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><span class="dot"></span><div><b>ELTEX·LAB</b><br><i>эмулятор сети для лабораторных NTF2</i></div></div>
+  <nav id="nav"><button data-m="free" class="on">Схема</button><button data-m="lab">Лабораторные</button><button data-m="task">Задания</button><button data-m="help">Справка</button></nav>
+  <div class="hbtns"><button id="bSave" title="Скачать схему в файл .json">Сохранить</button><button id="bOpen" title="Открыть схему из файла">Открыть</button><button id="bClear">Очистить</button>
+    <input type="file" id="fOpen" accept=".json,application/json" hidden></div>
+</header>
+<main>
+  <aside class="pal" id="pal"></aside>
+  <section class="stage">
+    <div class="tools">
+      <button id="tCable" title="Соединить два порта">Кабель</button>
+      <button id="tDel" title="Удалить выбранное устройство или кабель (Delete)">Удалить</button>
+      <span class="pingbar"><b>ping</b><select id="pSrc"></select><span>→</span><input id="pDst" list="pIps" placeholder="A.B.C.D"><datalist id="pIps"></datalist><button id="pGo">Отправить</button></span>
+      <span class="sp"></span><span class="hint" id="hint">Добавьте устройства из палитры, соедините кабелем, щёлкните устройство — откроется консоль</span>
+    </div>
+    <svg id="cv" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="trace" id="trace">
+      <div class="ctl"><button data-t="first" title="К началу">⏮</button><button data-t="prev" title="Шаг назад">◀</button><button data-t="next" title="Шаг вперёд">▶</button><button data-t="play" title="Проиграть всё">⏵</button></div>
+      <div class="txt"><div class="n" id="trN"></div><div class="t" id="trT"></div><div class="notes" id="trNotes"></div></div>
+      <button class="x" data-t="close" title="Закрыть">×</button>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="lab" id="lab"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="term"><div class="out" id="out"><div class="empty">Щёлкните устройство на схеме, чтобы открыть его консоль.<br>Подсказки: <b>?</b> — список команд, <b>Tab</b> — дописать слово, <b>↑ ↓</b> — история.</div></div>
+      <label class="inp"><span id="pr"></span><input id="in" spellcheck="false" autocomplete="off"></label></div>
+  </aside>
+</main>
+</div>
+<div class="modal" id="mNano"><div class="nano"><div class="bar" id="nanoT">GNU nano 5.4</div><textarea id="nanoTx" spellcheck="false"></textarea>
+  <div class="keys"><span><button id="nanoS">^S</button> Сохранить</span><span><button id="nanoX">^X</button> Выход</span></div></div></div>
+<div class="modal" id="mHelp"><div class="help" id="helpBody"></div></div>
+<div class="toast" id="toast"></div>
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

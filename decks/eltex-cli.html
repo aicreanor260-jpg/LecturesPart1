@@ -1,0 +1,2208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Сетевая лаборатория Eltex</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f2f0e9; --paper2:#e8e5db; --card:#fffdf7; --ink:#14161a; --ink2:#4a4f58; --line:#c9c4b5;
+  --blue:#1756f5; --blue2:#0b3bb8; --ok:#178a4c; --bad:#d3312a; --arp:#d98c00; --term:#0d0f12; --termtx:#e6e6e6;
+  --f:'Onest',system-ui,sans-serif; --m:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --fs:clamp(14px,.95vw,18px);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:500 var(--fs)/1.45 var(--f)}
+button{font:inherit;cursor:pointer}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+/* ---------- шапка */
+header{display:flex;align-items:stretch;gap:0;background:var(--ink);color:#fff;min-height:58px}
+.brand{display:flex;align-items:center;gap:12px;padding:0 22px;border-right:1px solid #2c3038}
+.brand b{font:800 1.15em/1 var(--f);letter-spacing:.06em}
+.brand i{font-style:normal;font:500 .78em/1.2 var(--f);color:#9aa3b5;max-width:150px}
+.brand .dot{width:14px;height:14px;background:var(--blue);transform:rotate(45deg)}
+nav{display:flex}
+nav button{background:none;border:0;color:#c6ccd8;padding:0 22px;font-weight:700;border-bottom:4px solid transparent;letter-spacing:.02em}
+nav button:hover{color:#fff;background:#1d2027}
+nav button.on{color:#fff;border-bottom-color:var(--blue);background:#1d2027}
+.hbtns{margin-left:auto;display:flex;align-items:center;gap:8px;padding:0 14px}
+.hbtns button{background:#22262e;color:#e8ebf1;border:1px solid #363b45;padding:8px 14px;border-radius:3px}
+.hbtns button:hover{border-color:var(--blue);color:#fff}
+/* ---------- основная сетка */
+main{display:grid;grid-template-columns:220px minmax(0,1fr) minmax(380px,44%);min-height:0}
+.pal{border-right:2px solid var(--ink);overflow:auto;padding:14px 12px;background:var(--paper2)}
+.pal h4{margin:16px 4px 6px;font:800 .72em/1 var(--f);text-transform:uppercase;letter-spacing:.12em;color:var(--ink2)}
+.pal h4:first-child{margin-top:2px}
+.pi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+    padding:8px 10px;margin-bottom:6px;border-radius:3px;transition:transform .12s,box-shadow .12s}
+.pi:hover{transform:translateX(3px);box-shadow:-3px 0 0 var(--blue);border-color:var(--ink)}
+.pi svg{flex:0 0 38px;height:28px}
+.pi b{display:block;font-weight:800}.pi small{display:block;color:var(--ink2);font-size:.74em;line-height:1.25}
+.pal .note{font-size:.76em;color:var(--ink2);margin:14px 4px;line-height:1.4}
+/* ---------- холст */
+.stage{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column}
+.tools{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center;background:var(--paper)}
+.tools button{background:var(--card);border:1px solid var(--ink);padding:6px 12px;border-radius:3px;font-weight:700}
+.tools button.on{background:var(--ink);color:#fff}
+.tools button:hover{box-shadow:2px 2px 0 var(--ink)}
+.tools .sp{flex:1}
+.tools .hint{color:var(--ink2);font-size:.85em}
+.pingbar{display:flex;gap:6px;align-items:center}
+.pingbar select,.pingbar input{font:600 .95em var(--m);padding:5px 6px;border:1px solid var(--ink);border-radius:3px;background:var(--card);max-width:150px}
+#cv{flex:1;min-height:0;width:100%;display:block;
+  background-color:var(--card);
+  background-image:linear-gradient(var(--paper2) 1px,transparent 1px),linear-gradient(90deg,var(--paper2) 1px,transparent 1px);
+  background-size:24px 24px}
+.dev{cursor:grab}.dev:active{cursor:grabbing}
+.dev .box{fill:#fff;stroke:var(--ink);stroke-width:2}
+.dev.sel .box{stroke:var(--blue);stroke-width:3.5}
+.dev .lbl{font:800 15px var(--f);fill:var(--ink);text-anchor:middle}
+.dev .mdl{font:500 11px var(--f);fill:var(--ink2);text-anchor:middle}
+.dev.pick .box{stroke:var(--arp);stroke-width:4}
+.lnk{stroke:var(--ink);stroke-width:2.5;cursor:pointer}
+.lnk:hover,.lnk.sel{stroke:var(--blue);stroke-width:4}
+.pl rect{fill:var(--paper);stroke:var(--ink);stroke-width:1}
+.pl text{font:700 14px var(--m);fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+.pkt circle{stroke:#fff;stroke-width:2}
+.pkt text{font:800 15px var(--m);fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:3}
+.ring{fill:none;stroke:var(--bad);stroke-width:4;animation:ring 1s ease-out both}
+@keyframes ring{from{opacity:1;transform:scale(.7)}to{opacity:0;transform:scale(1.6)}}
+/* всплывающий выбор порта */
+.pop{position:absolute;z-index:20;background:var(--card);border:2px solid var(--ink);box-shadow:5px 5px 0 var(--ink);padding:8px;max-height:280px;overflow:auto;min-width:170px}
+.pop b{display:block;margin:0 4px 6px}
+.pop button{display:block;width:100%;text-align:left;background:none;border:0;padding:4px 8px;font:600 .95em var(--m)}
+.pop button:hover{background:var(--blue);color:#fff}
+/* трасса пакета */
+.trace{border-top:2px solid var(--ink);background:var(--paper);padding:8px 12px;display:none;gap:12px;align-items:flex-start}
+.trace.on{display:flex}
+.trace .ctl{display:flex;gap:4px}
+.trace .ctl button{width:36px;height:32px;border:1px solid var(--ink);background:var(--card);border-radius:3px;font-weight:800}
+.trace .ctl button:hover{background:var(--ink);color:#fff}
+.trace .txt{flex:1;min-width:0}
+.trace .n{font:800 .78em var(--f);text-transform:uppercase;letter-spacing:.1em;color:var(--ink2)}
+.trace .t{font-weight:600}
+.trace .t.arp{color:#8a5a00}.trace .t.drop{color:var(--bad)}.trace .t.ok{color:var(--ok)}.trace .t.ip{color:var(--blue2)}
+.trace .notes{font-size:.85em;color:var(--bad);margin-top:2px}
+.trace .x{border:0;background:none;font-size:1.3em;line-height:1}
+/* ---------- правая колонка */
+.side{border-left:2px solid var(--ink);display:flex;flex-direction:column;min-height:0;background:var(--paper)}
+.lab{border-bottom:2px solid var(--ink);padding:12px 16px;overflow:auto;max-height:46%;background:var(--card);display:none}
+.lab.on{display:block}
+.lab .k{font:800 .74em/1 var(--f);text-transform:uppercase;letter-spacing:.14em;color:var(--blue)}
+.lab h2{margin:4px 0 6px;font:800 1.25em/1.2 var(--f)}
+.lab p{margin:0 0 8px;color:var(--ink2)}
+.lab ol{margin:0 0 8px;padding-left:1.4em}
+.lab li{margin:3px 0;padding-left:4px}
+.lab li.ok{color:var(--ok)}.lab li.ok::marker{content:'✓ '}
+.lab .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.lab .row button{border:1px solid var(--ink);background:var(--card);padding:6px 12px;border-radius:3px;font-weight:700}
+.lab .row button.pri{background:var(--blue);border-color:var(--blue2);color:#fff}
+.lab .row button:hover{box-shadow:2px 2px 0 var(--ink)}
+.lab pre{background:var(--term);color:var(--termtx);padding:10px 12px;font:500 .88em/1.45 var(--m);white-space:pre-wrap;margin:8px 0;border-radius:3px}
+.lab .sum{font-weight:800;margin-top:6px}.lab .sum.ok{color:var(--ok)}
+.lab .hintbox{background:#fff4d6;border-left:4px solid var(--arp);padding:6px 10px;margin:6px 0}
+.lab .labs{display:grid;gap:6px}
+.lab .labs button{text-align:left;border:1px solid var(--line);background:var(--paper);padding:8px 10px;border-radius:3px}
+.lab .labs button:hover{border-color:var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.lab .labs b{color:var(--blue);margin-right:8px}
+.lab .send div{padding:3px 0}.lab .send .ok{color:var(--ok)}.lab .send .no{color:var(--bad)}.lab .send .exp{color:#8a5a00}
+.tabs{display:flex;gap:0;overflow-x:auto;background:var(--paper2);border-bottom:1px solid var(--ink)}
+.tabs button{border:0;border-right:1px solid var(--line);background:none;padding:8px 14px;font-weight:700;white-space:nowrap;color:var(--ink2)}
+.tabs button.on{background:var(--term);color:#fff}
+.term{flex:1;min-height:0;display:flex;flex-direction:column;background:var(--term)}
+.out{flex:1;overflow:auto;padding:10px 14px;font:500 clamp(14px,1vw,19px)/1.45 var(--m);color:var(--termtx);white-space:pre-wrap;word-break:break-word}
+.out .c{color:#fff}.out .e{color:#ff8f87}.out .s{color:#7d8799}.out .h{color:#9ec1ff}
+.inp{display:flex;align-items:center;padding:8px 14px;border-top:1px solid #262a31;font:700 clamp(14px,1vw,19px)/1 var(--m)}
+.inp span{color:#7ee2a0;white-space:pre}
+.inp input{flex:1;min-width:0;background:none;border:0;outline:0;color:#fff;font:inherit;caret-color:#7ee2a0}
+.empty{color:#7d8799;padding:24px;font:500 1em/1.5 var(--f)}
+/* ---------- редактор nano и справка */
+.modal{position:fixed;inset:0;background:rgba(10,12,16,.55);display:none;align-items:center;justify-content:center;z-index:50}
+.modal.on{display:flex}
+.nano{width:min(900px,94vw);background:var(--term);color:var(--termtx);border:2px solid #fff;display:flex;flex-direction:column;height:min(620px,86vh)}
+.nano .bar{background:#e6e6e6;color:#111;font:700 .9em var(--m);padding:4px 10px;text-align:center}
+.nano textarea{flex:1;background:none;color:var(--termtx);border:0;outline:0;padding:10px;font:500 1em/1.45 var(--m);resize:none}
+.nano .keys{display:flex;gap:18px;padding:6px 10px;font:600 .85em var(--m)}
+.nano .keys button{background:#e6e6e6;border:0;font:700 1em var(--m);padding:2px 8px}
+.help{width:min(1100px,96vw);max-height:90vh;overflow:auto;background:var(--card);border:2px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:24px 30px}
+.help h1{font:800 1.8em/1.1 var(--f);margin:0 0 4px}.help h2{font:800 1.15em/1.2 var(--f);margin:22px 0 6px;border-bottom:2px solid var(--ink);padding-bottom:4px}
+.help .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:4px 26px}
+.help code,.help pre{font:500 .92em var(--m)}.help pre{background:var(--term);color:var(--termtx);padding:10px 12px;white-space:pre-wrap;border-radius:3px}
+.help table{border-collapse:collapse;width:100%}.help td{border-bottom:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.help td:first-child{font:600 .92em var(--m);white-space:nowrap}
+.help .close{float:right;border:2px solid var(--ink);background:var(--card);padding:6px 14px;font-weight:800}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:3px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:1100px){main{grid-template-columns:1fr;grid-template-rows:auto 56vh auto}.pal{display:flex;gap:6px;overflow-x:auto;border-right:0;border-bottom:2px solid var(--ink)}
+  .pal h4,.pal .note{display:none}.pi{min-width:170px}.side{border-left:0;border-top:2px solid var(--ink);min-height:70vh}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand"><span class="dot"></span><div><b>ELTEX·LAB</b><br><i>эмулятор сети для лабораторных NTF2</i></div></div>
+  <nav id="nav"><button data-m="free" class="on">Схема</button><button data-m="lab">Лабораторные</button><button data-m="task">Задания</button><button data-m="help">Справка</button></nav>
+  <div class="hbtns"><button id="bSave" title="Скачать схему в файл .json">Сохранить</button><button id="bOpen" title="Открыть схему из файла">Открыть</button><button id="bClear">Очистить</button>
+    <input type="file" id="fOpen" accept=".json,application/json" hidden></div>
+</header>
+<main>
+  <aside class="pal" id="pal"></aside>
+  <section class="stage">
+    <div class="tools">
+      <button id="tCable" title="Соединить два порта">Кабель</button>
+      <button id="tDel" title="Удалить выбранное устройство или кабель (Delete)">Удалить</button>
+      <span class="pingbar"><b>ping</b><select id="pSrc"></select><span>→</span><input id="pDst" list="pIps" placeholder="A.B.C.D"><datalist id="pIps"></datalist><button id="pGo">Отправить</button></span>
+      <span class="sp"></span><span class="hint" id="hint">Добавьте устройства из палитры, соедините кабелем, щёлкните устройство — откроется консоль</span>
+    </div>
+    <svg id="cv" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="trace" id="trace">
+      <div class="ctl"><button data-t="first" title="К началу">⏮</button><button data-t="prev" title="Шаг назад">◀</button><button data-t="next" title="Шаг вперёд">▶</button><button data-t="play" title="Проиграть всё">⏵</button></div>
+      <div class="txt"><div class="n" id="trN"></div><div class="t" id="trT"></div><div class="notes" id="trNotes"></div></div>
+      <button class="x" data-t="close" title="Закрыть">×</button>
+    </div>
+  </section>
+  <aside class="side">
+    <div class="lab" id="lab"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="term"><div class="out" id="out"><div class="empty">Щёлкните устройство на схеме, чтобы открыть его консоль.<br>Подсказки: <b>?</b> — список команд, <b>Tab</b> — дописать слово, <b>↑ ↓</b> — история.</div></div>
+      <label class="inp"><span id="pr"></span><input id="in" spellcheck="false" autocomplete="off"></label></div>
+  </aside>
+</main>
+</div>
+<div class="modal" id="mNano"><div class="nano"><div class="bar" id="nanoT">GNU nano 5.4</div><textarea id="nanoTx" spellcheck="false"></textarea>
+  <div class="keys"><span><button id="nanoS">^S</button> Сохранить</span><span><button id="nanoX">^X</button> Выход</span></div></div></div>
+<div class="modal" id="mHelp"><div class="help" id="helpBody"></div></div>
+<div class="toast" id="toast"></div>
+<template id="helpSrc"><button class="close">Закрыть ✕</button>
+<h1>Сетевая лаборатория Eltex</h1>
+<p>Лёгкий эмулятор для лабораторных NTF2: коммутаторы <b>MES</b> (свой CLI MES24xx), маршрутизатор <b>ESR</b> (CLI ESR), компьютеры <b>VPC</b> и <b>Debian</b>. Работает в браузере, офлайн, на слабых ПК — без виртуальных машин. Это модель поведения по документации Eltex, а не прошивка устройства.</p>
+<div class="cols">
+<div><h2>Как работать</h2>
+<ol><li>Добавьте устройства из палитры слева, перетащите на место.</li>
+<li><b>Кабель</b> → щёлкните устройство → выберите порт → второе устройство → порт.</li>
+<li>Щёлкните устройство — справа откроется его консоль. Вкладки над консолью переключают устройства.</li>
+<li><b>ping</b> в панели или из консоли — на схеме видно, как идут кадры: ARP-рассылка (жёлтый), ответ, IP-пакет (синий), теги VLAN на кабелях. Внизу — пошаговое объяснение: ◀ ▶ по шагам, ⏵ — заново.</li>
+<li><b>Лабораторные</b> — готовые работы со случайным вариантом и проверкой после каждой команды. <b>Задания</b> — случайные задачи на один коммутатор.</li>
+<li><b>Сохранить / Открыть</b> — схема со всеми настройками в файл .json.</li></ol>
+<p>В консоли: <code>?</code> — что можно ввести дальше, <code>Tab</code> — дописать слово, <code>↑ ↓</code> — история. Сокращения работают: <code>conf t</code>, <code>int gi1/0/1</code>, <code>sh vl</code>.</p></div>
+<div><h2>Режимы MES</h2>
+<pre>switch&gt;            enable
+switch#            configure
+switch(config)#    interface gigabitethernet 1/0/1
+switch(config-if)# exit / end
+switch(config)#    vlan database   → (config-vlan)#
+switch(config)#    line console    → (config-line)#
+switch(config)#    interface range gi1/0/1-4 → (config-if-range)#</pre>
+<h2>Режимы ESR</h2>
+<pre>vesr#                 configure
+vesr(config)#         interface gigabitethernet 1/0/1  → (config-if-gi)#
+vesr(config)#         interface gigabitethernet 1/0/1.10 → (config-if-sub)#
+vesr(config)#         username master → (config-user)#
+vesr(config)#         do commit   — применить
+vesr(config)#         do confirm  — подтвердить</pre>
+<p>На ESR изменения <b>не действуют до commit</b>. Пакеты на интерфейс с включённым межсетевым экраном отбрасываются — нужна <code>ip firewall disable</code>.</p></div>
+</div>
+<h2>Команды MES (коммутатор)</h2>
+<table>
+<tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>
+<tr><td>username admin1 password P privilege 15</td><td>пользователь</td></tr>
+<tr><td>enable password [level N] P</td><td>пароль на вход в #</td></tr>
+<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication, login-attempts, history size</td></tr>
+<tr><td>banner motd|login|exec @ текст @</td><td>баннеры с разделителем</td></tr>
+<tr><td>vlan database · vlan 10,20 · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
+<tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
+<tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
+<tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
+<tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
+<tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
+<tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>
+<tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
+<tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
+<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
+<tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
+</table>
+<h2>Команды ESR (маршрутизатор)</h2>
+<table>
+<tr><td>hostname R1 · clock timezone gmt +7 · set date 11:25:30 11 November 2025 · show date</td><td>базовые</td></tr>
+<tr><td>interface gigabitethernet 1/0/1[.VLAN] · interface loopback 1</td><td>интерфейс, саб-интерфейс (номер = VLAN), loopback</td></tr>
+<tr><td>ip address 192.168.1.1/24 · ip firewall disable · shutdown · description</td><td>на интерфейсе</td></tr>
+<tr><td>username master → password eltex → privilege 14</td><td>пользователь</td></tr>
+<tr><td>ip ssh server · banner login|exec "текст"</td><td>доступ</td></tr>
+<tr><td>ip route 10.0.0.0/8 192.168.1.2</td><td>статический маршрут</td></tr>
+<tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
+<tr><td>show running-config | ip interfaces | ip route | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
+</table>
+<h2>VPC и Debian</h2>
+<table>
+<tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
+<tr><td>Debian: вход root / toor · ip a · ip link set ens3 up · ip addr add A/N dev ens3 · ip route add default via GW</td><td>сеть командами</td></tr>
+<tr><td>nano /etc/network/interfaces · ifdown ens3 · ifup ens3 · cat · ping · traceroute · ssh user@IP</td><td>как в лабе 3.1</td></tr>
+</table>
+<h2>Типовые ошибки</h2>
+<table>
+<tr><td>% Unrecognized command</td><td>опечатка или такой команды нет — нажмите <code>?</code></td></tr>
+<tr><td>% Incomplete command</td><td>команда не дописана: <code>show</code> → <code>show vlan</code></td></tr>
+<tr><td>% Команда недоступна в этом режиме</td><td>посмотрите на приглашение: нужен <code>#</code>, <code>(config)#</code> или режим интерфейса</td></tr>
+<tr><td>% VLAN 30 не создана</td><td>сначала создайте VLAN, затем назначайте порт</td></tr>
+<tr><td>ESR не отвечает на ping</td><td>не сделан <code>commit</code> или не отключён межсетевой экран на интерфейсе</td></tr>
+<tr><td>ARP без ответа</td><td>порты в разных VLAN, VLAN не разрешена на транке, нет саб-интерфейса или выключен порт — шаги трассы покажут, где кадр отброшен</td></tr>
+</table>
+<p>Подробный мануал и как добавить свою лабораторную — в файле <code>eltex-cli-manual.md</code> рядом с этой страницей.</p>
+</template>
+<script>
+/* Симулятор CLI коммутатора Eltex для тренажёров дек «Базовая настройка» и «VLAN».
+   Режимы и приглашения как на устройстве: switch# → configure → switch(config)# → interface … → switch(config-if)#.
+   Задания генерируются случайно (кнопка «Обновить»), проверяется итоговое состояние коммутатора. */
+(function () {
+  'use strict';
+  var NPORTS = 24;
+
+  // ------------------------------------------------------------------ состояние коммутатора
+  function fresh(n) {
+    var ports = {};
+    for (var i = 1; i <= (n || NPORTS); i++) {
+      ports['gi1/0/' + i] = { mode: 'access', access: 1, allowed: [], native: 1, pvid: 1, gtag: [], guntag: [1] };
+    }
+    return {
+      host: 'switch', mode: 'priv', ctx: null,
+      vlans: { 1: '-' }, ports: ports, svi: {}, gw: null, ssh: false, rsa: false, http: true,
+      users: {}, enable: {}, banner: { login: null, exec: null, motd: null },
+      line: { console: {}, telnet: {}, ssh: {} }, aaa: null
+    };
+  }
+
+  var PROMPT = { user: '>', priv: '#', config: '(config)#', 'if': '(config-if)#', range: '(config-if-range)#',
+                 vlan: '(config-vlan)#', line: '(config-line)#' };
+  function prompt(st) { return st.host + PROMPT[st.mode]; }
+
+  function parseList(s) {           // "10,20,30-40" → [10,20,30..40]
+    var out = [];
+    String(s).split(',').forEach(function (p) {
+      var m = p.match(/^(\d+)-(\d+)$/);
+      if (m) { for (var i = +m[1]; i <= +m[2]; i++) out.push(i); }
+      else if (/^\d+$/.test(p)) out.push(+p);
+    });
+    return out;
+  }
+  function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }).sort(function (a, b) { return a - b; }); }
+  function fmtList(a) {
+    a = uniq(a); var r = [], i = 0;
+    while (i < a.length) { var j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++;
+      r.push(j > i ? a[i] + '-' + a[j] : '' + a[i]); i = j + 1; }
+    return r.join(',');
+  }
+  function ifList(spec) {          // gi1/0/1 или gi1/0/1-4
+    var m = spec.match(/^gi(\d+)\/(\d+)\/(\d+)(?:-(\d+))?$/);
+    if (!m || m[1] !== '1' || m[2] !== '0') return null;
+    var a = +m[3], b = m[4] ? +m[4] : a, out = [];
+    if (a < 1 || b > 52 || b < a) return null;
+    for (var i = a; i <= b; i++) out.push('gi1/0/' + i);
+    return out;
+  }
+  function hash(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    var x = (h >>> 0).toString(16); return (x + x + x + x + x).slice(0, 40); }
+
+  // ------------------------------------------------------------------ команды: шаблоны с префиксами ключевых слов
+  // <n> число, <w> слово, <ip> адрес, <if> интерфейс, <list> список VLAN, <rest> остаток строки
+  var CMDS = [];
+  function cmd(modes, pat, run) { CMDS.push({ modes: modes.split(' '), pat: pat.split(' '), run: run }); }
+  var CFG = 'config if range vlan line';
+
+  function match(pat, toks) {
+    var args = [], i = 0;
+    for (var k = 0; k < pat.length; k++) {
+      var p = pat[k], t = toks[i];
+      if (p === '<rest>') { if (i >= toks.length) return null; args.push(toks.slice(i).join(' ')); return args; }
+      if (t === undefined) return null;
+      if (p === '<n>') { if (!/^\d+$/.test(t)) return null; args.push(+t); i++; continue; }
+      if (p === '<w>') { args.push(t); i++; continue; }
+      if (p === '<ip>') { if (!/^\d+\.\d+\.\d+\.\d+$/.test(t)) return null; args.push(t); i++; continue; }
+      if (p === '<if>') { var L = ifList(t); if (!L) return null; args.push(L); i++; continue; }
+      if (p === '<list>') { if (!/^[\d,\-]+$/.test(t)) return null; args.push(parseList(t)); i++; continue; }
+      if (p === '<mask>') {           // /24, 24 или 255.255.255.0
+        var mm = t.match(/^\/?(\d{1,2})$/);
+        if (mm) { args.push(+mm[1]); i++; continue; }
+        if (/^\d+\.\d+\.\d+\.\d+$/.test(t)) { args.push(t.split('.').reduce(function (a, o) {
+          return a + (+o).toString(2).replace(/0/g, '').length; }, 0)); i++; continue; }
+        return null;
+      }
+      // ключевое слово: точное совпадение или префикс от 2 символов
+      if (t === p || (t.length >= 2 && p.indexOf(t) === 0) || (p === 'terminal' && t === 't')) { i++; continue; }
+      return null;
+    }
+    return i === toks.length ? args : null;
+  }
+
+  // --- режимы
+  cmd('priv', 'configure', function (st) { st.mode = 'config'; });
+  cmd('priv', 'configure terminal', function (st) { st.mode = 'config'; });
+  cmd(CFG, 'exit', function (st) { st.mode = st.mode === 'config' ? 'priv' : 'config'; st.ctx = null; });
+  cmd(CFG, 'end', function (st) { st.mode = 'priv'; st.ctx = null; });
+  cmd('priv', 'exit', function () { return '% Сессия остаётся открытой (тренажёр)'; });
+
+  // --- базовая настройка
+  cmd('config', 'hostname <rest>', function (st, a) {
+    var h = a[0].replace(/^"(.*)"$/, '$1');
+    if (/\s/.test(h) && !/^".*"$/.test(a[0])) return '% Имя с пробелом нужно указывать в кавычках';
+    if (h.length > 128) return '% Имя длиннее 128 символов';
+    st.host = h;
+  });
+  cmd('config', 'no hostname', function (st) { st.host = 'switch'; });
+  cmd('config', 'username <w> password <w> privilege <n>', function (st, a) {
+    if (a[2] < 1 || a[2] > 15) return '% Уровень привилегии 1–15'; st.users[a[0]] = { pw: a[1], priv: a[2] }; });
+  cmd('config', 'no username <w>', function (st, a) {
+    if (!st.users[a[0]]) return '% Пользователь не найден'; delete st.users[a[0]]; });
+  cmd('config', 'enable password level <n> <w>', function (st, a) { st.enable[a[0]] = a[1]; });
+  cmd('config', 'enable password <w>', function (st, a) { st.enable[15] = a[0]; });
+  cmd('config', 'line console', function (st) { st.mode = 'line'; st.ctx = 'console'; });
+  cmd('config', 'line ssh', function (st) { st.mode = 'line'; st.ctx = 'ssh'; });
+  cmd('config', 'line telnet', function (st) { st.mode = 'line'; st.ctx = 'telnet'; if (!st.line.telnet) st.line.telnet = {}; });
+  cmd('line', 'password <w>', function (st, a) { st.line[st.ctx].pw = a[0]; });
+  cmd('line', 'exec-timeout <n>', function (st, a) { st.line[st.ctx].timeout = a[0]; });
+  cmd('line', 'login authentication <w>', function (st, a) { st.line[st.ctx].auth = a[0]; });
+  cmd('line', 'login-attempts <n>', function (st, a) { st.line[st.ctx].attempts = a[0]; });
+  cmd('line', 'history size <n>', function (st, a) { st.line[st.ctx].history = a[0]; });
+  cmd('config', 'aaa authentication login <w> <rest>', function (st, a) { st.aaa = a[0] + ' ' + a[1]; });
+  cmd('config', 'ip ssh server', function (st) { st.ssh = true; });
+  cmd('config', 'no ip ssh server', function (st) { st.ssh = false; });
+  cmd('config', 'crypto key generate rsa', function (st) {
+    st.rsa = true; return 'Replace Existing (Default) RSA Key ? (Y/N)[N] Y\nThe SSH Server is generating a RSA key. This may take a few minutes, depending on the key size.'; });
+  cmd('config', 'ip http server', function (st) { st.http = true; });
+  cmd('config', 'no ip http server', function (st) { st.http = false; });
+  cmd('config', 'ip default-gateway <ip>', function (st, a) { st.gw = a[0]; });
+  cmd('config', 'interface vlan <n>', function (st, a) { st.mode = 'if'; st.ctx = { svi: a[0] }; });
+  cmd('if', 'ip address <ip> <mask>', function (st, a) {
+    if (!st.ctx || !st.ctx.svi) return '% Команда доступна на интерфейсе VLAN';
+    st.svi[st.ctx.svi] = a[0] + '/' + a[1]; });
+
+  // --- VLAN
+  cmd('config', 'vlan <n> name <w>', function (st, a) { if (a[0] < 2 || a[0] > 4094) return '% VLAN 1 и 4095 зарезервированы';
+    st.vlans[a[0]] = a[1]; });
+  cmd('config vlan', 'vlan <n>', function (st, a) { if (a[0] < 2 || a[0] > 4094) return '% VLAN 1 и 4095 зарезервированы';
+    if (!st.vlans[a[0]]) st.vlans[a[0]] = '-'; st.mode = 'vlan'; st.ctx = a[0]; });
+  cmd('vlan', 'name <w>', function (st, a) { st.vlans[st.ctx] = a[0]; });
+  cmd('config', 'no vlan <n>', function (st, a) {
+    if (a[0] === 1) return '% VLAN 1 удалить нельзя'; if (!st.vlans[a[0]]) return '% VLAN не существует';
+    delete st.vlans[a[0]];
+    Object.keys(st.ports).forEach(function (k) { if (st.ports[k].access === a[0]) st.ports[k].access = 1; });
+  });
+  cmd('config', 'interface <if>', function (st, a) {
+    if (a[0].length > 1) return '% Для нескольких портов используйте interface range';
+    if (!st.ports[a[0][0]]) return '% Такого порта нет на устройстве';
+    st.mode = 'if'; st.ctx = { ports: a[0] }; });
+  cmd('config', 'interface range <if>', function (st, a) { st.mode = 'range'; st.ctx = { ports: a[0] }; });
+  function eachPort(st, f) {
+    if (!st.ctx || !st.ctx.ports) return '% Команда доступна в настройке физического порта';
+    if (st.ctx.ports.some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
+    st.ctx.ports.forEach(function (k) { f(st.ports[k]); });
+  }
+  var IFM = 'if range';
+  cmd(IFM, 'switchport mode access', function (st) { return eachPort(st, function (p) { p.mode = 'access'; }); });
+  cmd(IFM, 'switchport mode trunk', function (st) { return eachPort(st, function (p) { p.mode = 'trunk'; }); });
+  cmd(IFM, 'switchport mode general', function (st) { return eachPort(st, function (p) { p.mode = 'general'; }); });
+  cmd(IFM, 'switchport access vlan <n>', function (st, a) {
+    if (!st.vlans[a[0]]) return '% VLAN ' + a[0] + ' не создана';
+    return eachPort(st, function (p) { p.access = a[0]; }); });
+  cmd(IFM, 'no switchport access vlan', function (st) { return eachPort(st, function (p) { p.access = 1; }); });
+  cmd(IFM, 'switchport trunk allowed vlan add <list>', function (st, a) {
+    var bad = a[0].filter(function (v) { return !st.vlans[v]; });
+    if (bad.length) return '% VLAN ' + fmtList(bad) + ' не созданы';
+    return eachPort(st, function (p) { p.allowed = uniq(p.allowed.concat(a[0])); }); });
+  cmd(IFM, 'switchport trunk allowed vlan remove <list>', function (st, a) {
+    return eachPort(st, function (p) { p.allowed = p.allowed.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
+  cmd(IFM, 'switchport trunk native vlan <n>', function (st, a) {
+    if (!st.vlans[a[0]]) return '% VLAN ' + a[0] + ' не создана';
+    return eachPort(st, function (p) { p.native = a[0]; }); });
+  cmd(IFM, 'switchport general pvid <n>', function (st, a) {
+    if (!st.vlans[a[0]]) return '% VLAN ' + a[0] + ' не создана';
+    return eachPort(st, function (p) { p.pvid = a[0]; }); });
+  cmd(IFM, 'switchport general allowed vlan add <list> tagged', function (st, a) {
+    var bad = a[0].filter(function (v) { return !st.vlans[v]; }); if (bad.length) return '% VLAN ' + fmtList(bad) + ' не созданы';
+    return eachPort(st, function (p) { p.gtag = uniq(p.gtag.concat(a[0])); p.guntag = p.guntag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
+  cmd(IFM, 'switchport general allowed vlan add <list> untagged', function (st, a) {
+    var bad = a[0].filter(function (v) { return !st.vlans[v]; }); if (bad.length) return '% VLAN ' + fmtList(bad) + ' не созданы';
+    return eachPort(st, function (p) { p.guntag = uniq(p.guntag.concat(a[0])); p.gtag = p.gtag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
+
+  // --- show
+  function showRun(st) {
+    var o = [];
+    var vl = Object.keys(st.vlans).map(Number).filter(function (v) { return v !== 1; });
+    if (vl.length) { o.push('vlan database', ' vlan ' + fmtList(vl));
+      vl.forEach(function (v) { if (st.vlans[v] !== '-') o.push(' vlan ' + v + ' name ' + st.vlans[v]); }); o.push('exit', '!'); }
+    if (st.host !== 'switch') o.push('hostname ' + (/\s/.test(st.host) ? '"' + st.host + '"' : st.host), '!');
+    Object.keys(st.users).forEach(function (u) { o.push('username ' + u + ' password encrypted ' + hash(st.users[u].pw) + ' privilege ' + st.users[u].priv); });
+    Object.keys(st.enable).forEach(function (l) { o.push('enable password ' + (l == 15 ? '' : 'level ' + l + ' ') + 'encrypted ' + hash(st.enable[l])); });
+    if (Object.keys(st.users).length) o.push('!');
+    if (st.banner.motd) o.push('banner motd ^', st.banner.motd, '^');
+    if (st.banner.login) o.push('banner login ^', st.banner.login, '^');
+    if (st.banner.exec) o.push('banner exec ^', st.banner.exec, '^');
+    if (st.banner.login || st.banner.exec || st.banner.motd) o.push('!');
+    ['console', 'telnet', 'ssh'].forEach(function (l) { var c = st.line[l]; if (!c || !Object.keys(c).length) return;
+      o.push('line ' + l); if (c.timeout !== undefined) o.push(' exec-timeout ' + c.timeout);
+      if (c.attempts) o.push(' login-attempts ' + c.attempts); if (c.history) o.push(' history size ' + c.history);
+      if (c.auth) o.push(' login authentication ' + c.auth); if (c.pw) o.push(' password encrypted ' + hash(c.pw)); o.push('exit', '!'); });
+    if (st.aaa) o.push('aaa authentication login ' + st.aaa, '!');
+    Object.keys(st.ports).forEach(function (k) {
+      var p = st.ports[k], d = [];
+      if (p.mode === 'access' && p.access !== 1) d.push(' switchport access vlan ' + p.access);
+      if (p.mode === 'trunk') { d.push(' switchport mode trunk'); if (p.allowed.length) d.push(' switchport trunk allowed vlan add ' + fmtList(p.allowed));
+        if (p.native !== 1) d.push(' switchport trunk native vlan ' + p.native); }
+      if (p.mode === 'general') { d.push(' switchport mode general');
+        if (p.gtag.length) d.push(' switchport general allowed vlan add ' + fmtList(p.gtag) + ' tagged');
+        var u = p.guntag.filter(function (v) { return v !== 1; }); if (u.length) d.push(' switchport general allowed vlan add ' + fmtList(u) + ' untagged');
+        if (p.pvid !== 1) d.push(' switchport general pvid ' + p.pvid); }
+      if (d.length) o.push('interface gigabitethernet' + k.slice(2), d.join('\n'), 'exit', '!');
+    });
+    Object.keys(st.svi).forEach(function (v) { o.push('interface vlan ' + v, ' ip address ' + st.svi[v].replace('/', ' /'), 'exit', '!'); });
+    if (st.gw) o.push('ip default-gateway ' + st.gw);
+    if (st.ssh) o.push('ip ssh server');
+    if (!st.http) o.push('no ip http server');
+    o.push('!');
+    return o.join('\n');
+  }
+  function showVlan(st) {
+    var o = ['Created by: D-Default, S-Static, G-GVRP, R-Radius Assigned VLAN, V-Voice VLAN', '',
+             'Vlan       Name           Tagged Ports      UnTagged Ports      Created by',
+             '---- ----------------- ------------------ ------------------ ----------------'];
+    Object.keys(st.vlans).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
+      var tg = [], un = [];
+      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k], n = +k.split('/')[2];
+        if (p.mode === 'access' && p.access === v) un.push(n);
+        if (p.mode === 'trunk') { if (p.native === v) un.push(n); else if (p.allowed.indexOf(v) >= 0) tg.push(n); }
+        if (p.mode === 'general') { if (p.gtag.indexOf(v) >= 0) tg.push(n); if (p.guntag.indexOf(v) >= 0) un.push(n); } });
+      var f = function (a) { return a.length ? 'gi1/0/' + fmtList(a) : ''; };
+      o.push((v + '    ').slice(0, 5) + ((st.vlans[v] === '-' ? '-' : st.vlans[v]) + '                  ').slice(0, 18) +
+             (f(tg) + '                   ').slice(0, 19) + (f(un) + '                   ').slice(0, 19) + (v === 1 ? 'D' : 'S'));
+    });
+    return o.join('\n');
+  }
+  function showSw(st, ports) {
+    var k = ports[0], p = st.ports[k];
+    var o = ['Port : ' + k, 'Port Mode: ' + p.mode.charAt(0).toUpperCase() + p.mode.slice(1),
+             'Gvrp Status: disabled', 'Ingress Filtering: true'];
+    if (p.mode === 'access') o.push('Acceptable Frame Type: admitUntaggedOnly', 'Ingress UnTagged VLAN ( NATIVE ): ' + p.access);
+    if (p.mode === 'trunk') o.push('Acceptable Frame Type: admitAll', 'Ingress UnTagged VLAN ( NATIVE ): ' + p.native,
+                                   'Trunking VLANs Enabled: ' + (fmtList(p.allowed) || 'none'));
+    if (p.mode === 'general') o.push('Acceptable Frame Type: admitAll', 'Ingress UnTagged VLAN ( NATIVE ): ' + p.pvid,
+                                     'Tagged VLANs: ' + (fmtList(p.gtag) || 'none'), 'Untagged VLANs: ' + (fmtList(p.guntag) || 'none'));
+    return o.join('\n');
+  }
+  function addShow(prefix, modes) {
+    cmd(modes, prefix + 'show running-config', function (st) { return showRun(st); });
+    cmd(modes, prefix + 'show vlan', function (st) { return showVlan(st); });
+    cmd(modes, prefix + 'show interfaces switchport <if>', function (st, a) { return showSw(st, a[0]); });
+    cmd(modes, prefix + 'show privilege', function () { return 'Current privilege level is 15'; });
+  }
+  addShow('', 'priv');
+  addShow('do ', CFG);
+
+  // ------------------------------------------------------------------ выполнение строки
+  function normLine(s) {
+    return s.replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
+  }
+  function exec(st, raw) {
+    var line = normLine(raw.trim());
+    if (!line) return '';
+    // баннер: banner login @ текст @
+    var b = line.match(/^ban\w*\s+(log\w*|exe\w*|motd)\s+(\S)([\s\S]*)$/i);
+    if (b && st.mode === 'config') {
+      var kind = /^l/i.test(b[1]) ? 'login' : (/^m/i.test(b[1]) ? 'motd' : 'exec'), d = b[2], rest = b[3], e = rest.lastIndexOf(d);
+      if (e < 0) return '% Текст баннера должен заканчиваться разделителем ' + d;
+      st.banner[kind] = rest.slice(0, e).trim(); return '';
+    }
+    var toks = line.split(/\s+/);
+    var low = toks.map(function (t) { return t.toLowerCase(); });
+    for (var i = 0; i < CMDS.length; i++) {
+      var c = CMDS[i]; if (c.modes.indexOf(st.mode) < 0) continue;
+      // значения (имена, пароли, баннеры) сохраняем как ввели — регистр важен
+      var args = match(c.pat, low);
+      if (args) {
+        var ri = c.pat.indexOf('<rest>');
+        var orig = match(c.pat, toks.map(function (t, j) { return (c.pat[j] === '<w>' || (ri >= 0 && j >= ri)) ? t : low[j]; }));
+        return c.run(st, orig || args) || '';
+      }
+    }
+    var other = CMDS.some(function (c) { return match(c.pat, low); });
+    return other ? '% Команда недоступна в этом режиме — проверьте приглашение' : '% Unrecognized command';
+  }
+
+  // ------------------------------------------------------------------ задания
+  function rnd(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); }
+  function pick(a) { return a[rnd(0, a.length - 1)]; }
+  function ports2() { var a = rnd(1, 20), b; do { b = rnd(1, 20); } while (Math.abs(a - b) < 2); return [a, b]; }
+
+  var NAMES = ['SW1-Room502', 'SW2-Floor3', 'Core-SW-NSK', 'SW-Lab214', 'Access-SW-7', 'SW3-Building2'];
+  var NAMES_SP = ['SW1 Room502 Floor5', 'Lab SW 214', 'Core SW NSK'];
+  var BANNERS = ['Unauthorized intrusion is prohibited!', 'Neavtorizovanniy vhod zapreschon!', 'Authorized access only!',
+                 'Legal action may follow!'];
+  var WELCOME = ['Welcome!', 'Dobro pojalovat!', 'Wilkommen!', 'Hello, admin!'];
+  var USERS = ['admin1', 'netadmin', 'support', 'student', 'operator'];
+  var VNAMES = ['IT', 'Management', 'Buh', 'Guest', 'Voice', 'Lab'];
+
+  var TASKS = {
+    base: [
+      { gen: function () { var sp = Math.random() < .35; return { h: sp ? pick(NAMES_SP) : pick(NAMES) }; },
+        text: function (p) { return 'Задайте коммутатору имя <b>' + p.h + '</b>.' + (/\s/.test(p.h) ? ' В имени есть пробелы.' : ''); },
+        sol: function (p) { return ['configure', 'hostname ' + (/\s/.test(p.h) ? '"' + p.h + '"' : p.h), 'end']; },
+        checks: function (p) { return [['Имя устройства — ' + p.h, function (s) { return s.host === p.h; }],
+                                       ['Вы вернулись в привилегированный режим (#)', function (s) { return s.mode === 'priv'; }]]; } },
+      { gen: function () { return { t: pick(BANNERS), w: pick(WELCOME) }; },
+        text: function (p) { return 'Настройте <b>banner login</b> с текстом «' + p.t + '» и <b>banner exec</b> с текстом «' + p.w + '». Разделитель — @.'; },
+        sol: function (p) { return ['configure', 'banner login @ ' + p.t + ' @', 'banner exec @ ' + p.w + ' @', 'end']; },
+        checks: function (p) { return [['banner login: «' + p.t + '»', function (s) { return s.banner.login === p.t; }],
+                                       ['banner exec: «' + p.w + '»', function (s) { return s.banner.exec === p.w; }]]; },
+        login: true },
+      { gen: function () { var u = pick(USERS); return { u: u, pw: u + rnd(10, 99), l: pick([1, 4, 7, 15]), u2: 'user', l2: 1 }; },
+        text: function (p) { return 'Создайте пользователя <b>' + p.u + '</b> с паролем <b>' + p.pw + '</b> и уровнем привилегий <b>' + p.l +
+                                    '</b>, а также пользователя <b>user</b> с паролем <b>user</b> и уровнем <b>1</b>.'; },
+        sol: function (p) { return ['configure', 'username ' + p.u + ' password ' + p.pw + ' privilege ' + p.l,
+                                    'username user password user privilege 1', 'end']; },
+        checks: function (p) { return [['Пользователь ' + p.u + ' / ' + p.pw + ' / privilege ' + p.l, function (s) {
+                                         var u = s.users[p.u]; return u && u.pw === p.pw && u.priv === p.l; }],
+                                       ['Пользователь user / user / privilege 1', function (s) {
+                                         var u = s.users.user; return u && u.pw === 'user' && u.priv === 1; }]]; },
+        login: true },
+      { gen: function () { return { pw: pick(['consolepass', 'c0ns0le', 'eltexcon']), t: pick([3, 5, 10]) }; },
+        text: function (p) { return 'Защитите консольный порт: пароль <b>' + p.pw + '</b>, период неактивности <b>' + p.t +
+                                    '</b> минут, метод <b>login authentication console</b>, а в глобальной конфигурации — аутентификация console: сначала line, затем local.'; },
+        sol: function (p) { return ['configure', 'line console', 'password ' + p.pw, 'exec-timeout ' + p.t,
+                                    'login authentication console', 'exit', 'aaa authentication login console line local', 'end']; },
+        checks: function (p) { return [['Пароль консоли ' + p.pw, function (s) { return s.line.console.pw === p.pw; }],
+                                       ['exec-timeout ' + p.t, function (s) { return s.line.console.timeout === p.t; }],
+                                       ['login authentication console', function (s) { return s.line.console.auth === 'console'; }],
+                                       ['aaa authentication login console line local', function (s) { return s.aaa === 'console line local'; }]]; } },
+      { gen: function () { return { l: pick([3, 4, 7]), p4: 'eltex' + rnd(2, 9), p15: 'eltex15' }; },
+        text: function (p) { return 'Задайте пароль <b>' + p.p4 + '</b> для временного повышения до уровня <b>' + p.l +
+                                    '</b> и пароль <b>' + p.p15 + '</b> для повышения до уровня 15.'; },
+        sol: function (p) { return ['configure', 'enable password level ' + p.l + ' ' + p.p4, 'enable password ' + p.p15, 'end']; },
+        checks: function (p) { return [['enable password level ' + p.l, function (s) { return s.enable[p.l] === p.p4; }],
+                                       ['enable password (уровень 15)', function (s) { return s.enable[15] === p.p15; }]]; } },
+      { gen: function () { var v = pick([20, 30, 99, 100]), o = rnd(2, 200); return { v: v, ip: '10.10.' + rnd(1, 9) + '.' + o, gw: null, t: rnd(1, 24) }; },
+        text: function (p) { var g = p.ip.replace(/\.\d+$/, '.1'); p.gw = g;
+          return 'Подготовьте управление по SSH: VLAN <b>' + p.v + '</b> с именем <b>Management</b>, разрешите её на транке <b>gi1/0/' + p.t +
+                 '</b>, на SVI VLAN ' + p.v + ' адрес <b>' + p.ip + ' /24</b>, шлюз <b>' + g + '</b>, включите SSH-сервер и сгенерируйте ключи RSA.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.v + ' name Management', 'interface gigabitethernet 1/0/' + p.t, 'switchport mode trunk',
+                                    'switchport trunk allowed vlan add ' + p.v, 'exit', 'interface vlan ' + p.v, 'ip address ' + p.ip + ' /24', 'exit',
+                                    'ip default-gateway ' + p.gw, 'ip ssh server', 'crypto key generate rsa', 'end']; },
+        checks: function (p) { return [['VLAN ' + p.v + ' Management', function (s) { return s.vlans[p.v] === 'Management'; }],
+                                       ['gi1/0/' + p.t + ': trunk, VLAN ' + p.v + ' разрешена', function (s) { var q = s.ports['gi1/0/' + p.t];
+                                         return q.mode === 'trunk' && q.allowed.indexOf(p.v) >= 0; }],
+                                       ['SVI VLAN ' + p.v + ': ' + p.ip + '/24', function (s) { return s.svi[p.v] === p.ip + '/24'; }],
+                                       ['Шлюз ' + p.gw, function (s) { return s.gw === p.gw; }],
+                                       ['SSH-сервер и ключи RSA', function (s) { return s.ssh && s.rsa; }]]; } }
+    ],
+    vlan: [
+      { gen: function () { var a = rnd(2, 50) * 2, b = a + rnd(1, 9) * 10; return { a: a, b: b, na: pick(VNAMES), nb: pick(VNAMES) }; },
+        text: function (p) { if (p.na === p.nb) p.nb = p.nb + '2';
+          return 'Создайте VLAN <b>' + p.a + '</b> с именем <b>' + p.na + '</b> и VLAN <b>' + p.b + '</b> с именем <b>' + p.nb +
+                 '</b> через режим config-vlan, затем проверьте командой show vlan.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.a, 'name ' + p.na, 'vlan ' + p.b, 'name ' + p.nb, 'end', 'show vlan']; },
+        checks: function (p) { return [['VLAN ' + p.a + ' ' + p.na, function (s) { return s.vlans[p.a] === p.na; }],
+                                       ['VLAN ' + p.b + ' ' + p.nb, function (s) { return s.vlans[p.b] === p.nb; }]]; } },
+      { gen: function () { var pp = ports2(); return { v: pick([10, 20, 30, 40]), p1: pp[0], p2: pp[1] }; },
+        text: function (p) { return 'ПК1 подключён к <b>gi1/0/' + p.p1 + '</b>, ПК2 — к <b>gi1/0/' + p.p2 + '</b>. Создайте VLAN <b>' + p.v +
+                                    '</b> и переведите оба порта в режим доступа этой VLAN. Затем отправьте кадр ПК1 → ПК2.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.v, 'exit', 'interface gigabitethernet 1/0/' + p.p1, 'switchport mode access',
+                                    'switchport access vlan ' + p.v, 'exit', 'interface gigabitethernet 1/0/' + p.p2, 'switchport mode access',
+                                    'switchport access vlan ' + p.v, 'end']; },
+        checks: function (p) { return [['VLAN ' + p.v + ' создана', function (s) { return !!s.vlans[p.v]; }],
+                                       ['gi1/0/' + p.p1 + ': access VLAN ' + p.v, function (s) { var q = s.ports['gi1/0/' + p.p1]; return q.mode === 'access' && q.access === p.v; }],
+                                       ['gi1/0/' + p.p2 + ': access VLAN ' + p.v, function (s) { var q = s.ports['gi1/0/' + p.p2]; return q.mode === 'access' && q.access === p.v; }]]; },
+        send: function (p, s) { return sendAccess(s, p.p1, p.p2); } },
+      { gen: function () { var a = rnd(1, 12), n = rnd(3, 6); return { v: pick([10, 20, 50]), a: a, b: a + n, x: a + n + 2 }; },
+        text: function (p) { return 'Одной командой interface range назначьте порты <b>gi1/0/' + p.a + '-' + p.b + '</b> в VLAN <b>' + p.v +
+                                    '</b> (VLAN создайте заранее). Порт gi1/0/' + p.x + ' не трогайте — кадр к нему из VLAN ' + p.v + ' не должен дойти.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.v, 'exit', 'interface range gigabitethernet 1/0/' + p.a + '-' + p.b,
+                                    'switchport mode access', 'switchport access vlan ' + p.v, 'end', 'show vlan']; },
+        checks: function (p) { return [['Порты gi1/0/' + p.a + '-' + p.b + ' в VLAN ' + p.v, function (s) {
+                                         for (var i = p.a; i <= p.b; i++) { var q = s.ports['gi1/0/' + i]; if (q.mode !== 'access' || q.access !== p.v) return false; } return true; }],
+                                       ['gi1/0/' + p.x + ' остался в VLAN 1', function (s) { return s.ports['gi1/0/' + p.x].access === 1; }]]; },
+        send: function (p, s) { return sendAccess(s, p.a, p.b).concat(sendAccess(s, p.a, p.x)); } },
+      { gen: function () { var t = rnd(20, 24), a = pick([10, 20]), b = a + 10, n = pick([50, 99]); return { t: t, a: a, b: b, n: n, x: b + 10 }; },
+        text: function (p) { return 'Порт <b>gi1/0/' + p.t + '</b> смотрит на соседний коммутатор. Создайте VLAN ' + p.a + ', ' + p.b + ' и ' + p.n +
+                                    ', сделайте порт транком: разрешите VLAN <b>' + p.a + '</b> и <b>' + p.b + '</b>, нативная VLAN — <b>' + p.n +
+                                    '</b>. Проверьте отправкой кадров через транк.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.a, 'vlan ' + p.b, 'vlan ' + p.n, 'exit', 'interface gigabitethernet 1/0/' + p.t,
+                                    'switchport mode trunk', 'switchport trunk allowed vlan add ' + p.a + ',' + p.b,
+                                    'switchport trunk native vlan ' + p.n, 'end']; },
+        checks: function (p) { return [['gi1/0/' + p.t + ' в режиме trunk', function (s) { return s.ports['gi1/0/' + p.t].mode === 'trunk'; }],
+                                       ['Разрешены VLAN ' + p.a + ' и ' + p.b, function (s) { var q = s.ports['gi1/0/' + p.t];
+                                         return q.allowed.indexOf(p.a) >= 0 && q.allowed.indexOf(p.b) >= 0; }],
+                                       ['Нативная VLAN ' + p.n, function (s) { return s.ports['gi1/0/' + p.t].native === p.n; }]]; },
+        send: function (p, s) { return sendTrunk(s, p.t, [p.a, p.b, p.n, p.x]); } },
+      { gen: function () { var g = rnd(1, 8); return { g: g, d: pick([10, 20]), v: pick([100, 110]) }; },
+        text: function (p) { return 'К порту <b>gi1/0/' + p.g + '</b> подключён IP-телефон, через него — ПК. Создайте VLAN ' + p.d + ' и ' + p.v +
+                                    '. Настройте порт в режиме <b>general</b>: данные ПК — VLAN <b>' + p.d + '</b> без тега (PVID ' + p.d +
+                                    '), голос — VLAN <b>' + p.v + '</b> с тегом.'; },
+        sol: function (p) { return ['configure', 'vlan ' + p.d, 'vlan ' + p.v, 'exit', 'interface gigabitethernet 1/0/' + p.g, 'switchport mode general',
+                                    'switchport general allowed vlan add ' + p.d + ' untagged', 'switchport general pvid ' + p.d,
+                                    'switchport general allowed vlan add ' + p.v + ' tagged', 'end']; },
+        checks: function (p) { var k = 'gi1/0/' + p.g; return [['gi1/0/' + p.g + ' в режиме general', function (s) { return s.ports[k].mode === 'general'; }],
+                                       ['PVID ' + p.d + ', VLAN ' + p.d + ' untagged', function (s) { var q = s.ports[k]; return q.pvid === p.d && q.guntag.indexOf(p.d) >= 0; }],
+                                       ['VLAN ' + p.v + ' tagged', function (s) { return s.ports[k].gtag.indexOf(p.v) >= 0; }]]; },
+        send: function (p, s) { return sendGeneral(s, p.g, p.d, p.v); } },
+      { gen: function () { return { p: rnd(1, 20), v: pick([10, 20, 30]) }; },
+        text: function (p) { return 'Порт <b>gi1/0/' + p.p + '</b> сейчас в VLAN ' + p.v + ' (уже настроено). Удалите его из VLAN командой ' +
+                                    '<b>no switchport access vlan</b> и проверьте show vlan — порт должен вернуться в VLAN 1.'; },
+        setup: function (p, s) { s.vlans[p.v] = '-'; s.ports['gi1/0/' + p.p].access = p.v; },
+        sol: function (p) { return ['configure', 'interface gigabitethernet 1/0/' + p.p, 'no switchport access vlan', 'end', 'show vlan']; },
+        checks: function (p) { return [['gi1/0/' + p.p + ' вернулся в VLAN 1', function (s) { return s.ports['gi1/0/' + p.p].access === 1; }]]; } }
+    ]
+  };
+
+  // ------------------------------------------------------------------ мини-проверки отправки
+  function pv(s, n) { var p = s.ports['gi1/0/' + n]; return p.mode === 'access' ? p.access : (p.mode === 'general' ? p.pvid : p.native); }
+  function sendAccess(s, a, b) {
+    var va = pv(s, a), vb = pv(s, b), ok = va === vb;
+    return [{ ok: ok, t: 'Кадр gi1/0/' + a + ' (VLAN ' + va + ') → gi1/0/' + b + ' (VLAN ' + vb + '): ' +
+             (ok ? 'доставлен — один широковещательный домен' : 'не доставлен — порты в разных VLAN') }];
+  }
+  function sendTrunk(s, t, vls) {
+    var p = s.ports['gi1/0/' + t];
+    return vls.map(function (v) {
+      if (p.mode !== 'trunk') return { ok: false, t: 'VLAN ' + v + ': порт gi1/0/' + t + ' не транк — тегированный кадр отброшен' };
+      if (v === p.native) return { ok: true, t: 'VLAN ' + v + ': нативная — кадр уходит БЕЗ тега' };
+      if (p.allowed.indexOf(v) >= 0) return { ok: true, t: 'VLAN ' + v + ': разрешена — кадр уходит с тегом 802.1Q VID ' + v };
+      return { ok: false, t: 'VLAN ' + v + ': не в списке allowed — кадр отброшен', exp: true };
+    });
+  }
+  function sendGeneral(s, g, d, v) {
+    var p = s.ports['gi1/0/' + g];
+    if (p.mode !== 'general') return [{ ok: false, t: 'Порт gi1/0/' + g + ' не в режиме general' }];
+    return [{ ok: p.pvid === d && p.guntag.indexOf(d) >= 0, t: 'Кадр ПК без тега → помещается в PVID ' + p.pvid + (p.pvid === d ? ' (VLAN данных) ✓' : ' — ожидалась VLAN ' + d) },
+            { ok: p.gtag.indexOf(v) >= 0, t: 'Голосовой кадр с тегом VID ' + v + (p.gtag.indexOf(v) >= 0 ? ' — принят' : ' — отброшен: VLAN не разрешена tagged') }];
+  }
+  function loginView(s) {
+    var o = [];
+    if (s.banner.motd) o.push(s.banner.motd, '');
+    if (s.banner.login) o.push(s.banner.login, '');
+    o.push('User Name:' + (Object.keys(s.users)[0] || 'admin'), 'Password:********', '');
+    if (s.banner.exec) o.push(s.banner.exec, '');
+    o.push(s.host + '#');
+    return o.join('\n');
+  }
+
+  // ------------------------------------------------------------------ виджет
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function init(box) {
+    var deck = box.dataset.deck, pool = (box.dataset.pool || '').split(',').map(Number);
+    var out = box.querySelector('.cs-out'), inp = box.querySelector('.cs-in input'), pr = box.querySelector('.cs-pr');
+    var taskEl = box.querySelector('.cs-task'), res = box.querySelector('.cs-res'), sol = box.querySelector('.cs-sol');
+    var sendB = box.querySelector('[data-cs=send]');
+    var st, T, P, hist = [], hi = 0, last = -1;
+    function print(t, cls) { var d = document.createElement('div'); d.className = cls || ''; d.innerHTML = esc(t); out.appendChild(d); out.scrollTop = out.scrollHeight; }
+    function newTask() {
+      var k; do { k = pool[rnd(0, pool.length - 1)]; } while (pool.length > 1 && k === last); last = k;
+      T = TASKS[deck][k]; P = T.gen(); st = fresh(); if (T.setup) T.setup(P, st);
+      taskEl.innerHTML = T.text(P); res.innerHTML = ''; sol.style.display = 'none';
+      sol.textContent = T.sol(P).join('\n');
+      out.innerHTML = ''; print('Console baud-rate auto detection is enabled. Подключение установлено.', 'cs-sys');
+      pr.textContent = prompt(st);
+      sendB.style.display = (T.send || T.login) ? '' : 'none';
+      sendB.textContent = T.login ? 'Подключиться заново' : 'Отправить кадр';
+    }
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        var v = inp.value; print(prompt(st) + v, 'cs-cmd'); hist.push(v); hi = hist.length;
+        var r = exec(st, v); if (r) print(r, /^%/.test(r) ? 'cs-err' : ''); inp.value = ''; pr.textContent = prompt(st);
+        e.preventDefault();
+      } else if (e.key === 'ArrowUp') { if (hi > 0) { hi--; inp.value = hist[hi]; } e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { if (hi < hist.length) { hi++; inp.value = hist[hi] || ''; } e.preventDefault(); }
+      e.stopPropagation();
+    });
+    out.addEventListener('click', function () { inp.focus(); });
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-cs]'); if (!b) return;
+      var a = b.dataset.cs;
+      if (a === 'new') newTask();
+      if (a === 'sol') sol.style.display = sol.style.display === 'none' ? 'block' : 'none';
+      if (a === 'check') {
+        var cs = T.checks(P), ok = 0;
+        res.innerHTML = cs.map(function (c) { var y = !!c[1](st); if (y) ok++; return '<div class="' + (y ? 'ok' : 'no') + '">' + (y ? '✓ ' : '✗ ') + c[0] + '</div>'; }).join('') +
+          '<div class="cs-sum ' + (ok === cs.length ? 'ok' : 'no') + '">' + (ok === cs.length ? 'Задание выполнено' : 'Выполнено ' + ok + ' из ' + cs.length) + '</div>';
+      }
+      if (a === 'send') {
+        if (T.login) { print('--- новое подключение к консоли ---', 'cs-sys'); print(loginView(st)); return; }
+        var r = T.send(P, st);
+        res.innerHTML = '<div class="cs-send">' + r.map(function (x) {
+          return '<div class="' + (x.ok ? 'ok' : (x.exp ? 'exp' : 'no')) + '"><span class="env">✉</span> ' + esc(x.t) + '</div>'; }).join('') + '</div>';
+      }
+    });
+    newTask();
+  }
+  // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
+  var api = { NPORTS: NPORTS, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
+              normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
+              showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
+              pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
+  if (typeof window !== 'undefined') window.EltexCLI = api;
+  if (typeof module !== 'undefined') module.exports = api;
+  if (typeof document !== 'undefined') document.querySelectorAll('.clisim').forEach(init);
+})();
+
+/* Эмулятор сети Eltex — общие утилиты: адреса, исполнение команд по таблице шаблонов, подсказки «?» и Tab.
+   Работает и в браузере, и в node (автотест): всё складывается в глобальный объект EL. */
+(function (G) {
+  'use strict';
+  var EL = G.EL = G.EL || {};
+  var E = EL.E = G.EltexCLI;          // движок MES из _dk_cli.js
+
+  // ------------------------------------------------------------------ IPv4
+  function ip2n(ip) { var p = String(ip).split('.'); if (p.length !== 4) return null;
+    var n = 0; for (var i = 0; i < 4; i++) { if (!/^\d{1,3}$/.test(p[i]) || +p[i] > 255) return null; n = n * 256 + (+p[i]); } return n; }
+  function n2ip(n) { return [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.'); }
+  function maskN(len) { return len === 0 ? 0 : (0xFFFFFFFF << (32 - len)) >>> 0; }
+  function len2mask(len) { return n2ip(maskN(len)); }
+  function mask2len(m) { var n = ip2n(m); if (n === null) return null; var l = 0; while (l < 32 && (n & (0x80000000 >>> l))) l++;
+    return maskN(l) === n ? l : null; }
+  function parseCidr(s) {             // "10.0.0.1/24" → {ip, len}
+    var m = String(s).match(/^(\d+\.\d+\.\d+\.\d+)\/(\d{1,2})$/);
+    if (!m || ip2n(m[1]) === null || +m[2] > 32) return null; return { ip: m[1], len: +m[2] }; }
+  function sameNet(a, b, len) { return ((ip2n(a) & maskN(len)) >>> 0) === ((ip2n(b) & maskN(len)) >>> 0); }
+  function netOf(ip, len) { return n2ip((ip2n(ip) & maskN(len)) >>> 0) + '/' + len; }
+  EL.ip = { ip2n: ip2n, n2ip: n2ip, maskN: maskN, len2mask: len2mask, mask2len: mask2len, parseCidr: parseCidr, sameNet: sameNet, netOf: netOf };
+
+  // ------------------------------------------------------------------ исполнение строки по таблице
+  // таблица: [{modes:[..], pat:[..], run(st,args)}]; шаблоны и сопоставление — из движка MES (E.match)
+  function lower(toks) { return toks.map(function (t) { return t.toLowerCase(); }); }
+  function runTable(table, st, raw) {
+    var line = E.normLine(String(raw).trim());
+    if (!line) return '';
+    var toks = line.split(/\s+/), low = lower(toks);
+    for (var i = 0; i < table.length; i++) {
+      var c = table[i]; if (c.modes.indexOf(st.mode) < 0) continue;
+      var args = E.match(c.pat, low);
+      if (!args) continue;
+      var ri = c.pat.indexOf('<rest>');
+      var orig = E.match(c.pat, toks.map(function (t, j) { return (c.pat[j] === '<w>' || (ri >= 0 && j >= ri)) ? t : low[j]; }));
+      var r = c.run(st, orig || args, line);
+      return r === undefined || r === null ? '' : r;
+    }
+    if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && partial(c.pat, low); })) return '% Incomplete command';
+    if (table.some(function (c) { return E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
+    return '% Unrecognized command';
+  }
+  // токены — строгое начало шаблона (команда не дописана)
+  function partial(pat, toks) {
+    if (toks.length >= pat.length) return false;
+    return E.match(pat.slice(0, toks.length), toks) !== null && pat[toks.length] !== '<rest>';
+  }
+
+  // ------------------------------------------------------------------ «?» и Tab
+  var PH = { '<n>': '<число>', '<w>': 'WORD', '<ip>': 'A.B.C.D', '<if>': 'gigabitethernet 1/0/N', '<list>': '<список VLAN: 10,20-30>',
+             '<mask>': 'A.B.C.D | /длина', '<rest>': 'LINE' };
+  function tokOk(p, t) {
+    if (p.charAt(0) === '<') return E.match([p], [t]) !== null || p === '<rest>';
+    return t === p || (t.length >= 2 && p.indexOf(t) === 0) || (p === 'terminal' && t === 't');
+  }
+  // варианты следующего слова: для строки «sh» → show…, для «show » → running-config, vlan…
+  function candidates(table, mode, raw) {
+    var line = E.normLine(String(raw)), ends = /\s$/.test(line) || !line.trim();
+    var toks = line.trim() ? lower(line.trim().split(/\s+/)) : [];
+    var part = ends ? '' : toks.pop();
+    var out = [], seen = {}, cr = false;
+    table.forEach(function (c) {
+      if (c.modes.indexOf(mode) < 0) return;
+      for (var k = 0; k < toks.length; k++) {
+        if (c.pat[k] === '<rest>') return;
+        if (k >= c.pat.length || !tokOk(c.pat[k], toks[k])) return;
+      }
+      if (toks.length === c.pat.length && ends) { cr = true; return; }
+      var p = c.pat[toks.length]; if (!p) return;
+      if (p.charAt(0) === '<') { if (!part || tokOk(p, part)) { if (!seen[p]) { seen[p] = 1; out.push({ w: PH[p] || p, ph: true, d: c.d || '' }); } } return; }
+      if (part && p.indexOf(part) !== 0) return;
+      if (!seen[p]) { seen[p] = 1; out.push({ w: p, ph: false, d: toks.length === 0 ? (c.d || '') : '' }); }
+    });
+    if (cr) out.push({ w: '<cr>', ph: true, d: 'выполнить команду' });
+    return { list: out, part: part };
+  }
+  function help(table, mode, raw) {
+    var c = candidates(table, mode, raw);
+    if (!c.list.length) return '% Unrecognized command';
+    return c.list.map(function (x) { return '  ' + (x.w + '                        ').slice(0, 24) + x.d; }).join('\n');
+  }
+  function tab(table, mode, raw) {
+    var c = candidates(table, mode, raw);
+    var kw = c.list.filter(function (x) { return !x.ph; });
+    if (!c.part || kw.length !== 1) return null;
+    return raw.replace(/\S+$/, kw[0].w) + ' ';
+  }
+  EL.cli = { runTable: runTable, help: help, tab: tab, candidates: candidates };
+
+  // ------------------------------------------------------------------ мелочи
+  EL.clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+  EL.rnd = function (a, b) { return a + Math.floor(Math.random() * (b - a + 1)); };
+  EL.pick = function (a) { return a[EL.rnd(0, a.length - 1)]; };
+  EL.mac = function (seed) {           // стабильный MAC по имени устройства/порта, OUI Eltex-подобный
+    var h = 0; for (var i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    var b = ['e0', 'd9', 'e3', (h >>> 16 & 255), (h >>> 8 & 255), (h & 255)];
+    return b.map(function (x) { return (typeof x === 'number' ? (x + 256).toString(16).slice(1) : x); }).join(':');
+  };
+})(typeof window !== 'undefined' ? window : global);
+
+/* CLI маршрутизатора ESR (vESR). Синтаксис — по лабораторным NTF2v2 и справочнику ESR-Series CLI:
+   правки копятся в кандидате и вступают в силу только после commit (+ confirm). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip;
+  var T = [];
+  function cmd(modes, pat, run, d) { T.push({ modes: modes.split(' '), pat: pat.split(' '), run: run, d: d }); }
+  var CFG = 'config gi sub lo user bridge';
+  var IFM = 'gi sub lo bridge';
+  var PROMPT = { priv: '#', config: '(config)#', gi: '(config-if-gi)#', sub: '(config-if-sub)#', lo: '(config-if-loopback)#',
+                 user: '(config-user)#', bridge: '(config-bridge)#' };
+
+  function freshCfg(host, nports) {
+    var ifs = {};
+    for (var i = 1; i <= nports; i++) ifs['gi1/0/' + i] = { ip: null, fw: true, shut: false };
+    return { host: host, ifs: ifs, users: { admin: { pw: 'password', priv: 15 } }, ssh: false, banner: { login: null, exec: null },
+             routes: [], tz: null, bridges: {} };
+  }
+  function fresh(host, nports) {
+    var c = freshCfg(host || 'esr', nports || 8);
+    return { kind: 'esr', mode: 'priv', ctx: null, cand: c, run: EL.clone(c), pending: false, date: null, nports: nports || 8 };
+  }
+  function prompt(st) { return st.run.host + PROMPT[st.mode]; }
+
+  // имена интерфейсов: gi1/0/1, gi1/0/1.10, lo1
+  function ifName(t) {
+    var m = String(t).match(/^gi(\d+)\/(\d+)\/(\d+)(?:\.(\d+))?$/);
+    if (!m || m[1] !== '1' || m[2] !== '0') return null;
+    return { phys: 'gi1/0/' + m[3], sub: m[4] ? +m[4] : null, name: 'gi1/0/' + m[3] + (m[4] ? '.' + m[4] : '') };
+  }
+  function cur(st) { return st.ctx && st.cand.ifs[st.ctx]; }
+  function touch(st) { st.pending = true; }
+
+  // ---------------------------------------------------------------- режимы
+  cmd('priv', 'configure', function (st) { st.mode = 'config'; }, 'Режим глобальной конфигурации');
+  cmd('priv', 'configure terminal', function (st) { st.mode = 'config'; });
+  cmd(CFG, 'exit', function (st) { st.mode = st.mode === 'config' ? 'priv' : 'config'; st.ctx = null; }, 'Выход на уровень выше');
+  cmd(CFG, 'end', function (st) { st.mode = 'priv'; st.ctx = null; }, 'Выход в привилегированный режим');
+
+  // ---------------------------------------------------------------- commit / confirm
+  function commit(st) {
+    if (!st.pending) return 'Nothing to commit';
+    st.run = EL.clone(st.cand); st.pending = false; st.unconfirmed = true;
+    return 'Configuration has been successfully applied and saved to flash. Commit timer started, changes will be reverted in 600 seconds.';
+  }
+  function confirm(st) {
+    if (!st.unconfirmed) return '% Нет изменений, ожидающих подтверждения';
+    st.unconfirmed = false; return 'Configuration has been confirmed. Commit timer canceled.';
+  }
+  cmd('priv', 'commit', commit, 'Применить изменения кандидата');
+  cmd('priv', 'confirm', confirm, 'Подтвердить применённую конфигурацию');
+  cmd('priv', 'rollback', function (st) { st.cand = EL.clone(st.run); st.pending = false; return 'Configuration has been successfully rolled back'; },
+      'Откатить неприменённые изменения');
+
+  // ---------------------------------------------------------------- базовая настройка
+  cmd('config', 'hostname <w>', function (st, a) { st.cand.host = a[0]; touch(st); }, 'Имя устройства');
+  cmd('config', 'clock timezone gmt <w>', function (st, a) {
+    if (!/^[+-]?\d{1,2}$/.test(a[0])) return '% Неверный часовой пояс (пример: +7)';
+    st.cand.tz = (/^[+-]/.test(a[0]) ? '' : '+') + a[0]; touch(st); }, 'Часовой пояс');
+  cmd('priv', 'set date <w> <n> <w> <n>', function (st, a) {
+    if (!/^\d{1,2}:\d{2}:\d{2}$/.test(a[0])) return '% Формат: set date ЧЧ:ММ:СС ДД Месяц ГГГГ';
+    st.date = a[0] + ' ' + a[1] + ' ' + a[2] + ' ' + a[3]; }, 'Установить дату и время');
+  cmd('priv', 'show date', function (st) {
+    var M = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    if (!st.date) return '"2026-01-01 00:00:00"';
+    var p = st.date.split(' '), mi = 0;
+    M.forEach(function (m, i) { if (m.indexOf(p[2].toLowerCase()) === 0) mi = i; });
+    return '"' + p[3] + '-' + ('0' + (mi + 1)).slice(-2) + '-' + ('0' + p[1]).slice(-2) + ' ' + p[0] + '"'; }, 'Текущие дата и время');
+  cmd('config', 'username <w>', function (st, a) {
+    if (!st.cand.users[a[0]]) st.cand.users[a[0]] = { pw: null, priv: 1 };
+    st.mode = 'user'; st.ctx = a[0]; touch(st); }, 'Локальный пользователь');
+  cmd('config', 'no username <w>', function (st, a) { if (!st.cand.users[a[0]]) return '% Пользователь не найден';
+    delete st.cand.users[a[0]]; touch(st); });
+  cmd('user', 'password <w>', function (st, a) { st.cand.users[st.ctx].pw = a[0]; touch(st); }, 'Пароль пользователя');
+  cmd('user', 'privilege <n>', function (st, a) { if (a[0] < 1 || a[0] > 15) return '% Уровень привилегий 1–15';
+    st.cand.users[st.ctx].priv = a[0]; touch(st); }, 'Уровень привилегий');
+  cmd('config', 'ip ssh server', function (st) { st.cand.ssh = true; touch(st); }, 'Включить SSH-сервер');
+  cmd('config', 'no ip ssh server', function (st) { st.cand.ssh = false; touch(st); });
+  function banner(kind) { return function (st, a) { st.cand.banner[kind] = a[0].replace(/^["«](.*)["»]$/, '$1'); touch(st); }; }
+  cmd('config', 'banner login <rest>', banner('login'), 'Баннер до авторизации');
+  cmd('config', 'banner exec <rest>', banner('exec'), 'Баннер после авторизации');
+  cmd('config', 'no banner login', function (st) { st.cand.banner.login = null; touch(st); });
+  cmd('config', 'no banner exec', function (st) { st.cand.banner.exec = null; touch(st); });
+
+  // ---------------------------------------------------------------- интерфейсы
+  cmd('config', 'interface <w>', function (st, a) {
+    var n = ifName(a[0]); if (!n) return '% Неверное имя интерфейса (пример: gigabitethernet 1/0/1 или 1/0/1.10)';
+    if (!st.cand.ifs[n.phys]) return '% Interface ' + n.phys + ' not found';
+    if (n.sub !== null) {
+      if (n.sub < 1 || n.sub > 4094) return '% Номер саб-интерфейса = VLAN, 1–4094';
+      if (!st.cand.ifs[n.name]) { st.cand.ifs[n.name] = { ip: null, fw: true, shut: false }; touch(st); }
+      st.mode = 'sub';
+    } else st.mode = 'gi';
+    st.ctx = n.name; }, 'Настройка интерфейса');
+  cmd('config', 'interface loopback <n>', function (st, a) {
+    if (a[0] < 1 || a[0] > 8) return '% Loopback 1–8';
+    var k = 'lo' + a[0]; if (!st.cand.ifs[k]) { st.cand.ifs[k] = { ip: null, fw: false, shut: false }; touch(st); }
+    st.mode = 'lo'; st.ctx = k; }, 'Loopback-интерфейс');
+  cmd('config', 'no interface <w>', function (st, a) {
+    var n = ifName(a[0]); if (!n || n.sub === null || !st.cand.ifs[n.name]) return '% Удалить можно только саб-интерфейс';
+    delete st.cand.ifs[n.name]; touch(st); });
+  cmd('config', 'no interface loopback <n>', function (st, a) { delete st.cand.ifs['lo' + a[0]]; touch(st); });
+  function setIp(st, v) {
+    var c = IP.parseCidr(v); if (!c) return '% Формат адреса: A.B.C.D/длина, например 192.168.1.1/24';
+    var me = st.ctx;
+    var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip &&
+      IP.sameNet(x.ip.split('/')[0], c.ip, Math.min(+x.ip.split('/')[1], c.len)) && x.ip.split('/')[1] !== '32' && c.len !== 32; });
+    if (clash.length) return '% Адрес пересекается с подсетью интерфейса ' + clash[0];
+    cur(st).ip = c.ip + '/' + c.len; touch(st);
+  }
+  cmd('gi sub lo', 'ip address <w>', function (st, a) { return setIp(st, a[0]); }, 'IP-адрес/префикс');
+  cmd('gi sub lo', 'no ip address', function (st) { cur(st).ip = null; touch(st); });
+  cmd('gi sub', 'ip firewall disable', function (st) { cur(st).fw = false; touch(st); }, 'Отключить межсетевой экран');
+  cmd('gi sub', 'no ip firewall disable', function (st) { cur(st).fw = true; touch(st); });
+  cmd('gi sub lo', 'shutdown', function (st) { cur(st).shut = true; touch(st); }, 'Выключить интерфейс');
+  cmd('gi sub lo', 'no shutdown', function (st) { cur(st).shut = false; touch(st); }, 'Включить интерфейс');
+  cmd('gi sub lo', 'description <rest>', function (st, a) { cur(st).desc = a[0]; touch(st); }, 'Описание');
+
+  // ---------------------------------------------------------------- статические маршруты
+  cmd('config', 'ip route <w> <ip>', function (st, a) {
+    var c = IP.parseCidr(a[0]); if (!c) return '% Формат: ip route A.B.C.D/длина шлюз';
+    var net = IP.netOf(c.ip, c.len);
+    if (!st.cand.routes.some(function (r) { return r.net === net && r.nh === a[1]; })) st.cand.routes.push({ net: net, nh: a[1] });
+    touch(st); }, 'Статический маршрут');
+  cmd('config', 'no ip route <w> <ip>', function (st, a) {
+    var c = IP.parseCidr(a[0]); if (!c) return '% Формат: no ip route A.B.C.D/длина шлюз';
+    var net = IP.netOf(c.ip, c.len), n = st.cand.routes.length;
+    st.cand.routes = st.cand.routes.filter(function (r) { return !(r.net === net && r.nh === a[1]); });
+    if (n === st.cand.routes.length) return '% Маршрут не найден'; touch(st); });
+
+  // ---------------------------------------------------------------- show
+  function ifSort(a, b) { var f = function (k) { return k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
+    return f(a) - f(b); }
+  function longIf(k) { return k.charAt(0) === 'l' ? 'loopback ' + k.slice(2) : 'gigabitethernet ' + k.slice(2); }
+  function showRun(st) {
+    var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
+    Object.keys(c.users).forEach(function (u) { var x = c.users[u];
+      o.push('username ' + u, '  password encrypted ' + E().hash(x.pw || '').slice(0, 30), '  privilege ' + x.priv, 'exit'); });
+    o.push('');
+    if (c.tz) o.push('clock timezone gmt ' + c.tz, '');
+    if (c.banner.login) o.push('banner login "' + c.banner.login + '"');
+    if (c.banner.exec) o.push('banner exec "' + c.banner.exec + '"');
+    Object.keys(c.ifs).sort(ifSort).forEach(function (k) {
+      var x = c.ifs[k], d = [];
+      if (x.desc) d.push('  description "' + x.desc + '"');
+      if (x.shut) d.push('  shutdown');
+      if (!x.fw && k.charAt(0) !== 'l') d.push('  ip firewall disable');
+      if (x.ip) d.push('  ip address ' + x.ip);
+      if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
+    });
+    c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh); });
+    if (c.ssh) o.push('ip ssh server');
+    return o.filter(function (x) { return x !== ''; }).join('\n').replace(/\nexit\n/g, '\nexit\n');
+  }
+  cmd('priv', 'show running-config', showRun, 'Применённая конфигурация');
+  cmd('priv', 'show candidate-config', function (st) { var r = st.run; st.run = st.cand; var o = showRun(st); st.run = r; return o; },
+      'Конфигурация-кандидат (до commit)');
+  cmd('priv', 'show ip interfaces', function (st) {
+    var o = ['IP address                Interface              Type', '------------------------- ---------------------- -------'];
+    Object.keys(st.run.ifs).sort(ifSort).forEach(function (k) { var x = st.run.ifs[k]; if (!x.ip) return;
+      o.push((x.ip + '                          ').slice(0, 26) + (k + '                       ').slice(0, 23) + 'static'); });
+    return o.join('\n'); }, 'IP-адреса интерфейсов');
+  cmd('priv', 'show interfaces status', function (st) {
+    var o = ['Interface    Admin   Link    MTU    MAC address         Last change', '------------ ------- ------- ------ ------------------- ----------'];
+    Object.keys(st.run.ifs).sort(ifSort).forEach(function (k) { var x = st.run.ifs[k];
+      var up = !x.shut && (k.charAt(0) === 'l' || (st.net && st.net.linked(st.dev, k.split('.')[0])));
+      o.push((k + '             ').slice(0, 13) + (x.shut ? 'Down    ' : 'Up      ') + (up ? 'Up      ' : 'Down    ') + '1500   ' +
+             EL.mac(st.run.host + k.split('.')[0]) + '   00,00:00:00'); });
+    return o.join('\n'); }, 'Состояние интерфейсов');
+  cmd('priv', 'show ip route', function (st) {
+    var o = ['Codes: C - connected, S - static, R - RIP derived, O - OSPF derived,', '       > - best route', ''];
+    Object.keys(st.run.ifs).sort(ifSort).forEach(function (k) { var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
+      var p = x.ip.split('/'); o.push('C     ' + IP.netOf(p[0], +p[1]) + '  [0/0] dev ' + k + ', ' + p[0] + ' > '); });
+    st.run.routes.forEach(function (r) { o.push('S     ' + r.net + '  [1/0] via ' + r.nh + ' > '); });
+    return o.join('\n'); }, 'Таблица маршрутизации');
+  cmd('priv', 'show users', function (st) { return 'User      Privilege\n--------- ---------\n' +
+    Object.keys(st.run.users).map(function (u) { return (u + '          ').slice(0, 10) + st.run.users[u].priv; }).join('\n'); });
+  cmd('priv', 'ping <ip>', function (st, a) { return st.net ? st.net.pingText(st.dev, a[0], 'esr') : '% Нет сети'; }, 'Проверка связности');
+  cmd('priv', 'traceroute <ip>', function (st, a) { return st.net ? st.net.traceText(st.dev, a[0]) : '% Нет сети'; }, 'Трассировка маршрута');
+
+  function E() { return EL.E; }
+
+  // do <команда> из любого режима конфигурации
+  function exec(st, raw) {
+    var line = String(raw).trim();
+    var m = line.match(/^do\s+(.+)$/i);
+    if (m && st.mode !== 'priv') { var md = st.mode; st.mode = 'priv'; var r = EL.cli.runTable(T, st, m[1]); if (st.mode === 'priv') st.mode = md; return r; }
+    return EL.cli.runTable(T, st, line);
+  }
+  function helpTable(st, raw) {
+    var m = String(raw).match(/^\s*do\s+(.*)$/i);
+    return m && st.mode !== 'priv' ? { mode: 'priv', raw: m[1] } : { mode: st.mode, raw: raw };
+  }
+  EL.esr = { T: T, fresh: fresh, prompt: prompt, exec: exec, showRun: showRun, ifName: ifName, helpTable: helpTable,
+             PROMPT: PROMPT, commit: commit, confirm: confirm };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Расширение движка MES (_dk_cli.js) для эмулятора: пользовательский режим switch>, enable/disable,
+   vlan database, списки VLAN, shutdown, L3 на SVI (ip route), ping, show ip interface/route, write/reload. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, IP = EL.ip, cmd = E.cmd, CFG = E.CFG;
+
+  EL.attach = function (st, net, dev) {         // ссылки на сеть не попадают в JSON-копии состояния
+    Object.defineProperty(st, 'net', { value: net, writable: true, configurable: true, enumerable: false });
+    Object.defineProperty(st, 'dev', { value: dev, writable: true, configurable: true, enumerable: false });
+  };
+
+  function fresh(n, host) {
+    var st = E.fresh(n);
+    st.kind = 'mes'; st.mode = 'user'; st.host = host || 'switch'; st.routes = []; st.startup = null;
+    Object.keys(st.ports).forEach(function (k) { st.ports[k].shut = false; });
+    return st;
+  }
+
+  // ---------------------------------------------------------------- режимы
+  cmd('user', 'enable', function (st) {
+    if (st.enable[15]) { st.askPw = { ok: function () { st.mode = 'priv'; }, pw: st.enable[15] }; return 'Password:'; }
+    st.mode = 'priv'; });
+  cmd('priv', 'disable', function (st) { st.mode = 'user'; });
+  cmd('user', 'exit', function () { return '% Сессия остаётся открытой (эмулятор)'; });
+  cmd('config', 'vlan database', function (st) { st.mode = 'vlan'; st.ctx = null; });
+  cmd('config vlan', 'vlan <list>', function (st, a) {
+    if (a[0].some(function (v) { return v < 2 || v > 4094; })) return '% VLAN 1 и 4095 зарезервированы';
+    a[0].forEach(function (v) { if (!st.vlans[v]) st.vlans[v] = '-'; });
+    st.mode = 'vlan'; st.ctx = a[0].length === 1 ? a[0][0] : null; });
+  cmd('vlan', 'name <rest>', function (st, a) {
+    if (!st.ctx) return '% Имя задаётся для одной VLAN: vlan N, затем name';
+    st.vlans[st.ctx] = a[0].replace(/^["«](.*)["»]$/, '$1'); });
+  cmd('config', 'no vlan <list>', function (st, a) {
+    if (a[0].indexOf(1) >= 0) return '% VLAN 1 удалить нельзя';
+    a[0].forEach(function (v) { if (!st.vlans[v]) return; delete st.vlans[v];
+      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k]; if (p.access === v) p.access = 1;
+        p.allowed = p.allowed.filter(function (x) { return x !== v; }); }); }); });
+
+  // ---------------------------------------------------------------- порты
+  function each(st, f) {
+    if (!st.ctx || !st.ctx.ports) return '% Команда доступна в настройке физического порта';
+    st.ctx.ports.forEach(function (k) { f(st.ports[k]); });
+  }
+  cmd('if range', 'shutdown', function (st) {
+    if (st.ctx && st.ctx.svi) { st.sviShut = st.sviShut || {}; st.sviShut[st.ctx.svi] = true; return; }
+    return each(st, function (p) { p.shut = true; }); });
+  cmd('if range', 'no shutdown', function (st) {
+    if (st.ctx && st.ctx.svi) { if (st.sviShut) delete st.sviShut[st.ctx.svi]; return; }
+    return each(st, function (p) { p.shut = false; }); });
+  cmd('if range', 'description <rest>', function (st, a) { return each(st, function (p) { p.desc = a[0]; }); });
+  cmd('if', 'ip address <w>', function (st, a) {         // форма 10.0.0.1/24 одним словом
+    if (!st.ctx || !st.ctx.svi) return '% Команда доступна на интерфейсе VLAN';
+    var c = IP.parseCidr(a[0]); if (!c) return '% Формат: ip address A.B.C.D A.B.C.D (маска) или A.B.C.D /длина';
+    st.svi[st.ctx.svi] = c.ip + '/' + c.len; });
+  cmd('if', 'no ip address', function (st) { if (st.ctx && st.ctx.svi) delete st.svi[st.ctx.svi]; });
+  cmd('config', 'no interface vlan <n>', function (st, a) { delete st.svi[a[0]]; });
+
+  // ---------------------------------------------------------------- маршруты
+  cmd('config', 'ip route <ip> <mask> <ip>', function (st, a) {
+    var net = IP.netOf(a[0], a[1]);
+    if (!st.routes.some(function (r) { return r.net === net && r.nh === a[2]; })) st.routes.push({ net: net, nh: a[2] }); });
+  cmd('config', 'no ip route <ip> <mask> <ip>', function (st, a) {
+    var net = IP.netOf(a[0], a[1]); st.routes = st.routes.filter(function (r) { return !(r.net === net && r.nh === a[2]); }); });
+  cmd('config', 'no ip default-gateway', function (st) { st.gw = null; });
+  cmd('config', 'ip routing', function (st) { st.routing = true; });
+
+  // ---------------------------------------------------------------- сохранение
+  function save(st) { var c = EL.clone(st); delete c.startup; c.mode = 'user'; c.ctx = null; st.startup = c;
+    return 'Building configuration...\n[OK]\nCopy succeeded'; }
+  cmd('priv', 'write', save); cmd('priv', 'write memory', save);
+  cmd('priv', 'copy running-config startup-config', save);
+  cmd('priv', 'show startup-config', function (st) { return st.startup ? E.showRun(st.startup) : '% Startup-config пуста — выполните write'; });
+  cmd('priv', 'reload', function (st) {
+    var keep = st.startup, nports = Object.keys(st.ports).length, host = 'switch';
+    var src = keep ? EL.clone(keep) : fresh(nports, host);
+    Object.keys(st).forEach(function (k) { delete st[k]; });
+    Object.keys(src).forEach(function (k) { st[k] = src[k]; });
+    st.startup = keep; st.mode = 'user';
+    return 'Перезагрузка… загружена ' + (keep ? 'startup-config' : 'заводская конфигурация') + '.'; });
+
+  // ---------------------------------------------------------------- show
+  function sviUp(st, v) { return !(st.sviShut && st.sviShut[v]) && !!st.vlans[v]; }
+  function showIpIf(st) {
+    var ks = Object.keys(st.svi).map(Number).sort(function (a, b) { return a - b; });
+    if (!ks.length) return '% IP-интерфейсы не настроены';
+    return ks.map(function (v) { var p = st.svi[v].split('/');
+      return ['vlan' + v + ' is ' + (sviUp(st, v) ? 'up' : 'down') + ', line protocol is ' + (sviUp(st, v) ? 'up' : 'down'),
+              'Internet Address is ' + p[0] + '/' + p[1],
+              'Broadcast Address  ' + IP.n2ip((IP.ip2n(p[0]) | (~IP.maskN(+p[1]) >>> 0)) >>> 0)].join('\n'); }).join('\n\n');
+  }
+  function showIpRoute(st) {
+    var o = ['Codes: C - connected, S - static, R - rip, O - ospf', ''];
+    Object.keys(st.svi).forEach(function (v) { if (!sviUp(st, v)) return; var p = st.svi[v].split('/');
+      o.push('C ' + IP.netOf(p[0], +p[1]) + ' is directly connected, vlan' + v); });
+    st.routes.forEach(function (r) { o.push('S ' + r.net + ' [1/0] via ' + r.nh); });
+    if (st.gw) o.push('S 0.0.0.0/0 [1/0] via ' + st.gw);
+    return o.join('\n');
+  }
+  function showStatus(st) {
+    var o = ['Port         Status     Vlan   Mode', '------------ ---------- ------ -------'];
+    Object.keys(st.ports).forEach(function (k) { var p = st.ports[k];
+      var link = !p.shut && st.net && st.net.linked(st.dev, k);
+      o.push((k + '             ').slice(0, 13) + ((p.shut ? 'disabled' : (link ? 'connected' : 'notconnect')) + '           ').slice(0, 11) +
+             ((p.mode === 'access' ? '' + p.access : p.mode === 'trunk' ? 'trunk' : 'gen') + '       ').slice(0, 7) + p.mode); });
+    return o.join('\n');
+  }
+  function shows(prefix, modes) {
+    cmd(modes, prefix + 'show ip interface', function (st) { return showIpIf(st); });
+    cmd(modes, prefix + 'show ip route', function (st) { return showIpRoute(st); });
+    cmd(modes, prefix + 'show interfaces status', function (st) { return showStatus(st); });
+    cmd(modes, prefix + 'show mac address-table', function (st) { return st.net ? st.net.macTable(st.dev) : ''; });
+    cmd(modes, prefix + 'ping <ip>', function (st, a) { return st.net ? st.net.pingText(st.dev, a[0], 'mes') : '% Нет сети'; });
+  }
+  shows('', 'priv'); shows('do ', CFG);
+  cmd('user', 'show vlan', function (st) { return E.showVlan(st); });
+  cmd('user', 'show ip interface', function (st) { return showIpIf(st); });
+  cmd('user', 'ping <ip>', function (st, a) { return st.net ? st.net.pingText(st.dev, a[0], 'mes') : '% Нет сети'; });
+
+  // описания для «?» по первому слову
+  var D = { enable: 'Привилегированный режим', disable: 'Пользовательский режим', configure: 'Режим глобальной конфигурации',
+    show: 'Просмотр состояния и конфигурации', ping: 'Проверка связности', write: 'Сохранить конфигурацию',
+    copy: 'Копировать конфигурацию', reload: 'Перезагрузить коммутатор', exit: 'Выход на уровень выше', end: 'Выход в режим #',
+    hostname: 'Имя устройства', username: 'Локальный пользователь', interface: 'Настройка интерфейса', vlan: 'Создание VLAN',
+    no: 'Отменить настройку', ip: 'Настройки IP', line: 'Консоль / Telnet / SSH', banner: 'Баннеры', enable_: '',
+    switchport: 'Режим и VLAN порта', shutdown: 'Выключить порт', name: 'Имя VLAN', do: 'Команда режима # из конфигурации',
+    password: 'Пароль', aaa: 'Аутентификация', crypto: 'Ключи шифрования', description: 'Описание' };
+  E.CMDS.forEach(function (c) { if (!c.d && D[c.pat[0]]) c.d = D[c.pat[0]]; });
+
+  function exec(st, raw) {
+    if (/^\s*banner\s+motd\s/i.test(raw) && st.mode !== 'config') return '% Команда недоступна в этом режиме — проверьте приглашение';
+    if (/^\s*ban/i.test(raw)) return E.exec(st, raw);       // баннеры с разделителем разбирает движок
+    return EL.cli.runTable(E.CMDS, st, raw);
+  }
+  EL.mes = { fresh: fresh, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Конечные узлы: VPC (как в pnetlab/VPCS) и компьютер Debian (ip, ifup/ifdown, nano interfaces, ping, ssh). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip;
+
+  // ================================================================ VPC
+  function vpc(name) { return { kind: 'vpc', name: name, ip: null, len: 24, gw: null }; }
+  function vpcExec(st, raw) {
+    var t = String(raw).trim().split(/\s+/), c = (t[0] || '').toLowerCase();
+    if (!c) return '';
+    if (c === '?' || c === 'help') return ['ip ARG ... [OPTION]   Настроить адрес: ip 10.0.0.2/24 10.0.0.1',
+      'show [ip]             Показать настройки', 'ping HOST             Проверить связность', 'trace HOST            Трассировка',
+      'arp                   ARP-таблица', 'clear ip              Сбросить адрес'].join('\n');
+    if (c === 'ip') {
+      if (t[1] === 'dhcp') return 'DDORA — DHCP-сервер не ответил (DHCP появится на следующем этапе эмулятора)';
+      var cidr = IP.parseCidr(t[1] || ''), ip = t[1], len = 24, gw = t[2];
+      if (cidr) { ip = cidr.ip; len = cidr.len; }
+      else if (t[2] && IP.mask2len(t[2]) !== null) { len = IP.mask2len(t[2]); gw = t[3]; }
+      if (!ip || IP.ip2n(ip) === null) return 'Invalid address';
+      if (gw && IP.ip2n(gw) === null) return 'Invalid gateway';
+      if (gw && !IP.sameNet(ip, gw, len)) return 'Gateway ' + gw + ' не в подсети ' + IP.netOf(ip, len);
+      st.ip = ip; st.len = len; st.gw = gw || null;
+      return 'Checking for duplicate address...\n' + st.name + ' : ' + ip + ' ' + IP.len2mask(len) + (gw ? ' gateway ' + gw : '');
+    }
+    if (c === 'clear' && t[1] === 'ip') { st.ip = null; st.gw = null; return 'IPv4 address/mask, gateway, DNS, and DHCP cleared'; }
+    if (c === 'show' || c === 'sh') return ['NAME        : ' + st.name, 'IP/MASK     : ' + (st.ip ? st.ip + '/' + st.len : '0.0.0.0/0'),
+      'GATEWAY     : ' + (st.gw || '0.0.0.0'), 'MAC         : ' + EL.mac(st.name + 'eth0'), 'LPORT       : 20000'].join('\n');
+    if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; return st.net ? st.net.pingText(st.dev, t[1], 'vpc') : ''; }
+    if (c === 'trace' || c === 'tracert') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
+    if (c === 'arp') return st.net ? st.net.arpText(st.dev) : '';
+    return 'Bad command: "' + raw.trim() + '". Use ? for help.';
+  }
+  function vpcPrompt(st) { return st.name + '> '; }
+
+  // ================================================================ Debian
+  var IFDEF = ['# This file describes the network interfaces available on your system', '# and how to activate them. For more information, see interfaces(5).', '',
+    'source /etc/network/interfaces.d/*', '', '# The loopback network interface', 'auto lo', 'iface lo inet loopback', '',
+    '# The primary network interface', 'allow-hotplug ens3', 'iface ens3 inet dhcp', ''].join('\n');
+  function deb(name) {
+    return { kind: 'deb', name: name, host: 'debian', user: null, login: 'user', up: false, ip: null, len: 24, gw: null,
+             files: { '/etc/network/interfaces': IFDEF }, accounts: { root: 'toor', user: 'user' }, ssh: null };
+  }
+  function debPrompt(st) {
+    if (st.ssh) return st.ssh.prompt();
+    if (!st.user) return st.login === 'user' ? st.host + ' login: ' : 'Password: ';
+    return st.user + '@' + st.host + ':~' + (st.user === 'root' ? '# ' : '$ ');
+  }
+  function parseIfaces(text) {                // берём блок «iface ens3 inet static»
+    var r = { auto: false, mode: null, ip: null, len: 24, gw: null };
+    var lines = text.split('\n').map(function (l) { return l.replace(/#.*/, '').trim(); }).filter(Boolean), inb = false;
+    lines.forEach(function (l) {
+      var w = l.split(/\s+/);
+      if (w[0] === 'auto' || w[0] === 'allow-hotplug') { if (w.indexOf('ens3') > 0) r.auto = true; return; }
+      if (w[0] === 'iface') { inb = w[1] === 'ens3'; if (inb) r.mode = w[3]; return; }
+      if (!inb) return;
+      if (w[0] === 'address') { var c = IP.parseCidr(w[1]); if (c) { r.ip = c.ip; r.len = c.len; } else r.ip = w[1]; }
+      if (w[0] === 'netmask' && IP.mask2len(w[1]) !== null) r.len = IP.mask2len(w[1]);
+      if (w[0] === 'gateway') r.gw = w[1];
+    });
+    return r;
+  }
+  function ipA(st) {
+    var mac = EL.mac(st.name + 'ens3'), o = ['1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000',
+      '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00', '    inet 127.0.0.1/8 scope host lo', '       valid_lft forever preferred_lft forever',
+      '2: ens3: <BROADCAST,MULTICAST' + (st.up ? ',UP,LOWER_UP' : '') + '> mtu 1500 qdisc ' + (st.up ? 'pfifo_fast state UP' : 'noop state DOWN') + ' group default qlen 1000',
+      '    link/ether ' + mac + ' brd ff:ff:ff:ff:ff:ff', '    altname enp0s3'];
+    if (st.ip) o.push('    inet ' + st.ip + '/' + st.len + ' brd ' + IP.n2ip((IP.ip2n(st.ip) | (~IP.maskN(st.len) >>> 0)) >>> 0) + ' scope global ens3',
+                      '       valid_lft forever preferred_lft forever');
+    return o.join('\n');
+  }
+  function debExec(st, raw, ui) {
+    if (st.ssh) return st.ssh.exec(raw);
+    var line = String(raw);
+    if (!st.user) {                             // вход в систему
+      if (st.login === 'user') { st.pendingUser = line.trim(); st.login = 'pw'; return null; }
+      st.login = 'user';
+      if (st.accounts[st.pendingUser] && st.accounts[st.pendingUser] === line.trim()) {
+        st.user = st.pendingUser;
+        return 'Linux debian 5.10.0-23-amd64 #1 SMP Debian 5.10.179-1 x86_64\n\nThe programs included with the Debian GNU/Linux system are free software.';
+      }
+      return '\nLogin incorrect';
+    }
+    var t = line.trim().split(/\s+/), c = t[0];
+    if (!c) return '';
+    var root = st.user === 'root';
+    function needRoot() { return root ? null : c + ': Operation not permitted (нужны права root: su - или sudo)'; }
+    if (c === 'sudo') { if (!t[1]) return 'usage: sudo command'; var u = st.user; st.user = 'root'; var r = debExec(st, t.slice(1).join(' '), ui); st.user = u; return r; }
+    if (c === 'su') { st.user = 'root'; return null; }
+    if (c === 'exit' || c === 'logout') { st.user = null; st.login = 'user'; return 'logout'; }
+    if (c === 'clear') { if (ui) ui.clear(); return ''; }
+    if (c === 'hostname') return st.host;
+    if (c === 'whoami') return st.user;
+    if (c === 'ip') {
+      var sub = t[1] || '';
+      if (/^a(ddr(ess)?)?$/.test(sub) && (!t[2] || t[2] === 'show')) return ipA(st);
+      if (/^a(ddr(ess)?)?$/.test(sub) && t[2] === 'add') {
+        var e = needRoot(); if (e) return e;
+        var cc = IP.parseCidr(t[3] || ''); if (!cc) return 'Error: any valid prefix is expected rather than "' + (t[3] || '') + '".';
+        if (t[4] !== 'dev' || t[5] !== 'ens3') return 'Cannot find device "' + (t[5] || '') + '"';
+        if (st.ip === cc.ip) return 'RTNETLINK answers: File exists';
+        st.ip = cc.ip; st.len = cc.len; return '';
+      }
+      if (/^a(ddr(ess)?)?$/.test(sub) && (t[2] === 'del' || t[2] === 'flush')) { var e2 = needRoot(); if (e2) return e2; st.ip = null; st.gw = null; return ''; }
+      if (sub === 'link' && t[2] === 'set') { var e3 = needRoot(); if (e3) return e3;
+        if (t[3] !== 'ens3') return 'Cannot find device "' + (t[3] || '') + '"'; st.up = t[4] === 'up'; return ''; }
+      if (/^r(oute)?$/.test(sub) && !t[2]) {
+        var o = []; if (st.gw && st.up) o.push('default via ' + st.gw + ' dev ens3');
+        if (st.ip && st.up) o.push(IP.netOf(st.ip, st.len) + ' dev ens3 proto kernel scope link src ' + st.ip);
+        return o.join('\n');
+      }
+      if (/^r(oute)?$/.test(sub) && t[2] === 'add') { var e4 = needRoot(); if (e4) return e4;
+        if (t[3] !== 'default' || t[4] !== 'via' || IP.ip2n(t[5] || '') === null) return 'Пример: ip route add default via 192.168.100.1';
+        if (!st.ip || !IP.sameNet(st.ip, t[5], st.len)) return 'Error: Nexthop has invalid gateway.';
+        st.gw = t[5]; return ''; }
+      if (/^r(oute)?$/.test(sub) && t[2] === 'del') { st.gw = null; return ''; }
+      return 'Object "' + sub + '" is unknown, try "ip help".';
+    }
+    if (c === 'ifup' || c === 'ifdown') {
+      var e5 = needRoot(); if (e5) return e5;
+      if (t[1] !== 'ens3') return c + ': unknown interface ' + (t[1] || '');
+      var cfg = parseIfaces(st.files['/etc/network/interfaces']);
+      if (c === 'ifdown') { if (!st.up) return 'ifdown: interface ens3 not configured'; st.up = false; st.ip = null; st.gw = null; return ''; }
+      if (cfg.mode === 'dhcp') { st.up = true; return 'Internet Systems Consortium DHCP Client 4.4.1\nListening on LPF/ens3\nDHCPDISCOVER on ens3 to 255.255.255.255 port 67\nNo DHCPOFFERS received.\nNo working leases in persistent database - sleeping.'; }
+      if (cfg.mode !== 'static') return 'ifup: no configuration for ens3 (в /etc/network/interfaces нет «iface ens3 inet static»)';
+      if (!cfg.ip || IP.ip2n(cfg.ip) === null) return 'ifup: missing or invalid address for ens3';
+      st.up = true; st.ip = cfg.ip; st.len = cfg.len; st.gw = cfg.gw && IP.sameNet(cfg.ip, cfg.gw, cfg.len) ? cfg.gw : null; return '';
+    }
+    if (c === 'cat') { var f = st.files[t[1]]; return f === undefined ? 'cat: ' + (t[1] || '') + ': No such file or directory' : f; }
+    if (c === 'nano' || c === 'vi' || c === 'vim') {
+      if (!t[1]) return 'Укажите файл: nano /etc/network/interfaces';
+      if (t[1].indexOf('/etc/') === 0 && !root) return '[ Нет прав на запись: войдите как root ]';
+      if (ui) ui.edit(t[1], st.files[t[1]] || '', function (txt) { st.files[t[1]] = txt; });
+      else return 'nano: нужен экран (в автотесте не используется)';
+      return '';
+    }
+    if (c === 'ping') { var dst = t.slice(1).filter(function (x) { return /^\d+\.\d+\.\d+\.\d+$/.test(x); })[0];
+      if (!dst) return 'ping: usage error: Destination address required';
+      return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
+    if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
+    if (c === 'ssh') {
+      var m = (t[1] || '').match(/^([^@]+)@(\d+\.\d+\.\d+\.\d+)$/);
+      if (!m) return 'usage: ssh user@A.B.C.D';
+      return st.net ? st.net.sshOpen(st, m[1], m[2]) : '';
+    }
+    if (c === 'help' || c === '?') return 'Доступно: ip a | ip addr add A.B.C.D/N dev ens3 | ip link set ens3 up | ip route [add default via GW]\n' +
+      'nano /etc/network/interfaces | cat ФАЙЛ | ifup/ifdown ens3 | ping A.B.C.D | traceroute A.B.C.D | ssh user@A.B.C.D | su | exit';
+    return '-bash: ' + c + ': command not found';
+  }
+
+  EL.hosts = { vpc: vpc, vpcExec: vpcExec, vpcPrompt: vpcPrompt, deb: deb, debExec: debExec, debPrompt: debPrompt, parseIfaces: parseIfaces };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Модель сети: устройства, кабели, прохождение кадров по VLAN/trunk/general, ARP, маршрутизация, межсетевой экран ESR.
+   Каждая отправка пакета возвращает пошаговую трассу — её проигрывает интерфейс («как идут пакеты»). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip, H = EL.hosts;
+
+  // каталог: только модели с CLI, совместимым с движком (MES14xx/24xx/3400/37xx — одна ветка ПО 10.4.x)
+  var MODELS = {
+    'MES2428':  { type: 'mes', ports: 28, group: 'Коммутаторы доступа', note: '24 × 10/100/1000BASE-T + 4 × Combo' },
+    'MES2428B': { type: 'mes', ports: 28, group: 'Коммутаторы доступа', note: '24 × 10/100/1000BASE-T + 4 × Combo, резервное питание 12 В' },
+    'vESR':     { type: 'esr', ports: 8,  group: 'Маршрутизаторы ESR', note: 'Виртуальный сервисный маршрутизатор, 8 × gigabitethernet' },
+    'VPC':      { type: 'vpc', ports: 1,  group: 'Конечные узлы', note: 'Виртуальный ПК (как VPCS в pnetlab)' },
+    'Debian':   { type: 'deb', ports: 1,  group: 'Конечные узлы', note: 'Компьютер с Debian 11: ip, ifup, nano, ping, ssh' }
+  };
+
+  function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; }
+  var P = Net.prototype;
+
+  P.portsOf = function (d) {
+    var m = MODELS[d.model];
+    if (d.type === 'vpc') return ['eth0'];
+    if (d.type === 'deb') return ['ens3'];
+    var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
+  };
+  P.add = function (model, name, x, y) {
+    var m = MODELS[model]; if (!m) throw new Error('Нет модели ' + model);
+    if (!name) { var n = 1, base = { mes: 'SW', esr: 'R', vpc: 'VPC', deb: 'Debian' }[m.type];
+      while (this.byName(base + n)) n++; name = base + n; }
+    if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
+    var id = 'd' + (++Net.seq);
+    var d = { id: id, name: name, model: model, type: m.type, x: x || 0, y: y || 0 };
+    if (m.type === 'mes') d.st = EL.mes.fresh(m.ports, 'switch');
+    if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
+    if (m.type === 'vpc') d.st = H.vpc(name);
+    if (m.type === 'deb') d.st = H.deb(name);
+    EL.attach(d.st, this, id);
+    this.devs[id] = d; this.order.push(id); this.mac[id] = {}; this.arp[id] = {};
+    return d;
+  };
+  Net.seq = 0;
+  P.byName = function (n) { var s = this; return s.order.map(function (i) { return s.devs[i]; }).filter(function (d) { return d.name === n; })[0] || null; };
+  P.list = function () { var s = this; return s.order.map(function (i) { return s.devs[i]; }); };
+  P.remove = function (id) {
+    this.links = this.links.filter(function (l) { return l.a.dev !== id && l.b.dev !== id; });
+    delete this.devs[id]; this.order = this.order.filter(function (x) { return x !== id; });
+  };
+  P.peer = function (dev, port) {
+    for (var i = 0; i < this.links.length; i++) { var l = this.links[i];
+      if (l.a.dev === dev && l.a.port === port) return { dev: l.b.dev, port: l.b.port, li: i };
+      if (l.b.dev === dev && l.b.port === port) return { dev: l.a.dev, port: l.a.port, li: i }; }
+    return null;
+  };
+  P.linked = function (dev, port) { return !!this.peer(dev, port); };
+  P.connect = function (a, ap, b, bp) {
+    var A = this.devs[a], B = this.devs[b];
+    if (!A || !B) return 'Нет такого устройства';
+    if (a === b) return 'Нельзя соединить устройство само с собой';
+    if (this.portsOf(A).indexOf(ap) < 0 || this.portsOf(B).indexOf(bp) < 0) return 'Нет такого порта';
+    if (this.linked(a, ap)) return A.name + ' ' + ap + ' уже занят';
+    if (this.linked(b, bp)) return B.name + ' ' + bp + ' уже занят';
+    this.links.push({ a: { dev: a, port: ap }, b: { dev: b, port: bp } });
+    return null;
+  };
+  P.disconnect = function (li) { this.links.splice(li, 1); };
+  P.freePorts = function (id) { var s = this, d = this.devs[id]; return this.portsOf(d).filter(function (p) { return !s.linked(id, p); }); };
+
+  // ------------------------------------------------------------------ L3-интерфейсы и маршруты
+  P.ifaces = function (id) {
+    var d = this.devs[id], st = d.st, o = [];
+    if (d.type === 'vpc' && st.ip) o.push({ name: 'eth0', ip: st.ip, len: st.len, port: 'eth0', tag: null });
+    if (d.type === 'deb' && st.ip && st.up) o.push({ name: 'ens3', ip: st.ip, len: st.len, port: 'ens3', tag: null });
+    if (d.type === 'mes') Object.keys(st.svi).forEach(function (v) {
+      var p = st.svi[v].split('/'); if (!EL.mes.sviUp(st, +v)) return;
+      o.push({ name: 'vlan' + v, ip: p[0], len: +p[1], vlan: +v }); });
+    if (d.type === 'esr') Object.keys(st.run.ifs).forEach(function (k) {
+      var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
+      var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && st.run.ifs[ph].shut) return;
+      var p = x.ip.split('/');
+      o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+    return o;
+  };
+  P.routes = function (id) {
+    var d = this.devs[id], st = d.st, o = [];
+    this.ifaces(id).forEach(function (f) { o.push({ net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, c: true }); });
+    var stat = d.type === 'esr' ? st.run.routes : d.type === 'mes' ? st.routes.slice() : [];
+    if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
+    if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
+    stat.forEach(function (r) { o.push({ net: r.net, len: +r.net.split('/')[1], nh: r.nh, c: false }); });
+    return o;
+  };
+  P.lookup = function (id, dst) {
+    var fs = this.ifaces(id), best = null;
+    this.routes(id).forEach(function (r) {
+      if (!IP.sameNet(dst, r.net.split('/')[0], r.len)) return;
+      if (best && (r.len < best.len || (r.len === best.len && !r.c))) return;
+      best = r; });
+    if (!best) return null;
+    if (best.c) return { iface: fs.filter(function (f) { return f.name === best.ifn; })[0], nh: dst };
+    var out = fs.filter(function (f) { return f.port !== null && IP.sameNet(best.nh, f.ip, f.len) || f.vlan && IP.sameNet(best.nh, f.ip, f.len); })[0];
+    return out ? { iface: out, nh: best.nh } : null;
+  };
+  P.owner = function (ip) {
+    var s = this; return this.order.filter(function (id) { return s.ifaces(id).some(function (f) { return f.ip === ip; }); })[0] || null;
+  };
+  function owns(net, id, ip) { return net.ifaces(id).some(function (f) { return f.ip === ip; }); }
+
+  // ------------------------------------------------------------------ L2: куда дойдёт кадр
+  // egress: как порт коммутатора отправит кадр VLAN v — 'u' без тега, 't' с тегом, null — не отправит
+  function egress(p, v) {
+    if (p.shut) return null;
+    if (p.mode === 'access') return p.access === v ? 'u' : null;
+    if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allowed.indexOf(v) >= 0 ? 't' : null);
+    if (p.guntag.indexOf(v) >= 0) return 'u';
+    return p.gtag.indexOf(v) >= 0 ? 't' : null;
+  }
+  // ingress: в какую VLAN попадёт входящий кадр (tag=null — без тега); {v} или {drop: причина}
+  function ingress(st, port, tag) {
+    var p = st.ports[port];
+    if (p.shut) return { drop: 'порт ' + port + ' выключен (shutdown)' };
+    var v;
+    if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
+    else {
+      if (p.mode === 'access') return { drop: port + ' в режиме access принимает только кадры без тега, пришёл тег ' + tag };
+      if (p.mode === 'trunk' && p.allowed.indexOf(tag) < 0 && p.native !== tag) return { drop: 'VLAN ' + tag + ' не разрешена на trunk ' + port };
+      if (p.mode === 'general' && p.gtag.indexOf(tag) < 0 && p.guntag.indexOf(tag) < 0) return { drop: 'VLAN ' + tag + ' не разрешена на general-порту ' + port };
+      v = tag;
+    }
+    if (!st.vlans[v]) return { drop: 'VLAN ' + v + ' не создана на коммутаторе' };
+    return { v: v };
+  }
+  // рассылка кадра из L3-интерфейса: список достигнутых интерфейсов + все пройденные отрезки + причины отбрасывания
+  P.flood = function (id, f, srcMac) {
+    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [];
+    function send(dev, port, tag, path) {
+      var pr = s.peer(dev, port); if (!pr) return;
+      var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag };
+      segs.push(seg); q.push({ dev: pr.dev, port: pr.port, tag: tag, path: path.concat([seg]) });
+    }
+    function inMes(dev, inPort, v, path) {
+      var st = s.devs[dev].st;
+      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort };
+      Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
+        var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
+      s.portsOf(s.devs[dev]).forEach(function (q2) {
+        if (q2 === inPort || !s.linked(dev, q2)) return;
+        var e = egress(st.ports[q2], v); if (e) send(dev, q2, e === 't' ? v : null, path);
+      });
+    }
+    if (f.vlan) inMes(id, null, f.vlan, []);
+    else if (f.port) send(id, f.port, f.tag, []);
+    while (q.length) {
+      var it = q.shift(), key = it.dev + '|' + it.port + '|' + it.tag;
+      if (seen[key]) continue; seen[key] = 1;
+      var d = this.devs[it.dev], nm = d.name;
+      if (d.type === 'mes') {
+        var r = ingress(d.st, it.port, it.tag);
+        if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
+        inMes(it.dev, it.port, r.v, it.path);
+      } else if (d.type === 'esr') {
+        var phys = d.st.run.ifs[it.port];
+        if (phys.shut) { notes.push(nm + ': интерфейс ' + it.port + ' выключен'); continue; }
+        var k = it.tag === null ? it.port : it.port + '.' + it.tag, x = d.st.run.ifs[k];
+        if (!x) { notes.push(nm + ': нет саб-интерфейса ' + it.port + '.' + it.tag + ' — кадр с тегом ' + it.tag + ' отброшен'); continue; }
+        if (!x.ip || x.shut) { notes.push(nm + ': на ' + k + ' нет IP-адреса или он выключен'); continue; }
+        var pp = x.ip.split('/');
+        eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw }, path: it.path });
+      } else {
+        if (it.tag !== null) { notes.push(nm + ': пришёл кадр с тегом ' + it.tag + ' — ПК тегов не понимает, отброшен'); continue; }
+        var hf = this.ifaces(it.dev)[0];
+        if (!hf) { notes.push(nm + ': на интерфейсе нет IP-адреса' + (d.type === 'deb' && !d.st.up ? ' (ens3 выключен)' : '')); continue; }
+        eps.push({ dev: it.dev, iface: hf, path: it.path });
+      }
+    }
+    return { eps: eps, segs: segs, notes: notes };
+  };
+
+  // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону)
+  P.send = function (src, dst, steps) {
+    var cur = src, ttl = 16, first = null, hops = [];
+    while (ttl-- > 0) {
+      var cd = this.devs[cur];
+      if (owns(this, cur, dst)) return { ok: true, dev: cur, srcIp: first, hops: hops };
+      var r = this.lookup(cur, dst);
+      if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
+        return { ok: false, why: 'Destination net unreachable', first: first }; }
+      if (!first) first = r.iface.ip;
+      var srcMac = EL.mac(cd.name + (r.iface.port || r.iface.name));
+      var fl = this.flood(cur, r.iface, srcMac);
+      var ep = fl.eps.filter(function (e) { return e.iface.ip === r.nh; })[0];
+      var vl = r.iface.vlan || r.iface.tag;
+      steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
+        (vl ? ' в VLAN ' + vl : '') + (r.nh !== dst ? ' (это шлюз к ' + dst + ')' : ''), notes: fl.notes });
+      if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене', notes: fl.notes });
+        return { ok: false, why: 'Host unreachable', first: first }; }
+      var nd = this.devs[ep.dev];
+      this.arp[cur][r.nh] = { mac: EL.mac(nd.name + (ep.iface.port || ep.iface.name)), ifn: r.iface.name };
+      var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + this.arp[cur][r.nh].mac + '»' });
+      steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': пакет ' + first + ' → ' + dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
+        ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+      if (nd.type === 'esr' && ep.iface.fw) {
+        steps.push({ k: 'drop', t: nd.name + ': межсетевой экран на ' + ep.iface.name + ' включён — пакет отброшен (нужна ip firewall disable или зона безопасности)' });
+        return { ok: false, why: 'Request timed out', first: first };
+      }
+      hops.push({ dev: ep.dev, ip: ep.iface.ip });
+      cur = ep.dev;
+      if (!owns(this, cur, dst) && (nd.type === 'vpc' || nd.type === 'deb')) {
+        steps.push({ k: 'drop', t: nd.name + ' получил чужой пакет и не маршрутизирует его' });
+        return { ok: false, why: 'Request timed out', first: first };
+      }
+      if (!owns(this, cur, dst)) steps.push({ k: 'route', t: nd.name + ': адрес ' + dst + ' не мой — ищу маршрут дальше' });
+    }
+    steps.push({ k: 'drop', t: 'TTL истёк — петля маршрутизации' });
+    return { ok: false, why: 'Time to live exceeded', first: first };
+  };
+  // ping туда и обратно
+  P.ping = function (src, dst) {
+    var steps = [], d = this.devs[src];
+    if (IP.ip2n(dst) === null) return { ok: false, why: 'Bad address', steps: steps };
+    if (!this.ifaces(src).length) { steps.push({ k: 'drop', t: d.name + ': нет ни одного IP-адреса' }); return { ok: false, why: 'No IP address', steps: steps }; }
+    var f = this.send(src, dst, steps);
+    if (!f.ok) return { ok: false, why: f.why, steps: steps };
+    if (f.dev === src) return { ok: true, steps: steps, hops: [] };
+    steps.push({ k: 'ok', t: this.devs[f.dev].name + ' получил ICMP echo request и отвечает echo reply' });
+    var b = this.send(f.dev, f.srcIp, steps);
+    if (!b.ok) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз в обратную сторону' });
+      return { ok: false, why: 'Request timed out', steps: steps }; }
+    steps.push({ k: 'ok', t: d.name + ' получил echo reply от ' + dst });
+    return { ok: true, steps: steps, hops: f.hops };
+  };
+  P.reach = function (srcName, dst) { var d = this.byName(srcName); return !!d && this.ping(d.id, dst).ok; };
+
+  // ------------------------------------------------------------------ текстовые выводы
+  P.pingText = function (id, dst, style) {
+    var r = this.ping(id, dst), n = 5, o = [];
+    if (this.onTrace) this.onTrace(r, id, dst);
+    if (IP.ip2n(dst) === null) return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : '% Неверный адрес';
+    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(r.ok ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
+                                                               : (r.why === 'Host unreachable' || r.why === 'No IP address' ? 'host (' + dst + ') not reachable' : dst + ' icmp_seq=' + i + ' timeout'));
+      return o.join('\n'); }
+    if (style === 'linux') {
+      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.');
+      for (var j = 1; j <= 4; j++) if (r.ok) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
+      if (!r.ok && /unreach/i.test(r.why || '')) o.push('From ' + (this.ifaces(id)[0] || { ip: dst }).ip + ' icmp_seq=1 Destination Host Unreachable');
+      if (!r.ok && /No IP/.test(r.why || '')) return 'ping: connect: Network is unreachable';
+      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + (r.ok ? 4 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 3004ms');
+      return o.join('\n');
+    }
+    if (style === 'esr') {
+      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.', r.ok ? '!!!!!' : '.....', '--- ' + dst + ' ping statistics ---',
+             '5 packets transmitted, ' + (r.ok ? 5 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 4005ms');
+      return o.join('\n');
+    }
+    for (var k = 1; k <= n; k++) o.push(r.ok ? 'Reply Received From :' + dst + ', TimeTaken : ' + k + ' msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs');
+    o.push('', '--- ' + dst + ' Ping Statistics ---', n + ' Packets Transmitted, ' + (r.ok ? n : 0) + ' Packets Received, ' + (r.ok ? '0' : '100') + '% Packets Loss');
+    return o.join('\n');
+  };
+  P.traceText = function (id, dst) {
+    if (IP.ip2n(dst) === null) return 'usage: traceroute A.B.C.D';
+    var r = this.ping(id, dst);
+    if (this.onTrace) this.onTrace(r, id, dst);
+    var o = ['traceroute to ' + dst + ', 30 hops max'];
+    (r.hops || []).forEach(function (h, i) { o.push(' ' + (i + 1) + '  ' + h.ip + '  0.' + (400 + i * 90) + ' ms'); });
+    if (!r.ok) o.push(' ' + ((r.hops || []).length + 1) + '  * * *');
+    return o.join('\n');
+  };
+  P.arpText = function (id) {
+    var a = this.arp[id], ks = Object.keys(a);
+    return ks.length ? ks.map(function (ip) { return a[ip].mac + '  ' + ip + ' expires in 120 seconds'; }).join('\n') : 'arp table is empty';
+  };
+  P.macTable = function (id) {
+    var t = this.mac[id], o = ['Vlan    Mac Address         Type      Ports', '----    -----------         ----      -----'];
+    Object.keys(t).forEach(function (k) { var x = t[k]; o.push((x.vlan + '        ').slice(0, 8) + x.mac + '   Learnt    ' + x.port); });
+    return o.join('\n') + '\nTotal Mac Addresses displayed: ' + Object.keys(t).length;
+  };
+
+  // ------------------------------------------------------------------ SSH с компьютера Debian
+  P.sshOpen = function (hst, user, ip) {
+    var s = this, own = this.owner(ip);
+    var r = this.ping(hst.dev, ip);
+    if (!r.ok) return 'ssh: connect to host ' + ip + ' port 22: No route to host';
+    var d = this.devs[own], st = d.st;
+    var on = d.type === 'esr' ? st.run.ssh : d.type === 'mes' ? st.ssh && st.rsa : false;
+    if (!on) return 'ssh: connect to host ' + ip + ' port 22: Connection refused';
+    var users = d.type === 'esr' ? st.run.users : st.users, banner = d.type === 'esr' ? st.run.banner : st.banner;
+    var sess = { stage: 'pw', mode: d.type === 'esr' ? 'priv' : 'priv', ctx: null };
+    function swap(fn) { var m = st.mode, c = st.ctx; st.mode = sess.mode; st.ctx = sess.ctx; var r2 = fn(); sess.mode = st.mode; sess.ctx = st.ctx; st.mode = m; st.ctx = c; return r2; }
+    sess.prompt = function () {
+      if (sess.stage === 'pw') return user + '@' + ip + "'s password: ";
+      return swap(function () { return d.type === 'esr' ? EL.esr.prompt(st) : EL.mes.prompt(st); });
+    };
+    sess.exec = function (line) {
+      if (sess.stage === 'pw') {
+        var u = users[user];
+        if (!u || u.pw !== line.trim()) { hst.ssh = null; return 'Permission denied, please try again.\n' + user + '@' + ip + ': Permission denied (publickey,password).'; }
+        sess.stage = 'cli'; var o = [];
+        if (banner.login) o.push(banner.login);
+        if (banner.exec) o.push(banner.exec);
+        return o.join('\n');
+      }
+      if (/^\s*exit\s*$/i.test(line) && (sess.mode === 'priv' || sess.mode === 'user')) { hst.ssh = null; return 'Connection to ' + ip + ' closed.'; }
+      return swap(function () { return d.type === 'esr' ? EL.esr.exec(st, line) : EL.mes.exec(st, line); });
+    };
+    hst.ssh = sess;
+    return 'The authenticity of host \'' + ip + ' (' + ip + ')\' can\'t be established.\nECDSA key fingerprint is SHA256:' +
+      EL.E.hash(ip).slice(0, 32) + '.\nWarning: Permanently added \'' + ip + '\' (ECDSA) to the list of known hosts.';
+  };
+
+  // ------------------------------------------------------------------ сохранение схемы
+  P.toJSON = function () {
+    var s = this;
+    return { v: 1, devs: this.list().map(function (d) { return { name: d.name, model: d.model, x: d.x, y: d.y, st: d.st }; }),
+             links: this.links.map(function (l) { return [s.devs[l.a.dev].name, l.a.port, s.devs[l.b.dev].name, l.b.port]; }) };
+  };
+  Net.fromJSON = function (j) {
+    var n = new Net();
+    if (!j || j.v !== 1 || !Array.isArray(j.devs)) throw new Error('Файл не похож на схему эмулятора');
+    j.devs.forEach(function (x) { var d = n.add(x.model, x.name, x.x, x.y);
+      if (x.st && x.st.kind === d.st.kind || x.st && x.st.kind === undefined) { d.st = x.st; d.st.ssh = null; EL.attach(d.st, n, d.id); } });
+    j.links.forEach(function (l) { var a = n.byName(l[0]), b = n.byName(l[2]); if (a && b) n.connect(a.id, l[1], b.id, l[3]); });
+    return n;
+  };
+
+  // ------------------------------------------------------------------ единая точка ввода команды на устройство
+  P.exec = function (id, line, ui) {
+    var d = this.devs[id], st = d.st;
+    if (st.askPw) { var a = st.askPw; st.askPw = null; if (line === a.pw) { a.ok(); return ''; } return '% Access denied'; }
+    if (/\?\s*$/.test(line) && (d.type === 'mes' || d.type === 'esr')) return this.help(id, line.replace(/\?\s*$/, ''));
+    if (d.type === 'mes') return EL.mes.exec(st, line);
+    if (d.type === 'esr') return EL.esr.exec(st, line);
+    if (d.type === 'vpc') return H.vpcExec(st, line);
+    return H.debExec(st, line, ui);
+  };
+  P.prompt = function (id) {
+    var d = this.devs[id], st = d.st;
+    if (st.askPw) return 'Password: ';
+    if (d.type === 'mes') return EL.mes.prompt(st);
+    if (d.type === 'esr') return EL.esr.prompt(st);
+    if (d.type === 'vpc') return H.vpcPrompt(st);
+    return H.debPrompt(st);
+  };
+  P.table = function (id, line) {
+    var d = this.devs[id];
+    if (d.type === 'mes') return { T: EL.mes.T, mode: d.st.mode, raw: line };
+    if (d.type === 'esr') { var h = EL.esr.helpTable(d.st, line); return { T: EL.esr.T, mode: h.mode, raw: h.raw, pre: line.slice(0, line.length - h.raw.length) }; }
+    if (d.type === 'deb' && d.st.ssh) return null;
+    return null;
+  };
+  P.help = function (id, line) { var t = this.table(id, line); return t ? EL.cli.help(t.T, t.mode, t.raw) : ''; };
+  P.tab = function (id, line) { var t = this.table(id, line); if (!t) return null; var r = EL.cli.tab(t.T, t.mode, t.raw); return r === null ? null : (t.pre || '') + r; };
+
+  EL.Net = Net; EL.MODELS = MODELS; EL.egress = egress;
+})(typeof window !== 'undefined' ? window : global);
+
+/* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
+   Каждая лаба: gen() — случайный вариант (номера VLAN, адреса), build() — топология, tasks() — проверки, sol() — решение. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, R = EL.rnd, PK = EL.pick;
+
+  function sw(st) { return st; }
+  function dev(net, n) { var d = net.byName(n); return d ? d.st : null; }
+  function port(net, n, p) { var s = dev(net, n); return s && s.ports['gi1/0/' + p]; }
+  function acc(net, n, ps, v) { return ps.every(function (p) { var q = port(net, n, p); return q && q.mode === 'access' && q.access === v; }); }
+  function distinct(k, from) { var o = []; while (o.length < k) { var x = PK(from); if (o.indexOf(x) < 0) o.push(x); } return o; }
+  function apply(net, script) {                 // выполнить команды на устройствах; вернуть ошибки (для автотеста)
+    var errs = [];
+    Object.keys(script).forEach(function (n) {
+      var d = net.byName(n); if (!d) { errs.push('нет устройства ' + n); return; }
+      script[n].forEach(function (l) { var r = net.exec(d.id, l);
+        if (typeof r === 'string' && /^%|Invalid|Bad command|command not found|Error/.test(r)) errs.push(n + ' «' + l + '» → ' + r.split('\n')[0]); });
+    });
+    return errs;
+  }
+  var V10 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+
+  var LABS = [
+    // ------------------------------------------------------------ 2.1
+    { id: '2.1', title: 'Создание и удаление VLAN — режимы access и trunk',
+      goal: 'Освоить создание, удаление и просмотр VLAN на коммутаторе MES.',
+      gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
+      build: function (net) { net.add('MES2428', 'SW1', 420, 260); },
+      tasks: function (p) { var v = p.v; return [
+        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan database → vlan ' + v.join(',') + ')', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
+        { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
+        { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'gi1/0/4–6 → access VLAN ' + v[2], ok: function (n) { return acc(n, 'SW1', [4, 5, 6], v[2]); } },
+        { t: 'gi1/0/8–9 → access VLAN ' + v[4], ok: function (n) { return acc(n, 'SW1', [8, 9], v[4]); } },
+        { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
+        { t: 'gi1/0/3 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 3); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
+        { t: 'Сохраните конфигурацию (write)', ok: function (n) { return !!dev(n, 'SW1').startup; } }]; },
+      sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v.join(','), 'exit', 'do show vlan',
+        'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
+        'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
+        'interface range gigabitethernet 1/0/4-6', 'switchport mode access', 'switchport access vlan ' + v[2], 'exit',
+        'interface gigabitethernet 1/0/7', 'switchport mode access', 'switchport access vlan ' + v[3], 'exit',
+        'interface range gigabitethernet 1/0/8-9', 'switchport mode access', 'switchport access vlan ' + v[4], 'exit',
+        'do show vlan', 'no vlan ' + v[3], 'do show vlan',
+        'interface gigabitethernet 1/0/3', 'switchport mode trunk', 'switchport trunk allowed vlan add ' + v[0] + ',' + v[1], 'end', 'write'] }; } },
+
+    // ------------------------------------------------------------ 3.1
+    { id: '3.1', title: 'Базовая настройка маршрутизатора',
+      goal: 'Базовая настройка vESR: имя, время, адреса, Loopback, саб-интерфейс, пользователь, SSH, баннеры. Проверка с Debian.',
+      gen: function () { return { x: R(1, 254), s: R(10, 99), tz: PK(['+3', '+7', '+10']), city: null }; },
+      build: function (net) { var r = net.add('vESR', 'R1', 560, 260), d = net.add('Debian', 'Debian', 240, 260); net.connect(d.id, 'ens3', r.id, 'gi1/0/1'); },
+      tasks: function (p) { var a = '192.168.' + p.x, s = '173.16.' + p.s;
+        function run(n) { return dev(n, 'R1').run; }
+        return [
+        { t: 'Имя маршрутизатора R1 (не забудьте do commit и do confirm)', ok: function (n) { return run(n).host === 'R1'; } },
+        { t: 'Часовой пояс GMT ' + p.tz + ' (clock timezone gmt ' + p.tz + ')', ok: function (n) { return run(n).tz === p.tz; } },
+        { t: 'gi1/0/1: ' + a + '.1/24, межсетевой экран отключён', ok: function (n) { var x = run(n).ifs['gi1/0/1']; return x.ip === a + '.1/24' && !x.fw; } },
+        { t: 'Loopback 1: 8.8.8.8/32', ok: function (n) { var x = run(n).ifs.lo1; return x && x.ip === '8.8.8.8/32'; } },
+        { t: 'Саб-интерфейс gi1/0/1.50: ' + s + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && x.ip === s + '.1/24' && !x.fw; } },
+        { t: 'Пользователь master / eltex, privilege 14', ok: function (n) { var u = run(n).users.master; return u && u.pw === 'eltex' && u.priv === 14; } },
+        { t: 'SSH-сервер включён', ok: function (n) { return run(n).ssh; } },
+        { t: 'banner login Router-R1 и banner exec «Connect Router R1»', ok: function (n) { var b = run(n).banner; return b.login === 'Router-R1' && b.exec === 'Connect Router R1'; } },
+        { t: 'Все изменения применены и подтверждены (commit + confirm)', ok: function (n) { var s2 = dev(n, 'R1'); return !s2.pending && !s2.unconfirmed; } },
+        { t: 'Debian (вход root / toor): ens3 = ' + a + '.2/24, шлюз ' + a + '.1', ok: function (n) { var d = dev(n, 'Debian'); return d.up && d.ip === a + '.2' && d.len === 24 && d.gw === a + '.1'; } },
+        { t: 'ping с Debian до ' + a + '.1 и до 8.8.8.8 проходит', ok: function (n) { return n.reach('Debian', a + '.1') && n.reach('Debian', '8.8.8.8'); } }]; },
+      sol: function (p) { var a = '192.168.' + p.x, s = '173.16.' + p.s; return {
+        R1: ['configure', 'hostname R1', 'clock timezone gmt ' + p.tz, 'interface gigabitethernet 1/0/1', 'ip address ' + a + '.1/24', 'ip firewall disable', 'exit',
+             'interface loopback 1', 'ip address 8.8.8.8/32', 'exit', 'interface gigabitethernet 1/0/1.50', 'ip address ' + s + '.1/24', 'ip firewall disable', 'exit',
+             'username master', 'password eltex', 'privilege 14', 'exit', 'ip ssh server', 'banner login Router-R1', 'banner exec "Connect Router R1"',
+             'do commit', 'do confirm', 'end', 'set date 11:25:30 11 November 2025', 'show date'],
+        Debian: ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + a + '.2/24 dev ens3', 'ip route add default via ' + a + '.1', 'ping ' + a + '.1'] }; },
+      alt: 'На Debian адрес можно задать и как в оригинальной лабе: nano /etc/network/interfaces → iface ens3 inet static / address / netmask / gateway, затем ifdown ens3 и ifup ens3.' },
+
+    // ------------------------------------------------------------ 4.1
+    { id: '4.1', title: 'Маршрутизация между VLAN на коммутаторе (SVI)',
+      goal: 'Разделить сеть на две VLAN и обеспечить связь между ними через интерфейсы VLAN коммутатора MES (L3-интерфейсы SVI).',
+      gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, n: [R(1, 99), R(100, 199)] }; },
+      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 280);
+        [['VPC1', 140, 150, 1], ['VPC2', 140, 410, 2], ['VPC3', 700, 150, 11], ['VPC4', 700, 410, 12]].forEach(function (x) {
+          var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
+      tasks: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return [
+        { t: 'VLAN ' + v[0] + ' и ' + v[1] + ' созданы', ok: function (n) { var s = dev(n, 'SW1'); return s.vlans[v[0]] && s.vlans[v[1]]; } },
+        { t: 'gi1/0/1–2 → access VLAN ' + v[0] + ', gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'interface vlan ' + v[0] + ': ' + A + '.1/24, interface vlan ' + v[1] + ': ' + B + '.1/24', ok: function (n) { var s = dev(n, 'SW1');
+            return s.svi[v[0]] === A + '.1/24' && s.svi[v[1]] === B + '.1/24'; } },
+        { t: 'VPC1/VPC2 — ' + A + '.2 и .3, VPC3/VPC4 — ' + B + '.2 и .3, шлюзы — адреса SVI', ok: function (n) {
+            return dev(n, 'VPC1').ip === A + '.2' && dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC3').ip === B + '.2' && dev(n, 'VPC4').ip === B + '.3' &&
+                   dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
+        { t: 'ping VPC1 → VPC2 (внутри VLAN)', ok: function (n) { return n.reach('VPC1', A + '.3'); } },
+        { t: 'ping VPC1 → VPC3 и VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC4', A + '.3'); } }]; },
+      sol: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return {
+        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+              'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
+              'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
+              'interface vlan ' + v[0], 'ip address ' + A + '.1 255.255.255.0', 'exit', 'interface vlan ' + v[1], 'ip address ' + B + '.1 255.255.255.0', 'end', 'write'],
+        VPC1: ['ip ' + A + '.2/24 ' + A + '.1'], VPC2: ['ip ' + A + '.3/24 ' + A + '.1'], VPC3: ['ip ' + B + '.2/24 ' + B + '.1'], VPC4: ['ip ' + B + '.3/24 ' + B + '.1'] }; } },
+
+    // ------------------------------------------------------------ 4.2
+    { id: '4.2', title: 'Маршрутизация между VLAN: Router-on-a-Stick',
+      goal: 'Коммутатор MES разделяет ПК по VLAN, trunk передаёт обе VLAN на ESR, ESR маршрутизирует через саб-интерфейсы.',
+      gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, a: R(1, 254), b: R(1, 254) }; },
+      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 330), r = net.add('vESR', 'R1', 420, 110);
+        net.connect(s.id, 'gi1/0/6', r.id, 'gi1/0/1');
+        [['VPC1', 140, 230, 1], ['VPC2', 140, 470, 2], ['VPC3', 700, 230, 11], ['VPC4', 700, 470, 12]].forEach(function (x) {
+          var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
+      tasks: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return [
+        { t: 'SW1: VLAN ' + v[0] + ' (gi1/0/1–2) и VLAN ' + v[1] + ' (gi1/0/11–12) в режиме access', ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'SW1 gi1/0/6 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 6); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
+        { t: 'R1: gi1/0/1.' + v[0] + ' = ' + A + '.1/24, gi1/0/1.' + v[1] + ' = ' + B + '.1/24, экран отключён, commit + confirm', ok: function (n) {
+            var f = dev(n, 'R1').run.ifs, x = f['gi1/0/1.' + v[0]], y = f['gi1/0/1.' + v[1]];
+            return x && y && x.ip === A + '.1/24' && y.ip === B + '.1/24' && !x.fw && !y.fw; } },
+        { t: 'VPC1/VPC2 — ' + A + '.2/.3, VPC3/VPC4 — ' + B + '.2/.3, шлюзы — адреса R1', ok: function (n) {
+            return dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC4').ip === B + '.3' && dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
+        { t: 'ping VPC1 → VPC3 и VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC2', B + '.3'); } }]; },
+      sol: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return {
+        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+              'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
+              'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
+              'interface gigabitethernet 1/0/6', 'switchport mode trunk', 'switchport trunk allowed vlan add ' + v[0] + ',' + v[1], 'end', 'write'],
+        R1: ['configure', 'interface gigabitethernet 1/0/1.' + v[0], 'ip firewall disable', 'ip address ' + A + '.1/24', 'exit',
+             'interface gigabitethernet 1/0/1.' + v[1], 'ip firewall disable', 'ip address ' + B + '.1/24', 'exit', 'do commit', 'do confirm', 'end'],
+        VPC1: ['ip ' + A + '.2/24 ' + A + '.1'], VPC2: ['ip ' + A + '.3/24 ' + A + '.1'], VPC3: ['ip ' + B + '.2/24 ' + B + '.1'], VPC4: ['ip ' + B + '.3/24 ' + B + '.1'] }; } },
+
+    // ------------------------------------------------------------ поиск неисправности
+    { id: 'T.1', title: 'Поиск неисправности: два коммутатора и Router-on-a-Stick',
+      goal: 'Сеть уже настроена, но VPC1 не может достучаться до VPC4. Найдите и исправьте ошибку. Смотрите путь пакета пошагово: где он отбрасывается и почему.',
+      gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; });
+        return { v: v, a: R(1, 254), b: R(1, 254), fault: R(0, 5) }; },
+      build: function (net, p) {
+        var s1 = net.add('MES2428', 'SW1', 300, 330), s2 = net.add('MES2428', 'SW2', 620, 330), r = net.add('vESR', 'R1', 300, 110);
+        net.connect(s1.id, 'gi1/0/24', s2.id, 'gi1/0/24'); net.connect(s1.id, 'gi1/0/6', r.id, 'gi1/0/1');
+        [['VPC1', s1, 120, 480, 1], ['VPC2', s1, 300, 520, 11], ['VPC3', s2, 620, 520, 1], ['VPC4', s2, 820, 480, 11]].forEach(function (x) {
+          var d = net.add('VPC', x[0], x[2], x[3]); net.connect(d.id, 'eth0', x[1].id, 'gi1/0/' + x[4]); });
+        var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v, f = p.fault;
+        var sw = function (acc2, trunks, extra) { return ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+          'interface gigabitethernet 1/0/1', 'switchport mode access', 'switchport access vlan ' + acc2[0], 'exit',
+          'interface gigabitethernet 1/0/11', 'switchport mode access', 'switchport access vlan ' + acc2[1], 'exit']
+          .concat(trunks.reduce(function (o, t) { return o.concat(['interface gigabitethernet 1/0/' + t[0], 'switchport mode trunk', 'switchport trunk allowed vlan add ' + t[1], 'exit']); }, []))
+          .concat(extra || []).concat(['end']); };
+        var both = v[0] + ',' + v[1];
+        apply(net, {
+          SW1: sw([v[0], v[1]], [[24, both], [6, both]]),
+          SW2: sw([v[0], f === 0 ? v[0] : v[1]], [[24, f === 1 ? '' + v[0] : both]]),
+          R1: ['configure', 'interface gigabitethernet 1/0/1.' + v[0], 'ip address ' + A + '.1/24', 'ip firewall disable', 'exit',
+               'interface gigabitethernet 1/0/1.' + (f === 2 ? v[1] + 1 : v[1]), 'ip address ' + B + '.1/24'].concat(f === 3 ? [] : ['ip firewall disable'])
+               .concat(['exit', 'do commit', 'do confirm', 'end']),
+          VPC1: ['ip ' + A + '.2/24 ' + A + '.1'], VPC2: ['ip ' + B + '.2/24 ' + B + '.1'], VPC3: ['ip ' + A + '.3/24 ' + A + '.1'],
+          VPC4: ['ip ' + B + '.3/24 ' + (f === 4 ? B + '.254' : B + '.1')] });
+        if (f === 5) apply(net, { SW1: ['configure', 'interface gigabitethernet 1/0/24', 'shutdown', 'end'] });
+        p.A = A; p.B = B;
+      },
+      tasks: function (p) { var B = '172.16.' + p.b, A = '192.168.' + p.a; return [
+        { t: 'VPC1 (' + A + '.2) успешно пингует VPC4 (' + B + '.3)', ok: function (n) { return n.reach('VPC1', B + '.3'); } },
+        { t: 'Остальные пары тоже работают: VPC3 → VPC2 и VPC1 → VPC3', ok: function (n) { return n.reach('VPC3', B + '.2') && n.reach('VPC1', A + '.3'); } }]; },
+      sol: function (p) { var v = p.v, B = '172.16.' + p.b;
+        var fix = [
+          { SW2: ['configure', 'interface gigabitethernet 1/0/11', 'switchport access vlan ' + v[1], 'end'] },
+          { SW2: ['configure', 'interface gigabitethernet 1/0/24', 'switchport trunk allowed vlan add ' + v[1], 'end'] },
+          { R1: ['configure', 'no interface gigabitethernet 1/0/1.' + (v[1] + 1), 'interface gigabitethernet 1/0/1.' + v[1], 'ip address ' + B + '.1/24', 'ip firewall disable', 'exit', 'do commit', 'do confirm', 'end'] },
+          { R1: ['configure', 'interface gigabitethernet 1/0/1.' + v[1], 'ip firewall disable', 'exit', 'do commit', 'do confirm', 'end'] },
+          { VPC4: ['ip ' + B + '.3/24 ' + B + '.1'] },
+          { SW1: ['configure', 'interface gigabitethernet 1/0/24', 'no shutdown', 'end'] }][p.fault];
+        return fix; },
+      hint: function (p) { return ['Проверьте show vlan на SW2 — в какой VLAN порт VPC4?', 'Посмотрите show interfaces switchport gi1/0/24 на обоих коммутаторах — какие VLAN разрешены на trunk?',
+        'На R1: show ip interfaces — совпадает ли номер саб-интерфейса с VLAN?', 'R1 получает пакет, но молчит — что с межсетевым экраном на саб-интерфейсе?',
+        'show на VPC4 — правильный ли шлюз?', 'show interfaces status на SW1 — все ли порты включены?'][p.fault]; } }
+  ];
+
+  // случайные задания из движка дек (TASKS base / vlan) — один коммутатор
+  function randomTask(kind) {
+    var pool = EL.E.TASKS[kind], k = R(0, pool.length - 1), T = pool[k], P = T.gen();
+    return { T: T, P: P, k: k };
+  }
+  EL.labs = { LABS: LABS, apply: apply, randomTask: randomTask, byId: function (id) { return LABS.filter(function (l) { return l.id === id; })[0]; } };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Интерфейс эмулятора: палитра, схема (SVG), кабели, консоли устройств, пошаговая анимация пакетов, лабы и задания. */
+(function () {
+  'use strict';
+  var EL = window.EL, $ = function (id) { return document.getElementById(id); };
+  var NS = 'http://www.w3.org/2000/svg';
+  var net = new EL.Net(), sel = null, selLink = null, cons = {}, tool = null, cable = null, mode = 'free';
+  var lab = null, labP = null, labSolShown = false, task = null, trace = null;
+  var cv = $('cv'), out = $('out'), inp = $('in'), pr = $('pr');
+
+  // ------------------------------------------------------------------ иконки
+  function icon(type, w) {
+    var s = { mes: '<rect x="2" y="6" width="34" height="18" rx="2" class="box"/><path d="M10 12h16l-3-3M28 18H12l3 3" fill="none" stroke="currentColor" stroke-width="2"/>',
+      esr: '<circle cx="19" cy="15" r="12" class="box"/><path d="M12 15h14M19 8v14M23 11l3 4-3 4M15 11l-3 4 3 4" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+      vpc: '<rect x="6" y="3" width="26" height="17" rx="1" class="box"/><path d="M14 25h10M19 20v5" stroke="currentColor" stroke-width="2"/>',
+      deb: '<rect x="6" y="3" width="26" height="17" rx="1" class="box"/><path d="M14 25h10M19 20v5" stroke="currentColor" stroke-width="2"/><path d="M22 8a4 4 0 1 0 0 6" fill="none" stroke="#c70036" stroke-width="2"/>' }[type];
+    return '<svg viewBox="0 0 38 28" width="' + (w || 38) + '" style="color:#14161a"><style>.box{fill:#fff;stroke:#14161a;stroke-width:2}</style>' + s + '</svg>';
+  }
+  // ------------------------------------------------------------------ палитра
+  function buildPalette() {
+    var g = {}, h = '';
+    Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
+    Object.keys(g).forEach(function (gr) {
+      h += '<h4>' + gr + '</h4>';
+      g[gr].forEach(function (k) { var m = EL.MODELS[k];
+        h += '<button class="pi" data-model="' + k + '">' + icon(m.type) + '<span><b>' + k + '</b><small>' + m.note + '</small></span></button>'; });
+    });
+    h += '<p class="note">Коммутаторы — CLI MES24xx (ПО 10.4), маршрутизатор — CLI ESR. Модели берутся из каталога и даташитов Eltex; поведение — модель по документации, не прошивка.</p>';
+    $('pal').innerHTML = h;
+  }
+  $('pal').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-model]'); if (!b) return;
+    var n = net.list().length, d = net.add(b.dataset.model, null, 130 + (n % 5) * 180, 110 + Math.floor(n / 5) % 3 * 190);
+    selectDev(d.id); draw(); refresh();
+  });
+
+  // ------------------------------------------------------------------ схема
+  function el(tag, attrs, parent) { var x = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { x.setAttribute(k, attrs[k]); });
+    if (parent) parent.appendChild(x); return x; }
+  function center(d) { return { x: d.x, y: d.y }; }
+  function draw() {
+    cv.innerHTML = '';
+    var gl = el('g', {}, cv), gp = el('g', {}, cv), gd = el('g', {}, cv);
+    el('g', { id: 'pk' }, cv);
+    net.links.forEach(function (l, i) {
+      var a = net.devs[l.a.dev], b = net.devs[l.b.dev], A = center(a), B = center(b);
+      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (selLink === i ? ' sel' : ''), 'data-li': i }, gl);
+      ln.addEventListener('click', function (e) { e.stopPropagation(); selLink = i; sel = null; draw(); });
+      [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (z) {
+        var dx = z[1].x - z[0].x, dy = z[1].y - z[0].y, L = Math.hypot(dx, dy) || 1, k = Math.min(95, L * 0.34);
+        var px = z[0].x + dx / L * k, py = z[0].y + dy / L * k, g = el('g', { 'class': 'pl' }, gp), w = z[2].length * 9 + 12;
+        el('rect', { x: px - w / 2, y: py - 11, width: w, height: 22, rx: 11 }, g);
+        el('text', { x: px, y: py }, g).textContent = z[2];
+      });
+    });
+    net.list().forEach(function (d) {
+      var g = el('g', { 'class': 'dev' + (sel === d.id ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : ''), transform: 'translate(' + d.x + ',' + d.y + ') scale(1.5)', 'data-id': d.id }, gd);
+      if (d.type === 'mes') { el('rect', { x: -46, y: -22, width: 92, height: 44, rx: 4, 'class': 'box' }, g);
+        el('path', { d: 'M-24 -8h40l-7-7M24 8h-40l7 7', fill: 'none', stroke: '#14161a', 'stroke-width': 3 }, g); }
+      if (d.type === 'esr') { el('circle', { r: 28, 'class': 'box' }, g);
+        el('path', { d: 'M-16 0h32M0 -16v32M9 -7l7 7-7 7M-9 -7l-7 7 7 7', fill: 'none', stroke: '#14161a', 'stroke-width': 2.6 }, g); }
+      if (d.type === 'vpc' || d.type === 'deb') { el('rect', { x: -26, y: -24, width: 52, height: 34, rx: 2, 'class': 'box' }, g);
+        el('path', { d: 'M-12 22h24M0 10v12', stroke: '#14161a', 'stroke-width': 3 }, g);
+        if (d.type === 'deb') el('path', { d: 'M6 -14a8 8 0 1 0 0 12', fill: 'none', stroke: '#c70036', 'stroke-width': 3 }, g); }
+      el('text', { y: 46, 'class': 'lbl' }, g).textContent = d.name;
+      el('text', { y: 61, 'class': 'mdl' }, g).textContent = d.model + ipLabel(d);
+      g.addEventListener('pointerdown', function (e) { startDrag(e, d); });
+    });
+  }
+  function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
+  function svgPt(e) { var p = cv.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(cv.getScreenCTM().inverse()); }
+  function startDrag(e, d) {
+    e.stopPropagation();
+    if (tool === 'cable') { pickPort(d, e); return; }
+    var p0 = svgPt(e), x0 = d.x, y0 = d.y, moved = false;
+    function mv(ev) { var p = svgPt(ev); d.x = Math.max(50, Math.min(950, x0 + p.x - p0.x)); d.y = Math.max(40, Math.min(570, y0 + p.y - p0.y));
+      if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) moved = true;
+      var g = cv.querySelector('[data-id="' + d.id + '"]'); if (g) g.setAttribute('transform', 'translate(' + d.x + ',' + d.y + ') scale(1.5)'); if (moved) drawLinksOnly(); }
+    function up() { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); if (!moved) selectDev(d.id); draw(); }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+  }
+  function drawLinksOnly() { draw(); }
+  cv.addEventListener('pointerdown', function () { if (tool !== 'cable') { selLink = null; draw(); } closePop(); });
+
+  // ------------------------------------------------------------------ кабель: выбор портов
+  var pop = null;
+  function closePop() { if (pop) { pop.remove(); pop = null; } }
+  function pickPort(d, e) {
+    closePop();
+    var free = net.freePorts(d.id);
+    if (!free.length) { toast('У ' + d.name + ' нет свободных портов'); return; }
+    if (cable && cable.a === d.id) { cable = null; draw(); return; }
+    pop = document.createElement('div'); pop.className = 'pop';
+    pop.innerHTML = '<b>' + d.name + ': порт</b>' + free.map(function (p) { return '<button data-p="' + p + '">' + p + '</button>'; }).join('');
+    var r = cv.parentNode.getBoundingClientRect();
+    pop.style.left = Math.min(e.clientX - r.left + 10, r.width - 190) + 'px'; pop.style.top = Math.min(e.clientY - r.top, r.height - 290) + 'px';
+    cv.parentNode.appendChild(pop);
+    pop.addEventListener('pointerdown', function (ev) { ev.stopPropagation(); });
+    pop.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-p]'); if (!b) return;
+      if (!cable) { cable = { a: d.id, ap: b.dataset.p }; hint('Теперь щёлкните второе устройство'); }
+      else { var err = net.connect(cable.a, cable.ap, d.id, b.dataset.p); if (err) toast(err); cable = null; hint('Кабель проложен. Щёлкните следующее устройство или выключите режим «Кабель»'); refresh(); }
+      closePop(); draw();
+    });
+  }
+  $('tCable').addEventListener('click', function () { tool = tool === 'cable' ? null : 'cable'; cable = null; this.classList.toggle('on', tool === 'cable');
+    hint(tool ? 'Режим «Кабель»: щёлкните первое устройство и выберите порт' : 'Щёлкните устройство — откроется консоль'); draw(); });
+  function delSel() {
+    if (selLink !== null) { net.disconnect(selLink); selLink = null; }
+    else if (sel) { net.remove(sel); delete cons[sel]; sel = null; }
+    draw(); refresh(); renderTabs(); showConsole();
+  }
+  $('tDel').addEventListener('click', delSel);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Delete' && document.activeElement !== inp && !$('mNano').classList.contains('on')) delSel(); });
+
+  // ------------------------------------------------------------------ консоли
+  function con(id) { return cons[id] || (cons[id] = { html: '', hist: [], hi: 0 }); }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function print(t, cls) { if (!sel) return; var c = con(sel), h = '<div class="' + (cls || '') + '">' + esc(t) + '</div>'; c.html += h;
+    out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight; }
+  function selectDev(id) {
+    sel = id; selLink = null;
+    var c = con(id);
+    if (!c.html) { var d = net.devs[id];
+      c.html = '<div class="s">' + esc(d.type === 'deb' ? 'Debian GNU/Linux 11 debian tty1' : d.type === 'vpc' ? 'Welcome to Virtual PC Simulator. Введите ? для справки.' :
+        'Console · ' + d.model + ' · ' + d.name + (d.type === 'mes' ? '\nUser Name:admin\nPassword:*****' : '\nesr login: admin\nPassword: ********')) + '</div>'; }
+    renderTabs(); showConsole(); inp.focus();
+  }
+  function renderTabs() {
+    $('tabs').innerHTML = Object.keys(cons).filter(function (id) { return net.devs[id]; }).map(function (id) {
+      return '<button data-id="' + id + '" class="' + (id === sel ? 'on' : '') + '">' + esc(net.devs[id].name) + '</button>'; }).join('');
+  }
+  $('tabs').addEventListener('click', function (e) { var b = e.target.closest('[data-id]'); if (b) { selectDev(b.dataset.id); draw(); } });
+  function showConsole() {
+    if (!sel || !net.devs[sel]) { out.innerHTML = '<div class="empty">Щёлкните устройство на схеме, чтобы открыть его консоль.</div>'; pr.textContent = ''; return; }
+    out.innerHTML = con(sel).html; out.scrollTop = out.scrollHeight; setPrompt();
+  }
+  function setPrompt() { if (!sel) return; var p = net.prompt(sel); pr.textContent = p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; }
+  var uiHooks = { clear: function () { con(sel).html = ''; out.innerHTML = ''; }, edit: openNano };
+  function run(line) {
+    var d = net.devs[sel], p = net.prompt(sel), c = con(sel);
+    print(p + (inp.type === 'password' ? '' : line), 'c');
+    if (line.trim()) { c.hist.push(line); } c.hi = c.hist.length;
+    var r = net.exec(sel, line, uiHooks);
+    if (r) print(r, /^%|Unrecognized|Bad command|command not found|Permission denied|Error|not reachable|timeout|100% packet loss|Login incorrect/.test(r) ? 'e' : '');
+    setPrompt(); draw(); refresh();
+    if (d.type === 'vpc' || d.type === 'deb') fillPing();
+  }
+  inp.addEventListener('keydown', function (e) {
+    if (!sel) return;
+    var c = con(sel);
+    if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(v); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { if (c.hi > 0) { c.hi--; inp.value = c.hist[c.hi]; } e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { if (c.hi < c.hist.length) { c.hi++; inp.value = c.hist[c.hi] || ''; } e.preventDefault(); }
+    else if (e.key === 'Tab') { e.preventDefault(); var t = net.tab(sel, inp.value); if (t) inp.value = t; else if (net.table(sel, inp.value)) { print(net.prompt(sel) + inp.value, 'c'); print(net.help(sel, inp.value), 'h'); } }
+    else if (e.key === '?' && net.table(sel, inp.value)) { e.preventDefault(); print(net.prompt(sel) + inp.value + '?', 'c'); print(net.help(sel, inp.value), 'h'); }
+  });
+  out.addEventListener('click', function () { if (!getSelection().toString()) inp.focus(); });
+
+  // ------------------------------------------------------------------ nano
+  var nanoSave = null;
+  function openNano(name, text, save) { nanoSave = save; $('nanoT').textContent = 'GNU nano 5.4    ' + name; $('nanoTx').value = text; $('mNano').classList.add('on'); $('nanoTx').focus(); }
+  function nanoClose(saveIt) { if (saveIt && nanoSave) { nanoSave($('nanoTx').value); toast('Файл сохранён'); } if (!saveIt) { $('mNano').classList.remove('on'); inp.focus(); } }
+  $('nanoS').addEventListener('click', function () { nanoClose(true); });
+  $('nanoX').addEventListener('click', function () { nanoClose(false); });
+  $('nanoTx').addEventListener('keydown', function (e) {
+    if (e.ctrlKey && (e.key === 's' || e.key === 'S' || e.key === 'ы')) { e.preventDefault(); nanoClose(true); }
+    if (e.ctrlKey && (e.key === 'x' || e.key === 'X' || e.key === 'ч')) { e.preventDefault(); nanoClose(false); }
+    e.stopPropagation();
+  });
+
+  // ------------------------------------------------------------------ ping из панели
+  function fillPing() {
+    var s = $('pSrc'), v = s.value;
+    s.innerHTML = net.list().filter(function (d) { return net.ifaces(d.id).length; }).map(function (d) { return '<option value="' + d.id + '">' + esc(d.name) + '</option>'; }).join('');
+    if (v && net.devs[v]) s.value = v;
+    var ips = []; net.list().forEach(function (d) { net.ifaces(d.id).forEach(function (f) { ips.push('<option value="' + f.ip + '">' + esc(d.name + ' ' + f.name) + '</option>'); }); });
+    $('pIps').innerHTML = ips.join('');
+  }
+  $('pGo').addEventListener('click', function () {
+    var s = $('pSrc').value, d = $('pDst').value.trim();
+    if (!s) { toast('Нет устройств с IP-адресом'); return; }
+    if (EL.ip.ip2n(d) === null) { toast('Введите адрес получателя'); return; }
+    var r = net.ping(s, d); showTrace(r, s, d);
+    toast(net.devs[s].name + ' → ' + d + ': ' + (r.ok ? 'ответ получен' : 'нет ответа (' + r.why + ')'));
+  });
+
+  // ------------------------------------------------------------------ пошаговая трасса пакета
+  net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
+  function showTrace(r, id, dst) {
+    stopTrace();
+    trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };
+    $('trace').classList.add('on'); play();
+  }
+  function stopTrace() { if (trace && trace.timer) { clearTimeout(trace.timer); trace.timer = null; } var g = $('pk'); if (g) g.innerHTML = ''; }
+  function renderStep(animate) {
+    var s = trace.steps[trace.i], cls = { arp: 'arp', arpr: 'arp', ip: 'ip', drop: 'drop', ok: 'ok', route: '' }[s.k];
+    $('trN').textContent = trace.title + ' · шаг ' + (trace.i + 1) + ' из ' + trace.steps.length + (trace.i === trace.steps.length - 1 ? (trace.ok ? ' · ДОСТАВЛЕНО' : ' · НЕ ДОСТАВЛЕНО') : '');
+    $('trT').className = 't ' + cls; $('trT').textContent = s.t;
+    $('trNotes').textContent = (s.notes || []).length && (s.k === 'drop' || s.k === 'arp') ? 'Отброшено по пути: ' + s.notes.join('; ') : '';
+    var dur = 0; if (animate && s.segs) dur = animSegs(s.segs, s.k === 'arp', { arp: '#d98c00', arpr: '#d98c00', ip: '#1756f5' }[s.k] || '#178a4c');
+    return dur;
+  }
+  function animSegs(segs, flood, color) {
+    var g = $('pk'); if (!g) return 0; g.innerHTML = '';
+    var dur = 650, gap = flood ? 160 : dur, total = 0;
+    segs.forEach(function (sg, i) {
+      var a = net.devs[sg.from], b = net.devs[sg.to]; if (!a || !b) return;
+      var t0 = (flood ? depth(segs, i) : i) * gap; total = Math.max(total, t0 + dur);
+      var dot = el('g', { 'class': 'pkt' }, g); el('circle', { r: 9, fill: color }, dot);
+      if (sg.tag !== null) el('text', { x: 12, y: -10 }, dot).textContent = 'VLAN ' + sg.tag;
+      dot.setAttribute('opacity', 0);
+      var st = performance.now() + t0;
+      (function step(now) { var k = (now - st) / dur;
+        if (k < 0) { requestAnimationFrame(step); return; }
+        if (k > 1) { dot.setAttribute('opacity', 0.35); return; }
+        dot.setAttribute('opacity', 1);
+        dot.setAttribute('transform', 'translate(' + (a.x + (b.x - a.x) * k) + ',' + (a.y + (b.y - a.y) * k) + ')');
+        requestAnimationFrame(step); })(performance.now());
+    });
+    return total;
+  }
+  function depth(segs, i) {                   // глубина отрезка в дереве рассылки: сколько отрезков до него ведут
+    var d = 0, cur = segs[i];
+    for (var guard = 0; guard < 20; guard++) {
+      var par = segs.slice(0, segs.indexOf(cur)).filter(function (s) { return s.to === cur.from; }).pop();
+      if (!par) break; d++; cur = par;
+    }
+    return d;
+  }
+  function play() { if (!trace) return; var dur = renderStep(true);
+    if (trace.i < trace.steps.length - 1) trace.timer = setTimeout(function () { trace.i++; play(); }, Math.max(dur, 900) + 500); }
+  $('trace').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-t]'); if (!b || !trace) return;
+    var a = b.dataset.t; stopTrace();
+    if (a === 'close') { $('trace').classList.remove('on'); trace = null; return; }
+    if (a === 'first') trace.i = 0;
+    if (a === 'prev') trace.i = Math.max(0, trace.i - 1);
+    if (a === 'next') trace.i = Math.min(trace.steps.length - 1, trace.i + 1);
+    if (a === 'play') { trace.i = 0; play(); return; }
+    renderStep(true);
+  });
+
+  // ------------------------------------------------------------------ лабы
+  function labList() {
+    $('lab').innerHTML = '<div class="k">Лабораторные NTF2 · синтаксис MES и ESR</div><h2>Выберите работу</h2>' +
+      '<p>Каждый запуск — новый вариант: номера VLAN и адреса меняются. Проверка идёт после каждой команды.</p><div class="labs">' +
+      EL.labs.LABS.map(function (L) { return '<button data-lab="' + L.id + '"><b>' + L.id + '</b>' + esc(L.title) + '</button>'; }).join('') + '</div>';
+  }
+  function startLab(id) {
+    lab = EL.labs.byId(id); labP = lab.gen(); labSolShown = false; resetNet();
+    lab.build(net, labP); draw(); fillPing(); renderLab();
+    var first = net.list()[0]; if (first) selectDev(first.id);
+  }
+  function renderLab() {
+    if (mode !== 'lab' || !lab) return;
+    var ts = lab.tasks(labP), ok = 0;
+    var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
+    var sol = '';
+    if (labSolShown) { var s = lab.sol(labP); sol = Object.keys(s).map(function (n) { return '<b>' + n + '</b><pre>' + esc(s[n].join('\n')) + '</pre>'; }).join('') + (lab.alt ? '<p>' + esc(lab.alt) + '</p>' : ''); }
+    $('lab').innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' + li + '</ol>' +
+      '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'Работа выполнена ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
+      (lab.hint && labSolShown === 'hint' ? '<div class="hintbox">' + esc(lab.hint(labP)) + '</div>' : '') +
+      '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
+      '<button data-a="sol">' + (labSolShown === true ? 'Скрыть решение' : 'Решение') + '</button><button data-a="list">Все работы</button></div>' + (labSolShown === true ? sol : '');
+  }
+  // ------------------------------------------------------------------ случайные задания (как в деках)
+  function startTask(kind) {
+    resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv';
+    task = EL.labs.randomTask(kind); task.kind = kind; task.dev = d.id; if (task.T.setup) task.T.setup(task.P, d.st);
+    task.html = task.T.text(task.P); task.res = ''; task.sol = false;
+    draw(); selectDev(d.id); renderTask();
+  }
+  function renderTask() {
+    if (mode !== 'task') return;
+    if (!task) { $('lab').innerHTML = '<div class="k">Задания</div><h2>Случайное задание на коммутатор</h2><p>Те же задания, что в тренажёрах дек «Базовая настройка» и «VLAN». Решение проверяется по итоговому состоянию коммутатора.</p>' +
+      '<div class="row"><button data-a="tbase" class="pri">Базовая настройка</button><button data-a="tvlan" class="pri">VLAN</button></div>'; return; }
+    var T = task.T;
+    $('lab').innerHTML = '<div class="k">Задание · ' + (task.kind === 'base' ? 'базовая настройка' : 'VLAN') + '</div><p style="color:var(--ink);font-weight:600">' + task.html + '</p>' +
+      '<div class="row"><button data-a="tcheck" class="pri">Проверить</button>' + (T.send ? '<button data-a="tsend">Отправить кадр</button>' : '') +
+      '<button data-a="t' + task.kind + '">Другое задание</button><button data-a="tsol">Решение</button><button data-a="tback">Назад</button></div>' + task.res +
+      (task.sol ? '<pre>' + esc(T.sol(task.P).join('\n')) + '</pre>' : '');
+  }
+  $('lab').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-lab],[data-a]'); if (!b) return;
+    if (b.dataset.lab) { startLab(b.dataset.lab); return; }
+    var a = b.dataset.a, st = task && net.devs[task.dev] && net.devs[task.dev].st;
+    if (a === 'new') startLab(lab.id);
+    if (a === 'sol') { labSolShown = labSolShown === true ? false : true; renderLab(); }
+    if (a === 'hint') { labSolShown = 'hint'; renderLab(); }
+    if (a === 'list') { lab = null; labList(); }
+    if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
+    if (a === 'tback') { task = null; renderTask(); }
+    if (a === 'tsol') { task.sol = !task.sol; renderTask(); }
+    if (a === 'tcheck') { var cs = task.T.checks(task.P), ok = 0;
+      task.res = '<div class="send">' + cs.map(function (c) { var y = !!c[1](st); if (y) ok++; return '<div class="' + (y ? 'ok' : 'no') + '">' + (y ? '✓ ' : '✗ ') + c[0] + '</div>'; }).join('') +
+        '</div><div class="sum ' + (ok === cs.length ? 'ok' : '') + '">' + (ok === cs.length ? 'Задание выполнено ✓' : 'Выполнено ' + ok + ' из ' + cs.length) + '</div>'; renderTask(); }
+    if (a === 'tsend') { var r = task.T.send(task.P, st);
+      task.res = '<div class="send">' + r.map(function (x) { return '<div class="' + (x.ok ? 'ok' : x.exp ? 'exp' : 'no') + '">✉ ' + esc(x.t) + '</div>'; }).join('') + '</div>'; renderTask(); }
+  });
+  function refresh() { if (mode === 'lab') renderLab(); }
+
+  // ------------------------------------------------------------------ режимы и файл
+  function resetNet() { stopTrace(); $('trace').classList.remove('on'); net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
+    sel = null; selLink = null; cons = {}; renderTabs(); showConsole(); fillPing(); draw(); }
+  $('nav').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === 'help') { $('mHelp').classList.add('on'); return; }
+    mode = b.dataset.m;
+    [].forEach.call(this.children, function (x) { x.classList.toggle('on', x === b); });
+    $('lab').classList.toggle('on', mode !== 'free');
+    if (mode === 'lab') { if (lab) renderLab(); else labList(); }
+    if (mode === 'task') renderTask();
+  });
+  $('bClear').addEventListener('click', function () { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); if (mode === 'lab') labList(); if (mode === 'task') renderTask(); });
+  $('bSave').addEventListener('click', function () {
+    var blob = new Blob([JSON.stringify(net.toJSON(), null, 1)], { type: 'application/json' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'eltex-shema.json'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  });
+  $('bOpen').addEventListener('click', function () { $('fOpen').click(); });
+  $('fOpen').addEventListener('change', function () {
+    var f = this.files[0]; if (!f) return; var rd = new FileReader();
+    rd.onload = function () { try { var n = EL.Net.fromJSON(JSON.parse(rd.result)); resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
+        draw(); fillPing(); toast('Схема загружена: ' + net.list().length + ' устройств'); } catch (err) { toast('Не удалось открыть файл: ' + err.message); } };
+    rd.readAsText(f); this.value = '';
+  });
+  $('mHelp').addEventListener('click', function (e) { if (e.target === this || e.target.closest('.close')) this.classList.remove('on'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { $('mHelp').classList.remove('on'); closePop(); } });
+
+  var tt = null;
+  function toast(t) { var x = $('toast'); x.textContent = t; x.classList.add('on'); clearTimeout(tt); tt = setTimeout(function () { x.classList.remove('on'); }, 2600); }
+  function hint(t) { $('hint').textContent = t; }
+
+  // ------------------------------------------------------------------ старт: демо-схема
+  buildPalette();
+  $('helpBody').innerHTML = document.getElementById('helpSrc') ? document.getElementById('helpSrc').innerHTML : '';
+  (function demo() {
+    var s = net.add('MES2428', 'SW1', 500, 330), r = net.add('vESR', 'R1', 500, 120);
+    var a = net.add('VPC', 'VPC1', 230, 470), b = net.add('VPC', 'VPC2', 770, 470);
+    net.connect(s.id, 'gi1/0/24', r.id, 'gi1/0/1'); net.connect(a.id, 'eth0', s.id, 'gi1/0/1'); net.connect(b.id, 'eth0', s.id, 'gi1/0/2');
+    draw(); fillPing(); selectDev(s.id); draw();
+  })();
+  window.ELUI = { net: function () { return net; }, run: function (id, l) { sel = id; run(l); }, startLab: startLab };
+})();
+
+</script>
+</body>
+</html>

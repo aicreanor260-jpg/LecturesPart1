@@ -1,0 +1,75 @@
+<button class="close">Закрыть ✕</button>
+<h1>Сетевая лаборатория Eltex</h1>
+<p>Лёгкий эмулятор для лабораторных NTF2: коммутаторы <b>MES</b> (свой CLI MES24xx), маршрутизатор <b>ESR</b> (CLI ESR), компьютеры <b>VPC</b> и <b>Debian</b>. Работает в браузере, офлайн, на слабых ПК — без виртуальных машин. Это модель поведения по документации Eltex, а не прошивка устройства.</p>
+<div class="cols">
+<div><h2>Как работать</h2>
+<ol><li>Добавьте устройства из палитры слева, перетащите на место.</li>
+<li><b>Кабель</b> → щёлкните устройство → выберите порт → второе устройство → порт.</li>
+<li>Щёлкните устройство — справа откроется его консоль. Вкладки над консолью переключают устройства.</li>
+<li><b>ping</b> в панели или из консоли — на схеме видно, как идут кадры: ARP-рассылка (жёлтый), ответ, IP-пакет (синий), теги VLAN на кабелях. Внизу — пошаговое объяснение: ◀ ▶ по шагам, ⏵ — заново.</li>
+<li><b>Лабораторные</b> — готовые работы со случайным вариантом и проверкой после каждой команды. <b>Задания</b> — случайные задачи на один коммутатор.</li>
+<li><b>Сохранить / Открыть</b> — схема со всеми настройками в файл .json.</li></ol>
+<p>В консоли: <code>?</code> — что можно ввести дальше, <code>Tab</code> — дописать слово, <code>↑ ↓</code> — история. Сокращения работают: <code>conf t</code>, <code>int gi1/0/1</code>, <code>sh vl</code>.</p></div>
+<div><h2>Режимы MES</h2>
+<pre>switch&gt;            enable
+switch#            configure
+switch(config)#    interface gigabitethernet 1/0/1
+switch(config-if)# exit / end
+switch(config)#    vlan database   → (config-vlan)#
+switch(config)#    line console    → (config-line)#
+switch(config)#    interface range gi1/0/1-4 → (config-if-range)#</pre>
+<h2>Режимы ESR</h2>
+<pre>vesr#                 configure
+vesr(config)#         interface gigabitethernet 1/0/1  → (config-if-gi)#
+vesr(config)#         interface gigabitethernet 1/0/1.10 → (config-if-sub)#
+vesr(config)#         username master → (config-user)#
+vesr(config)#         do commit   — применить
+vesr(config)#         do confirm  — подтвердить</pre>
+<p>На ESR изменения <b>не действуют до commit</b>. Пакеты на интерфейс с включённым межсетевым экраном отбрасываются — нужна <code>ip firewall disable</code>.</p></div>
+</div>
+<h2>Команды MES (коммутатор)</h2>
+<table>
+<tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>
+<tr><td>username admin1 password P privilege 15</td><td>пользователь</td></tr>
+<tr><td>enable password [level N] P</td><td>пароль на вход в #</td></tr>
+<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication, login-attempts, history size</td></tr>
+<tr><td>banner motd|login|exec @ текст @</td><td>баннеры с разделителем</td></tr>
+<tr><td>vlan database · vlan 10,20 · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
+<tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
+<tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
+<tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
+<tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
+<tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
+<tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>
+<tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
+<tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
+<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
+<tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
+</table>
+<h2>Команды ESR (маршрутизатор)</h2>
+<table>
+<tr><td>hostname R1 · clock timezone gmt +7 · set date 11:25:30 11 November 2025 · show date</td><td>базовые</td></tr>
+<tr><td>interface gigabitethernet 1/0/1[.VLAN] · interface loopback 1</td><td>интерфейс, саб-интерфейс (номер = VLAN), loopback</td></tr>
+<tr><td>ip address 192.168.1.1/24 · ip firewall disable · shutdown · description</td><td>на интерфейсе</td></tr>
+<tr><td>username master → password eltex → privilege 14</td><td>пользователь</td></tr>
+<tr><td>ip ssh server · banner login|exec "текст"</td><td>доступ</td></tr>
+<tr><td>ip route 10.0.0.0/8 192.168.1.2</td><td>статический маршрут</td></tr>
+<tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
+<tr><td>show running-config | ip interfaces | ip route | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
+</table>
+<h2>VPC и Debian</h2>
+<table>
+<tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
+<tr><td>Debian: вход root / toor · ip a · ip link set ens3 up · ip addr add A/N dev ens3 · ip route add default via GW</td><td>сеть командами</td></tr>
+<tr><td>nano /etc/network/interfaces · ifdown ens3 · ifup ens3 · cat · ping · traceroute · ssh user@IP</td><td>как в лабе 3.1</td></tr>
+</table>
+<h2>Типовые ошибки</h2>
+<table>
+<tr><td>% Unrecognized command</td><td>опечатка или такой команды нет — нажмите <code>?</code></td></tr>
+<tr><td>% Incomplete command</td><td>команда не дописана: <code>show</code> → <code>show vlan</code></td></tr>
+<tr><td>% Команда недоступна в этом режиме</td><td>посмотрите на приглашение: нужен <code>#</code>, <code>(config)#</code> или режим интерфейса</td></tr>
+<tr><td>% VLAN 30 не создана</td><td>сначала создайте VLAN, затем назначайте порт</td></tr>
+<tr><td>ESR не отвечает на ping</td><td>не сделан <code>commit</code> или не отключён межсетевой экран на интерфейсе</td></tr>
+<tr><td>ARP без ответа</td><td>порты в разных VLAN, VLAN не разрешена на транке, нет саб-интерфейса или выключен порт — шаги трассы покажут, где кадр отброшен</td></tr>
+</table>
+<p>Подробный мануал и как добавить свою лабораторную — в файле <code>eltex-cli-manual.md</code> рядом с этой страницей.</p>

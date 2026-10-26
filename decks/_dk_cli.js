@@ -6,20 +6,20 @@
   var NPORTS = 24;
 
   // ------------------------------------------------------------------ состояние коммутатора
-  function fresh() {
+  function fresh(n) {
     var ports = {};
-    for (var i = 1; i <= NPORTS; i++) {
+    for (var i = 1; i <= (n || NPORTS); i++) {
       ports['gi1/0/' + i] = { mode: 'access', access: 1, allowed: [], native: 1, pvid: 1, gtag: [], guntag: [1] };
     }
     return {
       host: 'switch', mode: 'priv', ctx: null,
       vlans: { 1: '-' }, ports: ports, svi: {}, gw: null, ssh: false, rsa: false, http: true,
-      users: {}, enable: {}, banner: { login: null, exec: null },
-      line: { console: {}, ssh: {} }, aaa: null
+      users: {}, enable: {}, banner: { login: null, exec: null, motd: null },
+      line: { console: {}, telnet: {}, ssh: {} }, aaa: null
     };
   }
 
-  var PROMPT = { priv: '#', config: '(config)#', 'if': '(config-if)#', range: '(config-if-range)#',
+  var PROMPT = { user: '>', priv: '#', config: '(config)#', 'if': '(config-if)#', range: '(config-if-range)#',
                  vlan: '(config-vlan)#', line: '(config-line)#' };
   function prompt(st) { return st.host + PROMPT[st.mode]; }
 
@@ -43,7 +43,7 @@
     var m = spec.match(/^gi(\d+)\/(\d+)\/(\d+)(?:-(\d+))?$/);
     if (!m || m[1] !== '1' || m[2] !== '0') return null;
     var a = +m[3], b = m[4] ? +m[4] : a, out = [];
-    if (a < 1 || b > NPORTS || b < a) return null;
+    if (a < 1 || b > 52 || b < a) return null;
     for (var i = a; i <= b; i++) out.push('gi1/0/' + i);
     return out;
   }
@@ -104,6 +104,7 @@
   cmd('config', 'enable password <w>', function (st, a) { st.enable[15] = a[0]; });
   cmd('config', 'line console', function (st) { st.mode = 'line'; st.ctx = 'console'; });
   cmd('config', 'line ssh', function (st) { st.mode = 'line'; st.ctx = 'ssh'; });
+  cmd('config', 'line telnet', function (st) { st.mode = 'line'; st.ctx = 'telnet'; if (!st.line.telnet) st.line.telnet = {}; });
   cmd('line', 'password <w>', function (st, a) { st.line[st.ctx].pw = a[0]; });
   cmd('line', 'exec-timeout <n>', function (st, a) { st.line[st.ctx].timeout = a[0]; });
   cmd('line', 'login authentication <w>', function (st, a) { st.line[st.ctx].auth = a[0]; });
@@ -135,10 +136,12 @@
   });
   cmd('config', 'interface <if>', function (st, a) {
     if (a[0].length > 1) return '% Для нескольких портов используйте interface range';
+    if (!st.ports[a[0][0]]) return '% Такого порта нет на устройстве';
     st.mode = 'if'; st.ctx = { ports: a[0] }; });
   cmd('config', 'interface range <if>', function (st, a) { st.mode = 'range'; st.ctx = { ports: a[0] }; });
   function eachPort(st, f) {
     if (!st.ctx || !st.ctx.ports) return '% Команда доступна в настройке физического порта';
+    if (st.ctx.ports.some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
     st.ctx.ports.forEach(function (k) { f(st.ports[k]); });
   }
   var IFM = 'if range';
@@ -178,10 +181,11 @@
     Object.keys(st.users).forEach(function (u) { o.push('username ' + u + ' password encrypted ' + hash(st.users[u].pw) + ' privilege ' + st.users[u].priv); });
     Object.keys(st.enable).forEach(function (l) { o.push('enable password ' + (l == 15 ? '' : 'level ' + l + ' ') + 'encrypted ' + hash(st.enable[l])); });
     if (Object.keys(st.users).length) o.push('!');
+    if (st.banner.motd) o.push('banner motd ^', st.banner.motd, '^');
     if (st.banner.login) o.push('banner login ^', st.banner.login, '^');
     if (st.banner.exec) o.push('banner exec ^', st.banner.exec, '^');
-    if (st.banner.login || st.banner.exec) o.push('!');
-    ['console', 'ssh'].forEach(function (l) { var c = st.line[l]; if (!Object.keys(c).length) return;
+    if (st.banner.login || st.banner.exec || st.banner.motd) o.push('!');
+    ['console', 'telnet', 'ssh'].forEach(function (l) { var c = st.line[l]; if (!c || !Object.keys(c).length) return;
       o.push('line ' + l); if (c.timeout !== undefined) o.push(' exec-timeout ' + c.timeout);
       if (c.attempts) o.push(' login-attempts ' + c.attempts); if (c.history) o.push(' history size ' + c.history);
       if (c.auth) o.push(' login authentication ' + c.auth); if (c.pw) o.push(' password encrypted ' + hash(c.pw)); o.push('exit', '!'); });
@@ -248,9 +252,9 @@
     var line = normLine(raw.trim());
     if (!line) return '';
     // баннер: banner login @ текст @
-    var b = line.match(/^ban\w*\s+(log\w*|exe\w*)\s+(\S)([\s\S]*)$/i);
+    var b = line.match(/^ban\w*\s+(log\w*|exe\w*|motd)\s+(\S)([\s\S]*)$/i);
     if (b && st.mode === 'config') {
-      var kind = /^l/i.test(b[1]) ? 'login' : 'exec', d = b[2], rest = b[3], e = rest.lastIndexOf(d);
+      var kind = /^l/i.test(b[1]) ? 'login' : (/^m/i.test(b[1]) ? 'motd' : 'exec'), d = b[2], rest = b[3], e = rest.lastIndexOf(d);
       if (e < 0) return '% Текст баннера должен заканчиваться разделителем ' + d;
       st.banner[kind] = rest.slice(0, e).trim(); return '';
     }
@@ -418,6 +422,7 @@
   }
   function loginView(s) {
     var o = [];
+    if (s.banner.motd) o.push(s.banner.motd, '');
     if (s.banner.login) o.push(s.banner.login, '');
     o.push('User Name:' + (Object.keys(s.users)[0] || 'admin'), 'Password:********', '');
     if (s.banner.exec) o.push(s.banner.exec, '');
@@ -473,5 +478,12 @@
     });
     newTask();
   }
-  document.querySelectorAll('.clisim').forEach(init);
+  // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
+  var api = { NPORTS: NPORTS, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
+              normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
+              showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
+              pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
+  if (typeof window !== 'undefined') window.EltexCLI = api;
+  if (typeof module !== 'undefined') module.exports = api;
+  if (typeof document !== 'undefined') document.querySelectorAll('.clisim').forEach(init);
 })();
