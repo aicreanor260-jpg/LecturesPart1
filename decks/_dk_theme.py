@@ -131,3 +131,20 @@ REP_CSS = """
 .dkrep .repc{background:none!important;border-radius:0!important;box-shadow:0 8px 30px rgba(0,0,0,.35)!important;color:#1a0a1a}
 .dkrep .repc img{-webkit-mask:none!important;mask:none!important}
 """
+
+SCENE_CSS = {
+ "vlan": """
+.scene .figwrap{background:linear-gradient(180deg,#1d3a8f,#132a6b);border:4px solid #fff;outline:3px solid #0a1440;
+ box-shadow:6px 6px 0 rgba(0,0,0,.5);padding:10px}
+svg.dkfig rect{rx:0!important;ry:0!important}
+svg.dkfig rect[fill^="url(#gsw)"]{fill:#3b4a7a;stroke:#fff;stroke-width:4}
+svg.dkfig text{font-family:"Golos Text",sans-serif}
+.scbar{border:4px solid #fff!important;outline:3px solid #0a1440;background:#0f2160!important}
+""",
+ "base": """
+.scene .figwrap{background:linear-gradient(160deg,rgba(60,10,56,.94),rgba(34,6,32,.96));border:3px solid #ff4fa3;
+ border-radius:6px;box-shadow:8px 8px 0 rgba(20,0,20,.7);padding:10px}
+svg.dkfig rect[fill^="url(#gsw)"]{fill:#55586a;stroke:#1a0a1a;stroke-width:3.5}
+.scbar{border:2px solid #ff4fa3!important;border-radius:6px}
+""",
+}

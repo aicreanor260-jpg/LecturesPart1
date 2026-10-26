@@ -357,7 +357,7 @@ def _scene_access():
     o.append(sw)
     o.append(S.badge(pts[0][0], 230, "access VLAN 10", S.LM, ph=0))
     o.append(S.pc(120, 150, "ПК", "не знает про 802.1Q", S.CY))
-    o.append(S.link(172, 183, 320, 280, S.SOFT, 2.4, .3))
+    o.append(S.link(120, 228, pts[0][0], pts[0][1] + 10, S.CY, 2.4, .3))
 
     o.append(S.pkt(210, 200, 320, 268, "Нетегированный кадр", 1, S.SOFT, w=230))
     o.append(S.badge(600, 130, "Правило 1: на входе принимается только нетегированный трафик", S.CY, ph=1, only=True))
@@ -447,8 +447,8 @@ def _scene_native():
                        names=["access", "trunk A", "trunk B", "1/0/4", "1/0/5", "1/0/6"])
     o.append(sw)
     o.append(S.badge(pts[0][0], 226, "access VLAN 10", S.LM, ph=0))
-    o.append(S.badge(pts[1][0], 226, "trunk: 10, 20 · native 30", S.AM, ph=0))
-    o.append(S.badge(pts[2][0] + 60, 226, "trunk: 10, 20 · native 30", S.MG, ph=0))
+    o.append(S.badge(pts[1][0] + 40, 192, "trunk A: 10, 20 · native 30", S.AM, ph=0))
+    o.append(S.badge(pts[2][0] + 150, 158, "trunk B: 10, 20 · native 30", S.MG, ph=0))
 
     rows = [
         ("Кадр VLAN 10", pts[0][0], S.LM, "без тега", 1),
@@ -458,15 +458,15 @@ def _scene_native():
     ]
     for (lbl, x, c, out, ph) in rows:
         o.append(S.pkt(x, 400, x, 340, lbl, ph, c, w=170, sub=out))
-    o.append(S.badge(600, 150, "На выходе порта доступа VLAN 10 метка всегда снимается", S.LM, ph=1, only=True))
-    o.append(S.badge(600, 150, "На транке кадр VLAN 10 уходит с меткой VID 10", S.LM, ph=2, only=True))
-    o.append(S.badge(600, 150, "Кадр VLAN 20 тоже уходит с меткой VID 20", S.MG, ph=3, only=True))
-    o.append(S.badge(600, 150, "А вот кадр нативной VLAN 30 уходит БЕЗ метки", S.AM, ph=4, only=True))
+    o.append(S.badge(600, 110, "На выходе порта доступа VLAN 10 метка всегда снимается", S.LM, ph=1, only=True))
+    o.append(S.badge(600, 110, "На транке кадр VLAN 10 уходит с меткой VID 10", S.LM, ph=2, only=True))
+    o.append(S.badge(600, 110, "Кадр VLAN 20 тоже уходит с меткой VID 20", S.MG, ph=3, only=True))
+    o.append(S.badge(600, 110, "А вот кадр нативной VLAN 30 уходит БЕЗ метки", S.AM, ph=4, only=True))
     o.append(S.note(230, 440, [
         "На входе транкового порта нетегированный кадр помещается в native VLAN,",
         "на выходе идентификатор native VLAN удаляется из кадра.",
         "Значит native VLAN должна совпадать на обоих концах магистрали!"], S.AM, ph=5, w=740, only=True))
-    o.append(S.badge(600, 150, "Рекомендация: не держать native VLAN равной 1", S.RD, ph=5, only=True))
+    o.append(S.badge(600, 110, "Рекомендация: не держать native VLAN равной 1", S.RD, ph=5, only=True))
 
     caps = ["Порт доступа и два транка с native VLAN 30",
             "Выход кадра VLAN 10 с порта доступа",
@@ -491,7 +491,7 @@ def _scene_general():
     o.append(S.txt(205, 228, "транзит ПК — без тега", 12.5, S.LM, 700))
     o.append(S.pc(110, 380, "ПК", "VLAN 10", S.LM))
     o.append(S.link(110, 380, 205, 250, S.SOFT, 2.4, .3))
-    o.append(S.link(320, 185, 410, 300, S.SOFT, 2.6, .35))
+    o.append(S.link(320, 185, pts[0][0], pts[0][1] + 10, S.SOFT, 2.6, .35))
 
     o.append(S.pkt(180, 330, 400, 300, "Кадр ПК — без тега", 1, S.LM, w=200))
     o.append(S.badge(630, 170, "Нетегированный кадр ПК попадает в PVID = VLAN 10", S.LM, ph=1, only=True))

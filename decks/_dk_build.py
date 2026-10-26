@@ -58,6 +58,49 @@ def info_slide(label, title, name, sub=""):
             % (L._esc(label), L.sc(L.head(title, sub), L.grow("g", npic(name)))))
 
 
+def scene_theme(key):
+    """Сцены SVG в стиле деки: ПК — рисунок из инфографик, кабели за устройствами, сплошные."""
+    import _sw_svg as S
+    import _dk_replib
+    if not hasattr(S, "_orig"):
+        S._orig = {"pc": S.pc, "link": S.link, "fig": S.fig, "switch": S.switch}
+    o = S._orig
+    uri = _dk_replib._webp(os.path.join(HERE, "_dk_rep", "crops", "dev_%s_pc.png" % key))
+    dark = "#0a1440" if key == "vlan" else "#2a0a2a"
+
+    def pc(x, y, name, mac="", col=S.CY, vlan=""):
+        g = ['<g>', '<image href="%s" x="%g" y="%g" width="104" height="82" preserveAspectRatio="xMidYMid meet"/>'
+             % (uri, x - 52, y - 4)]
+        w = max(70, len(name) * 10 + 20)
+        g.append('<rect x="%g" y="%g" width="%g" height="24" fill="%s" stroke="%s" stroke-width="2.5" class="dkpill"/>'
+                 % (x - w / 2.0, y + 82, w, dark, col))
+        g.append(S.txt(x, y + 99, name, 14, "#fff", 800))
+        if mac:
+            g.append(S.txt(x, y + 124, mac, 12, "#fff", 700, mono=True))
+        if vlan:
+            g.append(S.txt(x, y + 140, vlan, 12, col, 800))
+        g.append("</g>")
+        return "".join(g)
+
+    def link(x1, y1, x2, y2, col=S.CY, w=2.4, op=.5, dash=False, extra=""):
+        return o["link"](x1, y1, x2, y2, col, max(w, 3.5), 1, dash, ' class="lnk"' + extra)
+
+    def fig(body, vb="0 0 1200 560", cls="fig"):
+        lnk = re.findall(r'<path [^>]*class="lnk"[^>]*/>', body)
+        for l in lnk:
+            body = body.replace(l, "", 1)
+        # <b> внутри SVG ломает разбор HTML — жирный через tspan
+        body = re.sub(r"<b>(.*?)</b>", r'<tspan font-weight="900"></tspan>', body)
+        return o["fig"]("".join(lnk) + body, vb, cls + " dkfig")
+
+    def switch(x, y, w=380, h=74, ports=8, label="Коммутатор", col=S.CY, pid=None, names=None):
+        svg, pts = o["switch"](x, y, w, h, ports, "", col, pid, names)
+        lab = S.txt(x + 16, y + 26, label, 14, "#fff", 800, "start")
+        return svg.replace("</g>", lab + "</g>", 1) if label else svg, pts
+
+    S.pc, S.link, S.fig, S.switch = pc, link, fig, switch
+
+
 def collect():
     """Полный список слайдов коммутации (как в kommutaciya.html)."""
     del L.SL[:]
@@ -159,6 +202,7 @@ def build(key):
     OVR.clear()
     OVR.update(cfg["ovr"])
     ADIR[0] = cfg["adir"]
+    scene_theme(key)
     full = collect()
     body = cut(full, *cfg["range"])
     extra = {k: [info_slide(lb, t, n) for (lb, t, n) in v] for k, v in cfg["extra"].items()}
@@ -175,7 +219,7 @@ def build(key):
     slides = dedupe(head_sl + body + tail_sl)
     fn = hue_map(cfg["hues"])
 
-    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"]
+    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key]
     html_sl = recolor("\n".join(slides), fn)
     hud = _sw_build.HUD
     js = recolor(JS + _sw_fig.JS, fn)

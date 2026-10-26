@@ -227,17 +227,20 @@ def _scene_vlan_why():
     names = ["1/0/1", "1/0/2", "1/0/3", "1/0/4", "1/0/5", "1/0/6"]
     sw, pts = S.switch(330, 250, 540, 82, 6, "Коммутатор L2 без VLAN", names=names)
     o.append(sw)
-    PCS = [(110, 60, "10.10.1.5", S.CY), (110, 400, "10.10.1.6", S.LM),
-           (1090, 60, "10.10.1.7", S.MG), (1090, 400, "10.10.1.8", S.AM)]
-    for (x, y, ip, c) in PCS:
+    # каждый ПК — в свой порт: 1/0/1, 1/0/2, 1/0/5, 1/0/6
+    PCS = [(110, 60, "10.10.1.5", S.CY, 0), (110, 400, "10.10.1.6", S.LM, 1),
+           (1090, 60, "10.10.1.7", S.MG, 4), (1090, 400, "10.10.1.8", S.AM, 5)]
+    for (x, y, ip, c, pi) in PCS:
         o.append(S.pc(x, y, ip, col=c))
-        o.append(S.link(x, y + (100 if y < 250 else -16), 600, 290, S.SOFT, 2, .22))
+        px, py = pts[pi][0], pts[pi][1] + 10
+        o.append(S.link(x, y + (78 if y < 250 else 0), px, py, c, 2.4, .45))
 
     o.append(S.badge(600, 180, "10.10.1.5 хочет узнать MAC-адрес устройства 10.10.1.6", S.CY, ph=1, only=True))
     o.append(S.pkt(200, 140, 350, 250, "ARP: кто имеет 10.10.1.6?", 1, S.RD, w=250,
                    sub="DMAC ff:ff:ff:ff:ff:ff"))
-    for (x, y, ip, c) in PCS[1:]:
-        o.append(S.arrow(600, 290, x, y + (100 if y < 250 else -10), S.RD, 3.2, "ahr", ph=2))
+    for (x, y, ip, c, pi) in PCS[1:]:
+        o.append(S.arrow(pts[pi][0], pts[pi][1] + (0 if y < 250 else 24), x, y + (84 if y < 250 else -8),
+                         S.RD, 3.2, "ahr", ph=2))
     o.append(S.badge(600, 180, "Запрос получат ВСЕ устройства сегмента L2", S.RD, ph=2, only=True))
     o.append(S.note(280, 430, [
         "Даже те, которые не предназначены для получения рассылки, обязаны",
