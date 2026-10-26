@@ -158,6 +158,11 @@ def info(label, title, name):
 
 
 def pslide(label, title, left, right=None, layout="g2", sub=""):
+    if right and any('term wide' in b for b in right):
+        # широкий вывод CLI — на всю ширину под текстом, чтобы читался с проектора
+        body = grow("g", col(*[step(b) for b in list(left) + list(right)]))
+        slide(label, sc(head(title, sub), body))
+        return
     L = col(*[step(b) for b in left])
     body = grow("g", L) if right is None else grow(layout, L, col(*[step(b) for b in right]))
     slide(label, sc(head(title, sub), body))

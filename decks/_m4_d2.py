@@ -48,7 +48,8 @@ def build():
     pslide("Первый интерфейс", TT, [card("", p(src(38)[1]), "cy"), fig(G.topo_line(ports=True))],
            [conf([l for l in tx(38)[1]["lines"]])])
     # ---------------------------------------------------------------- pptx 39
-    pslide("Интерфейсы и таблица", TT, [fig(G.topo_line(ports=True)), T(39, 2)], [T(39, 1)], "g2")
+    pslide("Интерфейсы и таблица", TT, [fig(G.topo_line(ports=True))], [T(39, 2)])
+    pslide("show interfaces status", TT, [], [T(39, 1)])
     # ---------------------------------------------------------------- pptx 40
     t40 = src(40)
     b40 = t40[1].split("•")
@@ -86,7 +87,7 @@ def build():
     pslide("Connected: пример R1", TD, [card("", p(t45[2]), "mg")], [tbl(f45["cols"], f45["rows"], title="R1")])
     pslide("show ip route connected", TD, [card("", p(t45[3]) + conf([t45[4]]), "cy"), card("", p(t45[5]), "am")], [T(45, 2)])
     # ---------------------------------------------------------------- pptx 46
-    pslide("Connected + статический", TD, [card("", p(src(46)[1]), "cy")], [fig(F.topo_a(hl=("10", "20", "203"))), T(46, 1)])
+    pslide("Connected + статический", TD, [card("", p(src(46)[1]), "cy")], [T(46, 1)])
     # ---------------------------------------------------------------- pptx 47
     TR = "Записи таблицы маршрутизации <em>удаленных сетей</em>"
     t47 = src(47)
@@ -144,13 +145,15 @@ def build():
     info("Термины · инфографика", TM, "i_terms")
     # ---------------------------------------------------------------- pptx 58
     t58 = src(58)
-    pslide("Окончательный маршрут", TM, [card("", p(t58[0]), "cy"), card("", p(t58[2]), "mg")], [fig(G.levels()), T(58, 1)])
+    pslide("Окончательный маршрут", TM, [card("", p(t58[0]), "cy")], [fig(G.levels())])
+    pslide("Маршрут 1-го уровня", TM, [card("", p(t58[2]), "mg")], [fig(G.levels())])
+    pslide("Маршрут 1-го уровня: таблица R1", TM, [], [T(58, 1)])
     # ---------------------------------------------------------------- pptx 59
     pslide("Родительский маршрут", TM, [card("", p(src(59)[1]), "cy")], [fig(G.levels(parent=True))])
     # ---------------------------------------------------------------- pptx 60
     lines60 = [l for l in tx(60)[0]["lines"] if not l.startswith("(разрыв")]
-    pslide("Дочерний маршрут", TM, [card("", p(src(60)[1]), "cy"), fig(G.levels(parent=True))],
-           [_term(lines60)])
+    pslide("Дочерний маршрут", TM, [card("", p(src(60)[1]), "cy")], [fig(G.levels(parent=True))])
+    pslide("Дочерний маршрут: таблица R1", TM, [_term(lines60).replace('class="cli term"', 'class="cli term wide"')])
     # ---------------------------------------------------------------- pptx 61
     h61, it61 = items(src(61)[1])
     pslide("Поиск в таблице: порядок", TM, [card("", p(h61) + ol(it61[:3]), "cy")], [card("", ol(it61[3:], 4), "mg")])
@@ -178,7 +181,7 @@ def _tree44():
 
 def _anat52():
     f = tx(52)[1]
-    rows = [[c.split("  (")[0] for c in r] for r in f["rows"]]
+    rows = [[c.split(" (")[0] for c in r] for r in f["rows"]]
     cols = ["Источник маршрута", "Сеть назначения", "Preference/Cost", "Адрес следующего перехода", "Выходной интерфейс",
             "Протокол маршрутизации", "Временная метка маршрута"]
     return tbl(cols, rows)

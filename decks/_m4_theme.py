@@ -111,5 +111,5 @@ pre.cli.term{font-size:clamp(10px,.82vw,16px)!important;overflow-x:auto;white-sp
 """
 
 EXTRA += r"""
-pre.cli.term.wide{font-size:clamp(9px,.68vw,14px)!important}
+pre.cli.term.wide{font-size:clamp(10px,.9vw,18px)!important}
 """
