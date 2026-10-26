@@ -57,14 +57,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>router rip · network 192.168.0.0/23 · passive-interface gi1/0/3 · redistribute connected · enable</td><td>RIP</td></tr>
 <tr><td>router ospf 250 · router-id 1.1.1.1 · area 0.0.0.0 → enable · enable</td><td>процесс OSPF</td></tr>
 <tr><td>interface gigabitethernet 1/0/1-3 · ip ospf instance 250 · ip ospf area 0.0.0.0 · ip ospf · ip ospf passive-interface</td><td>OSPF на интерфейсах (можно диапазоном)</td></tr>
+<tr><td>ip dhcp-server · ip dhcp-server pool P → network · address-range A-B · default-router · default-lease-time</td><td>DHCP-сервер</td></tr>
+<tr><td>ip dhcp-relay · ip helper-address A.B.C.D (на интерфейсе)</td><td>DHCP relay</td></tr>
+<tr><td>nat source → ruleset → to interface → rule → match source-address address-range → action source-nat interface → enable</td><td>Source NAT</td></tr>
+<tr><td>nat destination → ruleset → from interface → rule → match protocol tcp · match destination-port port-range 80 · action destination-nat netmap IP/32</td><td>Destination NAT</td></tr>
+<tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
 <tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
 </table>
 <h2>VPC и Debian</h2>
 <table>
-<tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
+<tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
 <tr><td>Debian: вход root / toor · ip a · ip link set ens3 up · ip addr add A/N dev ens3 · ip route add default via GW</td><td>сеть командами</td></tr>
-<tr><td>nano /etc/network/interfaces · ifdown ens3 · ifup ens3 · cat · ping · traceroute · ssh user@IP</td><td>как в лабе 3.1</td></tr>
+<tr><td>nano /etc/network/interfaces · ifdown/ifup ens3 · dhclient · ping · ssh user@IP · curl · date · timedatectl · systemctl; Docker: open http://IP</td><td>как в лабе 3.1</td></tr>
 </table>
 <h2>Типовые ошибки</h2>
 <table>

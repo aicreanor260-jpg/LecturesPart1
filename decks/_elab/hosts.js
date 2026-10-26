@@ -12,14 +12,20 @@
       'show [ip]             Показать настройки', 'ping HOST             Проверить связность', 'trace HOST            Трассировка',
       'arp                   ARP-таблица', 'clear ip              Сбросить адрес'].join('\n');
     if (c === 'ip') {
-      if (t[1] === 'dhcp') return 'DDORA — DHCP-сервер не ответил (DHCP появится на следующем этапе эмулятора)';
+      if (t[1] === 'dhcp') {
+        if (!st.net) return '';
+        var dh = st.net.dhcp(st.dev); if (st.net.onTrace) st.net.onTrace({ ok: dh.ok, steps: dh.steps }, st.dev, 'DHCP');
+        if (!dh.ok) return "DDD\nCan't find dhcp server";
+        st.ip = dh.ip; st.len = dh.len; st.gw = dh.gw || null; st.dhcp = true;
+        return 'DDORA IP ' + dh.ip + '/' + dh.len + (dh.gw ? ' GW ' + dh.gw : '');
+      }
       var cidr = IP.parseCidr(t[1] || ''), ip = t[1], len = 24, gw = t[2];
       if (cidr) { ip = cidr.ip; len = cidr.len; }
       else if (t[2] && IP.mask2len(t[2]) !== null) { len = IP.mask2len(t[2]); gw = t[3]; }
       if (!ip || IP.ip2n(ip) === null) return 'Invalid address';
       if (gw && IP.ip2n(gw) === null) return 'Invalid gateway';
       if (gw && !IP.sameNet(ip, gw, len)) return 'Gateway ' + gw + ' не в подсети ' + IP.netOf(ip, len);
-      st.ip = ip; st.len = len; st.gw = gw || null;
+      st.ip = ip; st.len = len; st.gw = gw || null; st.dhcp = false;
       return 'Checking for duplicate address...\n' + st.name + ' : ' + ip + ' ' + IP.len2mask(len) + (gw ? ' gateway ' + gw : '');
     }
     if (c === 'clear' && t[1] === 'ip') { st.ip = null; st.gw = null; return 'IPv4 address/mask, gateway, DNS, and DHCP cleared'; }
@@ -36,9 +42,29 @@
   var IFDEF = ['# This file describes the network interfaces available on your system', '# and how to activate them. For more information, see interfaces(5).', '',
     'source /etc/network/interfaces.d/*', '', '# The loopback network interface', 'auto lo', 'iface lo inet loopback', '',
     '# The primary network interface', 'allow-hotplug ens3', 'iface ens3 inet dhcp', ''].join('\n');
-  function deb(name) {
-    return { kind: 'deb', name: name, host: 'debian', user: null, login: 'user', up: false, ip: null, len: 24, gw: null,
-             files: { '/etc/network/interfaces': IFDEF }, accounts: { root: 'toor', user: 'user' }, ssh: null };
+  function deb(name, o) {
+    o = o || {};
+    return { kind: 'deb', name: name, host: o.host || 'debian', user: o.auto ? 'root' : null, login: 'user', up: false, ip: null, len: 24, gw: null,
+             files: { '/etc/network/interfaces': IFDEF }, accounts: { root: 'toor', user: 'user' }, ssh: null,
+             tz: o.tz === undefined ? 7 : o.tz, clk: 0, ntp: true, browser: !!o.browser, svc: { chronyd: true, apache2: !!o.web, ssh: true } };
+  }
+  function dhcpUp(st) {
+    if (!st.net) return '';
+    var dh = st.net.dhcp(st.dev); if (st.net.onTrace) st.net.onTrace({ ok: dh.ok, steps: dh.steps }, st.dev, 'DHCP');
+    var head = 'Internet Systems Consortium DHCP Client 4.4.1\nListening on LPF/ens3\nDHCPDISCOVER on ens3 to 255.255.255.255 port 67';
+    if (!dh.ok) return head + '\nNo DHCPOFFERS received.\nNo working leases in persistent database - sleeping.';
+    st.up = true; st.ip = dh.ip; st.len = dh.len; st.gw = dh.gw || null;
+    return head + '\nDHCPOFFER of ' + dh.ip + '\nDHCPREQUEST for ' + dh.ip + ' on ens3\nDHCPACK of ' + dh.ip + '\nbound to ' + dh.ip;
+  }
+  function web(st, url, gui) {
+    var m = String(url || '').match(/^(?:https?:\/\/)?(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/);
+    if (!m) return gui ? 'Укажите адрес: open http://A.B.C.D' : 'curl: (3) URL using bad/illegal format or missing URL';
+    var port = +(m[2] || 80), r = st.net.request(st.dev, m[1], 'tcp', port);
+    if (st.net.onTrace) st.net.onTrace(r, st.dev, m[1] + ':' + port);
+    if (r.ok) return gui ? '[Браузер] http://' + m[1] + (port !== 80 ? ':' + port : '') + '/ — «Apache2 Debian Default Page: It works!»'
+                         : '<html><head><title>Apache2 Debian Default Page: It works</title></head>\n<body><h1>It works!</h1></body></html>';
+    var why = r.why === 'Connection refused' ? 'Connection refused' : r.why === 'Request timed out' ? 'Connection timed out' : 'No route to host';
+    return gui ? '[Браузер] Не удаётся получить доступ к сайту ' + m[1] + ' (' + why + ')' : 'curl: (7) Failed to connect to ' + m[1] + ' port ' + port + ': ' + why;
   }
   function debPrompt(st) {
     if (st.ssh) return st.ssh.prompt();
@@ -120,7 +146,7 @@
       if (t[1] !== 'ens3') return c + ': unknown interface ' + (t[1] || '');
       var cfg = parseIfaces(st.files['/etc/network/interfaces']);
       if (c === 'ifdown') { if (!st.up) return 'ifdown: interface ens3 not configured'; st.up = false; st.ip = null; st.gw = null; return ''; }
-      if (cfg.mode === 'dhcp') { st.up = true; return 'Internet Systems Consortium DHCP Client 4.4.1\nListening on LPF/ens3\nDHCPDISCOVER on ens3 to 255.255.255.255 port 67\nNo DHCPOFFERS received.\nNo working leases in persistent database - sleeping.'; }
+      if (cfg.mode === 'dhcp') return dhcpUp(st);
       if (cfg.mode !== 'static') return 'ifup: no configuration for ens3 (в /etc/network/interfaces нет «iface ens3 inet static»)';
       if (!cfg.ip || IP.ip2n(cfg.ip) === null) return 'ifup: missing or invalid address for ens3';
       st.up = true; st.ip = cfg.ip; st.len = cfg.len; st.gw = cfg.gw && IP.sameNet(cfg.ip, cfg.gw, cfg.len) ? cfg.gw : null; return '';
@@ -137,13 +163,48 @@
       if (!dst) return 'ping: usage error: Destination address required';
       return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
     if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
+    if (c === 'dhclient') { var e6 = needRoot(); if (e6) return e6; return dhcpUp(st); }
+    if (c === 'curl' || c === 'wget') return st.net ? web(st, t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0], false) : '';
+    if (c === 'open' || c === 'firefox' || c === 'chromium') return st.net ? web(st, t[1], true) : '';
+    if (c === 'date') {
+      if (!t[1]) return EL.clock.linux(Date.now() + st.clk, st.tz);
+      var e7 = needRoot(); if (e7) return 'date: cannot set date: Operation not permitted';
+      var dm = t[1].match(/^(\d\d)(\d\d)(\d\d)(\d\d)(\d{2}|\d{4})?$/);
+      if (!dm) return 'date: invalid date «' + t[1] + '» (формат MMDDhhmm[[CC]YY])';
+      var cy = new Date(Date.now() + st.clk + st.tz * 3600e3).getUTCFullYear(), y = dm[5] ? (dm[5].length === 2 ? 2000 + +dm[5] : +dm[5]) : cy;
+      st.clk = Date.UTC(y, +dm[1] - 1, +dm[2], +dm[3], +dm[4], 0) - st.tz * 3600e3 - Date.now();
+      return EL.clock.linux(Date.now() + st.clk, st.tz);
+    }
+    if (c === 'timedatectl') {
+      if (!t[1] || t[1] === 'status') return '               Local time: ' + EL.clock.linux(Date.now() + st.clk, st.tz) + '\n           Universal time: ' +
+        EL.clock.fmt(Date.now() + st.clk) + ' UTC\n                Time zone: Etc/GMT' + (st.tz >= 0 ? '-' : '+') + Math.abs(st.tz) + '\nNTP service: ' + (st.ntp ? 'active' : 'inactive');
+      var e8 = needRoot(); if (e8) return 'Failed: Access denied';
+      if (t[1] === 'set-ntp') { st.ntp = t[2] === 'true' || t[2] === 'yes' || t[2] === '1'; return ''; }
+      if (t[1] === 'set-time') {
+        if (st.ntp) return 'Failed to set time: Automatic time synchronization is enabled';
+        var q = line.match(/set-time\s+['"]?(\d{4})-(\d\d)-(\d\d)\s+(\d\d):(\d\d):(\d\d)['"]?/);
+        if (!q) return 'Failed to parse time specification: ' + t.slice(2).join(' ');
+        st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - Date.now(); return '';
+      }
+      return 'Unknown command verb ' + t[1] + '.';
+    }
+    if (c === 'systemctl') {
+      var svc = (t[2] || '').replace(/\.service$/, '').replace(/^chrony$/, 'chronyd');
+      if (!svc || !(svc in st.svc)) return 'Unit ' + (t[2] || '') + '.service could not be found.';
+      if (t[1] === 'status') return '● ' + svc + '.service\n     Loaded: loaded\n     Active: ' + (st.svc[svc] ? 'active (running)' : 'inactive (dead)');
+      var e9 = needRoot(); if (e9) return 'Failed to ' + t[1] + ' ' + svc + '.service: Access denied';
+      if (t[1] === 'start' || t[1] === 'restart') { st.svc[svc] = true; return ''; }
+      if (t[1] === 'stop') { st.svc[svc] = false; return ''; }
+      return 'Unknown command verb ' + t[1] + '.';
+    }
     if (c === 'ssh') {
       var m = (t[1] || '').match(/^([^@]+)@(\d+\.\d+\.\d+\.\d+)$/);
       if (!m) return 'usage: ssh user@A.B.C.D';
       return st.net ? st.net.sshOpen(st, m[1], m[2]) : '';
     }
     if (c === 'help' || c === '?') return 'Доступно: ip a | ip addr add A.B.C.D/N dev ens3 | ip link set ens3 up | ip route [add default via GW]\n' +
-      'nano /etc/network/interfaces | cat ФАЙЛ | ifup/ifdown ens3 | ping A.B.C.D | traceroute A.B.C.D | ssh user@A.B.C.D | su | exit';
+      'nano /etc/network/interfaces | cat ФАЙЛ | ifup/ifdown ens3 | dhclient ens3 | ping | traceroute | ssh user@A.B.C.D | curl http://A.B.C.D' +
+      '\ndate [MMDDhhmm] | timedatectl [set-ntp true|false | set-time \'ГГГГ-ММ-ДД чч:мм:сс\'] | systemctl status|restart chronyd|apache2' + (st.browser ? '\nopen http://A.B.C.D — открыть сайт в браузере' : '');
     return '-bash: ' + c + ': command not found';
   }
 

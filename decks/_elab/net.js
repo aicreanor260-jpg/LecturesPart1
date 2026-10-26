@@ -8,9 +8,11 @@
   // коммутаторы — из каталога eltex.ru (catalog.js, ветка ПО 10.x: тот же CLI, что у движка); нумерация портов упрощена до gi1/0/1–N
   var MODELS = {};
   Object.keys(EL.CATALOG || {}).forEach(function (k) { MODELS[k] = EL.CATALOG[k]; });
-  MODELS.vESR = { type: 'esr', ports: 8, group: 'Маршрутизаторы ESR', note: 'Виртуальный сервисный маршрутизатор, 8 × gigabitethernet' };
+  MODELS.vESR = { type: 'esr', ports: 4, group: 'Маршрутизаторы ESR', note: 'Виртуальный сервисный маршрутизатор, 4 × gigabitethernet (как шаблон vESR в pnetlab NTF2)' };
   MODELS.VPC = { type: 'vpc', ports: 1, group: 'Конечные узлы', note: 'Виртуальный ПК (как VPCS в pnetlab)' };
-  MODELS.Debian = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Компьютер с Debian 11: ip, ifup, nano, ping, ssh' };
+  MODELS.Debian = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Компьютер с Debian 11: ip, ifup, nano, ping, ssh, curl' };
+  MODELS['Debian-server'] = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Сервер Debian: веб-сервер apache2 (80/tcp) и NTP chronyd', opts: { host: 'debian-serv', web: true, tz: 8 } };
+  MODELS.Docker = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Docker-браузер: open http://A.B.C.D (как pnet-chrome)', opts: { host: 'docker', auto: true, browser: true } };
 
   function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; }
   var P = Net.prototype;
@@ -23,7 +25,7 @@
   };
   P.add = function (model, name, x, y) {
     var m = MODELS[model]; if (!m) throw new Error('Нет модели ' + model);
-    if (!name) { var n = 1, base = { mes: 'SW', esr: 'R', vpc: 'VPC', deb: 'Debian' }[m.type];
+    if (!name) { var n = 1, base = model === 'Docker' ? 'Docker' : model === 'Debian-server' ? 'Server' : { mes: 'SW', esr: 'R', vpc: 'VPC', deb: 'Debian' }[m.type];
       while (this.byName(base + n)) n++; name = base + n; }
     if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
     var id = 'd' + (++Net.seq);
@@ -31,7 +33,7 @@
     if (m.type === 'mes') d.st = EL.mes.fresh(m.ports, 'switch');
     if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
     if (m.type === 'vpc') d.st = H.vpc(name);
-    if (m.type === 'deb') d.st = H.deb(name);
+    if (m.type === 'deb') d.st = H.deb(name, m.opts);
     EL.attach(d.st, this, id);
     this.gen++;
     this.devs[id] = d; this.order.push(id); this.mac[id] = {}; this.arp[id] = {};
@@ -283,61 +285,190 @@
     return { eps: eps, segs: segs, notes: notes };
   };
 
-  // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону)
-  P.send = function (src, dst, steps) {
-    var cur = src, ttl = 16, first = null, hops = [];
+  // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону) с NAT
+  // pk = {src, dst, proto: 'icmp'|'tcp'|'udp', dport}; ct — таблица трансляций текущего обмена (общая для запроса и ответа)
+  function inRange(ip, r) { var n = IP.ip2n(ip); return n >= IP.ip2n(r[0]) && n <= IP.ip2n(r[1]); }
+  function natRules(d, kind, ifn) {
+    var n = d.st.run[kind], out = [];
+    if (!n) return out;
+    Object.keys(n.rulesets).forEach(function (k) { var rs = n.rulesets[k]; if (rs.ifn !== ifn) return;
+      Object.keys(rs.rules).sort(function (a, b) { return a - b; }).forEach(function (q) { if (rs.rules[q].on) out.push(rs.rules[q]); }); });
+    return out;
+  }
+  function ruleHit(r, pk) {
+    if (r.src && !inRange(pk.src, r.src)) return false;
+    if (r.dst && !inRange(pk.dst, r.dst)) return false;
+    if (r.proto && r.proto !== 'any' && r.proto !== pk.proto) return false;
+    if (r.dport && !(pk.dport >= r.dport[0] && pk.dport <= r.dport[1])) return false;
+    return true;
+  }
+  P.send = function (src, pk, steps, ct) {
+    var cur = src, ttl = 16, hops = [];
     while (ttl-- > 0) {
       var cd = this.devs[cur];
-      if (owns(this, cur, dst)) return { ok: true, dev: cur, srcIp: first, hops: hops };
-      var r = this.lookup(cur, dst);
-      if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
-        return { ok: false, why: 'Destination net unreachable', first: first }; }
-      if (!first) first = r.iface.ip;
+      if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      var r = this.lookup(cur, pk.dst);
+      if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
+        return { ok: false, why: 'Destination net unreachable', pk: pk }; }
+      if (!pk.src) pk.src = r.iface.ip;
+      if (cd.type === 'esr' && cur !== src) {      // Source NAT на выходе
+        var sr = natRules(cd, 'snat', r.iface.name).filter(function (x) { return x.act && ruleHit(x, pk); })[0];
+        if (sr) { ct.push({ dev: cur, kind: 's', orig: pk.src, pub: r.iface.ip, peer: pk.dst, proto: pk.proto });
+          steps.push({ k: 'nat', t: cd.name + ': Source NAT на ' + r.iface.name + ' — источник ' + pk.src + ' заменён на ' + r.iface.ip });
+          pk.src = r.iface.ip; }
+      }
       var srcMac = EL.mac(cd.name + (r.iface.port || r.iface.name));
       var fl = this.flood(cur, r.iface, srcMac);
       var ep = fl.eps.filter(function (e) { return e.iface.ip === r.nh; })[0];
       var vl = r.iface.vlan || r.iface.tag;
       steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
-        (vl ? ' в VLAN ' + vl : '') + (r.nh !== dst ? ' (это шлюз к ' + dst + ')' : ''), notes: fl.notes });
+        (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : ''), notes: fl.notes });
       if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене', notes: fl.notes });
-        return { ok: false, why: 'Host unreachable', first: first }; }
+        return { ok: false, why: 'Host unreachable', pk: pk }; }
       var nd = this.devs[ep.dev];
       this.arp[cur][r.nh] = { mac: EL.mac(nd.name + (ep.iface.port || ep.iface.name)), ifn: r.iface.name };
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
       steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + this.arp[cur][r.nh].mac + '»' });
-      steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': пакет ' + first + ' → ' + dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
+      steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
+        pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
       if (nd.type === 'esr' && ep.iface.fw) {
         steps.push({ k: 'drop', t: nd.name + ': межсетевой экран на ' + ep.iface.name + ' включён — пакет отброшен (нужна ip firewall disable или зона безопасности)' });
-        return { ok: false, why: 'Request timed out', first: first };
+        return { ok: false, why: 'Request timed out', pk: pk };
+      }
+      if (nd.type === 'esr') {                     // обратная трансляция для ответов и Destination NAT на входе
+        var self = this;
+        ct.forEach(function (c) {
+          if (c.dev !== ep.dev) return;
+          if (c.kind === 's' && pk.dst === c.pub && pk.src === c.peer) { steps.push({ k: 'nat', t: nd.name + ': ответ на трансляцию — назначение ' + c.pub + ' возвращено в ' + c.orig }); pk.dst = c.orig; }
+          if (c.kind === 'd' && pk.src === c.target && pk.dst === c.client) { steps.push({ k: 'nat', t: nd.name + ': ответ сервера — источник ' + c.target + ' заменён обратно на ' + c.pub }); pk.src = c.pub; }
+        });
+        var dr = natRules(nd, 'dnat', ep.iface.name).filter(function (x) { return x.to && ruleHit(x, pk); })[0];
+        if (dr && !ct.some(function (c) { return c.dev === ep.dev && c.kind === 'd' && c.client === pk.src && c.target === dr.to; }) && pk.dst !== dr.to) {
+          ct.push({ dev: ep.dev, kind: 'd', client: pk.src, pub: pk.dst, target: dr.to, proto: pk.proto });
+          steps.push({ k: 'nat', t: nd.name + ': Destination NAT на ' + ep.iface.name + ' — ' + pk.dst + (pk.dport ? ':' + pk.dport : '') + ' перенаправлен на ' + dr.to });
+          pk.dst = dr.to;
+        }
+        void self;
       }
       hops.push({ dev: ep.dev, ip: ep.iface.ip });
       cur = ep.dev;
-      if (!owns(this, cur, dst) && (nd.type === 'vpc' || nd.type === 'deb')) {
+      if (!owns(this, cur, pk.dst) && (nd.type === 'vpc' || nd.type === 'deb')) {
         steps.push({ k: 'drop', t: nd.name + ' получил чужой пакет и не маршрутизирует его' });
-        return { ok: false, why: 'Request timed out', first: first };
+        return { ok: false, why: 'Request timed out', pk: pk };
       }
-      if (!owns(this, cur, dst)) steps.push({ k: 'route', t: nd.name + ': адрес ' + dst + ' не мой — ищу маршрут дальше' });
+      if (!owns(this, cur, pk.dst)) steps.push({ k: 'route', t: nd.name + ': адрес ' + pk.dst + ' не мой — ищу маршрут дальше' });
     }
     steps.push({ k: 'drop', t: 'TTL истёк — петля маршрутизации' });
-    return { ok: false, why: 'Time to live exceeded', first: first };
+    return { ok: false, why: 'Time to live exceeded', pk: pk };
   };
-  // ping туда и обратно
-  P.ping = function (src, dst) {
-    var steps = [], d = this.devs[src];
+  // запрос и ответ: ICMP echo, либо TCP/UDP к службе (curl, NTP)
+  P.request = function (src, dst, proto, dport) {
+    var steps = [], d = this.devs[src], ct = [];
+    this.ctLast = ct;
     if (IP.ip2n(dst) === null) return { ok: false, why: 'Bad address', steps: steps };
     if (!this.ifaces(src).length) { steps.push({ k: 'drop', t: d.name + ': нет ни одного IP-адреса' }); return { ok: false, why: 'No IP address', steps: steps }; }
-    var f = this.send(src, dst, steps);
+    var f = this.send(src, { src: null, dst: dst, proto: proto || 'icmp', dport: dport || null }, steps, ct);
     if (!f.ok) return { ok: false, why: f.why, steps: steps };
-    if (f.dev === src) return { ok: true, steps: steps, hops: [] };
-    steps.push({ k: 'ok', t: this.devs[f.dev].name + ' получил ICMP echo request и отвечает echo reply' });
-    var b = this.send(f.dev, f.srcIp, steps);
-    if (!b.ok) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз в обратную сторону' });
+    if (f.dev === src && proto === 'icmp') return { ok: true, steps: steps, hops: [] };
+    var fd = this.devs[f.dev];
+    if (proto !== 'icmp' && !listens(fd, proto, dport)) {
+      steps.push({ k: 'drop', t: fd.name + ': на порту ' + proto.toUpperCase() + ' ' + dport + ' никто не слушает — ответ «соединение отклонено»' });
+      return { ok: false, why: 'Connection refused', steps: steps, dev: f.dev };
+    }
+    steps.push({ k: 'ok', t: fd.name + ' получил ' + (proto === 'icmp' ? 'ICMP echo request и отвечает echo reply' : 'запрос ' + proto.toUpperCase() + ':' + dport + ' и отвечает') });
+    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null }, steps, ct);
+    if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз/NAT в обратную сторону' });
       return { ok: false, why: 'Request timed out', steps: steps }; }
-    steps.push({ k: 'ok', t: d.name + ' получил echo reply от ' + dst });
-    return { ok: true, steps: steps, hops: f.hops };
+    steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
+    return { ok: true, steps: steps, hops: f.hops, dev: f.dev };
   };
+  function listens(d, proto, port) {
+    var s = d.st;
+    if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
+                                 (proto === 'tcp' && port === 22);
+    if (d.type === 'esr') return proto === 'tcp' && port === 22 && s.run.ssh;
+    return false;
+  }
+  P.ping = function (src, dst) { return this.request(src, dst, 'icmp'); };
   P.reach = function (srcName, dst) { var d = this.byName(srcName); return !!d && this.ping(d.id, dst).ok; };
+  P.http = function (srcName, dst, port) { var d = this.byName(srcName); return !!d && this.request(d.id, dst, 'tcp', port || 80).ok; };
+
+  // ------------------------------------------------------------------ DHCP: DISCOVER широковещательно, сервер или ретранслятор
+  P.dhcp = function (id) {
+    var s = this, d = this.devs[id], steps = [], ct = [];
+    var port = d.type === 'vpc' ? 'eth0' : 'ens3', cname = d.name;
+    var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
+    steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes });
+    var lease = null;
+    fl.eps.some(function (ep) {
+      var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
+      var c = rd.st.run;
+      if (ep.iface.fw) { steps.push({ k: 'drop', t: rd.name + ': межсетевой экран на ' + ep.iface.name + ' отбрасывает DHCP' }); return false; }
+      var own = c.dhcp && c.dhcp.on && poolFor(c, ep.iface.ip);
+      if (own) { lease = alloc(rd, own, cname); if (lease) lease.via = null; lease && (lease.server = rd.name); return !!lease; }
+      var x = c.ifs[ep.iface.name];
+      if (c.relay && x && x.helper) {
+        steps.push({ k: 'route', t: rd.name + ': ретранслятор — DISCOVER принят на ' + ep.iface.name + ', giaddr = ' + ep.iface.ip + ', пересылаю на ' + x.helper + ' (unicast)' });
+        var f = s.send(ep.dev, { src: null, dst: x.helper, proto: 'udp', dport: 67 }, steps, ct);
+        if (!f.ok) { steps.push({ k: 'drop', t: 'Сервер ' + x.helper + ' недостижим с ретранслятора' }); return false; }
+        var sd = s.devs[f.dev], sc = sd.type === 'esr' ? sd.st.run : null, pl = sc && sc.dhcp && sc.dhcp.on && poolFor(sc, ep.iface.ip);
+        if (!pl) { steps.push({ k: 'drop', t: sd.name + ': нет DHCP-сервера или пула для сети ' + IP.netOf(ep.iface.ip, ep.iface.len) }); return false; }
+        steps.push({ k: 'ok', t: sd.name + ': пул ' + pl.name + ' — выбран по giaddr ' + ep.iface.ip });
+        var b = s.send(f.dev, { src: null, dst: ep.iface.ip, proto: 'udp', dport: 67 }, steps, ct);
+        if (!b.ok || b.dev !== ep.dev) { steps.push({ k: 'drop', t: 'Ответ сервера не дошёл до ретранслятора — нет маршрута к ' + ep.iface.ip }); return false; }
+        lease = alloc(sd, pl, cname); if (lease) { lease.server = sd.name; lease.via = rd.name; }
+        return !!lease;
+      }
+      return false;
+    });
+    if (!lease) { steps.push({ k: 'drop', t: 'DHCPOFFER не пришёл: в этом широковещательном домене нет DHCP-сервера или ретранслятора' });
+      return { ok: false, steps: steps }; }
+    steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
+    steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
+    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw };
+  };
+  function poolFor(c, giaddr) {
+    var hit = null;
+    Object.keys(c.dhcp.pools).forEach(function (k) { var p = c.dhcp.pools[k];
+      if (p.net && p.range && IP.sameNet(giaddr, p.net.split('/')[0], +p.net.split('/')[1])) hit = { name: k, p: p }; });
+    return hit;
+  }
+  function alloc(rd, pl, cname) {
+    var st = rd.st, L = st.leases = st.leases || {}, p = pl.p, net = rd.st.net || null;
+    if (L[cname] && IP.sameNet(L[cname], p.net.split('/')[0], +p.net.split('/')[1])) return { ip: L[cname], len: +p.net.split('/')[1], gw: p.gw };
+    var used = Object.keys(L).map(function (k) { return L[k]; });
+    for (var n = IP.ip2n(p.range[0]); n <= IP.ip2n(p.range[1]); n++) {
+      var ip = IP.n2ip(n);
+      if (used.indexOf(ip) >= 0 || (net && net.owner(ip))) continue;
+      L[cname] = ip; return { ip: ip, len: +p.net.split('/')[1], gw: p.gw };
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ время: NTP-клиент ESR
+  P.ntpPeer = function (id) {
+    var d = this.devs[id], n = d.st.run.ntp;
+    if (!n || !n.on) return null;
+    var s = this, best = null;
+    Object.keys(n.servers).some(function (ip) {
+      var r = s.request(id, ip, 'udp', 123);
+      if (r.ok) { var sd = s.devs[r.dev]; best = { ip: ip, utc: Date.now() + (sd.st.clk || 0), poll: Math.pow(2, n.servers[ip].maxpoll) }; return true; }
+      return false;
+    });
+    return best || { ip: Object.keys(n.servers)[0], utc: null };
+  };
+  P.esrUtc = function (id) { var p = this.ntpPeer(id); return p && p.utc !== null ? p.utc : Date.now() + (this.devs[id].st.clk || 0); };
+  P.ntpText = function (id) {
+    var p = this.ntpPeer(id);
+    if (!p) return '% NTP выключен — ntp enable';
+    if (!p.ip) return '% NTP-серверы не заданы — ntp server A.B.C.D';
+    var ok = p.utc !== null;
+    return (ok ? 'Clock is synchronized, stratum 9, reference is ' + p.ip : 'Clock is unsynchronized') + '\n' +
+      '     remote                 refid            st  t  when  poll  reach   delay\n' +
+      '------------------------- ---------------- --- -- ----- ----- ------ -------\n' +
+      (ok ? '*' : ' ') + '    ' + (p.ip + '                    ').slice(0, 20) + (ok ? '127.127.1.1      8   u  1     ' + p.poll + '    255    0.641' : '.INIT.           16  u  -     64    0      0.000');
+  };
 
   // ------------------------------------------------------------------ текстовые выводы
   P.pingText = function (id, dst, style) {

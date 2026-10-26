@@ -202,7 +202,7 @@
   }
   function stopTrace() { if (trace && trace.timer) { clearTimeout(trace.timer); trace.timer = null; } var g = $('pk'); if (g) g.innerHTML = ''; }
   function renderStep(animate) {
-    var s = trace.steps[trace.i], cls = { arp: 'arp', arpr: 'arp', ip: 'ip', drop: 'drop', ok: 'ok', route: '' }[s.k];
+    var s = trace.steps[trace.i], cls = { arp: 'arp', arpr: 'arp', ip: 'ip', drop: 'drop', ok: 'ok', route: '', nat: 'nat' }[s.k];
     $('trN').textContent = trace.title + ' · шаг ' + (trace.i + 1) + ' из ' + trace.steps.length + (trace.i === trace.steps.length - 1 ? (trace.ok ? ' · ДОСТАВЛЕНО' : ' · НЕ ДОСТАВЛЕНО') : '');
     $('trT').className = 't ' + cls; $('trT').textContent = s.t;
     $('trNotes').textContent = (s.notes || []).length && (s.k === 'drop' || s.k === 'arp') ? 'Отброшено по пути: ' + s.notes.join('; ') : '';

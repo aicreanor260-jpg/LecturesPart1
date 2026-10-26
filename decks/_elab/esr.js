@@ -3,7 +3,7 @@
 (function (G) {
   'use strict';
   var EL = G.EL, IP = EL.ip;
-  var T = [];
+  var T = [], RUNX = [];
   function cmd(modes, pat, run, d) { T.push({ modes: modes.split(' '), pat: pat.split(' '), run: run, d: d }); }
   var CFG = 'config gi sub lo user bridge rip ospf ospfa';
   var IFM = 'gi sub lo bridge';
@@ -66,13 +66,15 @@
     st.cand.tz = (/^[+-]/.test(a[0]) ? '' : '+') + a[0]; touch(st); }, 'Часовой пояс');
   cmd('priv', 'set date <w> <n> <w> <n>', function (st, a) {
     if (!/^\d{1,2}:\d{2}:\d{2}$/.test(a[0])) return '% Формат: set date ЧЧ:ММ:СС ДД Месяц ГГГГ';
-    st.date = a[0] + ' ' + a[1] + ' ' + a[2] + ' ' + a[3]; }, 'Установить дату и время');
-  cmd('priv', 'show date', function (st) {
     var M = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-    if (!st.date) return '"2026-01-01 00:00:00"';
-    var p = st.date.split(' '), mi = 0;
-    M.forEach(function (m, i) { if (m.indexOf(p[2].toLowerCase()) === 0) mi = i; });
-    return '"' + p[3] + '-' + ('0' + (mi + 1)).slice(-2) + '-' + ('0' + p[1]).slice(-2) + ' ' + p[0] + '"'; }, 'Текущие дата и время');
+    var mi = M.map(function (m) { return a[2].length >= 3 && m.indexOf(a[2].toLowerCase()) === 0; }).indexOf(true);
+    if (mi < 0) return '% Месяц словом по-английски: January … December';
+    var t = a[0].split(':'), local = Date.UTC(a[3], mi, a[1], +t[0], +t[1], +t[2]);
+    st.date = a[0] + ' ' + a[1] + ' ' + a[2] + ' ' + a[3];
+    st.clk = local - EL.clock.tzMs(st.run.tz) - Date.now(); }, 'Установить дату и время');
+  cmd('priv', 'show date', function (st) {
+    var utc = st.net ? st.net.esrUtc(st.dev) : Date.now() + (st.clk || 0);
+    return '"' + EL.clock.fmt(utc + EL.clock.tzMs(st.run.tz)) + '"'; }, 'Текущие дата и время');
   cmd('config', 'username <w>', function (st, a) {
     if (!st.cand.users[a[0]]) st.cand.users[a[0]] = { pw: null, priv: 1 };
     st.mode = 'user'; st.ctx = a[0]; touch(st); }, 'Локальный пользователь');
@@ -171,8 +173,10 @@
       if (x.ospf) { if (x.ospf.inst) d.push('  ip ospf instance ' + x.ospf.inst); if (x.ospf.area) d.push('  ip ospf area ' + x.ospf.area);
         if (x.ospf.passive) d.push('  ip ospf passive-interface'); if (x.ospf.on) d.push('  ip ospf'); }
       if (x.ip) d.push('  ip address ' + x.ip);
+      if (x.helper) d.push('  ip helper-address ' + x.helper);
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
+    RUNX.forEach(function (f) { f(c, o); });
     c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
     if (c.rip) { o.push('router rip'); c.rip.nets.forEach(function (n) { o.push('  network ' + n); });
       c.rip.passive.forEach(function (n) { o.push('  passive-interface ' + longIf(n)); }); c.rip.redist.forEach(function (n) { o.push('  redistribute ' + n); });
@@ -256,6 +260,6 @@
     var m = String(raw).match(/^\s*do\s+(.*)$/i);
     return m && st.mode !== 'priv' ? { mode: 'priv', raw: m[1] } : { mode: st.mode, raw: raw };
   }
-  EL.esr = { T: T, fresh: fresh, prompt: prompt, exec: exec, showRun: showRun, ifName: ifName, helpTable: helpTable,
+  EL.esr = { T: T, cmd: cmd, RUNX: RUNX, longIf: longIf, ifNameFn: null, fresh: fresh, prompt: prompt, exec: exec, showRun: showRun, ifName: ifName, helpTable: helpTable,
              PROMPT: PROMPT, commit: commit, confirm: confirm };
 })(typeof window !== 'undefined' ? window : global);

@@ -9,13 +9,13 @@
 ## Интерфейс
 | Где | Что |
 |---|---|
-| Палитра слева | MES2428, MES2428B, vESR, VPC, Debian — щелчок добавляет устройство |
+| Палитра слева | 29 моделей MES ветки ПО 10.x (с поиском), vESR, VPC, Debian, Debian-server (веб + NTP), Docker-браузер — щелчок добавляет устройство |
 | **Кабель** | щёлкните устройство → порт → второе устройство → порт |
 | **Удалить** / Delete | удалить выбранное устройство или кабель |
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
 | **ping** в панели | отправить ping и посмотреть путь пакета |
 | Полоса внизу схемы | пошаговое объяснение: ARP-рассылка, ARP-ответ, IP-пакет, теги VLAN, где и почему кадр отброшен |
-| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
+| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
 | **Задания** | случайные задачи «Базовая настройка» и «VLAN» на один коммутатор (как в тренажёрах дек) |
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
@@ -61,11 +61,17 @@ router rip / network 192.168.0.0/23 / passive-interface gigabitethernet 1/0/3 / 
 router ospf 250 / router-id 1.1.1.1 / area 0.0.0.0 / enable / exit / enable
 interface … / ip ospf instance 250 / ip ospf area 0.0.0.0 / ip ospf / ip ospf passive-interface / ip ospf cost 10
 show ip route all | ip rip | ip ospf | ip ospf neighbors
+ip dhcp-server / ip dhcp-server pool DHCP-10 / network 192.168.10.0/24 / address-range 192.168.10.100-192.168.10.200 / default-router 192.168.10.1 / default-lease-time 0:1:0
+ip dhcp-relay / interface … / ip helper-address 192.168.100.2
+nat source / ruleset SNAT / to interface gi1/0/1 / rule 10 / match source-address address-range 192.168.1.1-192.168.1.254 / action source-nat interface / enable
+nat destination / ruleset Dest_NAT / from interface gi1/0/1 / rule 10 / match protocol tcp / match destination-port port-range 80 / action destination-nat netmap 192.168.1.100/32 / enable
+ntp enable / ntp server 192.168.1.10 / minpoll 1 / maxpoll 4
+show ip dhcp binding | ip nat translations | ntp peers
 do commit    do confirm    rollback    show candidate-config
 show running-config | ip interfaces | ip route | interfaces status | users    ping    traceroute
 ```
-**VPC:** `ip 10.0.0.2/24 10.0.0.1`, `show`, `ping`, `trace`, `arp`, `clear ip`.
-**Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`.
+**VPC:** `ip 10.0.0.2/24 10.0.0.1`, `ip dhcp`, `show`, `ping`, `trace`, `arp`, `clear ip`.
+**Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`, `dhclient ens3`, `curl http://IP`, `date`, `timedatectl set-ntp false` / `set-time '2010-09-01 10:12:00'`, `systemctl status|restart chronyd|apache2`. Docker-браузер: `open http://IP`.
 
 ## Типовые ошибки
 | Сообщение | Что делать |
