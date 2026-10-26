@@ -62,6 +62,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>nat source → ruleset → to interface → rule → match source-address address-range → action source-nat interface → enable</td><td>Source NAT</td></tr>
 <tr><td>nat destination → ruleset → from interface → rule → match protocol tcp · match destination-port port-range 80 · action destination-nat netmap IP/32</td><td>Destination NAT</td></tr>
 <tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
+<tr><td>vlan 100 · interface gi1/0/3 → mode switchport · switchport access vlan 100 · bridge 100 → vlan 100 · ip address · enable</td><td>коммутация на ESR, Bridge</td></tr>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
 <tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
 </table>

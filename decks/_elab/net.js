@@ -81,6 +81,9 @@
       var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
       o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+    if (d.type === 'esr') Object.keys(st.run.bridges || {}).forEach(function (k) {   // Bridge N — L3-интерфейс VLAN портов в switchport
+      var b = st.run.bridges[k]; if (!b.on || !b.ip || !b.vlan) return; var p = b.ip.split('/');
+      o.push({ name: 'bridge' + k, ip: p[0], len: +p[1], port: null, br: b.vlan, fw: b.fw }); });
     return o;
   };
   // все маршруты-кандидаты: C (AD 0), S (AD из команды, по умолчанию 1), R (120), O (110)
@@ -91,7 +94,7 @@
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
-      var out = fs.filter(function (f) { return (f.port !== null || f.vlan) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br) && IP.sameNet(r.nh, f.ip, f.len); })[0];
       o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
@@ -257,7 +260,16 @@
         var e = egress(st.ports[q2], v); if (e) send(dev, q2, e === 't' ? v : null, path);
       });
     }
-    if (f.vlan) inMes(id, null, f.vlan, []);
+    function inEsrSw(dev, inPort, v, path) {      // коммутация на ESR: порты switchport одной VLAN + Bridge этой VLAN
+      var c = s.devs[dev].st.run;
+      Object.keys(c.bridges || {}).forEach(function (k) { var b = c.bridges[k];
+        if (b.on && b.ip && b.vlan === v && !(dev === id && f.br === v)) { var p = b.ip.split('/');
+          eps.push({ dev: dev, iface: { name: 'bridge' + k, ip: p[0], len: +p[1], port: null, br: v, fw: b.fw }, path: path }); } });
+      Object.keys(c.ifs).forEach(function (q2) { var x = c.ifs[q2];
+        if (q2 === inPort || !x.sw || x.shut || x.sw.vlan !== v || !s.linked(dev, q2)) return; send(dev, q2, null, path); });
+    }
+    if (f.br) inEsrSw(id, null, f.br, []);
+    else if (f.vlan) inMes(id, null, f.vlan, []);
     else if (f.port) send(id, f.port, f.tag, []);
     while (q.length) {
       var it = q.shift(), key = it.dev + '|' + it.port + '|' + it.tag;
@@ -270,6 +282,8 @@
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
         if (phys.shut) { notes.push(nm + ': интерфейс ' + it.port + ' выключен'); continue; }
+        if (phys.sw) { if (it.tag !== null) { notes.push(nm + ': ' + it.port + ' (access) — кадр с тегом ' + it.tag + ' отброшен'); continue; }
+          inEsrSw(it.dev, it.port, phys.sw.vlan, it.path); continue; }
         var k = it.tag === null ? it.port : it.port + '.' + it.tag, x = d.st.run.ifs[k];
         if (!x) { notes.push(nm + ': нет саб-интерфейса ' + it.port + '.' + it.tag + ' — кадр с тегом ' + it.tag + ' отброшен'); continue; }
         if (!x.ip || x.shut) { notes.push(nm + ': на ' + k + ' нет IP-адреса или он выключен'); continue; }

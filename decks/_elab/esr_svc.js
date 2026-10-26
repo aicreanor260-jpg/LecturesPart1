@@ -140,4 +140,41 @@
     if (c.ntp) { if (c.ntp.on) o.push('ntp enable');
       Object.keys(c.ntp.servers).forEach(function (k) { var x = c.ntp.servers[k]; o.push('ntp server ' + k, '  minpoll ' + x.minpoll, '  maxpoll ' + x.maxpoll, 'exit'); }); }
   });
+
+  // ---------------------------------------------------------------- switchport и Bridge (экзамен NTF2: R1 gi1/0/3 + Bridge 100)
+  S.PROMPT.evlan = '(config-vlan)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('evlan'); });
+  cmd('evlan', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  cmd('config', 'vlan <list>', function (st, a) {
+    if (a[0].some(function (v) { return v < 2 || v > 4094; })) return '% VLAN 2–4094';
+    st.cand.vlans = st.cand.vlans || {}; a[0].forEach(function (v) { st.cand.vlans[v] = true; }); touch(st); st.mode = 'evlan'; st.ctx = a[0]; }, 'Создать VLAN');
+  cmd('config', 'no vlan <list>', function (st, a) { st.cand.vlans = st.cand.vlans || {}; a[0].forEach(function (v) { delete st.cand.vlans[v]; }); touch(st); });
+  function each(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
+  cmd('gi', 'mode switchport', function (st) { each(st, function (x) { x.sw = x.sw || { vlan: 1 }; x.ip = null; }); }, 'Порт в режим коммутатора');
+  cmd('gi', 'mode routerport', function (st) { each(st, function (x) { delete x.sw; }); }, 'Порт в режим маршрутизатора');
+  cmd('gi', 'switchport mode access', function (st) {
+    if ((Array.isArray(st.ctx) ? st.ctx : [st.ctx]).some(function (k) { return !st.cand.ifs[k].sw; })) return '% Сначала mode switchport';
+    each(st, function (x) { x.sw.mode = 'access'; }); }, 'Режим access');
+  cmd('gi', 'switchport access vlan <n>', function (st, a) {
+    if ((Array.isArray(st.ctx) ? st.ctx : [st.ctx]).some(function (k) { return !st.cand.ifs[k].sw; })) return '% Сначала mode switchport';
+    if (!(st.cand.vlans || {})[a[0]] && a[0] !== 1) return '% VLAN ' + a[0] + ' не создана';
+    each(st, function (x) { x.sw.vlan = a[0]; }); }, 'VLAN порта');
+  cmd('config', 'bridge <n>', function (st, a) {
+    st.cand.bridges[a[0]] = st.cand.bridges[a[0]] || { vlan: null, ip: null, fw: true, on: false };
+    touch(st); st.mode = 'bridge'; st.ctx = a[0]; }, 'Интерфейс Bridge');
+  cmd('config', 'no bridge <n>', function (st, a) { delete st.cand.bridges[a[0]]; touch(st); });
+  function br(st) { return st.cand.bridges[st.ctx]; }
+  cmd('bridge', 'vlan <n>', function (st, a) { br(st).vlan = a[0]; touch(st); }, 'Привязать VLAN к мосту');
+  cmd('bridge', 'ip address <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return '% Формат: A.B.C.D/длина';
+    br(st).ip = c.ip + '/' + c.len; touch(st); }, 'IP-адрес моста');
+  cmd('bridge', 'ip firewall disable', function (st) { br(st).fw = false; touch(st); }, 'Отключить межсетевой экран');
+  cmd('bridge', 'enable', function (st) { br(st).on = true; touch(st); }, 'Включить мост');
+  cmd('bridge', 'no enable', function (st) { br(st).on = false; touch(st); });
+  S.RUNX.push(function (c, o) {
+    var vl = Object.keys(c.vlans || {}); if (vl.length) o.push('vlan ' + vl.join(','), 'exit');
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k]; if (!x.sw) return;
+      o.push('interface ' + S.longIf(k), '  mode switchport', '  switchport access vlan ' + x.sw.vlan, 'exit'); });
+    Object.keys(c.bridges || {}).forEach(function (k) { var b = c.bridges[k]; o.push('bridge ' + k);
+      if (b.vlan) o.push('  vlan ' + b.vlan); if (!b.fw) o.push('  ip firewall disable'); if (b.ip) o.push('  ip address ' + b.ip); if (b.on) o.push('  enable'); o.push('exit'); });
+  });
 })(typeof window !== 'undefined' ? window : global);

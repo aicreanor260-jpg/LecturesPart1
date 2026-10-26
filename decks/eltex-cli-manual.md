@@ -15,7 +15,7 @@
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
 | **ping** в панели | отправить ping и посмотреть путь пакета |
 | Полоса внизу схемы | пошаговое объяснение: ARP-рассылка, ARP-ответ, IP-пакет, теги VLAN, где и почему кадр отброшен |
-| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
+| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP), E.1–E.3 (экзамен NTF-2 «Вариант 1» на трёх топологиях из пакета Eltex) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
 | **Задания** | случайные задачи «Базовая настройка» и «VLAN» на один коммутатор (как в тренажёрах дек) |
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
@@ -66,6 +66,8 @@ ip dhcp-relay / interface … / ip helper-address 192.168.100.2
 nat source / ruleset SNAT / to interface gi1/0/1 / rule 10 / match source-address address-range 192.168.1.1-192.168.1.254 / action source-nat interface / enable
 nat destination / ruleset Dest_NAT / from interface gi1/0/1 / rule 10 / match protocol tcp / match destination-port port-range 80 / action destination-nat netmap 192.168.1.100/32 / enable
 ntp enable / ntp server 192.168.1.10 / minpoll 1 / maxpoll 4
+vlan 100 / interface gi1/0/3 / mode switchport / switchport mode access / switchport access vlan 100
+bridge 100 / vlan 100 / ip address 192.168.220.1/24 / ip firewall disable / enable
 show ip dhcp binding | ip nat translations | ntp peers
 do commit    do confirm    rollback    show candidate-config
 show running-config | ip interfaces | ip route | interfaces status | users    ping    traceroute
