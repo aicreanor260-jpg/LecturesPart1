@@ -36,6 +36,10 @@ def nb64(name):
 
 
 def npic(name, cap=""):
+    import _dk_replib
+    r = _dk_replib.rep_html(name)
+    if r:
+        return "<!--norc-->" + r + "<!--/norc-->"
     c = '<div class="piccap">%s</div>' % cap if cap else ""
     return '<div class="pic"><img src="%s" alt="" loading="lazy"></div>%s' % (nb64(name), c)
 
@@ -121,7 +125,7 @@ def recolor(text, fn):
         r, g, b = fn(int(m.group(2)), int(m.group(3)), int(m.group(4)))
         return "rgb%s(%d,%d,%d" % (m.group(1), r, g, b)
 
-    parts = re.split(r'(data:[^"\')\s]+)', text)
+    parts = re.split(r'(data:[^"\')\s]+|<!--norc-->.*?<!--/norc-->)', text, flags=re.S)
     for i in range(0, len(parts), 2):
         parts[i] = _RGB.sub(rg, _HEX.sub(hx, parts[i]))
     return "".join(parts)
@@ -171,7 +175,7 @@ def build(key):
     slides = dedupe(head_sl + body + tail_sl)
     fn = hue_map(cfg["hues"])
 
-    css = recolor(CSS + _sw_fig.CSS, fn) + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"]
+    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"]
     html_sl = recolor("\n".join(slides), fn)
     hud = _sw_build.HUD
     js = recolor(JS + _sw_fig.JS, fn)
@@ -182,7 +186,7 @@ def build(key):
         '<div id="bgimg"></div><div id="bgfx"></div>\n<div id="stage">\n%s\n</div>\n%s\n'
         "<script>%s</script>\n</body>\n</html>\n"
         % (cfg["title"], cfg["fonts"], css, key, html_sl, hud, js))
-    out = os.path.join(HERE, cfg["out"])
+    out = os.environ.get("DK_OUT") or os.path.join(HERE, cfg["out"])
     with io.open(out, "w", encoding="utf-8") as fh:
         fh.write(html)
     print("готово: %s — %d слайдов, %.2f МБ" % (out, len(slides), os.path.getsize(out) / 1048576.0))

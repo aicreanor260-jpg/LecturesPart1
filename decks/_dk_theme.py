@@ -36,7 +36,10 @@ p.sub{color:#ffe3f1;text-shadow:0 1px 2px #000;margin-top:12px}
 """
 
 VLAN_CSS = r"""
-:root{--fd:"Pixelify Sans","Golos Text",monospace}
+:root{--fd:"Press Start 2P","Golos Text",monospace}
+h1.t{font-size:clamp(15px,1.7vw,30px)!important;line-height:1.3!important}
+.ch h3{font-family:"Golos Text",sans-serif!important;font-weight:800}
+.cover .big{font-size:clamp(26px,4.2vw,72px)!important;line-height:1.2!important}
 body{background:#5ab8ff}
 #bgfx{background:linear-gradient(180deg,rgba(10,20,60,.30),rgba(10,20,60,.45))!important}
 body:has(.slide.on.cover-slide) #bgfx{background:rgba(10,20,60,.18)!important}
@@ -90,7 +93,7 @@ THEMES = {
         "title": "Виртуальные локальные сети VLAN — лекция",
         "out": "vlan.html",
         "adir": "_vl_assets",
-        "fonts": FONT_LINK % ("family=Pixelify+Sans:wght@500;600;700&"
+        "fonts": FONT_LINK % ("family=Press+Start+2P&family=Pixelify+Sans:wght@500;600;700&"
                               "family=Golos+Text:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700"),
         "range": ("VLAN: принципы работы", "Базовая настройка"),
         # голубой акцент → золото монет, фиолетовый → кирпично-красный; тёмно-синие панели остаются
@@ -122,3 +125,9 @@ THEMES = {
         "css": VLAN_CSS,
     },
 }
+
+# вёрстка инфографик: фон-картинка сама задаёт подложку, без неоновой рамки и масок
+REP_CSS = """
+.dkrep .repc{background:none!important;border-radius:0!important;box-shadow:0 8px 30px rgba(0,0,0,.35)!important;color:#1a0a1a}
+.dkrep .repc img{-webkit-mask:none!important;mask:none!important}
+"""
