@@ -77,7 +77,7 @@ def build():
             "порту, а также промежуток бездеятельности (<b>Exec timeout</b>), после которого доступ пользователя к "
             "администрированию будет автоматически прекращен. Для настройки можно использовать следующую "
             "последовательность команд:"),
-        conf(["switch(config-line)#password consolepass", "switch(config-line)#exec-timeout 5",
+        conf(["switch(config)#line console", "switch(config-line)#password consolepass", "switch(config-line)#exec-timeout 5",
               "switch(config-line)#login authentication console", "switch(config-line)#exit",
               "switch(config)#aaa authentication login console line local"])],
         [txt("Команда <b>line console</b> переводит пользователя в режим настройки консольного соединения.",
@@ -231,7 +231,7 @@ def build():
     pslide("Пример учётных записей", TU, [
         txt("Пример настройки учетной записи пользователя admin1 с уровнем привилегий 15 и пользователя user уровнем привилегий 1:"),
         conf(["console(config)#username admin1 password admin1 privilege 15",
-              "console(config)#username user password user privilege 15"], "")],
+              "console(config)#username user password user privilege 1"], "")],
         [txt("Учетные записи пользователей хранятся в текущей и начальной конфигурациях коммутатора и составляют локальную "
              "базу пользователей. Просмотреть учетные записи в текущей конфигурации устройства можно c помощью команды "
              "<b>show running config</b> или ее расширенного варианта <b>show running-config | begin username</b>:"),

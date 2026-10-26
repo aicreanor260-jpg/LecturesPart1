@@ -415,7 +415,7 @@ def build():
         [txt("Конфигурация списка разрешенных VLAN осуществляется двумя командами:", "1. Добавление VLAN к списку разрешенных:"),
          conf(["switch(config-if)# switchport trunk allowed vlan add Num1,Num2,…,NumX"]),
          txt("где Num1, Num2, NumX – номера VLAN, разрешаемых на порту.", "2. Удаление VLAN из списка разрешенных:"),
-         conf(["switchport(config-if)# switchport trunk allowed vlan remove Num1,Num2,…,NumX"]),
+         conf(["switch(config-if)# switchport trunk allowed vlan remove Num1,Num2,…,NumX"]),
          txt("где Num1, Num2, NumX – номера VLAN, удаляемых из списка разрешенных на порту.")])
     # ---------------------------------------------------------------- pptx 30
     pslide("Нативная VLAN: команда и пример", TK, [
@@ -427,7 +427,7 @@ def build():
         [conf(["switch#configure", "switch(config)#interface Gigabitethernet 1/0/10",
                "switch(config-if)#switchport mode trunk",
                "switch(config-if)#switchport trunk allowed vlan add 10,20,30-40",
-               "switch(config-if)#switchport native vlan 50"], "Пример конфигурации")])
+               "switch(config-if)#switchport trunk native vlan 50"], "Пример конфигурации")])
     # ---------------------------------------------------------------- pptx 31
     TG = "Интерфейс с полной <em>поддержкой 802.1q</em>"
     pslide("General: конфигурация", TG, [
@@ -573,17 +573,17 @@ def build():
     info("MAC-based VLAN · инфографика", TMV, "v_macvlan")
     # ---------------------------------------------------------------- pptx 40
     pslide("MAC-based VLAN: конфигурация", TMV, [
-        conf(["switch(config)# interface gigabitethernet 0/2",
+        conf(["switch(config)# interface gigabitethernet 1/0/2",
               "switch(config-if)# switchport mode access",
               "switch(config-if)# switchport access vlan 10",
               "switch(config)# vlan database",
               "switch(config-vlan)# vlan 10",
               "switch(config-vlan)# map mac f4:f2:6d:03:42:31 40 macs-group 1",
-              "switch(config-vlan)# exit"], "Порт gigabitethernet 0/2 и MAC-группа"),
+              "switch(config-vlan)# exit"], "Порт gigabitethernet 1/0/2 и MAC-группа"),
         txt("Настраиваем порт interface gigabitethernet1/0/1:"),
-        conf(["switch(config)# interface gigabitethernet 0/1",
+        conf(["switch(config)# interface gigabitethernet 1/0/1",
               "switch(config-if)# switchport general map macs-group 1 vlan 10",
-              "switch(config-if)# switchport mode general"], "Порт gigabitethernet 0/1"),
+              "switch(config-if)# switchport mode general"], "Порт gigabitethernet 1/0/1"),
         txt("Для того, чтобы метка на выходе снималась, добавляем команду:"),
         conf(["switch(config-if)# switchport general allowed vlan add 10 untagged"], "")],
         [svg(F.mac_topo())])

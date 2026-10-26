@@ -85,7 +85,7 @@ def web_first():
     o.append(T(1000, 372, "SW-1", 18, "#fff", 900))
     o.append(wire(1000, 260, 1000, 160, PINK, 4))
     o.append(dot(1000, 160))
-    o.append(tagbox(1190, 80, ["VLAN 1", "IP add: 192.169.1.239 /24"], PINK, "end"))
+    o.append(tagbox(1190, 80, ["VLAN 1", "IP add: 192.168.1.239 /24"], PINK, "end"))
     return S.fig("".join(o), "0 0 1200 460")
 
 
