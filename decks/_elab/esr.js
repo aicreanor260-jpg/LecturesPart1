@@ -5,16 +5,17 @@
   var EL = G.EL, IP = EL.ip;
   var T = [];
   function cmd(modes, pat, run, d) { T.push({ modes: modes.split(' '), pat: pat.split(' '), run: run, d: d }); }
-  var CFG = 'config gi sub lo user bridge';
+  var CFG = 'config gi sub lo user bridge rip ospf ospfa';
   var IFM = 'gi sub lo bridge';
   var PROMPT = { priv: '#', config: '(config)#', gi: '(config-if-gi)#', sub: '(config-if-sub)#', lo: '(config-if-loopback)#',
-                 user: '(config-user)#', bridge: '(config-bridge)#' };
+                 user: '(config-user)#', bridge: '(config-bridge)#',
+                 rip: '(config-rip)#', ospf: '(config-ospf)#', ospfa: '(config-ospf-area)#' };
 
   function freshCfg(host, nports) {
     var ifs = {};
     for (var i = 1; i <= nports; i++) ifs['gi1/0/' + i] = { ip: null, fw: true, shut: false };
     return { host: host, ifs: ifs, users: { admin: { pw: 'password', priv: 15 } }, ssh: false, banner: { login: null, exec: null },
-             routes: [], tz: null, bridges: {} };
+             routes: [], tz: null, bridges: {}, rip: null, ospf: null };
   }
   function fresh(host, nports) {
     var c = freshCfg(host || 'esr', nports || 8);
@@ -24,17 +25,23 @@
 
   // имена интерфейсов: gi1/0/1, gi1/0/1.10, lo1
   function ifName(t) {
+    var r = String(t).match(/^gi1\/0\/(\d+)-(\d+)$/);
+    if (r) { var L = []; for (var i = +r[1]; i <= +r[2]; i++) L.push('gi1/0/' + i); return L.length ? { range: L } : null; }
     var m = String(t).match(/^gi(\d+)\/(\d+)\/(\d+)(?:\.(\d+))?$/);
     if (!m || m[1] !== '1' || m[2] !== '0') return null;
     return { phys: 'gi1/0/' + m[3], sub: m[4] ? +m[4] : null, name: 'gi1/0/' + m[3] + (m[4] ? '.' + m[4] : '') };
   }
-  function cur(st) { return st.ctx && st.cand.ifs[st.ctx]; }
+  function ctxList(st) { return Array.isArray(st.ctx) ? st.ctx : [st.ctx]; }
+  function cur(st) { return st.ctx && !Array.isArray(st.ctx) && st.cand.ifs[st.ctx]; }
+  function each(st, f) { ctxList(st).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
   function touch(st) { st.pending = true; }
 
   // ---------------------------------------------------------------- режимы
   cmd('priv', 'configure', function (st) { st.mode = 'config'; }, 'Режим глобальной конфигурации');
   cmd('priv', 'configure terminal', function (st) { st.mode = 'config'; });
-  cmd(CFG, 'exit', function (st) { st.mode = st.mode === 'config' ? 'priv' : 'config'; st.ctx = null; }, 'Выход на уровень выше');
+  cmd(CFG, 'exit', function (st) {
+    if (st.mode === 'ospfa') { st.mode = 'ospf'; st.ctx = st.ospfId; return; }
+    st.mode = st.mode === 'config' ? 'priv' : 'config'; st.ctx = null; }, 'Выход на уровень выше');
   cmd(CFG, 'end', function (st) { st.mode = 'priv'; st.ctx = null; }, 'Выход в привилегированный режим');
 
   // ---------------------------------------------------------------- commit / confirm
@@ -85,6 +92,8 @@
   // ---------------------------------------------------------------- интерфейсы
   cmd('config', 'interface <w>', function (st, a) {
     var n = ifName(a[0]); if (!n) return '% Неверное имя интерфейса (пример: gigabitethernet 1/0/1 или 1/0/1.10)';
+    if (n.range) { if (n.range.some(function (k) { return !st.cand.ifs[k]; })) return '% Таких интерфейсов нет на устройстве';
+      st.mode = 'gi'; st.ctx = n.range; return; }
     if (!st.cand.ifs[n.phys]) return '% Interface ' + n.phys + ' not found';
     if (n.sub !== null) {
       if (n.sub < 1 || n.sub > 4094) return '% Номер саб-интерфейса = VLAN, 1–4094';
@@ -101,6 +110,7 @@
     delete st.cand.ifs[n.name]; touch(st); });
   cmd('config', 'no interface loopback <n>', function (st, a) { delete st.cand.ifs['lo' + a[0]]; touch(st); });
   function setIp(st, v) {
+    if (!cur(st)) return '% IP-адрес задаётся на одном интерфейсе, не на диапазоне';
     var c = IP.parseCidr(v); if (!c) return '% Формат адреса: A.B.C.D/длина, например 192.168.1.1/24';
     var me = st.ctx;
     var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip &&
@@ -109,22 +119,35 @@
     cur(st).ip = c.ip + '/' + c.len; touch(st);
   }
   cmd('gi sub lo', 'ip address <w>', function (st, a) { return setIp(st, a[0]); }, 'IP-адрес/префикс');
-  cmd('gi sub lo', 'no ip address', function (st) { cur(st).ip = null; touch(st); });
-  cmd('gi sub', 'ip firewall disable', function (st) { cur(st).fw = false; touch(st); }, 'Отключить межсетевой экран');
-  cmd('gi sub', 'no ip firewall disable', function (st) { cur(st).fw = true; touch(st); });
-  cmd('gi sub lo', 'shutdown', function (st) { cur(st).shut = true; touch(st); }, 'Выключить интерфейс');
-  cmd('gi sub lo', 'no shutdown', function (st) { cur(st).shut = false; touch(st); }, 'Включить интерфейс');
-  cmd('gi sub lo', 'description <rest>', function (st, a) { cur(st).desc = a[0]; touch(st); }, 'Описание');
+  cmd('gi sub lo', 'no ip address', function (st) { each(st, function (x) { x.ip = null; }); });
+  cmd('gi sub', 'ip firewall disable', function (st) { each(st, function (x) { x.fw = false; }); }, 'Отключить межсетевой экран');
+  cmd('gi sub', 'no ip firewall disable', function (st) { each(st, function (x) { x.fw = true; }); });
+  cmd('gi sub lo', 'shutdown', function (st) { each(st, function (x) { x.shut = true; }); }, 'Выключить интерфейс');
+  cmd('gi sub lo', 'no shutdown', function (st) { each(st, function (x) { x.shut = false; }); }, 'Включить интерфейс');
+  cmd('gi sub lo', 'description <rest>', function (st, a) { each(st, function (x) { x.desc = a[0]; }); }, 'Описание');
+  // OSPF на интерфейсе
+  cmd('gi sub', 'ip ospf instance <n>', function (st, a) { each(st, function (x) { x.ospf = x.ospf || {}; x.ospf.inst = a[0]; }); }, 'Процесс OSPF интерфейса');
+  cmd('gi sub', 'ip ospf area <w>', function (st, a) { if (!/^\d+\.\d+\.\d+\.\d+$/.test(a[0])) return '% Область в формате A.B.C.D, например 0.0.0.0';
+    each(st, function (x) { x.ospf = x.ospf || {}; x.ospf.area = a[0]; }); });
+  cmd('gi sub', 'ip ospf', function (st) { each(st, function (x) { x.ospf = x.ospf || {}; x.ospf.on = true; }); }, 'Включить OSPF на интерфейсе');
+  cmd('gi sub', 'no ip ospf', function (st) { each(st, function (x) { if (x.ospf) x.ospf.on = false; }); });
+  cmd('gi sub', 'ip ospf passive-interface', function (st) { each(st, function (x) { x.ospf = x.ospf || {}; x.ospf.passive = true; }); });
+  cmd('gi sub', 'no ip ospf passive-interface', function (st) { each(st, function (x) { if (x.ospf) x.ospf.passive = false; }); });
+  cmd('gi sub', 'ip ospf cost <n>', function (st, a) { each(st, function (x) { x.ospf = x.ospf || {}; x.ospf.cost = a[0]; }); });
 
   // ---------------------------------------------------------------- статические маршруты
-  cmd('config', 'ip route <w> <ip>', function (st, a) {
-    var c = IP.parseCidr(a[0]); if (!c) return '% Формат: ip route A.B.C.D/длина шлюз';
+  function addRoute(st, a, ad) {
+    var c = IP.parseCidr(a[0]); if (!c) return '% Формат: ip route A.B.C.D/длина шлюз [метрика]';
+    if (ad !== undefined && (ad < 1 || ad > 255)) return '% Метрика (административное расстояние) 1–255';
     var net = IP.netOf(c.ip, c.len);
-    if (!st.cand.routes.some(function (r) { return r.net === net && r.nh === a[1]; })) st.cand.routes.push({ net: net, nh: a[1] });
-    touch(st); }, 'Статический маршрут');
+    st.cand.routes = st.cand.routes.filter(function (r) { return !(r.net === net && r.nh === a[1]); });
+    st.cand.routes.push({ net: net, nh: a[1], ad: ad || 1 }); touch(st);
+  }
+  cmd('config', 'ip route <w> <ip>', function (st, a) { return addRoute(st, a); }, 'Статический маршрут');
+  cmd('config', 'ip route <w> <ip> <n>', function (st, a) { return addRoute(st, a, a[2]); }, 'Плавающий маршрут с метрикой');
   cmd('config', 'no ip route <w> <ip>', function (st, a) {
     var c = IP.parseCidr(a[0]); if (!c) return '% Формат: no ip route A.B.C.D/длина шлюз';
-    var net = IP.netOf(c.ip, c.len), n = st.cand.routes.length;
+    var net = IP.netOf(c.ip, c.len), n = st.cand.routes.length; a = a.slice(0, 2);
     st.cand.routes = st.cand.routes.filter(function (r) { return !(r.net === net && r.nh === a[1]); });
     if (n === st.cand.routes.length) return '% Маршрут не найден'; touch(st); });
 
@@ -145,10 +168,18 @@
       if (x.desc) d.push('  description "' + x.desc + '"');
       if (x.shut) d.push('  shutdown');
       if (!x.fw && k.charAt(0) !== 'l') d.push('  ip firewall disable');
+      if (x.ospf) { if (x.ospf.inst) d.push('  ip ospf instance ' + x.ospf.inst); if (x.ospf.area) d.push('  ip ospf area ' + x.ospf.area);
+        if (x.ospf.passive) d.push('  ip ospf passive-interface'); if (x.ospf.on) d.push('  ip ospf'); }
       if (x.ip) d.push('  ip address ' + x.ip);
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
-    c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh); });
+    c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
+    if (c.rip) { o.push('router rip'); c.rip.nets.forEach(function (n) { o.push('  network ' + n); });
+      c.rip.passive.forEach(function (n) { o.push('  passive-interface ' + longIf(n)); }); c.rip.redist.forEach(function (n) { o.push('  redistribute ' + n); });
+      if (c.rip.on) o.push('  enable'); o.push('exit'); }
+    if (c.ospf) { o.push('router ospf ' + c.ospf.id); if (c.ospf.rid) o.push('  router-id ' + c.ospf.rid);
+      Object.keys(c.ospf.areas).forEach(function (k) { o.push('  area ' + k); if (c.ospf.areas[k].on) o.push('    enable'); o.push('  exit'); });
+      if (c.ospf.on) o.push('  enable'); o.push('exit'); }
     if (c.ssh) o.push('ip ssh server');
     return o.filter(function (x) { return x !== ''; }).join('\n').replace(/\nexit\n/g, '\nexit\n');
   }
@@ -167,16 +198,50 @@
       o.push((k + '             ').slice(0, 13) + (x.shut ? 'Down    ' : 'Up      ') + (up ? 'Up      ' : 'Down    ') + '1500   ' +
              EL.mac(st.run.host + k.split('.')[0]) + '   00,00:00:00'); });
     return o.join('\n'); }, 'Состояние интерфейсов');
-  cmd('priv', 'show ip route', function (st) {
-    var o = ['Codes: C - connected, S - static, R - RIP derived, O - OSPF derived,', '       > - best route', ''];
-    Object.keys(st.run.ifs).sort(ifSort).forEach(function (k) { var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
-      var p = x.ip.split('/'); o.push('C     ' + IP.netOf(p[0], +p[1]) + '  [0/0] dev ' + k + ', ' + p[0] + ' > '); });
-    st.run.routes.forEach(function (r) { o.push('S     ' + r.net + '  [1/0] via ' + r.nh + ' > '); });
-    return o.join('\n'); }, 'Таблица маршрутизации');
+  cmd('priv', 'show ip route', function (st) { return st.net ? st.net.routeText(st.dev, false) : ''; }, 'Таблица маршрутизации');
   cmd('priv', 'show users', function (st) { return 'User      Privilege\n--------- ---------\n' +
     Object.keys(st.run.users).map(function (u) { return (u + '          ').slice(0, 10) + st.run.users[u].priv; }).join('\n'); });
   cmd('priv', 'ping <ip>', function (st, a) { return st.net ? st.net.pingText(st.dev, a[0], 'esr') : '% Нет сети'; }, 'Проверка связности');
   cmd('priv', 'traceroute <ip>', function (st, a) { return st.net ? st.net.traceText(st.dev, a[0]) : '% Нет сети'; }, 'Трассировка маршрута');
+
+
+  // ---------------------------------------------------------------- RIP
+  function rip(st) { return st.cand.rip || (st.cand.rip = { on: false, nets: [], passive: [], redist: [] }); }
+  cmd('config', 'router rip', function (st) { rip(st); touch(st); st.mode = 'rip'; st.ctx = null; }, 'Настройка протокола RIP');
+  cmd('config', 'no router rip', function (st) { st.cand.rip = null; touch(st); });
+  cmd('rip', 'network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return '% Формат: network A.B.C.D/длина';
+    var n = IP.netOf(c.ip, c.len), r = rip(st); if (r.nets.indexOf(n) < 0) r.nets.push(n); touch(st); }, 'Анонсировать сеть');
+  cmd('rip', 'no network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return '% Формат: no network A.B.C.D/длина';
+    var n = IP.netOf(c.ip, c.len), r = rip(st); r.nets = r.nets.filter(function (x) { return x !== n; }); touch(st); });
+  cmd('rip', 'passive-interface <w>', function (st, a) { var n = ifName(a[0]); if (!n || n.range || !st.cand.ifs[n.name]) return '% Неверный интерфейс';
+    var r = rip(st); if (r.passive.indexOf(n.name) < 0) r.passive.push(n.name); touch(st); }, 'Не рассылать обновления в интерфейс');
+  cmd('rip', 'no passive-interface <w>', function (st, a) { var n = ifName(a[0]); if (!n) return '% Неверный интерфейс';
+    var r = rip(st); r.passive = r.passive.filter(function (x) { return x !== n.name; }); touch(st); });
+  cmd('rip', 'redistribute connected', function (st) { var r = rip(st); if (r.redist.indexOf('connected') < 0) r.redist.push('connected'); touch(st); }, 'Анонсировать подключённые сети');
+  cmd('rip', 'redistribute static', function (st) { var r = rip(st); if (r.redist.indexOf('static') < 0) r.redist.push('static'); touch(st); }, 'Анонсировать статические маршруты');
+  cmd('rip', 'enable', function (st) { rip(st).on = true; touch(st); }, 'Запустить RIP');
+  cmd('rip', 'no enable', function (st) { rip(st).on = false; touch(st); });
+
+  // ---------------------------------------------------------------- OSPF
+  cmd('config', 'router ospf <n>', function (st, a) {
+    if (a[0] < 1 || a[0] > 65535) return '% Номер процесса 1–65535';
+    if (!st.cand.ospf || st.cand.ospf.id !== a[0]) st.cand.ospf = { id: a[0], rid: null, on: false, areas: {} };
+    touch(st); st.mode = 'ospf'; st.ctx = a[0]; st.ospfId = a[0]; }, 'Настройка процесса OSPF');
+  cmd('config', 'no router ospf <n>', function (st, a) { if (st.cand.ospf && st.cand.ospf.id === a[0]) st.cand.ospf = null; touch(st); });
+  cmd('ospf', 'router-id <ip>', function (st, a) { st.cand.ospf.rid = a[0]; touch(st); }, 'Идентификатор маршрутизатора');
+  cmd('ospf', 'area <w>', function (st, a) { if (!/^\d+\.\d+\.\d+\.\d+$/.test(a[0])) return '% Область в формате A.B.C.D, например 0.0.0.0';
+    var ar = st.cand.ospf.areas; if (!ar[a[0]]) ar[a[0]] = { on: false }; touch(st); st.mode = 'ospfa'; st.ctx = a[0]; }, 'Область OSPF');
+  cmd('ospfa', 'enable', function (st) { st.cand.ospf.areas[st.ctx].on = true; touch(st); }, 'Активировать область');
+  cmd('ospfa', 'no enable', function (st) { st.cand.ospf.areas[st.ctx].on = false; touch(st); });
+  cmd('ospf', 'enable', function (st) { st.cand.ospf.on = true; touch(st); }, 'Запустить процесс OSPF');
+  cmd('ospf', 'no enable', function (st) { st.cand.ospf.on = false; touch(st); });
+
+  cmd('priv', 'show ip rip', function (st) { return st.net ? st.net.dynText(st.dev, 'R') : ''; }, 'Маршруты RIP');
+  cmd('priv', 'show ip ospf neighbors', function (st) { return st.net ? st.net.ospfNbrText(st.dev) : ''; }, 'Соседи OSPF');
+  cmd('priv', 'show ip ospf', function (st) { var o = st.run.ospf;
+    return o ? 'Routing Process: ospf ' + o.id + ' with ID ' + (o.rid || '0.0.0.0') + '\nProcess is ' + (o.on ? 'enabled' : 'disabled') +
+      Object.keys(o.areas).map(function (k) { return '\n Area ' + k + ' — ' + (o.areas[k].on ? 'active' : 'inactive'); }).join('') : '% OSPF не настроен'; });
+  cmd('priv', 'show ip route all', function (st) { return st.net ? st.net.routeText(st.dev, true) : ''; }, 'Все маршруты, включая резервные');
 
   function E() { return EL.E; }
 

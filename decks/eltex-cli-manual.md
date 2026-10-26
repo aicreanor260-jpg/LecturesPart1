@@ -15,7 +15,7 @@
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
 | **ping** в панели | отправить ping и посмотреть путь пакета |
 | Полоса внизу схемы | пошаговое объяснение: ARP-рассылка, ARP-ответ, IP-пакет, теги VLAN, где и почему кадр отброшен |
-| **Лабораторные** | 2.1, 3.1, 4.1, 4.2 и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
+| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
 | **Задания** | случайные задачи «Базовая настройка» и «VLAN» на один коммутатор (как в тренажёрах дек) |
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
@@ -55,7 +55,12 @@ interface gigabitethernet 1/0/1.50 / ip address 173.16.25.1/24
 interface loopback 1 / ip address 8.8.8.8/32
 username master / password eltex / privilege 14
 ip ssh server    banner login Router-R1    banner exec "Connect Router R1"
-ip route 10.0.0.0/8 192.168.1.2
+ip route 10.0.0.0/8 192.168.1.2          ip route 10.0.0.0/8 10.1.1.2 10   (плавающий, метрика 10)
+interface gigabitethernet 1/0/1-3       (диапазон интерфейсов)
+router rip / network 192.168.0.0/23 / passive-interface gigabitethernet 1/0/3 / redistribute connected / enable
+router ospf 250 / router-id 1.1.1.1 / area 0.0.0.0 / enable / exit / enable
+interface … / ip ospf instance 250 / ip ospf area 0.0.0.0 / ip ospf / ip ospf passive-interface / ip ospf cost 10
+show ip route all | ip rip | ip ospf | ip ospf neighbors
 do commit    do confirm    rollback    show candidate-config
 show running-config | ip interfaces | ip route | interfaces status | users    ping    traceroute
 ```
@@ -70,10 +75,12 @@ show running-config | ip interfaces | ip route | interfaces status | users    pi
 | `% Команда недоступна в этом режиме` | смотрите на приглашение: нужен `#`, `(config)#` или режим интерфейса |
 | `% VLAN 30 не создана` | сначала `vlan database` / `vlan 30` |
 | ESR не отвечает | нет `commit` или не отключён экран: `ip firewall disable` |
+| Маршрут есть в `show ip route all`, но без `*` | шлюз недоступен (интерфейс выключен) или есть маршрут с меньшей метрикой — это и есть плавающий маршрут в резерве |
+| Нет маршрутов R/O | протокол не включён (`enable`), сеть не в `network`, интерфейс пассивный или не применён `commit` |
 | ARP без ответа | разные VLAN, VLAN не разрешена на транке, нет саб-интерфейса, порт `shutdown` — шаги трассы показывают точку отбрасывания |
 
 ## Как добавить свою лабораторную
-Лабы описаны в `decks/_elab/labs.js`, массив `LABS`. Шаблон:
+Лабы описаны в `decks/_elab/labs.js` и `decks/_elab/labs_routing.js` (маршрутизация), массив `LABS`. Шаблон:
 ```js
 { id: '5.0', title: 'Название', goal: 'Цель работы',
   gen: function () { return { v: EL.pick([10, 20, 30]) }; },          // случайный вариант
@@ -97,4 +104,4 @@ python decks/_elab_build.py
 Новые команды MES добавляются в `decks/_elab/mesx.js` через `E.cmd('режимы', 'шаблон <n> <w> <ip>', function (st, args) {...})`, команды ESR — в `decks/_elab/esr.js`. Движок MES (`decks/_dk_cli.js`) общий с тренажёрами дек «Базовая настройка» и «VLAN».
 
 ## Что дальше (по лабам NTF2)
-4.3 и 5.1 (статика, суммарный и плавающий маршрут), 5.2 RIP, 5.3 OSPF, 6.x DHCP/relay/NAT/NTP, 7.1 ACL, 8.x RSTP/LACP/VRRP, 10.x LLDP/syslog/SPAN/TFTP, экзаменационный вариант.
+6.x DHCP/relay/NAT/NTP, 7.1 ACL, 8.x RSTP/LACP/VRRP, 10.x LLDP/syslog/SPAN/TFTP, экзаменационный вариант.

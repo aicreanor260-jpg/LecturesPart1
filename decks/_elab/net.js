@@ -34,6 +34,7 @@
     if (m.type === 'vpc') d.st = H.vpc(name);
     if (m.type === 'deb') d.st = H.deb(name);
     EL.attach(d.st, this, id);
+    this.gen++;
     this.devs[id] = d; this.order.push(id); this.mac[id] = {}; this.arp[id] = {};
     return d;
   };
@@ -41,6 +42,7 @@
   P.byName = function (n) { var s = this; return s.order.map(function (i) { return s.devs[i]; }).filter(function (d) { return d.name === n; })[0] || null; };
   P.list = function () { var s = this; return s.order.map(function (i) { return s.devs[i]; }); };
   P.remove = function (id) {
+    this.gen++;
     this.links = this.links.filter(function (l) { return l.a.dev !== id && l.b.dev !== id; });
     delete this.devs[id]; this.order = this.order.filter(function (x) { return x !== id; });
   };
@@ -58,15 +60,16 @@
     if (this.portsOf(A).indexOf(ap) < 0 || this.portsOf(B).indexOf(bp) < 0) return 'Нет такого порта';
     if (this.linked(a, ap)) return A.name + ' ' + ap + ' уже занят';
     if (this.linked(b, bp)) return B.name + ' ' + bp + ' уже занят';
+    this.gen++;
     this.links.push({ a: { dev: a, port: ap }, b: { dev: b, port: bp } });
     return null;
   };
-  P.disconnect = function (li) { this.links.splice(li, 1); };
+  P.disconnect = function (li) { this.links.splice(li, 1); this.gen++; };
   P.freePorts = function (id) { var s = this, d = this.devs[id]; return this.portsOf(d).filter(function (p) { return !s.linked(id, p); }); };
 
   // ------------------------------------------------------------------ L3-интерфейсы и маршруты
   P.ifaces = function (id) {
-    var d = this.devs[id], st = d.st, o = [];
+    var self = this, d = this.devs[id], st = d.st, o = [];
     if (d.type === 'vpc' && st.ip) o.push({ name: 'eth0', ip: st.ip, len: st.len, port: 'eth0', tag: null });
     if (d.type === 'deb' && st.ip && st.up) o.push({ name: 'ens3', ip: st.ip, len: st.len, port: 'ens3', tag: null });
     if (d.type === 'mes') Object.keys(st.svi).forEach(function (v) {
@@ -74,31 +77,138 @@
       o.push({ name: 'vlan' + v, ip: p[0], len: +p[1], vlan: +v }); });
     if (d.type === 'esr') Object.keys(st.run.ifs).forEach(function (k) {
       var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
-      var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && st.run.ifs[ph].shut) return;
+      var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
       o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
     return o;
   };
+  // все маршруты-кандидаты: C (AD 0), S (AD из команды, по умолчанию 1), R (120), O (110)
   P.routes = function (id) {
-    var d = this.devs[id], st = d.st, o = [];
-    this.ifaces(id).forEach(function (f) { o.push({ net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, c: true }); });
+    var d = this.devs[id], st = d.st, o = [], fs = this.ifaces(id);
+    fs.forEach(function (f) { o.push({ p: 'C', net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, ad: 0, m: 0 }); });
     var stat = d.type === 'esr' ? st.run.routes : d.type === 'mes' ? st.routes.slice() : [];
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
-    stat.forEach(function (r) { o.push({ net: r.net, len: +r.net.split('/')[1], nh: r.nh, c: false }); });
+    stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
+    });
+    if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
     return o;
   };
-  P.lookup = function (id, dst) {
-    var fs = this.ifaces(id), best = null;
-    this.routes(id).forEach(function (r) {
-      if (!IP.sameNet(dst, r.net.split('/')[0], r.len)) return;
-      if (best && (r.len < best.len || (r.len === best.len && !r.c))) return;
-      best = r; });
-    if (!best) return null;
-    if (best.c) return { iface: fs.filter(function (f) { return f.name === best.ifn; })[0], nh: dst };
-    var out = fs.filter(function (f) { return f.port !== null && IP.sameNet(best.nh, f.ip, f.len) || f.vlan && IP.sameNet(best.nh, f.ip, f.len); })[0];
-    return out ? { iface: out, nh: best.nh } : null;
+  function better(a, b) { return !b || a.ad < b.ad || (a.ad === b.ad && a.m < b.m); }
+  P.best = function (id, rs) {             // лучший маршрут на каждый префикс
+    var by = {};
+    (rs || this.routes(id)).forEach(function (r) { if (!r.dead && better(r, by[r.net])) by[r.net] = r; });
+    return by;
   };
+  P.lookup = function (id, dst) {
+    var fs = this.ifaces(id), by = this.best(id), best = null;
+    Object.keys(by).forEach(function (k) { var r = by[k];
+      if (!IP.sameNet(dst, r.net.split('/')[0], r.len)) return;
+      if (!best || r.len > best.len) best = r; });
+    if (!best) return null;
+    var out = fs.filter(function (f) { return f.name === best.ifn; })[0];
+    if (!out) return null;
+    return { iface: out, nh: best.nh || dst, r: best };
+  };
+
+  // ------------------------------------------------------------------ RIP и OSPF: расчёт по соседствам
+  P.gen = 0;
+  P.dyn = function () {
+    if (this._dyn && this._dyn.gen === this.gen) return this._dyn.t;
+    var s = this, t = {};
+    this._dyn = { gen: this.gen, t: t };     // защита от повторного входа: flood не зависит от динамических маршрутов
+    ['R', 'O'].forEach(function (proto) {
+      var rs = s.order.filter(function (id) { var d = s.devs[id]; if (d.type !== 'esr') return false;
+        var c = d.st.run; return proto === 'R' ? c.rip && c.rip.on : c.ospf && c.ospf.on; });
+      var info = {}, tab = {};
+      rs.forEach(function (id) {
+        var c = s.devs[id].st.run, fs = s.ifaces(id), part = [], orig = [];
+        fs.forEach(function (f) {
+          if (proto === 'R') {
+            if (f.port === null) return;
+            part.push({ f: f, passive: c.rip.passive.indexOf(f.name) >= 0 });
+            if (c.rip.redist.indexOf('connected') >= 0 || c.rip.nets.some(function (n) { var p = n.split('/');
+              return f.len >= +p[1] && IP.sameNet(f.ip, p[0], +p[1]); })) orig.push(IP.netOf(f.ip, f.len));
+          } else {
+            var x = c.ifs[f.name], o = x && x.ospf;
+            if (!o || !o.on || o.inst !== c.ospf.id || !o.area || !c.ospf.areas[o.area] || !c.ospf.areas[o.area].on) return;
+            part.push({ f: f, passive: !!o.passive, area: o.area, cost: o.cost || 1 }); orig.push(IP.netOf(f.ip, f.len));
+          }
+        });
+        if (proto === 'R' && c.rip.redist.indexOf('static') >= 0) c.routes.forEach(function (r) { orig.push(r.net); });
+        info[id] = { part: part, nb: [] };
+        tab[id] = {}; orig.forEach(function (n) { tab[id][n] = { m: 0, nh: null, ifn: null, own: true }; });
+      });
+      rs.forEach(function (id) {               // соседи — через L2, как реальные hello/update
+        info[id].part.forEach(function (pp) {
+          if (pp.passive || pp.f.port === null) return;
+          s.flood(id, pp.f).eps.forEach(function (e) {
+            var oi = info[e.dev]; if (!oi || e.dev === id) return;
+            var op = oi.part.filter(function (q) { return q.f.name === e.iface.name && !q.passive; })[0];
+            if (!op || !IP.sameNet(pp.f.ip, e.iface.ip, pp.f.len)) return;
+            if (proto === 'O' && op.area !== pp.area) return;
+            info[id].nb.push({ dev: e.dev, nh: e.iface.ip, ifn: pp.f.name, cost: proto === 'R' ? 1 : pp.cost });
+          });
+        });
+      });
+      for (var round = 0; round < 20; round++) {
+        var ch = false;
+        rs.forEach(function (id) {
+          info[id].nb.forEach(function (nb) {
+            Object.keys(tab[nb.dev]).forEach(function (n) {
+              var m2 = tab[nb.dev][n].m + nb.cost, cur = tab[id][n];
+              if (proto === 'R' && m2 > 15) return;
+              if (cur && (cur.own || cur.m <= m2)) return;
+              tab[id][n] = { m: m2, nh: nb.nh, ifn: nb.ifn }; ch = true;
+            });
+          });
+        });
+        if (!ch) break;
+      }
+      rs.forEach(function (id) {
+        t[id] = (t[id] || []).concat(Object.keys(tab[id]).filter(function (n) { return !tab[id][n].own; }).map(function (n) {
+          var x = tab[id][n]; return { p: proto, net: n, len: +n.split('/')[1], nh: x.nh, ifn: x.ifn, ad: proto === 'R' ? 120 : 110, m: x.m }; }));
+        if (proto === 'O') s.devs[id]._ospfNb = info[id].nb;
+      });
+    });
+    return t;
+  };
+  P.routeText = function (id, all) {
+    var all0 = this.routes(id), by = this.best(id, all0), rs = all0.filter(function (r) { return all || (!r.dead && by[r.net] === r); });
+    rs.sort(function (a, b) { return a.ad - b.ad || IP.ip2n(a.net.split('/')[0]) - IP.ip2n(b.net.split('/')[0]); });
+    var o = [' Codes: C - connected, S - static, R - RIP derived,', '        O - OSPF derived, IA - OSPF inter area route,', '        * - FIB route', ''];
+    rs.forEach(function (r) {
+      o.push((r.p + '     ').slice(0, 6) + (by[r.net] === r && !r.dead ? '* ' : '  ') + (r.net + '                  ').slice(0, 19) +
+             ('[' + r.ad + '/' + r.m + ']            ').slice(0, 13) + (r.nh ? 'via ' + r.nh + ' on ' + (r.ifn || '-') : 'dev ' + r.ifn) +
+             (r.p === 'C' ? '  direct' : '') + (r.dead ? '  (шлюз недоступен)' : ''));
+    });
+    return o.join('\n');
+  };
+  P.dynText = function (id, proto) {
+    var rs = (this.dyn()[id] || []).filter(function (r) { return r.p === proto; });
+    if (!rs.length) return '% Маршрутов ' + (proto === 'R' ? 'RIP' : 'OSPF') + ' нет — проверьте enable, network и соседей';
+    return rs.map(function (r) { return proto + '  ' + (r.net + '                  ').slice(0, 19) + '[' + r.ad + '/' + r.m + '] via ' + r.nh + ' on ' + r.ifn; }).join('\n');
+  };
+  P.ospfNbrText = function (id) {
+    var s = this; this.dyn(); var nb = this.devs[id]._ospfNb || [];
+    if (!nb.length) return '% Соседей OSPF нет';
+    return ['Router ID        Pri  State      Dead time   Address          Interface', '---------------- ---- ---------- ----------- ---------------- ---------']
+      .concat(nb.map(function (n) { var c = s.devs[n.dev].st.run.ospf;
+        return ((c.rid || n.nh) + '                 ').slice(0, 17) + '1    Full/DR    00:00:35    ' + (n.nh + '                 ').slice(0, 17) + n.ifn; })).join('\n');
+  };
+  // работает ли кабель: на обоих концах порт не выключен
+  P.linkUp = function (id, port) {
+    var pr = this.peer(id, port); if (!pr) return false;
+    return !portShut(this.devs[id], port) && !portShut(this.devs[pr.dev], pr.port);
+  };
+  function portShut(d, p) {
+    if (d.type === 'mes') return !!d.st.ports[p].shut;
+    if (d.type === 'esr') return !!d.st.run.ifs[p].shut;
+    if (d.type === 'deb') return !d.st.up;
+    return false;
+  }
   P.owner = function (ip) {
     var s = this; return this.order.filter(function (id) { return s.ifaces(id).some(function (f) { return f.ip === ip; }); })[0] || null;
   };
@@ -323,6 +433,7 @@
 
   // ------------------------------------------------------------------ единая точка ввода команды на устройство
   P.exec = function (id, line, ui) {
+    this.gen++;
     var d = this.devs[id], st = d.st;
     if (st.askPw) { var a = st.askPw; st.askPw = null; if (line === a.pw) { a.ok(); return ''; } return '% Access denied'; }
     if (/\?\s*$/.test(line) && (d.type === 'mes' || d.type === 'esr')) return this.help(id, line.replace(/\?\s*$/, ''));

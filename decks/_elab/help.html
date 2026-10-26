@@ -53,9 +53,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ip address 192.168.1.1/24 · ip firewall disable · shutdown · description</td><td>на интерфейсе</td></tr>
 <tr><td>username master → password eltex → privilege 14</td><td>пользователь</td></tr>
 <tr><td>ip ssh server · banner login|exec "текст"</td><td>доступ</td></tr>
-<tr><td>ip route 10.0.0.0/8 192.168.1.2</td><td>статический маршрут</td></tr>
+<tr><td>ip route 10.0.0.0/8 192.168.1.2 [10]</td><td>статический маршрут; число в конце — метрика, плавающий маршрут</td></tr>
+<tr><td>router rip · network 192.168.0.0/23 · passive-interface gi1/0/3 · redistribute connected · enable</td><td>RIP</td></tr>
+<tr><td>router ospf 250 · router-id 1.1.1.1 · area 0.0.0.0 → enable · enable</td><td>процесс OSPF</td></tr>
+<tr><td>interface gigabitethernet 1/0/1-3 · ip ospf instance 250 · ip ospf area 0.0.0.0 · ip ospf · ip ospf passive-interface</td><td>OSPF на интерфейсах (можно диапазоном)</td></tr>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
-<tr><td>show running-config | ip interfaces | ip route | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
+<tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
 </table>
 <h2>VPC и Debian</h2>
 <table>

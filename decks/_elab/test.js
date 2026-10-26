@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'mesx.js', 'hosts.js', 'net.js', 'labs.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'mesx.js', 'hosts.js', 'net.js', 'labs.js', 'labs_routing.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
