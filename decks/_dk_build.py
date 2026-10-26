@@ -197,18 +197,19 @@ def build(key):
     from _sw_engine import JS
     import _sw_fig
     import _sw_build
+    import _dk_kit
+    import _vl_fig
+    import _bs_fig
 
     cfg = T.THEMES[key]
     OVR.clear()
     OVR.update(cfg["ovr"])
     ADIR[0] = cfg["adir"]
     scene_theme(key)
-    full = collect()
-    body = cut(full, *cfg["range"])
-    extra = {k: [info_slide(lb, t, n) for (lb, t, n) in v] for k, v in cfg["extra"].items()}
-    body = insert_after(body, extra)
-    for lab in cfg.get("drop", []):
-        body = [s for s in body if label(s) != lab]
+    # слайды строго по порядку pptx: модуль деки (_bs_deck / _vl_deck)
+    del L.SL[:]
+    __import__(cfg["deck"]).build()
+    body = list(L.SL)
 
     del L.SL[:]
     getattr(X, key + "_head")()
@@ -219,7 +220,7 @@ def build(key):
     slides = dedupe(head_sl + body + tail_sl)
     fn = hue_map(cfg["hues"])
 
-    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key]
+    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key] + _dk_kit.CSS + _vl_fig.CSS + _bs_fig.CSS
     html_sl = recolor("\n".join(slides), fn)
     hud = _sw_build.HUD
     js = recolor(JS + _sw_fig.JS, fn)

@@ -78,7 +78,7 @@ THEMES = {
         "adir": "_bs_assets",
         "fonts": FONT_LINK % ("family=Rubik:ital,wght@0,600;0,800;1,800;1,900&"
                               "family=Golos+Text:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700"),
-        "range": ("Базовая настройка", "Шпаргалка команд"),
+        "deck": "_bs_deck",
         # синие/голубые → розовые, фиолетовые → голубой второй акцент
         "hues": [(170, 262, 328, 1.0), (263, 300, 192, 1.0)],
         "ovr": {"base_setup": "b_setup", "base_setup2": "b_connect", "base_console": "b_console",
@@ -95,7 +95,7 @@ THEMES = {
         "adir": "_vl_assets",
         "fonts": FONT_LINK % ("family=Press+Start+2P&family=Pixelify+Sans:wght@500;600;700&"
                               "family=Golos+Text:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700"),
-        "range": ("VLAN: принципы работы", "Базовая настройка"),
+        "deck": "_vl_deck",
         # голубой акцент → золото монет, фиолетовый → кирпично-красный; тёмно-синие панели остаются
         "hues": [(180, 205, 46, 1.0), (265, 300, 12, 1.0)],
         "ovr": {"vlan_intro": "v_intro", "vlan_tag8021q": "v_tag8021q", "vlan_id": "v_tagstruct",
@@ -134,7 +134,7 @@ REP_CSS = """
 
 SCENE_CSS = {
  "vlan": """
-.scene .figwrap{background:linear-gradient(180deg,#1d3a8f,#132a6b);border:4px solid #fff;outline:3px solid #0a1440;
+.scene .figwrap,.figwrap.dkpanel{background:linear-gradient(180deg,#1d3a8f,#132a6b);border:4px solid #fff;outline:3px solid #0a1440;
  box-shadow:6px 6px 0 rgba(0,0,0,.5);padding:10px}
 svg.dkfig rect{rx:0!important;ry:0!important}
 svg.dkfig rect[fill^="url(#gsw)"]{fill:#3b4a7a;stroke:#fff;stroke-width:4}
@@ -142,7 +142,7 @@ svg.dkfig text{font-family:"Golos Text",sans-serif}
 .scbar{border:4px solid #fff!important;outline:3px solid #0a1440;background:#0f2160!important}
 """,
  "base": """
-.scene .figwrap{background:linear-gradient(160deg,rgba(60,10,56,.94),rgba(34,6,32,.96));border:3px solid #ff4fa3;
+.scene .figwrap,.figwrap.dkpanel{background:linear-gradient(160deg,rgba(60,10,56,.94),rgba(34,6,32,.96));border:3px solid #ff4fa3;
  border-radius:6px;box-shadow:8px 8px 0 rgba(20,0,20,.7);padding:10px}
 svg.dkfig rect[fill^="url(#gsw)"]{fill:#55586a;stroke:#1a0a1a;stroke-width:3.5}
 .scbar{border:2px solid #ff4fa3!important;border-radius:6px}

@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 """Титулы, цели, задачи, тесты и финалы дек-спутников (base / vlan)."""
 
-from _sw_lib import (slide, head, sc, grow, col, card, p, li, foot, tags, tag, table, cli,
+import re
+
+from _sw_lib import (slide, head, sc, grow, col, card, p, li, foot, tags, tag, table,
                      step, task, quiz)
+from _dk_kit import conf
+
+
+def cli(lines, title=""):
+    """Команды шпаргалки: та же подсветка, что в слайдах с конфигурацией."""
+    return conf([re.sub(r"<[^>]+>", "", l) for l in lines], title)
 
 
 def _cover(big, lead, tg):
