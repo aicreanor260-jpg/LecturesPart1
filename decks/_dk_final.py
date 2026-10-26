@@ -3,7 +3,8 @@
 Все ответы — строго по материалу pptx соответствующей лекции."""
 
 from _sw_lib import slide, head, sc, grow, col, card, li, foot, step, task, quiz
-from _dk_kit import conf, clitrain
+from _dk_kit import conf
+from _dk_cli import sim_slide
 
 
 def _qslide(title, sub, qs):
@@ -78,23 +79,10 @@ def base_tail():
         task("bz8", "Какой атрибут в конфигурации указывает, что вместо пароля хранится его хеш?",
              "encrypted", "Атрибут <b>encrypted</b>: введённый пароль хешируется и сравнивается с сохранённым хешем.", "атрибут")])
 
-    _cli("Тренажёр CLI: имя и баннер", "Введите команды без приглашения, по одной в строке.",
-         clitrain("ctb1", "Задайте коммутатору имя <b>SW1-Room502-Floor5-Building2-NSK</b> "
-                          "(вы уже в режиме глобальной конфигурации).",
-                  ["hostname SW1-Room502-Floor5-Building2-NSK"]),
-         clitrain("ctb2", "Создайте пользователя <b>admin1</b> с паролем <b>admin1</b> и уровнем 15, затем "
-                          "пользователя <b>user</b> с паролем <b>user</b> и уровнем 1.",
-                  ["username admin1 password admin1 privilege 15", "username user password user privilege 1"]))
-    _cli("Тренажёр CLI: консоль и SSH", "Конфигурация из слайдов лекции.",
-         clitrain("ctb3", "Защитите консольный порт: войдите в настройку консольной линии, задайте пароль "
-                          "<b>consolepass</b>, период неактивности <b>5</b> минут, метод аутентификации <b>console</b>, выйдите "
-                          "и задайте метод <b>console</b>: сначала line, затем local.",
-                  ["line console", "password consolepass", "exec-timeout 5", "login authentication console", "exit",
-                   "aaa authentication login console line local"]),
-         clitrain("ctb4", "Подготовьте управление по SSH: SVI VLAN 20 с адресом <b>10.10.1.28 /24</b>, выход, шлюз "
-                          "<b>10.10.1.1</b>, включение SSH-сервера и генерация ключей RSA.",
-                  ["interface vlan 20", "ip address 10.10.1.28 /24||ip address 10.10.1.28/24", "exit",
-                   "ip default-gateway 10.10.1.1", "ip ssh server", "crypto key generate rsa"]))
+    sim_slide("Тренажёр CLI: базовая конфигурация", "Тренажёр <em>CLI</em>: базовая конфигурация",
+              "Начните с configure. Приглашение меняется по режимам. «Обновить» — новое задание.", "base", [0, 1, 2])
+    sim_slide("Тренажёр CLI: защита и SSH", "Тренажёр <em>CLI</em>: защита доступа и SSH",
+              "Консоль, пароли enable, VLAN управления и SSH. «Обновить» — новое задание.", "base", [3, 4, 5])
 
     _qslide("Тест · 1", "Подключение. Выберите один вариант — объяснение появится после ответа.", [
         quiz("Какая скорость терминала нужна для консольного подключения к Eltex?",
@@ -213,20 +201,10 @@ def vlan_tail():
         task("vt4", "Широковещательный кадр пришёл в «красный» порт. Получит ли его «синий» порт?", "нет",
              "Тег не совпадает с тегом порта — на «синих» портах кадр <b>отбрасывается</b>.", "да / нет")])
 
-    _cli("Тренажёр CLI: VLAN и порт доступа", "Введите команды без приглашения, по одной в строке.",
-         clitrain("ctv1", "Создайте VLAN <b>10</b> с именем <b>IT</b> и VLAN <b>20</b> с именем <b>Management</b>.",
-                  ["vlan 10", "name IT", "vlan 20", "name Management"]),
-         clitrain("ctv2", "Назначьте порты <b>gigabitethernet 1/0/1-4</b> разом в VLAN <b>10</b> как порты доступа.",
-                  ["interface range gigabitethernet 1/0/1-4||interface range gi1/0/1-4",
-                   "switchport mode access", "switchport access vlan 10"]))
-    _cli("Тренажёр CLI: trunk и general", "Конфигурации из примеров лекции.",
-         clitrain("ctv3", "Порт <b>Gigabitethernet 1/0/10</b>: транк, разрешить VLAN 10, 20 и 30–40, нетегированные "
-                          "кадры — в VLAN 50 (начните с configure).",
-                  ["configure", "interface gigabitethernet 1/0/10", "switchport mode trunk",
-                   "switchport trunk allowed vlan add 10,20,30-40", "switchport trunk native vlan 50"]),
-         clitrain("ctv4", "Порт к ПК <b>gigabitethernet 1/0/1</b> в режиме general: VLAN 10 без тега и PVID 10.",
-                  ["interface gigabitethernet 1/0/1", "switchport mode general",
-                   "switchport general allowed vlan add 10 untagged", "switchport general pvid 10"]))
+    sim_slide("Тренажёр CLI: VLAN и порты доступа", "Тренажёр <em>CLI</em>: VLAN и порты доступа",
+              "Настройте коммутатор и нажмите «Отправить кадр» — дойдёт ли он. «Обновить» — новое задание.", "vlan", [0, 1, 2, 5])
+    sim_slide("Тренажёр CLI: теги — trunk и general", "Тренажёр <em>CLI</em>: теги — trunk и general",
+              "Транк с нативной VLAN и порт general для IP-телефона. Проверка — отправкой кадров.", "vlan", [3, 4])
 
     T = []
     _qslide("Тест · 1", "Принципы VLAN. Выберите один вариант.", [

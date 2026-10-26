@@ -198,6 +198,7 @@ def build(key):
     import _sw_fig
     import _sw_build
     import _dk_kit
+    import _dk_cli
     import _vl_fig
     import _bs_fig
 
@@ -220,10 +221,10 @@ def build(key):
     slides = dedupe(head_sl + body + tail_sl)
     fn = hue_map(cfg["hues"])
 
-    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key] + _dk_kit.CSS + _vl_fig.CSS + _bs_fig.CSS
+    css = recolor(CSS + _sw_fig.CSS, fn) + T.REP_CSS + T.common_css(nb64("bg_main"), nb64("bg_cover")) + cfg["css"] + T.SCENE_CSS[key] + _dk_kit.CSS + _vl_fig.CSS + _bs_fig.CSS + _dk_cli.CSS
     html_sl = recolor("\n".join(slides), fn)
     hud = _sw_build.HUD
-    js = recolor(JS + _sw_fig.JS + _dk_kit.JS, fn)
+    js = recolor(JS + _sw_fig.JS + _dk_kit.JS, fn) + _dk_cli.JS
     html = (
         '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
