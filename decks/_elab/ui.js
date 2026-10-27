@@ -610,7 +610,7 @@
     var ts = lab.tasks(labP), ok = 0;
     if (mode === 'work') {   // как методичка: текст задания, без проверки и подсказок
       body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' +
-        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>';
+        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>' + (hasDoc(lab) ? '<div class="row"><button data-a="doc">Методичка</button></div>' : '');
       return;
     }
     var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
@@ -619,10 +619,23 @@
     body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' + li + '</ol>' +
       '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
       (lab.hint && labShow === 'hint' ? '<div class="hint">' + esc(lab.hint(labP)) + '</div>' : '') +
-      '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
+      '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
       '<button data-a="sol">' + (labShow === true ? 'Скрыть решение' : 'Решение') + '</button></div>' + sol;
   }
-  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a;
+  // методичка лабы — PDF курса рядом с эмулятором (labs/<id>.pdf на сайте курса); в репозиторий и в HTML не входит
+  function hasDoc(L) { return /^(\d+\.\d+|E\.\d+)$/.test(L.id); }
+  function openDoc(id) {
+    var url = 'labs/' + id + '.pdf', key = 'doc', body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
+    body.innerHTML = '<div class="row" style="padding:6px 10px;margin:0"><a class="act" target="_blank" rel="noopener" href="' + url + '">Открыть в новой вкладке</a></div><div class="pad" data-doc>Загрузка…</div>';
+    closeWin(key, true); makeWin(key, 'Методичка ' + id, 'PDF лабораторной', body, { x: Math.max(20, innerWidth - 720), y: 70, w: Math.min(700, innerWidth - 40), h: innerHeight - 140 });
+    var box = body.querySelector('[data-doc]'), miss = function () { box.innerHTML = 'Методичка доступна на сайте курса <b>net-cat.duckdns.org</b>'; body.querySelector('a').style.display = 'none'; };
+    if (location.protocol === 'file:' || !window.fetch) { miss(); return; }
+    fetch(url, { method: 'HEAD', credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok || !/pdf/i.test(r.headers.get('content-type') || 'pdf')) { miss(); return; }
+      box.className = ''; box.style.cssText = 'flex:1;min-height:0;display:flex'; box.innerHTML = '<iframe src="' + url + '" title="Методичка ' + id + '" style="flex:1;border:0;background:#fff"></iframe>';
+    }).catch(miss);
+  }
+  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
     lab = null; resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';

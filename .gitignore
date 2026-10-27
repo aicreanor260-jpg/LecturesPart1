@@ -45,3 +45,6 @@ decks/_o5_pptx/
 decks/_o5_rep/_cmp/
 decks/_o5_figprev/
 _mp2/shots/
+
+# методички лаб NTF2 (PDF Eltex) — только на сервере курса, не в публичном репозитории
+decks/labs/
