@@ -17,8 +17,9 @@
   cmd('gi', 'lldp transmit', function (st) { each(st, function (x) { x.lldpTx = true; }); }, 'Рассылать LLDPDU');
   cmd('gi', 'no lldp transmit', function (st) { each(st, function (x) { x.lldpTx = false; }); });
   cmd('priv', 'show lldp neighbors', function (st) { return st.net ? st.net.lldpText(st.dev) : ''; }, 'Соседи LLDP');
-  cmd('priv', 'show system', function (st) { return 'System type:           Eltex vESR Virtual Service Router\nSystem name:           ' + st.run.host +
-    '\nSoftware version:      1.24.2\nSystem MAC address:    ' + EL.mac(st.run.host + 'sys') + '\nSerial number:         VESRA' + EL.E.hash(st.dev || 'x').slice(0, 6).toUpperCase(); }, 'Сведения о системе');
+  cmd('priv', 'show system', function (st) { var mdl = st.net && st.net.devs[st.dev] ? st.net.devs[st.dev].model : 'vESR';
+    return 'System type:           Eltex ' + (mdl === 'vESR' ? 'vESR Virtual Service Router' : mdl + ' Service Router') + '\nSystem name:           ' + st.run.host +
+    '\nSoftware version:      1.24.2\nSystem MAC address:    ' + EL.mac(st.run.host + 'sys') + '\nSerial number:         ' + (mdl === 'vESR' ? 'VESRA' : mdl.replace(/[^A-Z0-9]/g, '').slice(0, 6)) + EL.E.hash(st.dev || 'x').slice(0, 6).toUpperCase(); }, 'Сведения о системе');
 
   // ---------------------------------------------------------------- syslog
   function hosts(st) { return st.cand.syslog || (st.cand.syslog = {}); }

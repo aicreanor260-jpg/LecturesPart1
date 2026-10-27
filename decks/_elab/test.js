@@ -376,5 +376,28 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ RIP и OSPF по таймерам');
 })();
 
+// линейка ESR из каталога eltex.ru: порты по типам, имена te/twe/fo/hu, связь через 10G
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var esrs = Object.keys(EL.MODELS).filter(function (k) { return EL.MODELS[k].type === 'esr' && k !== 'vESR'; });
+  chk('ESR: в каталоге больше 20 моделей', esrs.length > 20, esrs.length);
+  esrs.forEach(function (k) { var n = new EL.Net(), d = n.add(k, 'R');
+    chk('ESR ' + k + ': порты как в каталоге', Object.keys(d.st.run.ifs).length === EL.MODELS[k].ports && /esr# ?$/.test(n.prompt(d.id) + ' ')); });
+  var n = new EL.Net(), a = n.add('ESR-1000', 'A'), b = n.add('ESR-30', 'B');
+  chk('ESR-1000: 24 gi + 2 te', a.st.run.ifs['gi1/0/24'] && a.st.run.ifs['te1/0/2'] && !a.st.run.ifs['gi1/0/25']);
+  n.connect(a.id, 'te1/0/1', b.id, 'te1/0/2');
+  EL.labs.apply(n, { A: ['configure', 'interface tengigabitethernet 1/0/1', 'ip address 10.9.9.1/30', 'ip firewall disable', 'exit', 'do commit', 'do confirm', 'end'],
+                     B: ['configure', 'interface te1/0/2', 'ip address 10.9.9.2/30', 'ip firewall disable', 'end', 'commit', 'confirm'] });
+  chk('ESR: связь через te1/0/1 — te1/0/2', n.ping(a.id, '10.9.9.2').ok);
+  n.exec(a.id, 'configure'); n.exec(a.id, 'interface te1/0/1');
+  chk('ESR: приглашение (config-if-te)#', n.prompt(a.id) === 'esr(config-if-te)#', n.prompt(a.id));
+  chk('ESR: show running-config — interface tengigabitethernet 1/0/1', /interface tengigabitethernet 1\/0\/1/.test(n.exec(a.id, 'do show running-config')));
+  var c = new EL.Net(), x = c.add('ESR-3300', 'X'); c.exec(x.id, 'configure');
+  chk('ESR-3300: twentyfivegigabitethernet и hundredgigabitethernet', !c.exec(x.id, 'interface twentyfivegigabitethernet 1/0/4') && c.prompt(x.id) === 'esr(config-if-twe)#' &&
+      (c.exec(x.id, 'exit'), !c.exec(x.id, 'interface hundredgigabitethernet 1/0/1')) && c.prompt(x.id) === 'esr(config-if-hu)#', c.prompt(x.id));
+  chk('ESR: диапазон и список interface gi1/0/1-2,te1/0/1', (n.exec(a.id, 'exit'), !n.exec(a.id, 'interface gi1/0/1-2,te1/0/1')) && Array.isArray(a.st.ctx) && a.st.ctx.length === 3);
+  console.log('✓ линейка ESR (' + esrs.length + ' моделей)');
+})();
+
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

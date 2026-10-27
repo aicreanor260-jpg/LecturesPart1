@@ -281,7 +281,7 @@
   function banner(d) {
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
     if (d.type === 'vpc') return 'Welcome to Virtual PC Simulator, version 0.8.3' + (mode === 'test' ? ' · введите ? для справки' : '');
-    if (d.type === 'esr') return 'Eltex vESR · software version 1.24.2\n';
+    if (d.type === 'esr') return 'Eltex ' + d.model + ' · software version 1.24.2\n';
     return d.model + '\n';
   }
   function openTerm(id) {
@@ -343,7 +343,7 @@
       if (!net.devs[id]) return;
       if (reload) net.reboot(id); else net.power(id, true);
       var tt = term(id); tt.auth = false; tt.user = null;   // после загрузки снова вход
-      tlog(id, d.type === 'esr' ? 'Loading vESR firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
+      tlog(id, d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
         d.type === 'deb' ? 'Debian GNU/Linux 11 ' + d.st.host + ' tty1' : 'VPCS ready', 's');
       draw(); setPr(id); refresh();
     }, 1100);

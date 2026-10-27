@@ -47,6 +47,20 @@
 
 В консоли: `?` — подсказка, `Tab` — дописать, `↑ ↓` — история. Перезагрузка: `reload` на MES (загружается startup-config), `reload system` на ESR (неприменённые правки теряются); сброс кандидата ESR к заводскому: `copy system:default-config system:candidate-config`.
 
+## Маршрутизаторы ESR — вся линейка с eltex.ru
+В панели «Устройства» → «Маршрутизаторы ESR»: vESR (4 × gi, как в pnetlab) и 27 аппаратных моделей — ESR-10, 12V, 12VF, 14VF, 15, 15R, 15R-4G, 15VF, 20, 21, 30, 31, 100, 200, 1000, 1200, 1500, 1511, 1511 rev.B, 1700, 3100, 3150, 3200, 3200L, 3250, 3300, 3350. Порты — из таблицы характеристик страницы модели на eltex.ru (Combo считается gi); снятые с производства помечены. CLI у всех один — ESR (справочник 1.23), отличаются только порты.
+
+| Порт | Полное имя в CLI | Приглашение |
+|---|---|---|
+| gi1/0/N — 1G | `interface gigabitethernet 1/0/N` | `esr(config-if-gi)#` |
+| te1/0/N — 10G | `interface tengigabitethernet 1/0/N` | `esr(config-if-te)#` |
+| twe1/0/N — 25G | `interface twentyfivegigabitethernet 1/0/N` | `esr(config-if-twe)#` |
+| fo1/0/N — 40G | `interface fourtygigabitethernet 1/0/N` (так в CLI ESR) | `esr(config-if-fo)#` |
+| hu1/0/N — 100G | `interface hundredgigabitethernet 1/0/N` | `esr(config-if-hu)#` |
+
+Диапазоны и списки: `interface gi1/0/1-4`, `interface gi1/0/1-2,te1/0/1`. Пример: ESR-1000 — gi1/0/1–24 и te1/0/1–2; ESR-3300 — twe1/0/1–4 и hu1/0/1–4. Вход: admin / password, имя по умолчанию `esr` (у vESR — `vesr`).
+Чего нет: голосовых портов FXS/FXO, E1, USB, LTE-модема (ESR-15R-4G) — только Ethernet.
+
 ## Ветки ПО коммутаторов — свой CLI у каждой
 | Ветка | Модели | Отличия синтаксиса |
 |---|---|---|

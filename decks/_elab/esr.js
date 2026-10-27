@@ -11,25 +11,42 @@
                  user: '(config-user)#', bridge: '(config-bridge)#',
                  rip: '(config-rip)#', ospf: '(config-ospf)#', ospfa: '(config-ospf-area)#' };
 
-  function freshCfg(host, nports) {
+  function freshCfg(host, nports, list) {
     var ifs = {};
-    for (var i = 1; i <= nports; i++) ifs['gi1/0/' + i] = { ip: null, fw: true, shut: false };
+    (list || []).forEach(function (k) { ifs[k] = { ip: null, fw: true, shut: false }; });
+    if (!list) for (var i = 1; i <= nports; i++) ifs['gi1/0/' + i] = { ip: null, fw: true, shut: false };
     return { host: host, ifs: ifs, users: { admin: { pw: 'password', priv: 15 } }, ssh: false, banner: { login: null, exec: null },
              routes: [], tz: null, bridges: {}, rip: null, ospf: null };
   }
-  function fresh(host, nports) {
-    var c = freshCfg(host || 'esr', nports || 8);
+  function fresh(host, nports, list) {
+    var c = freshCfg(host || 'esr', nports || 8, list);
     return { kind: 'esr', mode: 'priv', ctx: null, cand: c, run: EL.clone(c), pending: false, date: null, nports: nports || 8 };
   }
-  function prompt(st) { return st.run.host + PROMPT[st.mode]; }
+  // приглашение порта по типу: (config-if-gi)#, (config-if-te)#, (config-if-twe)#, (config-if-fo)# …
+  function prompt(st) { var c = Array.isArray(st.ctx) ? st.ctx[0] : st.ctx, t = st.mode === 'gi' && c ? String(c).match(/^[a-z]+/)[0] : null;
+    return st.run.host + (t && t !== 'gi' ? '(config-if-' + t + ')#' : PROMPT[st.mode]); }
 
   // имена интерфейсов: gi1/0/1, gi1/0/1.10, lo1
+  // типы портов ESR: gi — gigabitethernet, te — tengigabitethernet, twe — twentyfivegigabitethernet,
+  // fo — fourtygigabitethernet (так пишется в CLI ESR), hu — hundredgigabitethernet; диапазоны и списки: gi1/0/1-3,te1/0/1
+  var IFT = { gi: 'gigabitethernet', te: 'tengigabitethernet', twe: 'twentyfivegigabitethernet', fo: 'fourtygigabitethernet', hu: 'hundredgigabitethernet' };
   function ifName(t) {
-    var r = String(t).match(/^gi1\/0\/(\d+)-(\d+)$/);
-    if (r) { var L = []; for (var i = +r[1]; i <= +r[2]; i++) L.push('gi1/0/' + i); return L.length ? { range: L } : null; }
-    var m = String(t).match(/^gi(\d+)\/(\d+)\/(\d+)(?:\.(\d+))?$/);
-    if (!m || m[1] !== '1' || m[2] !== '0') return null;
-    return { phys: 'gi1/0/' + m[3], sub: m[4] ? +m[4] : null, name: 'gi1/0/' + m[3] + (m[4] ? '.' + m[4] : '') };
+    var parts = String(t).split(','), L = [];
+    for (var j = 0; j < parts.length; j++) {
+      var r = parts[j].match(/^(gi|te|twe|fo|hu)1\/0\/(\d+)-(?:(?:gi|te|twe|fo|hu)1\/0\/)?(\d+)$/);
+      if (r) { if (+r[3] < +r[2]) return null; for (var i = +r[2]; i <= +r[3]; i++) L.push(r[1] + '1/0/' + i); continue; }
+      if (parts.length > 1) { var one = parts[j].match(/^(gi|te|twe|fo|hu)1\/0\/(\d+)$/); if (!one) return null; L.push(one[0]); continue; }
+      var m = parts[j].match(/^(gi|te|twe|fo|hu)(\d+)\/(\d+)\/(\d+)(?:\.(\d+))?$/);
+      if (!m || m[2] !== '1' || m[3] !== '0') return null;
+      var ph = m[1] + '1/0/' + m[4];
+      return { phys: ph, sub: m[5] ? +m[5] : null, name: ph + (m[5] ? '.' + m[5] : '') };
+    }
+    return L.length ? { range: L } : null;
+  }
+  // полные имена ESR, которых нет в общем нормализаторе MES
+  function normEsr(line) {
+    return line.replace(/\b(?:twentyfive\w*|twe)\s*(?=\d+\/\d+\/\d+)/ig, 'twe').replace(/\bfourty\w*\s*(?=\d+\/\d+\/\d+)/ig, 'fo')
+               .replace(/\b(?:hundred\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'hu');
   }
   function ctxList(st) { return Array.isArray(st.ctx) ? st.ctx : [st.ctx]; }
   function cur(st) { return st.ctx && !Array.isArray(st.ctx) && st.cand.ifs[st.ctx]; }
@@ -98,7 +115,7 @@
 
   // ---------------------------------------------------------------- интерфейсы
   cmd('config', 'interface <w>', function (st, a) {
-    var n = ifName(a[0]); if (!n) return '% Неверное имя интерфейса (пример: gigabitethernet 1/0/1 или 1/0/1.10)';
+    var n = ifName(a[0]); if (!n) return '% Неверное имя интерфейса (пример: gigabitethernet 1/0/1, tengigabitethernet 1/0/1, gi1/0/1.10)';
     if (n.range) { if (n.range.some(function (k) { return !st.cand.ifs[k]; })) return '% Таких интерфейсов нет на устройстве';
       st.mode = 'gi'; st.ctx = n.range; return; }
     if (!st.cand.ifs[n.phys]) return '% Interface ' + n.phys + ' not found';
@@ -161,7 +178,7 @@
   // ---------------------------------------------------------------- show
   function ifSort(a, b) { var f = function (k) { return k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
     return f(a) - f(b); }
-  function longIf(k) { return k.charAt(0) === 'l' ? 'loopback ' + k.slice(2) : 'gigabitethernet ' + k.slice(2); }
+  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
@@ -256,7 +273,7 @@
 
   // do <команда> из любого режима конфигурации
   function exec(st, raw) {
-    var line = String(raw).trim();
+    var line = normEsr(String(raw).trim());
     var m = line.match(/^do\s+(.+)$/i);
     if (m && st.mode !== 'priv') { var md = st.mode; st.mode = 'priv'; var r = EL.cli.runTable(T, st, m[1]); if (st.mode === 'priv') st.mode = md; return r; }
     return EL.cli.runTable(T, st, line);

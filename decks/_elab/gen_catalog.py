@@ -56,6 +56,28 @@ def main():
                               "note": " + ".join("%d × %s" % (p["count"], short(p)) for p in ports),
                               "full": " + ".join("%d × %s" % (p["count"], p["type"]) for p in ports) + " · " + (fam.split(" (")[0] or "ПО ?"),
                               "url": m.get("url")}
+    # маршрутизаторы ESR (routers.json): порты по скорости — gi 1G, te 10G, twe 25G, fo 40G, hu 100G, нумерация в типе с 1
+    rsrc = os.path.join(os.path.dirname(SRC), "routers.json")
+    nr = 0
+    if os.path.exists(rsrc):
+        RP = {"1G": "gi", "10G": "te", "25G": "twe", "40G": "fo", "100G": "hu"}
+        for m in json.load(open(rsrc, encoding="utf-8")):
+            ports = [p for p in (m.get("ports") or []) if p.get("count") and RP.get(p.get("speed"))]
+            if not ports or m["model"] == "vESR":
+                continue
+            names, cnt = [], {}
+            for p in ports:
+                k = RP[p["speed"]]
+                for _ in range(p["count"]):
+                    cnt[k] = cnt.get(k, 0) + 1
+                    names.append("%s1/0/%d" % (k, cnt[k]))
+            st = m.get("status")
+            models[m["model"]] = {"type": "esr", "ports": len(names), "portList": names, "group": "Маршрутизаторы ESR", "host": "esr",
+                                  "sw": "ПО ESR",
+                                  "note": (m.get("summary") or " + ".join("%d×%s" % (p["count"], p["speed"]) for p in ports)) + (" · " + st.lower() if st else ""),
+                                  "full": " + ".join("%d × %s" % (p["count"], p["type"]) for p in ports) + ((" · " + m["note"]) if m.get("note") else ""),
+                                  "url": m.get("url")}
+            nr += 1
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))
@@ -63,8 +85,9 @@ def main():
         f.write(js)
     by = {}
     for v in models.values():
-        by[v["dialect"]] = by.get(v["dialect"], 0) + 1
-    print(len(models), "моделей;", by)
+        k = v.get("dialect", "esr")
+        by[k] = by.get(k, 0) + 1
+    print(len(models), "моделей;", by, "· из них ESR:", nr)
 
 
 if __name__ == "__main__":

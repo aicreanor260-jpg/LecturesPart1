@@ -32,7 +32,7 @@
     var id = 'd' + (++Net.seq);
     var d = { id: id, name: name, model: model, type: m.type, x: x || 0, y: y || 0 };
     if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, m.dialect === '8' ? 'switch' : 'console', m.portList, m.dialect); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
-    if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
+    if (m.type === 'esr') d.st = EL.esr.fresh(m.host || 'vesr', m.ports, m.portList);
     if (m.type === 'vpc') d.st = H.vpc(name);
     if (m.type === 'deb') d.st = H.deb(name, m.opts);
     EL.attach(d.st, this, id);
