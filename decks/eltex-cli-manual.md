@@ -348,6 +348,19 @@ SA устанавливается, когда у пары ESR зеркальны
 ### QinQ на MES 6.x (руководство 6.6.8.8)
 `interface gi1/0/1` → `switchport mode customer`, `switchport customer vlan 100` — клиентский порт: любой кадр клиента (с тегом или без) попадает в S-VLAN 100, тег клиента сохраняется внутри. По trunk провайдера (`switchport trunk allowed vlan add 100`) кадр идёт с двумя тегами; на клиентском порту другой стороны S-тег снимается и клиент получает кадр со своим тегом. В захвате на trunk — VLAN `100/10` и два заголовка 802.1Q (S-VLAN и C-VLAN); в трассе — тег S-VLAN. У разных S-VLAN на концах — связи нет. В руководстве 10.4.6 есть только Selective Q-in-Q — для ветки 10 не моделируется.
 
+### STP/RSTP по таймерам (руководства MES 10.4.6, 6.6.8.8, 8.4.0.7)
+Роли портов (Root/Desg/Altn) выбираются сразу, а путь порта к пересылке идёт по модельным часам (как старение MAC/ARP):
+
+| Режим | Что происходит с портом |
+|---|---|
+| 802.1D — `spanning-tree mode stp` (6.x/8.x), на 10.x `spanning-tree compatibility stp` | blocking → listening (Forward Delay) → learning (Forward Delay) → forwarding, всего 30 с. Непрямой отказ (свой корневой порт жив, пропал путь дальше): заблокированный порт сначала ждёт Max Age (20 с), итого 50 с; прямой отказ (упал свой корневой порт) — 30 с |
+| RSTP/MSTP (по умолчанию) | между двумя RSTP-мостами по point-to-point — proposal/agreement, forwarding сразу; к мосту 802.1D или при `spanning-tree link-type shared` — discarding → learning → forwarding (2 × Forward Delay) |
+| Порт к конечному узлу | `spanning-tree portfast` (8.x — `spanning-tree edgeport`) — сразу; авто-определение edge — 10.x `spanning-tree auto-edge` и 6.x `spanning-tree portfast auto` (включено по умолчанию) — через 3 с без BPDU; `no spanning-tree auto-edge` (10.x) и 8.x без edgeport — 30 с |
+
+Пока порт не в forwarding, кадры через него не идут (трасса пишет состояние и сколько осталось); в learning коммутатор уже учит MAC отправителя. Таймеры: `spanning-tree forward-time 4..30` (15), `spanning-tree hello-time 1..10` (2; на 8.x глобальной команды нет), `spanning-tree max-age 6..40` (20), условие `2*(Forward-Delay - 1) >= Max-Age >= 2*(Hello-Time + 1)` — иначе команда отклоняется. `show spanning-tree` (и `show spanning-tree mst N`): столбец Sts — `Blk`/`Lsn`/`Lrn`/`Frw` (802.1D) или `Dsc`/`Lrn`/`Frw` (RSTP), Type — `P2p`/`Shr`, `Edge`, `(STP)`; строка Hello/Max Age/Forward Delay — из настроек. Сообщения консоли о смене состояния порта приходят в момент перехода. В режиме «Тест» подписи портов MES на схеме подсвечены: янтарный — порт идёт к forwarding (подсказка — сколько секунд осталось), красный — заблокирован; в «Работе» подсветки нет, как на железе.
+Debian при `ip link set ens3 up` повторяет Router Solicitation ещё 2 раза через 4 с (как Linux), поэтому SLAAC срабатывает, когда порт коммутатора дойдёт до forwarding.
+Упрощения: proposal/agreement — мгновенно (в железе — миллисекунды); TCN и досрочная очистка MAC-таблицы при смене топологии не моделируются; Hello Time влияет только на вывод.
+
 ### MSTP-экземпляры на MES (руководства 10.4.6 и 6.6.8.8)
 `spanning-tree mode mst`, затем `spanning-tree mst configuration` → `(config-mst)#`: `instance 1 vlan 10`, `instance 2 vlan 20`, `name LAB`, `revision 1`, `exit`; `spanning-tree mst 1 priority 4096` (кратно 4096); на порту `spanning-tree mst 2 cost 200000`, `spanning-tree mst 2 port-priority 64`. Показ: `show spanning-tree mst 2`, `show spanning-tree mst configuration`.
 У каждого экземпляра своё дерево — свой корень и свои заблокированные порты, поэтому VLAN разных экземпляров могут идти по разным линкам (балансировка); трасса показывает, в каком MSTI заблокирован порт. VLAN без экземпляра идут по CIST (обычные `spanning-tree priority`/`cost`). Упрощение: имя, ревизия и привязки региона на разных коммутаторах не сравниваются — все коммутаторы считаются одним регионом.

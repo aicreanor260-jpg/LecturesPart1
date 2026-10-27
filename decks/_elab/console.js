@@ -256,7 +256,8 @@
     s.order.forEach(function (id) { var d = s.devs[id]; if (!isNet(d) || d.off) return;
       physPorts(s, id).forEach(function (p) { o['L|' + id + '|' + p] = s.linkUp(id, p) ? 1 : 0;
         if (d.type === 'mes' && d.st.ports[p] && d.st.ports[p].errdis === 'bpduguard') o['B|' + id + '|' + p] = 1; });
-      if (d.type === 'mes' && t[id]) { Object.keys(t[id]).forEach(function (ln) { o['S|' + id + '|' + ln] = t[id][ln].fwd ? 'Forwarding' : 'Discarding';
+      if (d.type === 'mes' && t[id]) { Object.keys(t[id]).forEach(function (ln) { var z = s.stpState ? s.stpState(id, ln, 0) : null;       // состояние по таймерам STP (stp_timers.js)
+          o['S|' + id + '|' + ln] = z ? EL.STPN[z].charAt(0).toUpperCase() + EL.STPN[z].slice(1) : t[id][ln].fwd ? 'Forwarding' : 'Discarding';
         if (t[id][ln].role === 'Root') o['R|' + id] = ln; });
         if (s._stp && s._stp.root[id] === id && Object.keys(t[id]).length) o['R|' + id] = '*'; }
       Object.keys(vr[id] || {}).forEach(function (k) { var v = vr[id][k]; o['V|' + id + '|' + k + '|' + v.id] = v.master ? 'Master' : 'Backup'; });

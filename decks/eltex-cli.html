@@ -70,6 +70,7 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 .dev.off{opacity:.42}
 .lnk{stroke:var(--cy2);stroke-width:2.4;cursor:pointer}
 .lnk.down{stroke:var(--rd);stroke-dasharray:7 5}
+.pl.stp-tr rect{stroke:#e0a83a;fill:rgba(224,168,58,.18)}.pl.stp-blk rect{stroke:var(--rd);fill:rgba(255,107,98,.16)}
 .lnk.ser{stroke:#e0a83a;stroke-dasharray:2 5;stroke-linecap:round}
 .lnk:hover,.lnk.sel{stroke:var(--cy);stroke-width:4}
 .ghost{stroke:var(--arp);stroke-width:2;stroke-dasharray:6 5;pointer-events:none}
@@ -312,6 +313,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>sh ru · sh int st · int gi 1/0/1 · sw mode trunk · conf t · wr</td><td>сокращения как на железе: любое слово сокращается до однозначного начала</td></tr>
 <tr><td>10.x: switchport port-security enable · mac-limit N · mode max-addresses|lock|secure-permanent · violation restrict|protect|discard-shutdown · show port-security</td><td>port security: кадры с чужих MAC отбрасываются, discard-shutdown выключает порт</td></tr>
 <tr><td>6.x/4.x: port security · port security max N · port security mode lock|max-addresses · port security forward|discard|discard-shutdown · show ports security</td><td>port security в ветке 6.x</td></tr>
+<tr><td>spanning-tree forward-time 4..30 · max-age 6..40 · hello-time 1..10 · (10.x) spanning-tree compatibility stp · (порт) spanning-tree auto-edge · link-type shared · (8.x) spanning-tree edgeport</td><td>STP по таймерам: 802.1D — listening/learning по 15 с (непрямой отказ +20 с max-age); RSTP p2p — сразу; порт к ПК — portfast сразу, auto-edge через 3 с; в «Тесте» подписи портов на схеме: янтарный — переход, красный — блок</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
@@ -2619,7 +2621,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       t[id] = {};
       s.lports(id).forEach(function (L) {
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
-        if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
+        if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true, host: !on[pr.dev], nostp: !!(L.cfg.stpOff || L.cfg.stackLink) }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
         edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
@@ -2665,8 +2667,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
   P.stpFwd = function (id, lname, v) {
     var d = this.devs[id]; if (d.st.stp && d.st.stp.on === false) return true;
-    var r = (this.stp(this.stpInst(id, v))[id] || {})[lname]; return !r || r.fwd;
+    var k = this.stpInst(id, v), r = (this.stp(k)[id] || {})[lname]; if (!r) return true;
+    var z = this.stpState ? this.stpState(id, lname, k) : null; return z ? z === 'Frw' : r.fwd;
   };
+  P.stpSts = function (id, ln, k) { var r = (this.stp(k)[id] || {})[ln]; return r && r.fwd ? 'Frw' : 'Dsc'; };   // модуль stp_timers уточняет по таймерам
+  P.stpType = function () { return 'P2p'; };
   P.stpText = function (id) {
     var d = this.devs[id], st = d.st, s = this;
     if (st.stp && st.stp.on === false) return 'Spanning tree disabled';
@@ -2675,12 +2680,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var o = ['Spanning tree enabled mode ' + mode, 'Default port cost method:  long', '',
       '  Root ID    Priority    ' + rb.prio, '             Address     ' + rb.mac];
     if (R === id) o.push('             This switch is the root'); else o.push('             Cost        ' + this._stp.dist[id]);
-    o.push('             Hello Time 2 sec  Max Age 20 sec  Forward Delay 15 sec', '',
+    var tm = this.stpTimers ? this.stpTimers(st) : { hello: 2, ma: 20, fd: 15 };
+    o.push('             Hello Time ' + tm.hello + ' sec  Max Age ' + tm.ma + ' sec  Forward Delay ' + tm.fd + ' sec', '',
       '  Bridge ID  Priority    ' + me.prio, '             Address     ' + me.mac, '',
       'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
     this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
       o.push(' ' + (L.name + '          ').slice(0, 11) + 'enabled 128.' + (pnum(L.name) + '    ').slice(0, 5) + ' ' +
-             ((L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000)) + '          ').slice(0, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + (r.role + '      ').slice(0, 7) + 'P2p'); });
+             ((L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000)) + '          ').slice(0, 10) + (s.stpSts(id, L.name, 0) + '      ').slice(0, 6) + (r.role + '      ').slice(0, 7) + s.stpType(id, L, r)); });
     return o.join('\n');
   };
 
@@ -2802,8 +2808,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var dx = this.dot1xBlock ? this.dot1xBlock(it.dev, it.port) : null; if (dx) { notes.push(nm + ': ' + dx); continue; }   // 802.1X
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
-        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v);
-          notes.push(nm + ': ' + LP.name + ' заблокирован STP' + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
+        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v), zs = this.stpState ? this.stpState(it.dev, LP.name, ki) : null;
+          if (zs === 'Lrn' && srcMac) this.macIn(it.dev, LP.name, r.v, srcMac);            // learning: адрес учится, кадр не передаётся
+          notes.push(nm + ': ' + LP.name + (this.stp(ki)[it.dev][LP.name].fwd ? ' ещё не перешёл в forwarding — STP-состояние ' + EL.STPN[zs] + ', осталось ' + this.stpLeft(it.dev, LP.name, ki) + ' с'
+            : ' заблокирован STP') + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         inMes(it.dev, LP.name, r.v, it.path, r.inner !== undefined ? r.inner : it.inner);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
@@ -3651,7 +3659,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
                                 : 'mac-address-table static unicast ' + x.mac + ' vlan ' + x.vlan + ' ' + ifl + ' status permanent'); });
   });
   E.PORTX.push(function (st, k, p, d) { var c = p.psec;
-      if (p.portfast) d.push(' spanning-tree portfast');
+      if (p.portfast) d.push(st.dialect === '8' ? ' spanning-tree edgeport' : ' spanning-tree portfast');
       if (p.bpduGuard) d.push(' spanning-tree bpduguard enable');
       if (c && c.on) { if (st.dialect === '6') { d.push(' port security'); if (c.max !== 1) d.push(' port security max ' + c.max);
           if (c.mode !== 'lock') d.push(' port security mode ' + c.mode.replace('secure-', 'secure ')); if (c.act !== 'discard') d.push(' port security ' + c.act); }
@@ -4459,7 +4467,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     s.order.forEach(function (id) { var d = s.devs[id]; if (!isNet(d) || d.off) return;
       physPorts(s, id).forEach(function (p) { o['L|' + id + '|' + p] = s.linkUp(id, p) ? 1 : 0;
         if (d.type === 'mes' && d.st.ports[p] && d.st.ports[p].errdis === 'bpduguard') o['B|' + id + '|' + p] = 1; });
-      if (d.type === 'mes' && t[id]) { Object.keys(t[id]).forEach(function (ln) { o['S|' + id + '|' + ln] = t[id][ln].fwd ? 'Forwarding' : 'Discarding';
+      if (d.type === 'mes' && t[id]) { Object.keys(t[id]).forEach(function (ln) { var z = s.stpState ? s.stpState(id, ln, 0) : null;       // состояние по таймерам STP (stp_timers.js)
+          o['S|' + id + '|' + ln] = z ? EL.STPN[z].charAt(0).toUpperCase() + EL.STPN[z].slice(1) : t[id][ln].fwd ? 'Forwarding' : 'Discarding';
         if (t[id][ln].role === 'Root') o['R|' + id] = ln; });
         if (s._stp && s._stp.root[id] === id && Object.keys(t[id]).length) o['R|' + id] = '*'; }
       Object.keys(vr[id] || {}).forEach(function (k) { var v = vr[id][k]; o['V|' + id + '|' + k + '|' + v.id] = v.master ? 'Master' : 'Backup'; });
@@ -5158,8 +5167,22 @@ vesr(config)#         do confirm  — подтвердить</pre>
       return 'Soliciting ff02::2 (ff02::2) on ens3...\n\nHop limit                 :           64\nPrefix                    : ' + (r.prefix || '-') + '\n from ' + r.gw; }
     var out = deb0.apply(this, arguments);
     if (st.net && !wasUp && st.up && /^ip\s+link\s+set\s+(dev\s+)?ens3\s+up$/.test(line)) {   // accept_ra: адрес из RA при поднятии интерфейса
-      var q = st.net.slaac(st.dev); if (q.ok) { st.ip6 = (st.ip6 || []).filter(function (x) { return x !== q.addr; }).concat([q.addr]); st.gw6 = st.gw6 || q.gw; st.net.gen++; } }
+      if (!raAddr(st)) st.rsPend = { n: 2, at: st.net.now + 4 }; }   // Linux: ещё 2 Router Solicitation через 4 с (порт коммутатора мог быть не в forwarding)
     return out;
+  };
+  function raAddr(st) { var q = st.net.slaac(st.dev); if (!q.ok) return false;
+    st.ip6 = (st.ip6 || []).filter(function (x) { return x !== q.addr; }).concat([q.addr]); st.gw6 = st.gw6 || q.gw; st.net.gen++; return true; }
+  var tick0 = P.tick;
+  P.tick = function (dt) {                     // часы идут до момента очередного RS, затем дальше
+    var s = this, end = this.now + dt, gone = [];
+    for (;;) {
+      var due = this.order.map(function (id) { return s.devs[id]; }).filter(function (d) { var p = d.st && d.st.rsPend; return p && p.at <= end; })
+        .sort(function (a, b) { return a.st.rsPend.at - b.st.rsPend.at; })[0];
+      if (!due) break;
+      var st = due.st, p = st.rsPend; gone = gone.concat(tick0.call(this, Math.max(0, p.at - this.now)));
+      if (!st.up || raAddr(st) || !--p.n) delete st.rsPend; else p.at += 4;
+    }
+    return gone.concat(tick0.call(this, end - this.now));
   };
 })(typeof window !== 'undefined' ? window : global);
 
@@ -5833,13 +5856,149 @@ vesr(config)#         do confirm  — подтвердить</pre>
     o.push('Bridge ID        Priority    ' + me, '                 Address     ' + st.bmac, '', 'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
     this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
       var c = (L.cfg.mstCost && L.cfg.mstCost[k]) || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000), pr = (L.cfg.mstPrio && L.cfg.mstPrio[k]) || 128;
-      o.push(' ' + rp(L.name, 11) + 'enabled ' + rp(pr + '.' + L.name.split('/').pop(), 10) + rp(c, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + rp(r.role, 7) + 'P2p'); });
+      o.push(' ' + rp(L.name, 11) + 'enabled ' + rp(pr + '.' + L.name.split('/').pop(), 10) + rp(c, 10) + rp(s.stpSts(id, L.name, k), 6) + rp(r.role, 7) + s.stpType(id, L, r)); });
     void s; return o.join('\n');
   };
   ['', 'do '].forEach(function (pre) { mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst <n>', function (st, a) { return st.net ? st.net.mstText(st.dev, a[0]) : ''; }, 'Состояние экземпляра MSTP');
     mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst configuration', function (st) { var m = st.mst || { inst: {} };
       return ['Name      ' + (m.name || ''), 'Revision  ' + (m.rev || 0), 'Instance  Vlans mapped', '--------  ------------------'].concat(
         Object.keys(m.inst).filter(function (k) { return m.inst[k].vlans.length; }).map(function (k) { return rp(k, 10) + E.fmtList(m.inst[k].vlans); })).join('\n'); }, 'Конфигурация MSTP'); });
+})(typeof window !== 'undefined' ? window : global);
+
+/* STP/RSTP по таймерам: состояния портов во времени (модельные часы net.now, как aging.js и rt_timers.js).
+   Роли портов считает P.stp (net.js) мгновенно; здесь — путь порта к forwarding:
+     802.1D (mode stp/pvst, на 10.x — spanning-tree compatibility stp):
+       blocking → listening (forward-time) → learning (forward-time) → forwarding;
+       непрямой отказ (корневой порт жив, но корень пропал) — сначала ждём max-age, потом listening;
+     RSTP/MSTP: порт между двумя RSTP-мостами по p2p — proposal/agreement, сразу forwarding;
+       к мосту 802.1D или по shared — discarding (forward-time) → learning (forward-time) → forwarding;
+     порт к конечному узлу: portfast (8.x — edgeport) — сразу; авто-определение (10.x spanning-tree auto-edge,
+       6.x spanning-tree portfast auto — по умолчанию) — через 3 с без BPDU; иначе — по таймерам.
+   Кадры идут только в forwarding; в learning MAC отправителя учится, кадр отбрасывается.
+   Таймеры и ограничения — по руководствам MES 10.4.6, 6.6.8.8, 8.4.0.7:
+     forward-time 4..30 (15), hello-time 1..10 (2; на 8.x глобальной команды нет), max-age 6..40 (20),
+     2*(Forward-Delay - 1) >= Max-Age >= 2*(Hello-Time + 1).
+   Упрощения: proposal/agreement — мгновенно (в железе — миллисекунды); TCN и сброс MAC-таблицы
+   при смене топологии не моделируются; hello-time влияет только на вывод show. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, P = EL.Net.prototype, CMDS = E.CMDS;
+  var FD = 15, MA = 20, HELLO = 2, EDGE_DELAY = 3;
+  EL.STPN = { Frw: 'forwarding', Dsc: 'discarding', Lrn: 'learning', Blk: 'blocking', Lsn: 'listening' };
+
+  P.stpTimers = function (st) { var s = st.stp || {}; return { fd: s.fd || FD, ma: s.ma || MA, hello: s.hello || HELLO }; };
+  function legacy(st) { var s = st.stp || {}; return s.mode === 'stp' || s.mode === 'pvst' || s.compat === 'stp'; }
+  function autoEdge(st, cfg) { return st.dialect !== '8' && !cfg.noAutoEdge; }
+  function lp(net, id, ln) { return net.lports(id).filter(function (x) { return x.name === ln; })[0] || { cfg: {}, members: [ln] }; }
+
+  // план перехода порта в forwarding: [[состояние, секунд], …]; пустой — сразу
+  function plan(net, id, ln, r, prev, oldDev, newDev) {
+    if (r.nostp) return [];
+    var st = net.devs[id].st, L = lp(net, id, ln), cfg = L.cfg || {}, tm = net.stpTimers(st), leg = legacy(st);
+    var wait = leg ? 'Lsn' : 'Dsc', timers = [[wait, tm.fd], ['Lrn', tm.fd]];
+    if (cfg.portfast) return [];
+    if (r.host) return autoEdge(st, cfg) ? [[wait, EDGE_DELAY]] : timers;
+    var pr = net.peer(id, L.members[0]), peerLeg = pr ? legacy(net.devs[pr.dev].st) : false;
+    if (!leg && !peerLeg && cfg.linkType !== 'shared') return [];          // proposal/agreement
+    if (!leg) return timers;
+    // 802.1D: заблокированный порт хранит BPDU соседа max-age; если свой корневой порт не падал (непрямой отказ),
+    // худшие BPDU игнорируются, пока сохранённая информация не устареет, — затем listening/learning
+    var oldRoot = Object.keys(oldDev || {}).filter(function (k) { return oldDev[k].role === 'Root'; })[0];
+    if (prev && !prev.fwd && !(oldRoot && !newDev[oldRoot])) return [['Blk', tm.ma]].concat(timers);
+    return timers;
+  }
+  function track(net, k, t) {
+    var PS = net._ps || (net._ps = {}), old = PS[k] || {}, nw = {};
+    Object.keys(t).forEach(function (id) {
+      var o = old[id] || {}, n = nw[id] = {};
+      Object.keys(t[id]).forEach(function (ln) {
+        var r = t[id][ln], p = o[ln];
+        if (p && p.fwd === r.fwd) { n[ln] = { fwd: p.fwd, role: r.role, t0: p.t0, plan: p.plan, leg: p.leg }; return; }
+        n[ln] = { fwd: r.fwd, role: r.role, t0: net.now, plan: r.fwd ? plan(net, id, ln, r, p, o, t[id]) : [], leg: legacy(net.devs[id].st) };
+      });
+    });
+    PS[k] = nw;
+  }
+  var stp0 = P.stp;
+  P.stp = function (k) {
+    k = k || 0; var c = k ? (this._stpK || {})[k] : this._stp, fresh = !(c && c.gen === this.gen);
+    var t = stp0.call(this, k); if (fresh) track(this, k, t); return t;
+  };
+  function entry(net, id, ln, k) { net.stp(k); var e = ((net._ps || {})[k || 0] || {})[id]; return e ? e[ln] : null; }
+  P.stpState = function (id, ln, k) {
+    var e = entry(this, id, ln, k); if (!e) return null;
+    if (!e.fwd) return e.leg ? 'Blk' : 'Dsc';
+    var el = this.now - e.t0;
+    for (var i = 0; i < e.plan.length; i++) { if (el < e.plan[i][1]) return e.plan[i][0]; el -= e.plan[i][1]; }
+    return 'Frw';
+  };
+  P.stpLeft = function (id, ln, k) {
+    var e = entry(this, id, ln, k); if (!e || !e.fwd) return 0;
+    var all = e.plan.reduce(function (a, x) { return a + x[1]; }, 0); return Math.max(0, Math.ceil(all - (this.now - e.t0)));
+  };
+  P.stpSts = function (id, ln, k) { return this.stpState(id, ln, k) || 'Frw'; };
+  P.stpType = function (id, L, r) { var c = L.cfg || {}, st = this.devs[id].st;
+    var edge = c.portfast || (r.host && autoEdge(st, c));
+    return (c.linkType === 'shared' ? 'Shr' : 'P2p') + (edge ? ' Edge' : '') + (legacy(st) ? ' (STP)' : ''); };
+
+  // «кабели подключены давно»: текущие переходы считаются завершёнными (автотест собирает схему мгновенно)
+  P.stpSettle = function () { this.stpSync(); var PS = this._ps || {};
+    Object.keys(PS).forEach(function (k) { Object.keys(PS[k]).forEach(function (id) { Object.keys(PS[k][id]).forEach(function (ln) {
+      var e = PS[k][id][ln]; PS[k][id][ln] = { fwd: e.fwd, role: e.role, t0: -1e9, plan: e.plan, leg: e.leg }; }); }); }); };
+  // синхронизация: смена топологии фиксируется в момент модельного времени, когда она произошла
+  P.stpSync = function () {
+    var s = this, ks = { 0: 1 };
+    this.order.forEach(function (id) { var st = s.devs[id].st; if (s.devs[id].type === 'mes' && st.mst && (st.stp || {}).mode === 'mst') Object.keys(st.mst.inst).forEach(function (k) { ks[k] = 1; }); });
+    Object.keys(ks).forEach(function (k) { s.stp(+k); });
+  };
+  ['exec', 'connect', 'disconnect', 'power', 'remove'].forEach(function (m) { var f = P[m];
+    P[m] = function () { var r = f.apply(this, arguments); this.stpSync(); return r; }; });
+  var tick0 = P.tick;
+  P.tick = function () {                         // состояние порта выводится из net.now − t0, поэтому прыжок часов не теряет переходов
+    this.stpSync(); return tick0.apply(this, arguments);
+  };
+
+  // ---------------------------------------------------------------- команды MES
+  function cmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function stp(st) { return st.stp || (st.stp = { on: true, mode: 'mst', prio: 32768 }); }
+  function ports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k] || (st.pos || {})[k]; }) : null; }
+  function each(st, f) { var p = ports(st); if (!p) return '% Команда доступна в настройке порта'; p.forEach(f); if (st.net) st.net.gen++; }
+  function setT(key, lo, hi) {
+    return function (st, a) { var n = +a[0]; if (!/^\d+$/.test(a[0]) || n < lo || n > hi) return '% Допустимо ' + lo + '..' + hi;
+      var s = stp(st), was = s[key]; s[key] = n; var tm = P.stpTimers(st);
+      if (!(2 * (tm.fd - 1) >= tm.ma && tm.ma >= 2 * (tm.hello + 1))) { if (was === undefined) delete s[key]; else s[key] = was;
+        return '% Нарушено условие 2*(Forward-Delay - 1) >= Max-Age >= 2*(Hello-Time + 1)'; } };
+  }
+  function unset(key) { return function (st) { var s = stp(st), was = s[key]; delete s[key]; var tm = P.stpTimers(st);
+    if (!(2 * (tm.fd - 1) >= tm.ma && tm.ma >= 2 * (tm.hello + 1))) { s[key] = was; return '% Нарушено условие 2*(Forward-Delay - 1) >= Max-Age >= 2*(Hello-Time + 1)'; } }; }
+  cmd(['10', '6', '8'], 'config', 'spanning-tree forward-time <w>', setT('fd', 4, 30), 'Forward Delay: время listening/learning, с (по умолчанию 15)');
+  cmd(['10', '6', '8'], 'config', 'no spanning-tree forward-time', unset('fd'));
+  cmd(['10', '6', '8'], 'config', 'spanning-tree max-age <w>', setT('ma', 6, 40), 'Max Age: время жизни BPDU-информации, с (по умолчанию 20)');
+  cmd(['10', '6', '8'], 'config', 'no spanning-tree max-age', unset('ma'));
+  cmd(['10', '6'], 'config', 'spanning-tree hello-time <w>', setT('hello', 1, 10), 'Hello Time: период BPDU, с (по умолчанию 2)');
+  cmd(['10', '6'], 'config', 'no spanning-tree hello-time', unset('hello'));
+  cmd(['10'], 'config', 'spanning-tree compatibility <w>', function (st, a) { var m = a[0].toLowerCase();
+    if (['stp', 'rst', 'mst'].indexOf(m) < 0) return '% Режим совместимости: stp | rst | mst';
+    if (m === 'stp') stp(st).compat = 'stp'; else delete stp(st).compat; }, 'Совместимость: stp — работать как 802.1D (таймеры)');
+  cmd(['10'], 'config', 'no spanning-tree compatibility', function (st) { delete stp(st).compat; });
+  cmd(['10'], 'if range', 'spanning-tree auto-edge', function (st) { return each(st, function (p) { delete p.noAutoEdge; }); }, 'Авто-определение клиентского порта (3 с без BPDU)');
+  cmd(['10'], 'if range', 'no spanning-tree auto-edge', function (st) { return each(st, function (p) { p.noAutoEdge = true; }); });
+  cmd(['6'], 'if range', 'spanning-tree portfast auto', function (st) { return each(st, function (p) { p.portfast = false; delete p.noAutoEdge; }); }, 'Portfast с задержкой 3 с (по умолчанию)');
+  cmd(['8'], 'if range', 'spanning-tree edgeport', function (st) { return each(st, function (p) { p.portfast = true; }); }, 'Порт к конечному узлу: сразу в forwarding');
+  cmd(['8'], 'if range', 'no spanning-tree edgeport', function (st) { return each(st, function (p) { p.portfast = false; }); });
+  cmd(['10', '6'], 'if range', 'spanning-tree link-type <w>', function (st, a) { var m = a[0].toLowerCase();
+    if (['point-to-point', 'shared'].indexOf(m) < 0) return '% Тип: point-to-point | shared';
+    return each(st, function (p) { if (m === 'shared') p.linkType = 'shared'; else delete p.linkType; }); }, 'Тип связи: shared — без быстрого перехода RSTP');
+  cmd(['10', '6'], 'if range', 'no spanning-tree link-type', function (st) { return each(st, function (p) { delete p.linkType; }); });
+
+  E.RUNX.push(function (st, o) { var s = st.stp; if (!s) return;
+    if (s.compat) o.push('spanning-tree compatibility ' + s.compat);
+    if (s.fd) o.push('spanning-tree forward-time ' + s.fd);
+    if (s.hello) o.push('spanning-tree hello-time ' + s.hello);
+    if (s.ma) o.push('spanning-tree max-age ' + s.ma); });
+  E.PORTX.push(function (st, k, p, d) {
+    if (p.noAutoEdge) d.push(' no spanning-tree auto-edge');
+    if (p.linkType) d.push(' spanning-tree link-type ' + p.linkType); });
 })(typeof window !== 'undefined' ? window : global);
 
 /* VRF на ESR (справочник ESR-Series CLI 1.23): ip vrf <NAME> → (config-vrf)#; на интерфейсе ip vrf forwarding <NAME>;
@@ -9117,6 +9276,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (l.a.dev > l.b.dev) { dx = -dx; dy = -dy; }
     var k = (same.indexOf(i) - (same.length - 1) / 2) * 16; return { x: -dy / L * k, y: dx / L * k };
   }
+  // «Тест»: подписи портов MES по STP-состоянию — янтарный переход (listening/learning/discarding до forwarding), красный блок
+  function stpMarks() {
+    [].forEach.call($('gp').querySelectorAll('g.pl'), function (g) {
+      var dp = g.getAttribute('data-dp').split('|'), d = net.devs[dp[0]], z = null, cl = '';
+      if (mode === 'test' && d && d.type === 'mes' && net.stpState) { var L = net.lportOf(dp[0], dp[1]); z = L && net.stpState(dp[0], L.name, 0); }
+      if (z && z !== 'Frw') { var r = net.stp(0)[dp[0]][net.lportOf(dp[0], dp[1]).name]; cl = r.fwd ? ' stp-tr' : ' stp-blk'; }
+      g.setAttribute('class', 'pl' + cl);
+      var tt = g.querySelector('title'); if (!tt) tt = el('title', {}, g);
+      tt.textContent = z ? 'STP: ' + EL.STPN[z] + (cl === ' stp-tr' ? ', до forwarding ' + net.stpLeft(dp[0], net.lportOf(dp[0], dp[1]).name, 0) + ' с' : '') : '';
+    });
+  }
   function draw() {
     var gl = $('gl'), gp = $('gp'), gd = $('gd'); gl.innerHTML = ''; gp.innerHTML = ''; gd.innerHTML = '';
     net.links.forEach(function (l, i) {
@@ -9127,10 +9297,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
       ln.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); linkMenu(i, e); });
       [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (zz) {
         var dx = zz[1].x - zz[0].x, dy = zz[1].y - zz[0].y, L = Math.hypot(dx, dy) || 1, k = Math.min(Math.abs(dy) > Math.abs(dx) ? 96 : 84, L * 0.38);
-        var px = zz[0].x + dx / L * k, py = zz[0].y + dy / L * k, g = el('g', { 'class': 'pl' }, gp), w = zz[2].length * 7.4 + 12;
+        var px = zz[0].x + dx / L * k, py = zz[0].y + dy / L * k, g = el('g', { 'class': 'pl', 'data-dp': (zz[0] === A ? l.a.dev : l.b.dev) + '|' + zz[2] }, gp), w = zz[2].length * 7.4 + 12;
         el('rect', { x: px - w / 2, y: py - 9, width: w, height: 18 }, g); el('text', { x: px, y: py }, g).textContent = zz[2];
       });
     });
+    stpMarks();
     net.list().forEach(function (d) {
       var g = el('g', { 'class': 'dev' + (sel === d.id ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : '') + (d.off ? ' off' : ''),
                         transform: 'translate(' + d.x + ',' + d.y + ')', 'data-id': d.id }, gd);
@@ -9167,7 +9338,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (gone.length && mode === 'test') { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
-    pollEv();
+    stpMarks(); pollEv();
     return gone.length;
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств

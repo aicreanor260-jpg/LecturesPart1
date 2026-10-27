@@ -287,7 +287,7 @@
       t[id] = {};
       s.lports(id).forEach(function (L) {
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
-        if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
+        if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true, host: !on[pr.dev], nostp: !!(L.cfg.stpOff || L.cfg.stackLink) }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
         edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
@@ -333,8 +333,11 @@
   };
   P.stpFwd = function (id, lname, v) {
     var d = this.devs[id]; if (d.st.stp && d.st.stp.on === false) return true;
-    var r = (this.stp(this.stpInst(id, v))[id] || {})[lname]; return !r || r.fwd;
+    var k = this.stpInst(id, v), r = (this.stp(k)[id] || {})[lname]; if (!r) return true;
+    var z = this.stpState ? this.stpState(id, lname, k) : null; return z ? z === 'Frw' : r.fwd;
   };
+  P.stpSts = function (id, ln, k) { var r = (this.stp(k)[id] || {})[ln]; return r && r.fwd ? 'Frw' : 'Dsc'; };   // модуль stp_timers уточняет по таймерам
+  P.stpType = function () { return 'P2p'; };
   P.stpText = function (id) {
     var d = this.devs[id], st = d.st, s = this;
     if (st.stp && st.stp.on === false) return 'Spanning tree disabled';
@@ -343,12 +346,13 @@
     var o = ['Spanning tree enabled mode ' + mode, 'Default port cost method:  long', '',
       '  Root ID    Priority    ' + rb.prio, '             Address     ' + rb.mac];
     if (R === id) o.push('             This switch is the root'); else o.push('             Cost        ' + this._stp.dist[id]);
-    o.push('             Hello Time 2 sec  Max Age 20 sec  Forward Delay 15 sec', '',
+    var tm = this.stpTimers ? this.stpTimers(st) : { hello: 2, ma: 20, fd: 15 };
+    o.push('             Hello Time ' + tm.hello + ' sec  Max Age ' + tm.ma + ' sec  Forward Delay ' + tm.fd + ' sec', '',
       '  Bridge ID  Priority    ' + me.prio, '             Address     ' + me.mac, '',
       'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
     this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
       o.push(' ' + (L.name + '          ').slice(0, 11) + 'enabled 128.' + (pnum(L.name) + '    ').slice(0, 5) + ' ' +
-             ((L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000)) + '          ').slice(0, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + (r.role + '      ').slice(0, 7) + 'P2p'); });
+             ((L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000)) + '          ').slice(0, 10) + (s.stpSts(id, L.name, 0) + '      ').slice(0, 6) + (r.role + '      ').slice(0, 7) + s.stpType(id, L, r)); });
     return o.join('\n');
   };
 
@@ -470,8 +474,10 @@
         var dx = this.dot1xBlock ? this.dot1xBlock(it.dev, it.port) : null; if (dx) { notes.push(nm + ': ' + dx); continue; }   // 802.1X
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
-        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v);
-          notes.push(nm + ': ' + LP.name + ' заблокирован STP' + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
+        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v), zs = this.stpState ? this.stpState(it.dev, LP.name, ki) : null;
+          if (zs === 'Lrn' && srcMac) this.macIn(it.dev, LP.name, r.v, srcMac);            // learning: адрес учится, кадр не передаётся
+          notes.push(nm + ': ' + LP.name + (this.stp(ki)[it.dev][LP.name].fwd ? ' ещё не перешёл в forwarding — STP-состояние ' + EL.STPN[zs] + ', осталось ' + this.stpLeft(it.dev, LP.name, ki) + ' с'
+            : ' заблокирован STP') + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         inMes(it.dev, LP.name, r.v, it.path, r.inner !== undefined ? r.inner : it.inner);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];

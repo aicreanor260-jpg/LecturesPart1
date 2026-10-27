@@ -4,15 +4,19 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
+// схемы в тестах собираются мгновенно: порты новых кабелей считаются давно сошедшимися по STP;
+// таймеры STP проверяются отдельно (net.stpReal = true)
+['connect', 'exec', 'power'].forEach(function (m) { var P = EL.Net.prototype, f = P[m];
+  P[m] = function () { var r = f.apply(this, arguments); if (!this.stpReal) this.stpSettle(); return r; }; });
 
 function runLab(L) {
   for (var i = 0; i < N; i++) {
     total++;
-    var net = new EL.Net(), p = L.gen(); L.build(net, p);
+    var net = new EL.Net(), p = L.gen(); L.build(net, p); net.tick(31);   // STP: порты к узлам и между мостами переходят в forwarding
     var tasks = L.tasks(p);
     if (L.id.charAt(0) === 'T') {                 // поиск неисправности: до исправления ping не должен проходить
       if (tasks[0].ok(net)) { fail++; console.error('✗ ' + L.id + ' неисправность ' + p.fault + ' не ломает сеть'); continue; }
@@ -79,7 +83,7 @@ EL.labs.LABS.forEach(runLab);
   Object.keys(D).forEach(function (k) {
     var d = D[k], tag = 'диалект ' + k + ' (' + d.model + ')';
     // VLAN + маршрутизация на SVI
-    var n = new EL.Net(), s = n.add(d.model, 'SW1'); ['A', 'B', 'C'].forEach(function (x, i) { var v = n.add('VPC', x); n.connect(v.id, 'eth0', s.id, d.p(i + 1)); });
+    var n = new EL.Net(), s = n.add(d.model, 'SW1'); ['A', 'B', 'C'].forEach(function (x, i) { var v = n.add('VPC', x); n.connect(v.id, 'eth0', s.id, d.p(i + 1)); }); n.tick(31);
     var e = run(n, { SW1: ['enable'].concat(d.vlans, [d.rng(1, 2), 'switchport mode access', 'switchport access vlan 10', 'exit',
                        d.one(3), 'switchport mode access', 'switchport access vlan 20', 'exit',
                        'interface vlan 10', 'ip address 10.0.10.1 255.255.255.0', 'exit', 'interface vlan 20', 'ip address 10.0.20.1 255.255.255.0', 'end']),
@@ -90,7 +94,7 @@ EL.labs.LABS.forEach(runLab);
     // LACP между двумя коммутаторами
     var m = new EL.Net(), a = m.add(d.model, 'S1'), b = m.add(d.model, 'S2'), va = m.add('VPC', 'A'), vb = m.add('VPC', 'B');
     for (var i = 1; i <= 4; i++) m.connect(a.id, d.p(i), b.id, d.p(i));
-    m.connect(va.id, 'eth0', a.id, d.p(10)); m.connect(vb.id, 'eth0', b.id, d.p(10));
+    m.connect(va.id, 'eth0', a.id, d.p(10)); m.connect(vb.id, 'eth0', b.id, d.p(10)); m.tick(31);
     var lag = ['enable', 'configure'].concat(d.lagPre, [d.rng(1, 4)], d.lag, ['end']);
     e = run(m, { S1: lag, S2: lag, A: ['ip 10.1.1.1/24'], B: ['ip 10.1.1.2/24'] });
     var L = m.lports(a.id).filter(function (l) { return l.name === 'po1'; })[0];
@@ -98,14 +102,14 @@ EL.labs.LABS.forEach(runLab);
     // кольцо из трёх с RSTP
     var r = new EL.Net(), x = ['X1', 'X2', 'X3'].map(function (nm) { return r.add(d.model, nm); }), ra = r.add('VPC', 'A'), rb = r.add('VPC', 'B');
     r.connect(x[0].id, d.p(1), x[1].id, d.p(2)); r.connect(x[1].id, d.p(1), x[2].id, d.p(2)); r.connect(x[2].id, d.p(1), x[0].id, d.p(2));
-    r.connect(ra.id, 'eth0', x[0].id, d.p(5)); r.connect(rb.id, 'eth0', x[2].id, d.p(5));
+    r.connect(ra.id, 'eth0', x[0].id, d.p(5)); r.connect(rb.id, 'eth0', x[2].id, d.p(5)); r.tick(31);
     var sc = { A: ['ip 10.2.2.1/24'], B: ['ip 10.2.2.2/24'] };
     ['X1', 'X2', 'X3'].forEach(function (nm, i) { sc[nm] = ['enable', 'configure'].concat(d.stp, i === 1 ? [d.root] : [], ['end']); });
     e = run(r, sc); var t = r.stp(), blk = 0; Object.keys(t).forEach(function (id) { Object.keys(t[id]).forEach(function (q) { if (!t[id][q].fwd) blk++; }); });
     chk(tag + ': RSTP', !e.length && blk === 1 && r._stp.root[x[1].id] === x[1].id && r.reach('A', '10.2.2.2'), e.join('; ') + ' blk=' + blk);
     // зеркалирование
     var w = new EL.Net(), sw = w.add(d.model, 'M'), p1 = w.add('VPC', 'A'), p2 = w.add('VPC', 'B'), sn = w.add('Debian', 'S');
-    w.connect(p1.id, 'eth0', sw.id, d.p(1)); w.connect(p2.id, 'eth0', sw.id, d.p(2)); w.connect(sn.id, 'ens3', sw.id, d.p(12));
+    w.connect(p1.id, 'eth0', sw.id, d.p(1)); w.connect(p2.id, 'eth0', sw.id, d.p(2)); w.connect(sn.id, 'ens3', sw.id, d.p(12)); w.tick(31);
     e = run(w, { M: ['enable', 'configure'].concat(d.mon(1, 12), ['end']), A: ['ip 10.3.3.1/24'], B: ['ip 10.3.3.2/24', 'ping 10.3.3.1'] });
     chk(tag + ': зеркалирование', !e.length && (sn.st.capN || 0) >= 2, e.join('; '));
   });
@@ -116,11 +120,82 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ диалекты 6.x и 8.x');
 })();
 
+// STP по таймерам: состояния портов во времени (net.stpReal — без мгновенной сходимости автотеста)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ STP-таймеры: ' + name + (extra !== undefined ? ' — ' + extra : '')); } }
+  function mk(model, cfg) {
+    var n = new EL.Net(); n.stpReal = true;
+    var a = n.add(model, 'S1'), b = n.add(model, 'S2'), va = n.add('VPC', 'A'), vb = n.add('VPC', 'B'), P = model === 'MES5448' ? '1/0/' : 'gi1/0/';
+    EL.labs.apply(n, { S1: ['enable', 'configure'].concat(cfg || [], ['end']), S2: ['enable', 'configure'].concat(cfg || [], ['end']), A: ['ip 10.9.0.1/24'], B: ['ip 10.9.0.2/24'] });
+    n.connect(a.id, P + '1', b.id, P + '1'); n.connect(va.id, 'eth0', a.id, P + '5'); n.connect(vb.id, 'eth0', b.id, P + '5');
+    return { n: n, a: a, b: b, va: va };
+  }
+  function sts(n, id, ln) { return n.stpState(id, ln, 0); }
+  // RSTP (10.x по умолчанию MSTP): мосты договорились сразу, порт к ПК — auto-edge через 3 с
+  var t = mk('MES2428'), n = t.n;
+  chk('RSTP p2p между мостами — сразу forwarding', sts(n, t.a.id, 'gi1/0/1') === 'Frw' && sts(n, t.b.id, 'gi1/0/1') === 'Frw');
+  var r = n.ping(t.va.id, '10.9.0.2');
+  chk('auto-edge: в первые 3 с порт к ПК в discarding, ping не проходит', !r.ok && sts(n, t.a.id, 'gi1/0/5') === 'Dsc' && /Dsc/.test(n.exec(t.a.id, 'show spanning-tree')), r.why);
+  n.tick(3);
+  chk('auto-edge: через 3 с forwarding, ping идёт', sts(n, t.a.id, 'gi1/0/5') === 'Frw' && n.ping(t.va.id, '10.9.0.2').ok);
+  chk('show spanning-tree: Frw, Edge', /gi1\/0\/5\s+enabled .*Frw\s+Desg\s+P2p Edge/.test(n.exec(t.a.id, 'show spanning-tree')), n.exec(t.a.id, 'show spanning-tree'));
+  // portfast — сразу
+  t = mk('MES2428', ['interface gi1/0/5', 'spanning-tree portfast', 'exit']); n = t.n;
+  chk('portfast: порт к ПК сразу forwarding', sts(n, t.a.id, 'gi1/0/5') === 'Frw');
+  // без auto-edge — discarding 15 с, learning 15 с (MAC учится, кадры не идут), forwarding
+  t = mk('MES2428', ['interface gi1/0/5', 'no spanning-tree auto-edge', 'exit']); n = t.n;
+  n.tick(14); chk('no auto-edge: 14 с — discarding', sts(n, t.a.id, 'gi1/0/5') === 'Dsc');
+  n.tick(2); r = n.ping(t.va.id, '10.9.0.2');
+  chk('no auto-edge: 16 с — learning, кадр отброшен, MAC ПК выучен', sts(n, t.a.id, 'gi1/0/5') === 'Lrn' && !r.ok &&
+      n.macRows(t.a.id).some(function (x) { return x.port === 'gi1/0/5'; }), JSON.stringify(n.macRows(t.a.id)));
+  n.tick(14); chk('no auto-edge: 30 с — forwarding', sts(n, t.a.id, 'gi1/0/5') === 'Frw');
+  chk('running-config: no spanning-tree auto-edge', /no spanning-tree auto-edge/.test(n.exec(t.a.id, 'show running-config')));
+  // 802.1D (compatibility stp): listening → learning → forwarding и между мостами
+  t = mk('MES2428', ['spanning-tree compatibility stp']); n = t.n;
+  chk('802.1D: сразу listening между мостами', sts(n, t.a.id, 'gi1/0/1') === 'Lsn' && /Lsn/.test(n.exec(t.a.id, 'show spanning-tree')), n.exec(t.a.id, 'show spanning-tree'));
+  n.tick(15); chk('802.1D: 15 с — learning', sts(n, t.a.id, 'gi1/0/1') === 'Lrn');
+  n.tick(15); chk('802.1D: 30 с — forwarding, ping идёт', sts(n, t.a.id, 'gi1/0/1') === 'Frw' && n.ping(t.va.id, '10.9.0.2').ok);
+  chk('802.1D: show — Hello 2 Max Age 20 Forward Delay 15', /Hello Time 2 sec  Max Age 20 sec  Forward Delay 15 sec/.test(n.exec(t.a.id, 'show spanning-tree')));
+  // forward-time 11: переход за 22 с; условие 2*(FD-1) >= MaxAge
+  t = mk('MES2428', ['spanning-tree compatibility stp', 'spanning-tree forward-time 11']); n = t.n;
+  n.tick(21); chk('forward-time 11: 21 с — ещё learning', sts(n, t.a.id, 'gi1/0/1') === 'Lrn');
+  n.tick(1); chk('forward-time 11: 22 с — forwarding', sts(n, t.a.id, 'gi1/0/1') === 'Frw');
+  n.exec(t.a.id, 'configure');
+  chk('forward-time 4 при max-age 20 — ошибка', /2\*\(Forward-Delay - 1\)/.test(n.exec(t.a.id, 'spanning-tree forward-time 4')));
+  chk('running-config: forward-time 11', /spanning-tree forward-time 11/.test(n.exec(t.a.id, 'do show running-config')));
+  // 802.1D, кольцо из трёх: прямой отказ — 30 с, непрямой — max-age 20 + 30 с
+  function ring() {
+    var n = new EL.Net(); n.stpReal = true; var x = ['X1', 'X2', 'X3'].map(function (nm) { return n.add('MES2428', nm); }), sc = {};
+    x.forEach(function (d, i) { sc[d.name] = ['enable', 'configure', 'spanning-tree compatibility stp', 'spanning-tree priority ' + (4096 * (i + 1)), 'end']; });
+    EL.labs.apply(n, sc);
+    n.connect(x[0].id, 'gi1/0/1', x[1].id, 'gi1/0/1'); n.connect(x[0].id, 'gi1/0/2', x[2].id, 'gi1/0/1'); n.connect(x[1].id, 'gi1/0/2', x[2].id, 'gi1/0/2');
+    n.tick(31); return { n: n, x: x };
+  }
+  var R = ring(), q = R.n.stp()[R.x[2].id];
+  chk('кольцо: X3 gi1/0/2 — Altn, blocking', q['gi1/0/2'] && q['gi1/0/2'].role === 'Altn' && sts(R.n, R.x[2].id, 'gi1/0/2') === 'Blk', JSON.stringify(q));
+  ['configure', 'interface gi1/0/1', 'shutdown'].forEach(function (l) { R.n.exec(R.x[2].id, l); });
+  chk('прямой отказ: Altn → Root, listening', R.n.stp()[R.x[2].id]['gi1/0/2'].role === 'Root' && sts(R.n, R.x[2].id, 'gi1/0/2') === 'Lsn');
+  R.n.tick(30); chk('прямой отказ: forwarding через 30 с', sts(R.n, R.x[2].id, 'gi1/0/2') === 'Frw');
+  R = ring(); ['configure', 'interface gi1/0/1', 'shutdown'].forEach(function (l) { R.n.exec(R.x[1].id, l); });
+  chk('непрямой отказ: X3 ждёт max-age в blocking', sts(R.n, R.x[2].id, 'gi1/0/2') === 'Blk' && R.n.stpLeft(R.x[2].id, 'gi1/0/2', 0) === 50, R.n.stpLeft(R.x[2].id, 'gi1/0/2', 0));
+  R.n.tick(20); chk('непрямой отказ: после max-age — listening', sts(R.n, R.x[2].id, 'gi1/0/2') === 'Lsn');
+  R.n.tick(30); chk('непрямой отказ: forwarding через 50 с', sts(R.n, R.x[2].id, 'gi1/0/2') === 'Frw');
+  // 8.x: edgeport нет по умолчанию — порт к ПК по таймерам; 6.x: portfast auto по умолчанию — 3 с
+  t = mk('MES5448'); n = t.n;
+  n.tick(3); chk('8.x: без edgeport порт к ПК через 3 с ещё не forwarding', sts(n, t.a.id, '1/0/5') !== 'Frw');
+  n.tick(27); chk('8.x: forwarding через 30 с', sts(n, t.a.id, '1/0/5') === 'Frw');
+  t = mk('MES5448', ['interface 1/0/5', 'spanning-tree edgeport', 'exit']); n = t.n;
+  chk('8.x: spanning-tree edgeport — сразу', sts(n, t.a.id, '1/0/5') === 'Frw' && /spanning-tree edgeport/.test(n.exec(t.a.id, 'show running-config')));
+  t = mk('MES3348'); n = t.n;
+  chk('6.x: portfast auto — 3 с', sts(n, t.a.id, 'gi1/0/5') === 'Dsc' && (n.tick(3), sts(n, t.a.id, 'gi1/0/5') === 'Frw'));
+  console.log('✓ STP по таймерам');
+})();
+
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), s = n.add('MES2428', 'SW1'), v = ['VPC1', 'VPC2', 'VPC3'].map(function (x) { return n.add('VPC', x); });
-  v.forEach(function (d, i) { n.connect(d.id, 'eth0', s.id, 'gi1/0/' + (i + 1)); });
+  v.forEach(function (d, i) { n.connect(d.id, 'eth0', s.id, 'gi1/0/' + (i + 1)); }); n.tick(5);
   EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan 10,20', 'exit', 'interface range gi1/0/1-2', 'switchport access vlan 10', 'exit',
                            'interface gi1/0/3', 'switchport access vlan 20', 'end'],
                      VPC1: ['ip 10.0.0.1/24'], VPC2: ['ip 10.0.0.2/24'], VPC3: ['ip 10.0.0.3/24'] });
@@ -1103,7 +1178,7 @@ EL.labs.LABS.forEach(runLab);
   var o = n.exec(pc.id, 'ip auto');
   chk('VPC ip auto: адрес из префикса + EUI-64, шлюз — link-local ESR', /GLOBAL SCOPE\s+: 2001:db8:1:[0-9a-f:]+\/64/.test(o) && /ROUTER LINK-LAYER : fe80::/.test(o), o);
   chk('VPC по SLAAC пингует сервер за ESR', n.ping6(pc.id, '2001:db8:2::10').ok);
-  ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(deb.id, l); });
+  ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(deb.id, l); }); n.tick(4);   // повторный RS через 4 с
   chk('Debian: адрес по SLAAC при ip link set ens3 up', /inet6 2001:db8:1:[0-9a-f:]+\/64 scope global/.test(n.exec(deb.id, 'ip -6 addr')), n.exec(deb.id, 'ip -6 addr'));
   chk('Debian ping6 сервер', /64 bytes from 2001:db8:2::10/.test(n.exec(deb.id, 'ping -6 2001:db8:2::10')));
   chk('rdisc6 ens3', /Prefix\s+: 2001:db8:1::\/64[\s\S]*from fe80::/.test(n.exec(deb.id, 'rdisc6 ens3')), n.exec(deb.id, 'rdisc6 ens3'));

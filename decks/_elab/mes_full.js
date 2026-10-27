@@ -203,7 +203,7 @@
                                 : 'mac-address-table static unicast ' + x.mac + ' vlan ' + x.vlan + ' ' + ifl + ' status permanent'); });
   });
   E.PORTX.push(function (st, k, p, d) { var c = p.psec;
-      if (p.portfast) d.push(' spanning-tree portfast');
+      if (p.portfast) d.push(st.dialect === '8' ? ' spanning-tree edgeport' : ' spanning-tree portfast');
       if (p.bpduGuard) d.push(' spanning-tree bpduguard enable');
       if (c && c.on) { if (st.dialect === '6') { d.push(' port security'); if (c.max !== 1) d.push(' port security max ' + c.max);
           if (c.mode !== 'lock') d.push(' port security mode ' + c.mode.replace('secure-', 'secure ')); if (c.act !== 'discard') d.push(' port security ' + c.act); }

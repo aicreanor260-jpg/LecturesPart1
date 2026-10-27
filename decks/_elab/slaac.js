@@ -59,7 +59,21 @@
       return 'Soliciting ff02::2 (ff02::2) on ens3...\n\nHop limit                 :           64\nPrefix                    : ' + (r.prefix || '-') + '\n from ' + r.gw; }
     var out = deb0.apply(this, arguments);
     if (st.net && !wasUp && st.up && /^ip\s+link\s+set\s+(dev\s+)?ens3\s+up$/.test(line)) {   // accept_ra: адрес из RA при поднятии интерфейса
-      var q = st.net.slaac(st.dev); if (q.ok) { st.ip6 = (st.ip6 || []).filter(function (x) { return x !== q.addr; }).concat([q.addr]); st.gw6 = st.gw6 || q.gw; st.net.gen++; } }
+      if (!raAddr(st)) st.rsPend = { n: 2, at: st.net.now + 4 }; }   // Linux: ещё 2 Router Solicitation через 4 с (порт коммутатора мог быть не в forwarding)
     return out;
+  };
+  function raAddr(st) { var q = st.net.slaac(st.dev); if (!q.ok) return false;
+    st.ip6 = (st.ip6 || []).filter(function (x) { return x !== q.addr; }).concat([q.addr]); st.gw6 = st.gw6 || q.gw; st.net.gen++; return true; }
+  var tick0 = P.tick;
+  P.tick = function (dt) {                     // часы идут до момента очередного RS, затем дальше
+    var s = this, end = this.now + dt, gone = [];
+    for (;;) {
+      var due = this.order.map(function (id) { return s.devs[id]; }).filter(function (d) { var p = d.st && d.st.rsPend; return p && p.at <= end; })
+        .sort(function (a, b) { return a.st.rsPend.at - b.st.rsPend.at; })[0];
+      if (!due) break;
+      var st = due.st, p = st.rsPend; gone = gone.concat(tick0.call(this, Math.max(0, p.at - this.now)));
+      if (!st.up || raAddr(st) || !--p.n) delete st.rsPend; else p.at += 4;
+    }
+    return gone.concat(tick0.call(this, end - this.now));
   };
 })(typeof window !== 'undefined' ? window : global);

@@ -54,7 +54,7 @@
     o.push('Bridge ID        Priority    ' + me, '                 Address     ' + st.bmac, '', 'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
     this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
       var c = (L.cfg.mstCost && L.cfg.mstCost[k]) || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000), pr = (L.cfg.mstPrio && L.cfg.mstPrio[k]) || 128;
-      o.push(' ' + rp(L.name, 11) + 'enabled ' + rp(pr + '.' + L.name.split('/').pop(), 10) + rp(c, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + rp(r.role, 7) + 'P2p'); });
+      o.push(' ' + rp(L.name, 11) + 'enabled ' + rp(pr + '.' + L.name.split('/').pop(), 10) + rp(c, 10) + rp(s.stpSts(id, L.name, k), 6) + rp(r.role, 7) + s.stpType(id, L, r)); });
     void s; return o.join('\n');
   };
   ['', 'do '].forEach(function (pre) { mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst <n>', function (st, a) { return st.net ? st.net.mstText(st.dev, a[0]) : ''; }, 'Состояние экземпляра MSTP');

@@ -60,6 +60,17 @@
     if (l.a.dev > l.b.dev) { dx = -dx; dy = -dy; }
     var k = (same.indexOf(i) - (same.length - 1) / 2) * 16; return { x: -dy / L * k, y: dx / L * k };
   }
+  // «Тест»: подписи портов MES по STP-состоянию — янтарный переход (listening/learning/discarding до forwarding), красный блок
+  function stpMarks() {
+    [].forEach.call($('gp').querySelectorAll('g.pl'), function (g) {
+      var dp = g.getAttribute('data-dp').split('|'), d = net.devs[dp[0]], z = null, cl = '';
+      if (mode === 'test' && d && d.type === 'mes' && net.stpState) { var L = net.lportOf(dp[0], dp[1]); z = L && net.stpState(dp[0], L.name, 0); }
+      if (z && z !== 'Frw') { var r = net.stp(0)[dp[0]][net.lportOf(dp[0], dp[1]).name]; cl = r.fwd ? ' stp-tr' : ' stp-blk'; }
+      g.setAttribute('class', 'pl' + cl);
+      var tt = g.querySelector('title'); if (!tt) tt = el('title', {}, g);
+      tt.textContent = z ? 'STP: ' + EL.STPN[z] + (cl === ' stp-tr' ? ', до forwarding ' + net.stpLeft(dp[0], net.lportOf(dp[0], dp[1]).name, 0) + ' с' : '') : '';
+    });
+  }
   function draw() {
     var gl = $('gl'), gp = $('gp'), gd = $('gd'); gl.innerHTML = ''; gp.innerHTML = ''; gd.innerHTML = '';
     net.links.forEach(function (l, i) {
@@ -70,10 +81,11 @@
       ln.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); linkMenu(i, e); });
       [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (zz) {
         var dx = zz[1].x - zz[0].x, dy = zz[1].y - zz[0].y, L = Math.hypot(dx, dy) || 1, k = Math.min(Math.abs(dy) > Math.abs(dx) ? 96 : 84, L * 0.38);
-        var px = zz[0].x + dx / L * k, py = zz[0].y + dy / L * k, g = el('g', { 'class': 'pl' }, gp), w = zz[2].length * 7.4 + 12;
+        var px = zz[0].x + dx / L * k, py = zz[0].y + dy / L * k, g = el('g', { 'class': 'pl', 'data-dp': (zz[0] === A ? l.a.dev : l.b.dev) + '|' + zz[2] }, gp), w = zz[2].length * 7.4 + 12;
         el('rect', { x: px - w / 2, y: py - 9, width: w, height: 18 }, g); el('text', { x: px, y: py }, g).textContent = zz[2];
       });
     });
+    stpMarks();
     net.list().forEach(function (d) {
       var g = el('g', { 'class': 'dev' + (sel === d.id ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : '') + (d.off ? ' off' : ''),
                         transform: 'translate(' + d.x + ',' + d.y + ')', 'data-id': d.id }, gd);
@@ -110,7 +122,7 @@
     if (gone.length && mode === 'test') { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
-    pollEv();
+    stpMarks(); pollEv();
     return gone.length;
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
