@@ -35,6 +35,11 @@ button,input,select{font:inherit;color:inherit}
 .bar{width:160px;height:26px;background:repeating-linear-gradient(90deg,var(--cy) 0 2px,transparent 2px 4px,var(--cy) 4px 5px,transparent 5px 9px,var(--cy) 9px 12px,transparent 12px 14px);opacity:.75}
 .tbtn{border:1px solid var(--cy2);background:var(--cyd);color:var(--cy);padding:6px 12px;clip-path:var(--cut-s);cursor:pointer;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px}
 .tbtn:hover{background:var(--cy);color:#0e1b1e}
+.mode{display:flex;border:1px solid var(--rd);clip-path:var(--cut-s)}
+.mode button{background:transparent;border:0;color:var(--rd);padding:6px 14px;cursor:pointer;font:700 13px var(--f);letter-spacing:.1em;text-transform:uppercase}
+.mode button.on{background:var(--rd);color:#1a0b0d}
+.mode button:not(.on):hover{background:var(--rdd)}
+body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 .clk{display:flex;align-items:center;gap:8px;font:500 12px var(--m);color:var(--dim)}
 .clk .ck{letter-spacing:.12em;color:var(--rd)}
 .clk b{font:700 18px var(--m);color:var(--cy);min-width:84px;text-shadow:0 0 10px rgba(111,227,234,.45)}
@@ -191,18 +196,19 @@ button,input,select{font:inherit;color:inherit}
   <div class="logo"><i>E</i><div>ELTEX // NETLAB<small>NTF-2 · СЕТЕВАЯ ЛАБОРАТОРИЯ</small></div></div>
   <div class="rule"></div>
   <div class="stat" id="stat"></div>
-  <div class="clk" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
+  <div class="clk t-only" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
     <span class="ck">ВРЕМЯ СЕТИ</span><b id="clkT">00:00:00</b>
     <span class="cb"><button data-sp="0" title="Пауза">❚❚</button><button data-sp="1" class="on">×1</button><button data-sp="10">×10</button><button data-sp="60">×60</button></span>
     <span class="cb ff"><button data-ff="60" title="Промотать 1 минуту">⏩ 1 мин</button><button data-ff="300" title="Промотать 5 минут — MAC-записи с таймером 300 с истекут">⏩ 5 мин</button></span>
   </div>
+  <div class="mode" id="mode" title="Работа — как на оборудовании; Тест — учебные инструменты: таблицы, путь пакета, часы, автопроверка"><button data-m="work" class="on">Работа</button><button data-m="test">Тест</button></div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
 </header>
 <svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
 <div class="frame"></div><div class="ticks"></div>
 <div class="edge" id="edge"></div>
 <aside class="side" id="side">
-  <div class="stabs" id="stabs"><button data-t="dev" class="on">Устройства</button><button data-t="lab">Лабы</button><button data-t="task">Задания</button><button data-t="file">Файл</button><button data-t="help">?</button><button class="spin" id="spin" title="Закрепить панель">⇤</button></div>
+  <div class="stabs" id="stabs"><button data-t="dev" class="on">Устройства</button><button data-t="lab">Лабы</button><button data-t="task" class="t-only">Задания</button><button data-t="file" class="t-only">Файл</button><button data-t="help" class="t-only">?</button><button class="spin" id="spin" title="Закрепить панель">⇤</button></div>
   <div class="sbody" id="sbody"></div>
 </aside>
 <div class="dock">

@@ -85,11 +85,22 @@
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
   // ================================================================== модельное время: старение MAC/ARP
-  var speed = 1;
+  var speed = 1, mode = 'work';
+  // Работа — как на оборудовании (без таблиц, трассы, часов и проверок); Тест — учебные инструменты
+  function setMode(m) {
+    mode = m; document.body.classList.toggle('mtest', m === 'test');
+    [].forEach.call($('mode').querySelectorAll('[data-m]'), function (x) { x.classList.toggle('on', x.dataset.m === m); });
+    if (m === 'work') { speed = 1; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x.dataset.sp === '1'); });
+      stopTrace(); trace = null; Object.keys(wins).forEach(function (k) { if (/^(tb|task|help|ping)/.test(k)) closeWin(k, true); }); chips();
+      if (tab === 'task' || tab === 'file') { tab = 'dev'; [].forEach.call($('stabs').querySelectorAll('[data-t]'), function (x) { x.classList.toggle('on', x.dataset.t === 'dev'); }); }
+      task = null; }
+    renderSide(); renderLab(false);
+  }
+  $('mode').addEventListener('click', function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); });
   function advance(dt, jump) {
     var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
     $('clkT').textContent = net.clockText();
-    if (gone.length) { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
+    if (gone.length && mode === 'test') { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
     return gone.length;
@@ -147,7 +158,8 @@
   function devMenu(d, e) {
     sel = d.id; draw();
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
-      item('term', '▣', 'Консоль') + item('tables', '☰', 'Таблицы ARP / MAC / маршруты') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') + item('ping', '⇢', 'Ping отсюда…') + '<hr>' +
+      item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
+      (mode === 'test' ? item('ping', '⇢', 'Ping отсюда…') : '') + '<hr>' +
       (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
       function (a) {
         if (a === 'term') openTerm(d.id);
@@ -242,12 +254,35 @@
     if (w.min) minWin(k, false); else if (w.el.classList.contains('focus')) minWin(k, true); else focusWin(k); });
 
   // ================================================================== терминалы
-  function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0 }); }
+  function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
+  // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
+  function needLogin(d) { return d.type === 'mes' || d.type === 'esr'; }
+  function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
+  function checkLogin(d, u, p) {
+    var U = d.type === 'esr' ? d.st.run.users : d.st.users;
+    if (d.type === 'mes' && !Object.keys(U || {}).length) return u === 'admin' && p === 'admin';
+    return !!(U && U[u] && U[u].pw === p);
+  }
+  // в режиме «Работа» — только то, что пишет устройство: русские подсказки эмулятора убираются
+  var CYR = /[А-Яа-яЁё]/;
+  function realOut(d, line, r) {
+    if (mode === 'test' || !r || (d.type !== 'mes' && d.type !== 'esr')) return r;
+    var L = String(r).split('\n'), keep = [], err = false;
+    L.forEach(function (x) {
+      if (!CYR.test(x)) { keep.push(x); return; }
+      if (/^\s*%/.test(x)) { err = true; return; }
+      var cut = x.replace(/\s+←.*$/, '').replace(/\s*\([^()]*[А-Яа-яЁё][^()]*\)\s*$/, '');
+      if (!CYR.test(cut) && cut.trim()) keep.push(cut);
+    });
+    if (d.type === 'esr') keep = keep.map(function (x) { return x === '% Unrecognized command' ? 'Syntax error: Unknown command' : x === '% Incomplete command' ? 'Syntax error: Incomplete command' : x; });
+    if (!keep.length && err && !/^\s*(do\s+)?sh(o(w)?)?\b/i.test(line)) keep.push(d.type === 'esr' ? 'Syntax error: Illegal parameter' : "% Invalid input detected at '^' marker.");
+    return keep.join('\n');
+  }
   function banner(d) {
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
-    if (d.type === 'vpc') return 'Welcome to Virtual PC Simulator, version 0.8.3 · введите ? для справки';
-    if (d.type === 'esr') return 'vESR ' + d.name + ' · Eltex Service Router · ПО 1.24.2\nesr login: admin\nPassword: ********';
-    var m = EL.MODELS[d.model] || {}; return d.model + ' · ' + (m.sw || '') + '\nUser Name:admin\nPassword:*****';
+    if (d.type === 'vpc') return 'Welcome to Virtual PC Simulator, version 0.8.3' + (mode === 'test' ? ' · введите ? для справки' : '');
+    if (d.type === 'esr') return 'Eltex vESR · software version 1.24.2\n';
+    return d.model + '\n';
   }
   function openTerm(id) {
     var d = net.devs[id]; if (!d) return; sel = id; draw();
@@ -261,8 +296,12 @@
     out.addEventListener('mouseup', function () { if (!getSelection().toString()) inp.focus(); });
     inp.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(id, v); e.preventDefault(); }
+      else if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); var dz = net.devs[id];   // Ctrl+Z — выход в привилегированный режим
+        if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
+          if (dz.type === 'mes' ? dz.st.mode !== 'user' && dz.st.mode !== 'priv' : dz.st.mode !== 'priv') net.exec(id, 'end'); setPr(id); } }
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
       else if (e.key === 'ArrowDown') { if (t.hi < t.hist.length) { t.hi++; inp.value = t.hist[t.hi] || ''; } e.preventDefault(); }
+      else if (needLogin(net.devs[id]) && !t.auth) { if (e.key === 'Tab' || e.key === '?') e.preventDefault(); }
       else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, net.help(id, inp.value), 'h'); } }
       else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, net.help(id, inp.value), 'h'); }
       e.stopPropagation();
@@ -273,18 +312,27 @@
     var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h;
     var w = wins['t' + id]; if (w) { var out = w.el.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight; }
   }
-  function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var p = net.prompt(id), inp = w.el.querySelector('input');
+  function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
     w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; }
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
     var d = net.devs[id], t = term(id); if (!d || d.off) return;
-    var p = net.prompt(id), w = wins['t' + id], pw = w && w.el.querySelector('input').type === 'password';
+    var w = wins['t' + id], pw = w && w.el.querySelector('input').type === 'password';
+    if (needLogin(d) && !t.auth) {                 // вход в консоль
+      tlog(id, loginPrompt(d, t) + (t.user === null ? line : ''), 'c');
+      if (t.user === null) { t.user = line.trim(); if (!t.user) t.user = null; }
+      else { var okL = checkLogin(d, t.user, line); t.user = null;
+        if (okL) { t.auth = true; var bn = d.type === 'esr' ? d.st.run.banner : d.st.banner; if (bn && bn.exec) tlog(id, bn.exec, ''); }
+        else tlog(id, d.type === 'esr' ? 'Login incorrect' : '% Authentication failed', 'e'); }
+      setPr(id); return;
+    }
+    var p = net.prompt(id);
     tlog(id, p + (pw ? '' : line), 'c'); if (line.trim()) t.hist.push(line); t.hi = t.hist.length;
     hooks.cur = id;
     if (d.type === 'mes' && /^\s*rel(o(a(d)?)?)?\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
     if (d.type === 'esr' && /^\s*reload\s+system\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
-    var r = net.exec(id, line, hooks);
+    var r = realOut(d, line, net.exec(id, line, hooks));
     if (r) tlog(id, r, /^%|Unrecognized|Bad command|command not found|Permission denied|Error|not reachable|timeout|100% packet loss|Login incorrect|Unable|refused/i.test(r) ? 'e' : '');
     setPr(id); draw(); refresh();
   }
@@ -294,7 +342,8 @@
     setTimeout(function () {
       if (!net.devs[id]) return;
       if (reload) net.reboot(id); else net.power(id, true);
-      tlog(id, d.type === 'esr' ? 'Loading vESR firmware 1.24.2 … OK\nesr login: admin\nPassword: ********' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK\nUser Name:admin\nPassword:*****' :
+      var tt = term(id); tt.auth = false; tt.user = null;   // после загрузки снова вход
+      tlog(id, d.type === 'esr' ? 'Loading vESR firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
         d.type === 'deb' ? 'Debian GNU/Linux 11 ' + d.st.host + ' tty1' : 'VPCS ready', 's');
       draw(); setPr(id); refresh();
     }, 1100);
@@ -413,6 +462,7 @@
   // ================================================================== трасса пакета
   net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
   function showTrace(r, id, dst) {
+    if (mode !== 'test') return;
     stopTrace();
     if (r.steps.flush) r.steps.flush();
     trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };
@@ -518,6 +568,11 @@
       body.addEventListener('click', labClick); }
     else if (open) minWin('lab', false);
     var ts = lab.tasks(labP), ok = 0;
+    if (mode === 'work') {   // как методичка: текст задания, без проверки и подсказок
+      body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' +
+        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>';
+      return;
+    }
     var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
     var sol = '';
     if (labShow === true) { var s = lab.sol(labP); sol = Object.keys(s).map(function (n) { return '<b>' + esc(n) + '</b><pre>' + esc(s[n].join('\n')) + '</pre>'; }).join('') + (lab.alt ? '<p>' + esc(lab.alt) + '</p>' : ''); }
@@ -532,7 +587,7 @@
   function startTask(kind) {
     lab = null; resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';
     task = EL.labs.randomTask(kind); task.kind = kind; task.dev = d.id; if (task.T.setup) task.T.setup(task.P, d.st);
-    task.html = task.T.text(task.P); task.res = ''; task.sol = false; draw(); fit(); renderTask(true); openTerm(d.id);
+    task.html = task.T.text(task.P); task.res = ''; task.sol = false; term(d.id).auth = true; draw(); fit(); renderTask(true); openTerm(d.id);
   }
   function renderTask(open) {
     if (!task) return; var body = $('taskbody');
