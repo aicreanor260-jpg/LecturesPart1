@@ -85,7 +85,8 @@
     for (var i = +m[1]; i <= +(m[2] || m[1]); i++) L.push(i); }); return L && L.every(function (n) { return n >= 1 && n <= max; }) ? L : null; }
   function nfront(st) { return Object.keys(st.ports).filter(function (k) { return /^front-port/.test(k); }).length; }
   function npon(st) { return Object.keys(st.ports).filter(function (k) { return /^pon-port/.test(k); }).length; }
-  function maxOnt(st) { return st.olt.pon === 'gpon' ? 128 : 256; }
+  // ONT на pon-port: GPON — до 128, XGS-PON — до 256; LTX по умолчанию в GPON (справочник CLI, вариант А), у C-моделей чётные порты — XGS-PON
+  function maxOnt(st, pp) { return st.olt.pon === 'combo' && pp % 2 === 0 ? 256 : 128; }
   var ERR = '% Invalid input';
   cmd('root', 'configure', function (st) { st.olt.mode = 'configure'; }, 'Режим конфигурации');
   cmd('root', 'configure terminal', function (st) { st.olt.mode = 'configure'; });
@@ -111,7 +112,7 @@
     L.forEach(function (n) { C(st).front[n] = C(st).front[n] || { allow: [] }; }); return a[0]; }), 'Порт к ядру сети');
   cmd('configure', 'interface pon-port <w>', enter('pon', function (st, a) { return nums(a[0], npon(st)) ? a[0] : null; }), 'PON-порт');
   cmd('configure', 'interface port-oob', enter('oob', function () { return ''; }));
-  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+)\/(\d+)$/); if (!m || +m[1] < 1 || +m[1] > npon(st) || +m[2] < 1 || +m[2] > maxOnt(st)) return null;
+  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+)\/(\d+)$/); if (!m || +m[1] < 1 || +m[1] > npon(st) || +m[2] < 1 || +m[2] > maxOnt(st, +m[1])) return null;
     C(st).ont[a[0]] = C(st).ont[a[0]] || { svc: {} }; return a[0]; }), 'ONT P/O');
   cmd('configure', 'no interface ont <w>', function (st, a) { delete C(st).ont[a[0]]; });
   cmd('configure', 'vlan <n>', enter('vlan', function (st, a) { if (a[0] < 1 || a[0] > 4094) return null; C(st).vlans[a[0]] = C(st).vlans[a[0]] || {}; return a[0]; }));
@@ -196,7 +197,7 @@
     out.push('Total ONT count: ' + rows.length); return out.join('\n'); }
   ['unactivated', 'configured', 'online', 'offline'].forEach(function (k) { cmd('root', 'show interface ont <w> ' + k, function (st, a) { return st.net ? list(st, a[0], k) : ''; }, 'Список ONT: ' + k); });
   cmd('root', 'show interface ont <w> unconfigured', function (st, a) { var p = +a[0], used = Object.keys(st.olt.run.ont).filter(function (k) { return +k.split('/')[0] === p; }).map(function (k) { return +k.split('/')[1]; });
-    var free = []; for (var i = 1; i <= maxOnt(st); i++) if (used.indexOf(i) < 0) free.push(i); return 'pon-port ' + p + ' ONT unconfigured: ' + E.fmtList(free); });
+    var free = []; for (var i = 1; i <= maxOnt(st, p); i++) if (used.indexOf(i) < 0) free.push(i); return 'pon-port ' + p + ' ONT unconfigured: ' + E.fmtList(free); });
   cmd('root', 'show interface ont <w> state', function (st, a) { var x = onts(st.net, st.net.devs[st.dev]).filter(function (y) { return y.key === a[0]; })[0]; if (!x) return ERR;
     return [dash('[ONT ' + a[0] + '] state'), 'Serial number: ' + (x.o.serial || 'n/a'), 'Pon-port: ' + x.pp, 'ONT ID: ' + x.id, 'Equipment ID: n/a',
       'Current software version: ' + (x.dev ? (EL.MODELS[x.dev.model] || {}).swv : 'n/a'), 'State: ' + (x.dev ? 'OK' : 'OFFLINE'), 'RSSI: ' + (x.dev ? '-18.50 [dBm]' : 'n/a')].join('\n'); });

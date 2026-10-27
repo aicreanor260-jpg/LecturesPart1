@@ -1372,6 +1372,8 @@ EL.labs.LABS.forEach(runLab);
   chk('чужой серийный номер: позиция offline, ONT в unactivated, ping нет', /OFFLINE/.test(n.exec(o.id, 'show interface ont 2 offline')) && /UNACTIVATED/.test(n.exec(o.id, 'show interface ont 2 unactivated')) && !n.ping(pc.id, '10.0.0.2').ok);
   chk('serial неверного формата — ошибка', /%/.test((n.exec(o.id, 'configure'), n.exec(o.id, 'interface ont 2/2'), n.exec(o.id, 'serial 454C5451A2B3C4D'))) && (n.exec(o.id, 'end'), true));
   chk('management: адрес управления в VLAN 1', /management ip 192\.168\.1\.2/.test(n.exec(o.id, 'show running-config management')));
+  var x = new EL.Net(), lx = x.add('LTX-8', 'X'), lc = x.add('LTX-8C', 'C'); lx.st.olt.mode = 'configure'; lc.st.olt.mode = 'configure';
+  chk('LTX по умолчанию GPON: ONT 1/129 — ошибка; LTX-8C: на чётном порту до 256', /%/.test(x.exec(lx.id, 'interface ont 1/129')) && !/%/.test(x.exec(lc.id, 'interface ont 2/200')) && /%/.test((x.exec(lc.id, 'exit'), x.exec(lc.id, 'interface ont 1/200'))));
   console.log('✓ OLT LTP-N и ONT');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
