@@ -9,9 +9,8 @@
    router ospfv2 NAME → router-id, area → interface (passive, metric — по умолчанию 1, вариант А). Межсетевого экрана нет.
    router bgp ASN → bgp router-id, neighbor (remote-as, update-source, ebgp-multihop, address-family ipv4 unicast, next-hop-self), network,
    redistribution — компилируется в BGP-модель ESR. MPLS L3VPN: vrf (rd, route-target) + iBGP с address-family vpnv4 unicast + mpls → ldp —
-   маршруты VRF передаются на другой PE по совпадению route-target, пакет идёт до loopback PE как через туннель (метки не моделируются).
-   Хранятся, но трафик не меняют (упрощение): IS-IS, детали MPLS/LDP, L2VPN,
-   prefix-list, route-map, admin-distance, redistribution. Выводы show route / ospfv2 / ping — в формате ESR-модели (упрощение);
+   маршруты VRF передаются на другой PE по совпадению route-target; IS-IS, LDP-метки, стек меток L3VPN и L2VPN (VPWS) — me_mpls.js.
+   Хранятся, но трафик не меняют (упрощение): prefix-list, route-map, admin-distance, redistribution. Выводы show route / ospfv2 / ping — в формате ESR-модели (упрощение);
    диалог при exit с неприменёнными правками не моделируется; ввод проверяется по шаблонам справочника. */
 (function (G) {
   'use strict';
@@ -40,6 +39,7 @@
     pl_seq: 'seq-num', rm_seq: 'seq-num', mpls: 'mpls', mpls_fwd: 'forwarding', ldp: 'ldp', l2vpn: 'l2vpn', pwclass: 'pw-class', xcg: 'xconnect-group', p2p: 'p2p', pw: 'pw' };
   var IFT = { te: 'tengigabitethernet', twe: 'twentyfivegigabitethernet', hu: 'hundredgigabitethernet', fo: 'fortygigabitethernet', gi: 'gigabitethernet', bu: 'bundle-ether' };
   function isMe(d) { return !!d && d.sub === 'me'; }
+  var X = { compile: [], check: [], show: [], lsp: null, vpnLabel: null };   // расширения: me_mpls.js
   // имена интерфейсов: tengigabitethernet 0/0/1 | te 0/0/1 → te0/0/1 (fortygigabitethernet и fourtygigabitethernet → fo)
   function norm(line) {
     return String(line).replace(/\b(tengigabitethernet|te|twentyfivegigabitethernet|twe|hundredgigabitethernet|hu|fortygigabitethernet|fourtygigabitethernet|fo|gigabitethernet|gi)\s*(\d+\/\d+\/\d+(?:\.\d+)?)/ig,
@@ -142,6 +142,7 @@
     Object.keys(t.K).forEach(function (h) { if (!/^router bgp /.test(h)) return; Object.keys(t.K[h].K).forEach(function (h2) { var nm = h2.match(/^neighbor (\S+)$/);
       if (nm && t.K[h].K[h2].K['address-family vpnv4 unicast']) v4.push(nm[1]); }); });
     c.vpn = { vrfs: vv, ldp: !!(mp && mp.K.ldp), v4: v4 };
+    X.compile.forEach(function (f) { f(st, t, c); });        // IS-IS, MPLS/LDP, L2VPN — me_mpls.js
     st.cand = EL.clone(c);
   }
   // ---------------------------------------------------------------- L3VPN: маршрут в VRF через MP-BGP VPNv4 до удалённого PE
@@ -168,10 +169,14 @@
     var vs = this._vrfSrc; this._vrfSrc = null; var f;
     try { f = this.send(cur, { src: null, dst: v.peer, proto: 'icmp' }, steps, ct); } finally { this._vrfSrc = vs; }
     if (!f.ok || f.dev !== v.dev) { steps.push({ k: 'drop', t: 'Транспорт до ' + v.peer + ' не построен — нет маршрута к loopback удалённого PE' }); return { ok: false }; }
+    if (X.lsp) { var L = X.lsp(this, cur, v.dev, v.peer, X.vpnLabel ? X.vpnLabel(this, v.dev, v.vrf) : null);   // стек меток по LSP (me_mpls.js)
+      L.steps.forEach(function (x) { steps.push(x); }); if (!L.ok) return { ok: false }; }
     steps.push({ k: 'route', t: pd.name + ': метки сняты — пакет ищется в таблице VRF ' + v.vrf });
     return { ok: true, dev: v.dev, ip: v.peer, inIf: { vrf: v.vrf, name: 'vpnv4', ip: v.peer } };
   };
-  function commit(st) { var me = M(st); me.run = EL.clone(me.cand); compile(st); me.dirty = false; if (st.net) st.net.gen++;
+  function commit(st) { var me = M(st), err = X.check.map(function (f) { return f(st, me.cand); }).filter(Boolean)[0]; if (err) return err;
+    me.run = EL.clone(me.cand); compile(st); me.dirty = false; me.tCommit = st.net ? st.net.now : 0;
+    if (st.net) { st.net.gen++; (st.net._bgpKick = st.net._bgpKick || {})[st.dev] = st.net.now; }
     var host = st.run.host; return EL.clock.fmt(EL.clock.now()) + '\nCommit successfully completed in 0.031951 sec' + (host ? '' : ''); }
 
   // ---------------------------------------------------------------- глобальный режим
@@ -179,6 +184,7 @@
     var me = M(st), low = line.toLowerCase().split(/\s+/), net = st.net;
     if (line === 'configure' || line === 'config') { me.stack = [{ mode: 'config', h: null, prm: 'config' }]; return ''; }
     if (line === 'abort' || line === 'clear candidate-config') { me.cand = EL.clone(me.run); return ''; }
+    var sx = null; X.show.some(function (f) { sx = f(st, line); return sx !== null && sx !== undefined; }); if (sx !== null && sx !== undefined) return sx;
     if (line === 'show running-config') return dump(me.run, '', []).join('\n');
     if (/^show running-config /.test(line)) { var w = norm(line.slice(20)).replace(/\b(te|twe|hu|fo|gi)(0\/)/g, function (m, t, r) { return IFT[t] + ' ' + r; }); return dump(me.run, '', []).join('\n').split(/\n(?=\S)/).filter(function (b) { return b.indexOf(w) === 0; }).join('\n'); }
     if (line === 'show candidate-config') return dump(me.cand, '', []).join('\n');
@@ -204,8 +210,9 @@
     return me.stack.length ? config(st, line) : global(st, line);
   }
   var ex0 = P.exec;
-  P.exec = function (id, line) { var d = this.devs[id]; if (isMe(d)) { this.gen++; return d.off ? '' : exec(d.st, line); } return ex0.apply(this, arguments); };
+  P.exec = function (id, line) { var d = this.devs[id]; if (!isMe(d)) return ex0.apply(this, arguments);
+    if (this.bgpSessions) this.bgpSessions(); this.gen++; var r = d.off ? '' : exec(d.st, line); if (this.bgpSessions) this.bgpSessions(); return r; };
   var pr0 = P.prompt;
   P.prompt = function (id) { var d = this.devs[id]; return isMe(d) ? prompt(d.st) : pr0.apply(this, arguments); };
-  EL.me = { exec: exec, prompt: prompt, norm: norm };
+  EL.me = { exec: exec, prompt: prompt, norm: norm, X: X, val: val, IFT: IFT, isMe: isMe };
 })(typeof window !== 'undefined' ? window : global);

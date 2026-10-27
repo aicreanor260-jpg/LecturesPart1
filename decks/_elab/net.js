@@ -482,6 +482,8 @@
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
         if (phys.shut) { notes.push(nm + ': интерфейс ' + it.port + ' выключен'); continue; }
+        var acx = this.acIn ? this.acIn(it.dev, it.port, it.tag) : null;     // ME: attachment circuit L2VPN — кадр уходит в псевдопровод
+        if (acx) { acx.notes.forEach(function (x) { notes.push(x); }); if (acx.out) send(acx.out.dev, acx.out.port, acx.out.tag, it.path); continue; }
         if (phys.sw) { if (it.tag !== null) { notes.push(nm + ': ' + it.port + ' (access) — кадр с тегом ' + it.tag + ' отброшен'); continue; }
           inEsrSw(it.dev, it.port, phys.sw.vlan, it.path); continue; }
         var k = it.tag === null ? it.port : it.port + '.' + it.tag, x = d.st.run.ifs[k];

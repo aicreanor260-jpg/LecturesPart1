@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1627,7 +1627,8 @@ EL.labs.LABS.forEach(runLab);
     ifs.forEach(function (x) { c.push('interface ' + x[0], 'ipv4 address ' + x[1], 'exit'); });
     c.push('router ospfv2 core', 'router-id ' + lo, 'area 0.0.0.0', 'interface loopback 1', 'passive', 'exit');
     ifs.forEach(function (x) { c.push('interface ' + x[0], 'network point-to-point', 'exit'); });
-    c.push('root', 'mpls', 'ldp'); ifs.forEach(function (x) { c.push('discovery interface ' + x[0], 'exit'); }); c.push('root'); return c; }
+    c.push('root', 'mpls', 'router-id ' + lo, 'forwarding'); ifs.forEach(function (x) { c.push('interface ' + x[0], 'exit'); }); c.push('exit', 'ldp');
+    ifs.forEach(function (x) { c.push('discovery interface ' + x[0], 'exit'); }); c.push('root'); return c; }
   function pe(lo, peer, ifs, ce) { return igp(lo, ifs).concat(['vrf example', 'rd ' + lo + ':100', 'import route-target 65535:100', 'export route-target 65535:100', 'exit',
     'interface te 0/0/17', 'vrf example', 'ipv4 address ' + ce, 'exit',
     'router bgp 65535', 'bgp router-id ' + lo, 'neighbor ' + peer, 'remote-as 65535', 'update-source ' + lo, 'send-community', 'send-community-ext', 'address-family vpnv4 unicast', 'exit', 'exit', 'root', 'commit', 'end']); }
@@ -1640,9 +1641,61 @@ EL.labs.LABS.forEach(runLab);
   var r = n.ping(h1.id, '100.100.2.10');
   chk('клиент VRF example на PE1 пингует клиента на PE2 через P (метки VPN + LDP)', r.ok && r.steps.some(function (s) { return /VPN-маршрут 100\.100\.2\.0\/24/.test(s.t); }), r.steps.map(function (s) { return s.t; }).slice(-4).join(' | '));
   chk('P не знает сети клиентов (маршрута 100.100.2.0/24 в GRT нет)', !n.ping(p.id, '100.100.2.10').ok);
+  chk('трасса L3VPN: PE1 → P транспортная метка + метка VPN 1000, P → PE2 — PHP', r.steps.some(function (s) { return /PE1 → P \(te0\/0\/12\): транспортная метка \d+ \| метка VPN 1000/.test(s.t); }) &&
+      r.steps.some(function (s) { return /P → PE2 \(te0\/0\/12\): транспортная метка снята \(PHP, ImpNull\)/.test(s.t); }), r.steps.map(function (s) { return s.t; }).join(' | '));
+  var lf = n.exec(a.id, 'show mpls ldp forwarding');
+  chk('show mpls ldp forwarding на PE1: 2.2.2.2/32 с меткой P, 9.9.9.9/32 — ImpNull', /2\.2\.2\.2\/32\s+\d+\s+te 0\/0\/12\s+10\.0\.1\.2/.test(lf) && /9\.9\.9\.9\/32\s+ImpNull/.test(lf), lf);
+  chk('show mpls ldp neighbors на P: два соседа', (n.exec(p.id, 'show mpls ldp neighbors').match(/:0 /g) || []).length === 2, n.exec(p.id, 'show mpls ldp neighbors'));
+  ['configure', 'mpls', 'ldp', 'no discovery interface te 0/0/12', 'root', 'commit', 'end'].forEach(function (l) { n.exec(p.id, l); });
+  var r2 = n.ping(h1.id, '100.100.2.10');
+  chk('LDP между P и PE2 выключен — LSP разорван, VPN не работает', !r2.ok && r2.steps.some(function (s) { return /LSP до 2\.2\.2\.2 разорван — нет LDP-сессии с PE2/.test(s.t); }), r2.steps.map(function (s) { return s.t; }).slice(-2).join(' | '));
+  ['configure', 'mpls', 'ldp', 'discovery interface te 0/0/12', 'root', 'commit', 'end'].forEach(function (l) { n.exec(p.id, l); });
   EL.labs.apply(n, { PE2: ['configure', 'vrf example', 'no import route-target 65535:100', 'no export route-target 65535:100', 'export route-target 65535:999', 'import route-target 65535:999', 'root', 'commit', 'end'] });
   chk('route-target не совпадают — VPN-маршрутов нет', !n.ping(h1.id, '100.100.2.10').ok);
   console.log('✓ ME: MPLS L3VPN');
+})();
+
+// ME: IS-IS (уровни, области, ATT), LDP-метки и L2VPN VPWS (псевдопровод LDP)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ME IS-IS/L2VPN: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('ME5100S', 'PE1'), p = n.add('ME5100S', 'P'), b = n.add('ME5100S', 'PE2'), c1 = n.add('VPC', 'C1'), c2 = n.add('VPC', 'C2');
+  n.connect(a.id, 'te0/0/1', p.id, 'te0/0/1'); n.connect(p.id, 'te0/0/2', b.id, 'te0/0/1'); n.connect(c1.id, 'eth0', a.id, 'te0/0/9'); n.connect(c2.id, 'eth0', b.id, 'te0/0/9');
+  function run(d, L) { return L.map(function (l) { var x = n.exec(d.id, l); return /^%/.test(x) ? l + ' → ' + x : null; }).filter(Boolean); }
+  function core(lo, net, lvl, ifs) { var c = ['configure', 'hostname ' + lo.split('.')[0], 'interface loopback 1', 'ipv4 address ' + lo + '/32', 'exit'];
+    ifs.forEach(function (x) { c.push('interface ' + x[0], 'ipv4 address ' + x[1], 'exit'); });
+    c.push('router isis core', 'net ' + net, 'is-level ' + lvl, 'interface loopback 1', 'address-family ipv4 unicast', 'exit', 'passive', 'exit');
+    ifs.forEach(function (x) { c.push('interface ' + x[0], 'address-family ipv4 unicast', 'exit', 'point-to-point', 'exit'); });
+    c.push('root', 'mpls', 'router-id ' + lo, 'forwarding'); ifs.forEach(function (x) { c.push('interface ' + x[0], 'exit'); }); c.push('exit', 'ldp');
+    ifs.forEach(function (x) { c.push('discovery interface ' + x[0], 'exit'); }); c.push('root'); return c; }
+  function pw(lo, peer, id) { return ['mpls ldp neighbor ' + peer, 'exit', 'l2vpn pw-class PWC', 'encapsulation mpls signaling-type pseudowire-id-fec-signaling', 'exit',
+    'l2vpn', 'xconnect-group G1', 'p2p CUST1', 'interface te 0/0/9', 'pw ' + peer + ' ' + id, 'pw-class PWC', 'exit', 'exit', 'root', 'commit', 'end']; }
+  var e = run(a, core('1.1.1.1', '49.0001.0010.0100.1001.00', 'level-2', [['te 0/0/1', '10.0.1.0/31']]).concat(pw('1.1.1.1', '2.2.2.2', 100)))
+    .concat(run(p, core('9.9.9.9', '49.0002.0090.0900.9009.00', 'level-2', [['te 0/0/1', '10.0.1.1/31'], ['te 0/0/2', '10.0.2.0/31']]).concat(['commit', 'end'])))
+    .concat(run(b, core('2.2.2.2', '49.0003.0020.0200.2002.00', 'level-2', [['te 0/0/1', '10.0.2.1/31']]).concat(pw('2.2.2.2', '1.1.1.1', 100))));
+  chk('конфигурация IS-IS + LDP + L2VPN по РН без ошибок', !e.length, e.join('; '));
+  var rt = n.exec(a.id, 'show route isis');
+  chk('show route isis на PE1: 2.2.2.2/32 [116/20] и 9.9.9.9/32 [116/10] — разные области, уровень 2', /i L2\s+2\.2\.2\.2\/32 via 10\.0\.1\.1 \[116\/20\]/.test(rt) && /i L2\s+9\.9\.9\.9\/32 via 10\.0\.1\.1 \[116\/10\]/.test(rt), rt);
+  chk('show isis neighbors на P: две смежности level-2', (n.exec(p.id, 'show isis neighbors').match(/ up\s+level-2/g) || []).length === 2, n.exec(p.id, 'show isis neighbors'));
+  chk('PE1 пингует loopback PE2 по IS-IS', n.ping(a.id, '2.2.2.2').ok);
+  n.exec(c1.id, 'ip 192.168.77.1/24'); n.exec(c2.id, 'ip 192.168.77.2/24');
+  var r = n.ping(c1.id, '192.168.77.2');
+  chk('L2VPN: C1 и C2 в одной L2-сети через псевдопровод (метки PW + LDP)', r.ok && JSON.stringify(r.steps).indexOf('перенесён псевдопроводом CUST1') >= 0, r.steps.map(function (s) { return s.t + ' ' + JSON.stringify(s.notes || []); }).join(' | ').slice(0, 900));
+  chk('show l2vpn xconnect: oper Up', /PW: Neighbor 2\.2\.2\.2, pw-id 100, admin up, oper Up/.test(n.exec(a.id, 'show l2vpn xconnect')), n.exec(a.id, 'show l2vpn xconnect'));
+  EL.labs.apply(n, { PE2: ['configure', 'l2vpn', 'xconnect-group G1', 'p2p CUST1', 'mtu 9000', 'root', 'commit', 'end'] });
+  chk('MTU не совпадают — oper MM, кадры не идут', /oper MM/.test(n.exec(a.id, 'show l2vpn xconnect')) && !n.ping(c1.id, '192.168.77.2').ok, n.exec(a.id, 'show l2vpn xconnect'));
+  EL.labs.apply(n, { PE2: ['configure', 'l2vpn', 'xconnect-group G1', 'p2p CUST1', 'no mtu', 'root', 'commit', 'end'] });
+  chk('MTU выровнены — снова Up', /oper Up/.test(n.exec(a.id, 'show l2vpn xconnect')), n.exec(a.id, 'show l2vpn xconnect'));
+  var ce = n.exec(b.id, 'configure') + n.exec(b.id, 'interface te 0/0/9') + n.exec(b.id, 'ipv4 address 192.168.77.254/24') + n.exec(b.id, 'root');
+  chk('AC с IP-адресом — commit отклонён (РН с. 180)', /cannot be used as L2VPN attachment circuit/.test(ce + n.exec(b.id, 'commit')));
+  n.exec(b.id, 'abort');
+  // IS-IS level-1: разные области — смежности нет; одна область — маршруты L1 и default по ATT
+  EL.labs.apply(n, { PE1: ['configure', 'router isis core', 'is-level level-1', 'root', 'commit', 'end'] });
+  chk('level-1 и другая область — смежности нет, маршрутов нет', !/i L/.test(n.exec(a.id, 'show route isis')), n.exec(a.id, 'show route isis'));
+  EL.labs.apply(n, { PE1: ['configure', 'router isis core', 'net 49.0002.0010.0100.1001.00', 'root', 'commit', 'end'],
+    P: ['configure', 'router isis core', 'is-level level-1-2', 'root', 'commit', 'end'] });
+  var r1 = n.exec(a.id, 'show route isis');
+  chk('level-1 в области P (L1/L2): 9.9.9.9 i L1 [115/10] и 0.0.0.0/0 по ATT', /i L1\s+9\.9\.9\.9\/32 via 10\.0\.1\.1 \[115\/10\]/.test(r1) && /i L1\s+0\.0\.0\.0\/0 via 10\.0\.1\.1 \[115\/10\]/.test(r1) && n.ping(a.id, '2.2.2.2').ok, r1);
+  console.log('✓ ME: IS-IS, LDP, L2VPN');
 })();
 
 // симуляция пакетов как в Packet Tracer: события со временем, протоколы, линейный код L1

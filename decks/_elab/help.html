@@ -176,6 +176,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
 <tr><td>router bgp 65535 → bgp router-id · neighbor A → remote-as · update-source · address-family ipv4 unicast · address-family ipv4 unicast → network P/L</td><td>BGP (enable не нужен); show bgp summary</td></tr>
 <tr><td>vrf X → rd · import/export route-target · mpls → ldp → discovery interface · neighbor → address-family vpnv4 unicast</td><td>MPLS L3VPN между PE</td></tr>
+<tr><td>router isis N → net 49.0001.XXXX.XXXX.XXXX.00 · is-level · interface … → address-family ipv4 unicast · passive · level level-2 → metric</td><td>IS-IS: i L1 (115) / i L2 (116); show route isis · show isis neighbors</td></tr>
+<tr><td>mpls → router-id · forwarding → interface … · ldp → discovery interface … · neighbor A</td><td>LDP-метки: show mpls ldp forwarding · neighbors · bindings; трасса VPN — стек меток по хопам</td></tr>
+<tr><td>l2vpn → xconnect-group G → p2p N → interface AC · pw A ID → pw-class · mpls ldp neighbor A</td><td>L2VPN VPWS: show l2vpn xconnect · summary</td></tr>
 <tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
 </table>
 
