@@ -82,7 +82,7 @@
       if (x.tun && !(x.on && x.local && x.remote)) return;              // GRE-туннель поднят, когда задан и включён (enable)
       var ph = k.split('.')[0], virt = k.charAt(0) === 'l' || !!x.tun; if (!virt && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
-      o.push({ name: k, ip: p[0], len: +p[1], tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+      o.push({ name: k, ip: p[0], len: +p[1], vrf: x.vrf || null, tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
     if (d.type === 'esr') { var vt = this.vrrp()[id] || {}; Object.keys(vt).forEach(function (k) { var v = vt[k]; if (!v.master) return;
       var base = o.filter(function (f) { return f.name === k; })[0]; if (!base) return; var vp = v.vip.split('/');
       o.push({ name: k + ':vrrp', ip: vp[0], len: +vp[1], port: base.port, tag: base.tag, fw: base.fw, vrrp: true }); }); }
@@ -94,13 +94,13 @@
   // все маршруты-кандидаты: C (AD 0), S (AD из команды, по умолчанию 1), R (120), O (110)
   P.routes = function (id) {
     var d = this.devs[id], st = d.st, o = [], fs = this.ifaces(id);
-    fs.forEach(function (f) { o.push({ p: 'C', net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, ad: 0, m: 0 }); });
+    fs.forEach(function (f) { o.push({ p: 'C', net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, ad: 0, m: 0, vrf: f.vrf || null }); });
     var stat = d.type === 'esr' ? st.run.routes : d.type === 'mes' ? st.routes.slice() : [];
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
-      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && IP.sameNet(r.nh, f.ip, f.len); })[0];
-      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && (f.vrf || null) === (r.vrf || null) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out, vrf: r.vrf || null });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
     return o;
@@ -462,10 +462,10 @@
         if (!x) { notes.push(nm + ': нет саб-интерфейса ' + it.port + '.' + it.tag + ' — кадр с тегом ' + it.tag + ' отброшен'); continue; }
         if (!x.ip || x.shut) { notes.push(nm + ': на ' + k + ' нет IP-адреса или он выключен'); continue; }
         var pp = x.ip.split('/');
-        eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw }, path: it.path });
+        eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw, vrf: x.vrf || null }, path: it.path });
         var vv = (this.vrrp()[it.dev] || {})[k];
         if (vv && vv.master) { var vp = vv.vip.split('/');
-          eps.push({ dev: it.dev, iface: { name: k + ':vrrp', ip: vp[0], len: +vp[1], port: it.port, tag: it.tag, fw: x.fw, vrrp: true }, path: it.path }); }
+          eps.push({ dev: it.dev, iface: { name: k + ':vrrp', ip: vp[0], len: +vp[1], port: it.port, tag: it.tag, fw: x.fw, vrrp: true, vrf: x.vrf || null }, path: it.path }); }
       } else {
         if (it.tag !== null) { notes.push(nm + ': пришёл кадр с тегом ' + it.tag + ' — ПК тегов не понимает, отброшен'); continue; }
         var hf = this.ifaces(it.dev)[0];
@@ -497,13 +497,14 @@
     return true;
   }
   P.send = function (src, pk, steps, ct) {
-    var cur = src, ttl = 16, hops = [];
+    var cur = src, ttl = 16, hops = [], inIf = null;          // inIf — интерфейс, через который пакет пришёл (его VRF задаёт таблицу маршрутов)
     while (ttl-- > 0) {
       var cd = this.devs[cur];
-      if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops, inIf: inIf };
       var vf = cd.type === 'esr' && this.ipsecForward ? this.ipsecForward(cur, pk, steps, ct) : null;   // IPsec policy-based: трафик политики уходит в ESP
       if (vf) { if (!vf.ok) return { ok: false, why: 'Request timed out', pk: pk }; hops.push({ dev: vf.dev, ip: vf.ip }); cur = vf.dev; continue; }
-      var r = this.lookup(cur, pk.dst);
+      this._vrfCtx = inIf ? inIf.vrf || null : (this._vrfSrc && this._vrfSrc.dev === cur ? this._vrfSrc.vrf : null);
+      var r; try { r = this.lookup(cur, pk.dst); } finally { this._vrfCtx = null; }
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
@@ -530,7 +531,7 @@
         if (sc.length) { steps.push({ k: 'drop', t: 'Storm-control: широковещательный шторм — порт ' + sc.join(', ') + ' выключен (err-disable), петля разорвана. Повторите ping' }); return { ok: false, why: 'Request timed out', pk: pk }; }
         steps.push({ k: 'drop', t: 'Широковещательный шторм: в сети петля, а STP выключен — кадры бесконечно размножаются, связи нет', notes: fl.notes });
         return { ok: false, why: 'Request timed out', pk: pk }; }
-      var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh], dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
+      var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh] && (!r.iface.vrf || this.arp[cur][r.nh].ifn === r.iface.name) ? this.arp[cur][r.nh] : null, dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
       if (cached && cached.mac === dmac) {        // адрес уже в ARP-кэше — широковещательный запрос не нужен
         steps.push({ k: 'route', t: cd.name + ': ' + r.nh + ' уже есть в ARP-таблице (' + cached.mac + ') — ARP-запрос не нужен, кадр сразу на этот MAC' });
       } else if (cached) {                         // запись устарела: кадр уходит на старый MAC и теряется
@@ -585,7 +586,7 @@
         if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
         if (!fw.ok) return { ok: false, why: 'Request timed out', pk: pk };
       }
-      hops.push({ dev: ep.dev, ip: ep.iface.ip });
+      hops.push({ dev: ep.dev, ip: ep.iface.ip }); inIf = ep.iface;
       cur = ep.dev;
       if (!owns(this, cur, pk.dst) && (nd.type === 'vpc' || nd.type === 'deb')) {
         steps.push({ k: 'drop', t: nd.name + ' получил чужой пакет и не маршрутизирует его' });
@@ -612,7 +613,9 @@
       return { ok: false, why: 'Connection refused', steps: steps, dev: f.dev };
     }
     steps.push({ k: 'ok', t: fd.name + ' получил ' + (proto === 'icmp' ? 'ICMP echo request и отвечает echo reply' : 'запрос ' + proto.toUpperCase() + ':' + dport + ' и отвечает') });
-    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct);
+    var own = f.inIf && f.inIf.ip === f.pk.dst ? f.inIf : this.ifaces(f.dev).filter(function (x) { return x.ip === f.pk.dst; })[0], vs0 = this._vrfSrc;   // ответ уходит в VRF интерфейса, получившего запрос
+    if (own && own.vrf) this._vrfSrc = { dev: f.dev, vrf: own.vrf };
+    var b; try { b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct); } finally { this._vrfSrc = vs0; }
     if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз/NAT в обратную сторону' });
       return { ok: false, why: 'Request timed out', steps: steps }; }
     steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });

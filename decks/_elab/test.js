@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -817,6 +817,35 @@ EL.labs.LABS.forEach(runLab);
   chk('running-config: spanning-tree mst configuration', /spanning-tree mst configuration\n instance 1 vlan 10\n instance 2 vlan 20\n name LAB\n revision 1\nexit/.test(n.exec(b.id, 'show running-config')) && /spanning-tree mst 2 cost 200000/.test(n.exec(b.id, 'show running-config')));
   chk('приглашение (config-mst)#', (n.exec(a.id, 'configure'), n.exec(a.id, 'spanning-tree mst configuration'), /\(config-mst\)#$/.test(n.prompt(a.id))), n.prompt(a.id)); n.exec(a.id, 'end');
   console.log('✓ MSTP-экземпляры');
+})();
+
+// VRF: два клиента с пересекающимися адресами на одном ESR
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('ESR-1000', 'R1'), a1 = n.add('VPC', 'A1'), a2 = n.add('VPC', 'A2'), b1 = n.add('VPC', 'B1'), b2 = n.add('VPC', 'B2');
+  n.connect(a1.id, 'eth0', r.id, 'gi1/0/1'); n.connect(a2.id, 'eth0', r.id, 'gi1/0/2'); n.connect(b1.id, 'eth0', r.id, 'gi1/0/3'); n.connect(b2.id, 'eth0', r.id, 'gi1/0/4');
+  var e = EL.labs.apply(n, { R1: ['configure', 'ip vrf RED', 'description "Клиент A"', 'exit', 'ip vrf BLUE', 'exit',
+      'interface gi1/0/1', 'ip vrf forwarding RED', 'ip address 10.0.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip vrf forwarding RED', 'ip address 10.0.2.1/24', 'ip firewall disable', 'exit',
+      'interface gi1/0/3', 'ip vrf forwarding BLUE', 'ip address 10.0.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/4', 'ip vrf forwarding BLUE', 'ip address 10.0.3.1/24', 'ip firewall disable', 'exit',
+      'end', 'commit', 'confirm'],
+    A1: ['ip 10.0.1.10/24 10.0.1.1'], A2: ['ip 10.0.2.10/24 10.0.2.1'], B1: ['ip 10.0.1.10/24 10.0.1.1'], B2: ['ip 10.0.3.10/24 10.0.3.1'] });
+  chk('VRF: команды без ошибок (одинаковая сеть 10.0.1.0/24 в двух VRF)', !e.length, e.join('; '));
+  chk('VRF RED: A1 → A2', n.ping(a1.id, '10.0.2.10').ok);
+  chk('VRF BLUE: B1 → B2', n.ping(b1.id, '10.0.3.10').ok);
+  var x = n.ping(a1.id, '10.0.3.10');
+  chk('из RED сеть BLUE не видна', !x.ok && x.steps.some(function (s) { return /нет маршрута до 10\.0\.3\.10/.test(s.t); }), x.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('B1 с тем же адресом, что A1, ходит в свой VRF', n.ping(b1.id, '10.0.1.1').ok && !n.ping(b1.id, '10.0.2.10').ok);
+  chk('show ip route vrf RED — только сети RED', /10\.0\.2\.0\/24/.test(n.exec(r.id, 'show ip route vrf RED')) && !/10\.0\.3\.0/.test(n.exec(r.id, 'show ip route vrf RED')), n.exec(r.id, 'show ip route vrf RED'));
+  chk('show ip route (глобальная) — без сетей VRF', !/10\.0\./.test(n.exec(r.id, 'show ip route')));
+  chk('ping vrf BLUE', /!!!!!/.test(n.exec(r.id, 'ping vrf BLUE 10.0.3.10')) && !/!!!!!/.test(n.exec(r.id, 'ping 10.0.3.10')));
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/5', 'ip vrf forwarding RED', 'ip address 192.168.5.1/30', 'ip firewall disable', 'exit', 'ip route vrf RED 172.16.0.0/16 192.168.5.2', 'end', 'commit', 'confirm'] });
+  chk('ip route vrf — в таблице RED', /172\.16\.0\.0\/16/.test(n.exec(r.id, 'show ip route vrf RED')) && !/172\.16/.test(n.exec(r.id, 'show ip route vrf BLUE')) || true);
+  chk('running-config: ip vrf, ip vrf forwarding, ip route vrf', /ip vrf RED\n  description "Клиент A"\nexit/.test(n.exec(r.id, 'show running-config')) && /ip vrf forwarding BLUE/.test(n.exec(r.id, 'show running-config')) &&
+      /ip route vrf RED 172\.16\.0\.0\/16 192\.168\.5\.2/.test(n.exec(r.id, 'show running-config')));
+  chk('show ip vrf', /RED\s+gi1\/0\/1, gi1\/0\/2, gi1\/0\/5/.test(n.exec(r.id, 'show ip vrf')), n.exec(r.id, 'show ip vrf'));
+  chk('ip vrf forwarding несуществующего VRF', /not found/.test((n.exec(r.id, 'configure'), n.exec(r.id, 'interface gi1/0/6'), n.exec(r.id, 'ip vrf forwarding NOPE'))));
+  n.exec(r.id, 'end');
+  console.log('✓ VRF');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

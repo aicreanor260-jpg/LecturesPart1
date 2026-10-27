@@ -139,7 +139,7 @@
     if (!cur(st)) return '% IP-адрес задаётся на одном интерфейсе, не на диапазоне';
     var c = IP.parseCidr(v); if (!c) return '% Формат адреса: A.B.C.D/длина, например 192.168.1.1/24';
     var me = st.ctx;
-    var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip &&
+    var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip && (x.vrf || null) === (st.cand.ifs[me].vrf || null) &&
       IP.sameNet(x.ip.split('/')[0], c.ip, Math.min(+x.ip.split('/')[1], c.len)) && x.ip.split('/')[1] !== '32' && c.len !== 32; });
     if (clash.length) return '% Адрес пересекается с подсетью интерфейса ' + clash[0];
     cur(st).ip = c.ip + '/' + c.len; touch(st);
@@ -203,7 +203,7 @@
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });
-    c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
+    c.routes.forEach(function (r) { o.push('ip route ' + (r.vrf ? 'vrf ' + r.vrf + ' ' : '') + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
     if (c.rip) { o.push('router rip'); c.rip.nets.forEach(function (n) { o.push('  network ' + n); });
       c.rip.passive.forEach(function (n) { o.push('  passive-interface ' + longIf(n)); }); c.rip.redist.forEach(function (n) { o.push('  redistribute ' + n); });
       if (c.rip.on) o.push('  enable'); o.push('exit'); }

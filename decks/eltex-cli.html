@@ -1157,7 +1157,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (!cur(st)) return '% IP-адрес задаётся на одном интерфейсе, не на диапазоне';
     var c = IP.parseCidr(v); if (!c) return '% Формат адреса: A.B.C.D/длина, например 192.168.1.1/24';
     var me = st.ctx;
-    var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip &&
+    var clash = Object.keys(st.cand.ifs).filter(function (k) { var x = st.cand.ifs[k]; return k !== me && x.ip && (x.vrf || null) === (st.cand.ifs[me].vrf || null) &&
       IP.sameNet(x.ip.split('/')[0], c.ip, Math.min(+x.ip.split('/')[1], c.len)) && x.ip.split('/')[1] !== '32' && c.len !== 32; });
     if (clash.length) return '% Адрес пересекается с подсетью интерфейса ' + clash[0];
     cur(st).ip = c.ip + '/' + c.len; touch(st);
@@ -1221,7 +1221,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });
-    c.routes.forEach(function (r) { o.push('ip route ' + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
+    c.routes.forEach(function (r) { o.push('ip route ' + (r.vrf ? 'vrf ' + r.vrf + ' ' : '') + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
     if (c.rip) { o.push('router rip'); c.rip.nets.forEach(function (n) { o.push('  network ' + n); });
       c.rip.passive.forEach(function (n) { o.push('  passive-interface ' + longIf(n)); }); c.rip.redist.forEach(function (n) { o.push('  redistribute ' + n); });
       if (c.rip.on) o.push('  enable'); o.push('exit'); }
@@ -2302,7 +2302,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (x.tun && !(x.on && x.local && x.remote)) return;              // GRE-туннель поднят, когда задан и включён (enable)
       var ph = k.split('.')[0], virt = k.charAt(0) === 'l' || !!x.tun; if (!virt && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
-      o.push({ name: k, ip: p[0], len: +p[1], tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+      o.push({ name: k, ip: p[0], len: +p[1], vrf: x.vrf || null, tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
     if (d.type === 'esr') { var vt = this.vrrp()[id] || {}; Object.keys(vt).forEach(function (k) { var v = vt[k]; if (!v.master) return;
       var base = o.filter(function (f) { return f.name === k; })[0]; if (!base) return; var vp = v.vip.split('/');
       o.push({ name: k + ':vrrp', ip: vp[0], len: +vp[1], port: base.port, tag: base.tag, fw: base.fw, vrrp: true }); }); }
@@ -2314,13 +2314,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // все маршруты-кандидаты: C (AD 0), S (AD из команды, по умолчанию 1), R (120), O (110)
   P.routes = function (id) {
     var d = this.devs[id], st = d.st, o = [], fs = this.ifaces(id);
-    fs.forEach(function (f) { o.push({ p: 'C', net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, ad: 0, m: 0 }); });
+    fs.forEach(function (f) { o.push({ p: 'C', net: IP.netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name, ad: 0, m: 0, vrf: f.vrf || null }); });
     var stat = d.type === 'esr' ? st.run.routes : d.type === 'mes' ? st.routes.slice() : [];
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
-      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && IP.sameNet(r.nh, f.ip, f.len); })[0];
-      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && (f.vrf || null) === (r.vrf || null) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out, vrf: r.vrf || null });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
     return o;
@@ -2682,10 +2682,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (!x) { notes.push(nm + ': нет саб-интерфейса ' + it.port + '.' + it.tag + ' — кадр с тегом ' + it.tag + ' отброшен'); continue; }
         if (!x.ip || x.shut) { notes.push(nm + ': на ' + k + ' нет IP-адреса или он выключен'); continue; }
         var pp = x.ip.split('/');
-        eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw }, path: it.path });
+        eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw, vrf: x.vrf || null }, path: it.path });
         var vv = (this.vrrp()[it.dev] || {})[k];
         if (vv && vv.master) { var vp = vv.vip.split('/');
-          eps.push({ dev: it.dev, iface: { name: k + ':vrrp', ip: vp[0], len: +vp[1], port: it.port, tag: it.tag, fw: x.fw, vrrp: true }, path: it.path }); }
+          eps.push({ dev: it.dev, iface: { name: k + ':vrrp', ip: vp[0], len: +vp[1], port: it.port, tag: it.tag, fw: x.fw, vrrp: true, vrf: x.vrf || null }, path: it.path }); }
       } else {
         if (it.tag !== null) { notes.push(nm + ': пришёл кадр с тегом ' + it.tag + ' — ПК тегов не понимает, отброшен'); continue; }
         var hf = this.ifaces(it.dev)[0];
@@ -2717,13 +2717,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return true;
   }
   P.send = function (src, pk, steps, ct) {
-    var cur = src, ttl = 16, hops = [];
+    var cur = src, ttl = 16, hops = [], inIf = null;          // inIf — интерфейс, через который пакет пришёл (его VRF задаёт таблицу маршрутов)
     while (ttl-- > 0) {
       var cd = this.devs[cur];
-      if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops, inIf: inIf };
       var vf = cd.type === 'esr' && this.ipsecForward ? this.ipsecForward(cur, pk, steps, ct) : null;   // IPsec policy-based: трафик политики уходит в ESP
       if (vf) { if (!vf.ok) return { ok: false, why: 'Request timed out', pk: pk }; hops.push({ dev: vf.dev, ip: vf.ip }); cur = vf.dev; continue; }
-      var r = this.lookup(cur, pk.dst);
+      this._vrfCtx = inIf ? inIf.vrf || null : (this._vrfSrc && this._vrfSrc.dev === cur ? this._vrfSrc.vrf : null);
+      var r; try { r = this.lookup(cur, pk.dst); } finally { this._vrfCtx = null; }
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
@@ -2750,7 +2751,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (sc.length) { steps.push({ k: 'drop', t: 'Storm-control: широковещательный шторм — порт ' + sc.join(', ') + ' выключен (err-disable), петля разорвана. Повторите ping' }); return { ok: false, why: 'Request timed out', pk: pk }; }
         steps.push({ k: 'drop', t: 'Широковещательный шторм: в сети петля, а STP выключен — кадры бесконечно размножаются, связи нет', notes: fl.notes });
         return { ok: false, why: 'Request timed out', pk: pk }; }
-      var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh], dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
+      var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh] && (!r.iface.vrf || this.arp[cur][r.nh].ifn === r.iface.name) ? this.arp[cur][r.nh] : null, dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
       if (cached && cached.mac === dmac) {        // адрес уже в ARP-кэше — широковещательный запрос не нужен
         steps.push({ k: 'route', t: cd.name + ': ' + r.nh + ' уже есть в ARP-таблице (' + cached.mac + ') — ARP-запрос не нужен, кадр сразу на этот MAC' });
       } else if (cached) {                         // запись устарела: кадр уходит на старый MAC и теряется
@@ -2805,7 +2806,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
         if (!fw.ok) return { ok: false, why: 'Request timed out', pk: pk };
       }
-      hops.push({ dev: ep.dev, ip: ep.iface.ip });
+      hops.push({ dev: ep.dev, ip: ep.iface.ip }); inIf = ep.iface;
       cur = ep.dev;
       if (!owns(this, cur, pk.dst) && (nd.type === 'vpc' || nd.type === 'deb')) {
         steps.push({ k: 'drop', t: nd.name + ' получил чужой пакет и не маршрутизирует его' });
@@ -2832,7 +2833,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
       return { ok: false, why: 'Connection refused', steps: steps, dev: f.dev };
     }
     steps.push({ k: 'ok', t: fd.name + ' получил ' + (proto === 'icmp' ? 'ICMP echo request и отвечает echo reply' : 'запрос ' + proto.toUpperCase() + ':' + dport + ' и отвечает') });
-    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct);
+    var own = f.inIf && f.inIf.ip === f.pk.dst ? f.inIf : this.ifaces(f.dev).filter(function (x) { return x.ip === f.pk.dst; })[0], vs0 = this._vrfSrc;   // ответ уходит в VRF интерфейса, получившего запрос
+    if (own && own.vrf) this._vrfSrc = { dev: f.dev, vrf: own.vrf };
+    var b; try { b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct); } finally { this._vrfSrc = vs0; }
     if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз/NAT в обратную сторону' });
       return { ok: false, why: 'Request timed out', steps: steps }; }
     steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
@@ -5557,6 +5560,64 @@ vesr(config)#         do confirm  — подтвердить</pre>
     mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst configuration', function (st) { var m = st.mst || { inst: {} };
       return ['Name      ' + (m.name || ''), 'Revision  ' + (m.rev || 0), 'Instance  Vlans mapped', '--------  ------------------'].concat(
         Object.keys(m.inst).filter(function (k) { return m.inst[k].vlans.length; }).map(function (k) { return rp(k, 10) + E.fmtList(m.inst[k].vlans); })).join('\n'); }, 'Конфигурация MSTP'); });
+})(typeof window !== 'undefined' ? window : global);
+
+/* VRF на ESR (справочник ESR-Series CLI 1.23): ip vrf <NAME> → (config-vrf)#; на интерфейсе ip vrf forwarding <NAME>;
+   ip route vrf <NAME> <SUBNET> <NEXTHOP>; show ip route vrf <NAME>; ping vrf <NAME> <ADDR>.
+   У каждого VRF своя таблица маршрутов: пакет, пришедший на интерфейс VRF, ищет маршрут только среди сетей этого VRF —
+   одинаковые адреса в разных VRF не мешают друг другу, а сети разных VRF друг друга не видят.
+   Упрощения: RIP/OSPF/BGP работают только в глобальной таблице, утечки маршрутов между VRF (route-target, import) нет. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype, IP = EL.ip;
+  S.PROMPT.vrf = '(config-vrf)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('vrf'); });
+  function touch(st) { st.pending = true; }
+  function each(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k], k); }); touch(st); }
+  S.cmd('config', 'ip vrf <w>', function (st, a) { if (!/^[\w.-]{1,31}$/.test(a[0])) return 'Syntax error: Illegal parameter';
+    var V = st.cand.vrfs = st.cand.vrfs || {}; V[a[0]] = V[a[0]] || {}; touch(st); st.mode = 'vrf'; st.ctx = a[0]; }, 'Создать VRF');
+  S.cmd('config', 'no ip vrf <w>', function (st, a) { var V = st.cand.vrfs || {}; delete V[a[0]];
+    Object.keys(st.cand.ifs).forEach(function (k) { if (st.cand.ifs[k].vrf === a[0]) delete st.cand.ifs[k].vrf; });
+    st.cand.routes = st.cand.routes.filter(function (r) { return r.vrf !== a[0]; }); touch(st); });
+  S.cmd('vrf', 'description <rest>', function (st, a) { st.cand.vrfs[st.ctx].desc = a[0].replace(/^["']|["']$/g, ''); touch(st); }, 'Описание VRF');
+  S.cmd('vrf', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  var IFM = 'gi sub lo gre vti';
+  S.cmd(IFM, 'ip vrf forwarding <w>', function (st, a) { if (!(st.cand.vrfs || {})[a[0]]) return 'Syntax error: VRF ' + a[0] + ' not found';
+    each(st, function (x) { x.vrf = a[0]; }); }, 'Интерфейс в VRF');
+  S.cmd(IFM, 'no ip vrf forwarding', function (st) { each(st, function (x) { delete x.vrf; }); });
+  S.cmd('config', 'ip route vrf <w> <w> <ip>', function (st, a) { return addRoute(st, a[0], a[1], a[2]); }, 'Статический маршрут в VRF');
+  S.cmd('config', 'ip route vrf <w> <w> <ip> <n>', function (st, a) { return addRoute(st, a[0], a[1], a[2], a[3]); });
+  S.cmd('config', 'no ip route vrf <w> <w> <ip>', function (st, a) { var c = IP.parseCidr(a[1]); if (!c) return 'Syntax error: Illegal parameter';
+    var net = IP.netOf(c.ip, c.len); st.cand.routes = st.cand.routes.filter(function (r) { return !(r.vrf === a[0] && r.net === net && r.nh === a[2]); }); touch(st); });
+  function addRoute(st, v, cidr, nh, ad) {
+    if (!(st.cand.vrfs || {})[v]) return 'Syntax error: VRF ' + v + ' not found';
+    var c = IP.parseCidr(cidr); if (!c || (ad !== undefined && (ad < 1 || ad > 255))) return 'Syntax error: Illegal parameter';
+    var net = IP.netOf(c.ip, c.len); st.cand.routes = st.cand.routes.filter(function (r) { return !(r.vrf === v && r.net === net && r.nh === nh); });
+    st.cand.routes.push({ net: net, nh: nh, ad: ad || 1, vrf: v }); touch(st);
+  }
+  S.RUNX.push(function (c, o) {
+    Object.keys(c.vrfs || {}).forEach(function (v) { o.push('ip vrf ' + v); if (c.vrfs[v].desc) o.push('  description "' + c.vrfs[v].desc + '"'); o.push('exit'); });
+    Object.keys(c.ifs).forEach(function (k) { if (c.ifs[k].vrf) o.push((c.ifs[k].tun ? 'tunnel ' + c.ifs[k].tun + ' ' + k.slice(3) : 'interface ' + S.longIf(k)), '  ip vrf forwarding ' + c.ifs[k].vrf, 'exit'); });
+  });
+  // таблица маршрутов — только своего VRF (глобальная — без VRF)
+  var routes0 = P.routes;
+  P.routes = function (id) {
+    var r = routes0.apply(this, arguments), d = this.devs[id], ctx = this._vrfCtx || null;
+    if (d.type !== 'esr') return r;
+    return r.filter(function (x) { return (x.vrf || null) === ctx; });
+  };
+  // RIP/OSPF считаются в глобальной таблице, даже если расчёт запущен из поиска маршрута в VRF
+  var dyn0 = P.dyn;
+  P.dyn = function () { var o = this._vrfCtx; this._vrfCtx = null; try { return dyn0.apply(this, arguments); } finally { this._vrfCtx = o; } };
+  function inVrf(s, st, v, f) { var o = s._vrfCtx; s._vrfCtx = v; try { return f(); } finally { s._vrfCtx = o; } }
+  S.cmd('priv', 'show ip route vrf <w>', function (st, a) { if (!st.net) return ''; if (!(st.run.vrfs || {})[a[0]]) return 'Syntax error: VRF ' + a[0] + ' not found';
+    return inVrf(st.net, st, a[0], function () { return st.net.routeText(st.dev, false); }); }, 'Таблица маршрутов VRF');
+  S.cmd('priv', 'ping vrf <w> <ip>', function (st, a) { var s = st.net; if (!s) return ''; if (!(st.run.vrfs || {})[a[0]]) return 'Syntax error: VRF ' + a[0] + ' not found';
+    s._vrfSrc = { dev: st.dev, vrf: a[0] }; try { return s.pingText(st.dev, a[1], 'esr'); } finally { s._vrfSrc = null; } }, 'Ping из VRF');
+  S.cmd('priv', 'show ip vrf', function (st) { var V = st.run.vrfs || {};
+    return ['Name                             Interfaces', '-------------------------------  ----------------------------------'].concat(Object.keys(V).map(function (v) {
+      var ifs = Object.keys(st.run.ifs).filter(function (k) { return st.run.ifs[k].vrf === v; });
+      var x = v; while (x.length < 33) x += ' '; return x + ifs.join(', '); })).join('\n'); }, 'Список VRF');
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).

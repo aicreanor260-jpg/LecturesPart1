@@ -347,6 +347,11 @@ SA устанавливается, когда у пары ESR зеркальны
 `spanning-tree mode mst`, затем `spanning-tree mst configuration` → `(config-mst)#`: `instance 1 vlan 10`, `instance 2 vlan 20`, `name LAB`, `revision 1`, `exit`; `spanning-tree mst 1 priority 4096` (кратно 4096); на порту `spanning-tree mst 2 cost 200000`, `spanning-tree mst 2 port-priority 64`. Показ: `show spanning-tree mst 2`, `show spanning-tree mst configuration`.
 У каждого экземпляра своё дерево — свой корень и свои заблокированные порты, поэтому VLAN разных экземпляров могут идти по разным линкам (балансировка); трасса показывает, в каком MSTI заблокирован порт. VLAN без экземпляра идут по CIST (обычные `spanning-tree priority`/`cost`). Упрощение: имя, ревизия и привязки региона на разных коммутаторах не сравниваются — все коммутаторы считаются одним регионом.
 
+### VRF на ESR (справочник ESR-Series CLI 1.23)
+`ip vrf RED` → `(config-vrf)#` (`description`), `exit`; на интерфейсе (gi, саб-интерфейс, loopback, gre, vti) `ip vrf forwarding RED`; `ip route vrf RED 172.16.0.0/16 192.168.5.2`; показ — `show ip route vrf RED`, `show ip vrf`; `ping vrf RED 10.0.3.10`.
+У каждого VRF своя таблица маршрутов: пакет, пришедший на интерфейс VRF, ищет маршрут только среди сетей этого VRF, ответ маршрутизатора уходит в VRF интерфейса, получившего запрос. Одинаковые сети в разных VRF допустимы (проверка пересечения адресов — внутри VRF), ARP-записи разных VRF не путаются. `show ip route` без vrf показывает глобальную таблицу.
+Упрощения: RIP/OSPF/BGP только в глобальной таблице, утечки маршрутов между VRF нет, межсетевой экран и NAT от VRF не зависят.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:
@@ -356,7 +361,7 @@ SA устанавливается, когда у пары ESR зеркальны
 - **Потерь нет.** Перегрузка канала не моделируется; несовпадение дуплекса даёт ошибки в счётчиках, но кадры доходят.
 - **Протоколы маршрутизации IPv4 (RIP, OSPF)** идут по реальным таймерам; **RIPng, OSPFv3** сходятся сразу; через туннели GRE/VTI соседства не строятся.
 - **Межсетевой экран ESR** к IPv6 не применяется; NAT-T, DPD, rekey IPsec нет.
-- **Не моделируются:** L2TP, BGP, VRF, PBR (route-map), BFD; на MES — 802.1X, IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
+- **Не моделируются:** L2TP, BGP, PBR (route-map), BFD; на MES — 802.1X, IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
 
 ## Типовые ошибки
 | Сообщение | Что делать |
