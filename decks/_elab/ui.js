@@ -84,6 +84,20 @@
     stat();
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
+  // ================================================================== модельное время: старение MAC/ARP
+  var speed = 1;
+  function advance(dt, jump) {
+    var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
+    $('clkT').textContent = net.clockText();
+    if (gone.length) { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
+      $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
+    if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
+    return gone.length;
+  }
+  setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
+  $('clk').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ff) { if (!advance(+b.dataset.ff, true)) toast('Промотано ' + (b.dataset.ff / 60) + ' мин модельного времени'); return; }
+    speed = +b.dataset.sp; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x === b); }); });
   function stat() {
     $('stat').innerHTML = 'УСТРОЙСТВ <b>' + net.list().length + '</b> · КАБЕЛЕЙ <b>' + net.links.length + '</b><br>' +
       (lab ? 'ЛАБА <b>' + lab.id + '</b>' : task ? 'ЗАДАНИЕ <b>' + (task.kind === 'base' ? 'БАЗА' : 'VLAN') + '</b>' : 'СВОБОДНАЯ СХЕМА');
@@ -341,9 +355,10 @@
     var h = '<div class="k">' + esc(d.model) + (d.off ? ' · выключено' : '') + '</div><h2>' + esc(d.name) + '</h2>';
     var hot = tview ? tview.hot : {};
     function mark(row, key) { if (hot[key]) row.hot = true; return row; }
-    var arp = net.arpRows(id).map(function (r) { return mark([r.ip, r.mac, r.ifn], 'a|' + id + '|' + r.ip); });
+    var arp = net.arpRows(id).map(function (r) { var e = net.arp[id][r.ip];
+      return mark([r.ip, r.mac, r.ifn, net.ttl(id, 'a', e) + (d.type === 'deb' ? ' · ' + net.neighState(id, e) : '')], 'a|' + id + '|' + r.ip); });
     if (d.type === 'mes') {
-      h += '<h3>MAC-таблица (коммутация)</h3>' + tbl(['VLAN', 'MAC', 'Порт'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
+      h += '<h3>MAC-таблица (коммутация) · aging ' + net.macAge(id) + ' с</h3>' + tbl(['VLAN', 'MAC', 'Порт', 'Осталось, с'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port, net.ttl(id, 'm', r)], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
@@ -351,9 +366,9 @@
       h += '<h3>VLAN и порты</h3>' + tbl(['VLAN', 'Имя', 'Порты'], Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (v) {
         var p = by[v].filter(function (x) { return net.linked(id, x.replace('(T)', '')) || x.indexOf('po') === 0; });
         return [v, d.st.vlans[v] || '—', p.join(', ') || '(подключённых нет)']; }), '');
-      if (Object.keys(d.st.svi).length) h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто');
+      if (Object.keys(d.st.svi).length) h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс', 'Осталось, с'], arp, 'пусто');
     } else {
-      h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто — заполняется ARP-запросами и ответами (ping)');
+      h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс', 'Осталось, с'], arp, 'пусто — заполняется ARP-запросами и ответами (ping)');
     }
     if (d.type !== 'mes' || Object.keys(d.st.svi).length) {
       var by2 = net.best(id), rows = Object.keys(by2).map(function (k) { var r = by2[k]; return [r.p, r.net, r.nh ? 'через ' + r.nh : 'подключена', r.ifn || '—', r.ad + '/' + r.m]; });

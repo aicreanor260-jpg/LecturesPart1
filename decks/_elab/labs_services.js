@@ -134,7 +134,7 @@
         { t: 'vESR gi1/0/1 — 192.168.1.1/24 (экран отключён); Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
             return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
         { t: 'На сервере выставьте время ' + W + ' (местное, пояс GMT+' + p.tz + '): timedatectl set-ntp false, затем set-time', ok: function (n) {
-            var s = dev(n, 'Server'); return Math.abs(Date.now() + s.clk - target) < 6 * 3600e3; } },
+            var s = dev(n, 'Server'); return Math.abs(EL.clock.now() + s.clk - target) < 6 * 3600e3; } },
         { t: 'vESR: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4)', ok: function (n) { var c = run(n, 'vESR').ntp, x = c && c.servers['192.168.1.10'];
             return c && c.on && x && x.minpoll === 1 && x.maxpoll === 4; } },
         { t: 'vESR синхронизирован с сервером (show ntp peers — звёздочка у 192.168.1.10)', ok: function (n) {

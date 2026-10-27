@@ -9,6 +9,8 @@
   var DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   function p2(n) { return ('0' + n).slice(-2); }
   EL.clock = {
+    warp: 0,                                   // сдвиг модельного времени (ускорение и «промотать»), мс
+    now: function () { return Date.now() + EL.clock.warp; },
     tzMs: function (tz) { return tz ? (+tz) * 3600e3 : 0; },
     fmt: function (ms) { var d = new Date(ms);
       return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()); },

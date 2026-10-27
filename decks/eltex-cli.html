@@ -34,6 +34,17 @@ button,input,select{font:inherit;color:inherit}
 .bar{width:160px;height:26px;background:repeating-linear-gradient(90deg,var(--cy) 0 2px,transparent 2px 4px,var(--cy) 4px 5px,transparent 5px 9px,var(--cy) 9px 12px,transparent 12px 14px);opacity:.75}
 .tbtn{border:1px solid var(--cy2);background:var(--cyd);color:var(--cy);padding:6px 12px;clip-path:var(--cut-s);cursor:pointer;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px}
 .tbtn:hover{background:var(--cy);color:#0e1b1e}
+.clk{display:flex;align-items:center;gap:8px;font:500 12px var(--m);color:var(--dim)}
+.clk .ck{letter-spacing:.12em;color:var(--rd)}
+.clk b{font:700 18px var(--m);color:var(--cy);min-width:84px;text-shadow:0 0 10px rgba(111,227,234,.45)}
+.clk .cb{display:flex;border:1px solid var(--cy2);clip-path:var(--cut-s)}
+.clk .cb button{background:transparent;border:0;border-right:1px solid rgba(111,227,234,.25);color:var(--cy);padding:4px 8px;cursor:pointer;font:700 12px var(--m)}
+.clk .cb button:last-child{border-right:0}
+.clk .cb button:hover{background:var(--cyd)}
+.clk .cb button.on{background:var(--cy);color:#0e1b1e}
+.clk .ff button{color:var(--arp)}
+.clk.flash b{color:var(--arp)}
+@media (max-width:1200px){.clk .ck,.bar{display:none}}
 /* ---------- поле */
 #cv{position:fixed;left:0;top:54px;width:100%;height:calc(100% - 100px);display:block;cursor:default;
   background-image:linear-gradient(rgba(111,227,234,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(111,227,234,.05) 1px,transparent 1px);background-size:32px 32px}
@@ -179,7 +190,11 @@ button,input,select{font:inherit;color:inherit}
   <div class="logo"><i>E</i><div>ELTEX // NETLAB<small>NTF-2 · СЕТЕВАЯ ЛАБОРАТОРИЯ</small></div></div>
   <div class="rule"></div>
   <div class="stat" id="stat"></div>
-  <div class="bar" aria-hidden="true"></div>
+  <div class="clk" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
+    <span class="ck">ВРЕМЯ СЕТИ</span><b id="clkT">00:00:00</b>
+    <span class="cb"><button data-sp="0" title="Пауза">❚❚</button><button data-sp="1" class="on">×1</button><button data-sp="10">×10</button><button data-sp="60">×60</button></span>
+    <span class="cb ff"><button data-ff="60" title="Промотать 1 минуту">⏩ 1 мин</button><button data-ff="300" title="Промотать 5 минут — MAC-записи с таймером 300 с истекут">⏩ 5 мин</button></span>
+  </div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
 </header>
 <svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
@@ -486,6 +501,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return eachPort(st, function (p) { p.guntag = uniq(p.guntag.concat(a[0])); p.gtag = p.gtag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
 
   // --- show
+  var RUNX = [];                              // доп. строки running-config от модулей эмулятора
   function showRun(st) {
     var o = [];
     var vl = Object.keys(st.vlans).map(Number).filter(function (v) { return v !== 1; });
@@ -519,6 +535,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (st.gw) o.push('ip default-gateway ' + st.gw);
     if (st.ssh) o.push('ip ssh server');
     if (!st.http) o.push('no ip http server');
+    RUNX.forEach(function (f) { f(st, o); });
     o.push('!');
     return o.join('\n');
   }
@@ -798,7 +815,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
   var api = { NPORTS: NPORTS, longIf: longIf, portGroups: portGroups, PFX: PFX, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
               normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
-              showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
+              showRun: showRun, RUNX: RUNX, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
               pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
   if (typeof window !== 'undefined') window.EltexCLI = api;
   if (typeof module !== 'undefined') module.exports = api;
@@ -985,9 +1002,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (mi < 0) return '% Месяц словом по-английски: January … December';
     var t = a[0].split(':'), local = Date.UTC(a[3], mi, a[1], +t[0], +t[1], +t[2]);
     st.date = a[0] + ' ' + a[1] + ' ' + a[2] + ' ' + a[3];
-    st.clk = local - EL.clock.tzMs(st.run.tz) - Date.now(); }, 'Установить дату и время');
+    st.clk = local - EL.clock.tzMs(st.run.tz) - EL.clock.now(); }, 'Установить дату и время');
   cmd('priv', 'show date', function (st) {
-    var utc = st.net ? st.net.esrUtc(st.dev) : Date.now() + (st.clk || 0);
+    var utc = st.net ? st.net.esrUtc(st.dev) : EL.clock.now() + (st.clk || 0);
     return '"' + EL.clock.fmt(utc + EL.clock.tzMs(st.run.tz)) + '"'; }, 'Текущие дата и время');
   cmd('config', 'username <w>', function (st, a) {
     if (!st.cand.users[a[0]]) st.cand.users[a[0]] = { pw: null, priv: 1 };
@@ -1189,6 +1206,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   var DOW = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   function p2(n) { return ('0' + n).slice(-2); }
   EL.clock = {
+    warp: 0,                                   // сдвиг модельного времени (ускорение и «промотать»), мс
+    now: function () { return Date.now() + EL.clock.warp; },
     tzMs: function (tz) { return tz ? (+tz) * 3600e3 : 0; },
     fmt: function (ms) { var d = new Date(ms);
       return d.getUTCFullYear() + '-' + p2(d.getUTCMonth() + 1) + '-' + p2(d.getUTCDate()) + ' ' + p2(d.getUTCHours()) + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()); },
@@ -1956,7 +1975,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (c === 'clear') { if (ui) ui.clear(); return ''; }
     if (c === 'hostname') return st.host;
     if (c === 'whoami') return st.user;
-    if (c === 'ip') {
+    if (c === 'ip' && !/^n(eigh(bour)?)?$/.test(t[1] || '')) {
       var sub = t[1] || '';
       if (/^a(ddr(ess)?)?$/.test(sub) && (!t[2] || t[2] === 'show')) return ipA(st);
       if (/^a(ddr(ess)?)?$/.test(sub) && t[2] === 'add') {
@@ -2008,7 +2027,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var R = st.net.arpRows(st.dev);
       return c === 'arp' ? ['Address                  HWtype  HWaddress           Flags Mask            Iface'].concat(R.map(function (r) {
           return (r.ip + '                         ').slice(0, 25) + 'ether   ' + r.mac + '   C                     ens3'; })).join('\n')
-        : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' REACHABLE'; }).join('\n');
+        : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' ' + st.net.neighState(st.dev, st.net.arp[st.dev][r.ip]); }).join('\n');
     }
     if (c === 'telnet') {
       if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D';
@@ -2021,24 +2040,24 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (c === 'curl' || c === 'wget') return st.net ? web(st, t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0], false) : '';
     if (c === 'open' || c === 'firefox' || c === 'chromium') return st.net ? web(st, t[1], true) : '';
     if (c === 'date') {
-      if (!t[1]) return EL.clock.linux(Date.now() + st.clk, st.tz);
+      if (!t[1]) return EL.clock.linux(EL.clock.now() + st.clk, st.tz);
       var e7 = needRoot(); if (e7) return 'date: cannot set date: Operation not permitted';
       var dm = t[1].match(/^(\d\d)(\d\d)(\d\d)(\d\d)(\d{2}|\d{4})?$/);
       if (!dm) return 'date: invalid date «' + t[1] + '» (формат MMDDhhmm[[CC]YY])';
-      var cy = new Date(Date.now() + st.clk + st.tz * 3600e3).getUTCFullYear(), y = dm[5] ? (dm[5].length === 2 ? 2000 + +dm[5] : +dm[5]) : cy;
-      st.clk = Date.UTC(y, +dm[1] - 1, +dm[2], +dm[3], +dm[4], 0) - st.tz * 3600e3 - Date.now();
-      return EL.clock.linux(Date.now() + st.clk, st.tz);
+      var cy = new Date(EL.clock.now() + st.clk + st.tz * 3600e3).getUTCFullYear(), y = dm[5] ? (dm[5].length === 2 ? 2000 + +dm[5] : +dm[5]) : cy;
+      st.clk = Date.UTC(y, +dm[1] - 1, +dm[2], +dm[3], +dm[4], 0) - st.tz * 3600e3 - EL.clock.now();
+      return EL.clock.linux(EL.clock.now() + st.clk, st.tz);
     }
     if (c === 'timedatectl') {
-      if (!t[1] || t[1] === 'status') return '               Local time: ' + EL.clock.linux(Date.now() + st.clk, st.tz) + '\n           Universal time: ' +
-        EL.clock.fmt(Date.now() + st.clk) + ' UTC\n                Time zone: Etc/GMT' + (st.tz >= 0 ? '-' : '+') + Math.abs(st.tz) + '\nNTP service: ' + (st.ntp ? 'active' : 'inactive');
+      if (!t[1] || t[1] === 'status') return '               Local time: ' + EL.clock.linux(EL.clock.now() + st.clk, st.tz) + '\n           Universal time: ' +
+        EL.clock.fmt(EL.clock.now() + st.clk) + ' UTC\n                Time zone: Etc/GMT' + (st.tz >= 0 ? '-' : '+') + Math.abs(st.tz) + '\nNTP service: ' + (st.ntp ? 'active' : 'inactive');
       var e8 = needRoot(); if (e8) return 'Failed: Access denied';
       if (t[1] === 'set-ntp') { st.ntp = t[2] === 'true' || t[2] === 'yes' || t[2] === '1'; return ''; }
       if (t[1] === 'set-time') {
         if (st.ntp) return 'Failed to set time: Automatic time synchronization is enabled';
         var q = line.match(/set-time\s+['"]?(\d{4})-(\d\d)-(\d\d)\s+(\d\d):(\d\d):(\d\d)['"]?/);
         if (!q) return 'Failed to parse time specification: ' + t.slice(2).join(' ');
-        st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - Date.now(); return '';
+        st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - EL.clock.now(); return '';
       }
       return 'Unknown command verb ' + t[1] + '.';
     }
@@ -2101,7 +2120,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   MODELS['Debian-server'] = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Сервер Debian: веб-сервер apache2 (80/tcp) и NTP chronyd', opts: { host: 'debian-serv', web: true, tz: 8 } };
   MODELS.Docker = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Docker-браузер: open http://A.B.C.D (как pnet-chrome)', opts: { host: 'docker', auto: true, browser: true } };
 
-  function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; }
+  function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; this.now = 0; }
   var P = Net.prototype;
 
   P.portsOf = function (d) {
@@ -2480,7 +2499,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     }
     function inMes(dev, inPort, v, path) {
       var st = s.devs[dev].st;
-      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort };
+      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort, t: s.now };
       var gk = dev + '|' + v; got[gk] = (got[gk] || 0) + 1;
       if (got[gk] > 1) { if (!storm) notes.push(s.devs[dev].name + ': тот же широковещательный кадр пришёл второй раз — петля без STP, широковещательный шторм'); storm = true; return; }
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
@@ -2589,8 +2608,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
-      this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name };
-      this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name };   // отвечающий тоже запоминает спросившего
+      this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
+      this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
       this.learn(back, dmac); this.learn(ep.path, srcMac);
       if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
@@ -2727,12 +2746,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var s = this, best = null;
     Object.keys(n.servers).some(function (ip) {
       var r = s.request(id, ip, 'udp', 123);
-      if (r.ok) { var sd = s.devs[r.dev]; best = { ip: ip, utc: Date.now() + (sd.st.clk || 0), poll: Math.pow(2, n.servers[ip].maxpoll) }; return true; }
+      if (r.ok) { var sd = s.devs[r.dev]; best = { ip: ip, utc: EL.clock.now() + (sd.st.clk || 0), poll: Math.pow(2, n.servers[ip].maxpoll) }; return true; }
       return false;
     });
     return best || { ip: Object.keys(n.servers)[0], utc: null };
   };
-  P.esrUtc = function (id) { var p = this.ntpPeer(id); return p && p.utc !== null ? p.utc : Date.now() + (this.devs[id].st.clk || 0); };
+  P.esrUtc = function (id) { var p = this.ntpPeer(id); return p && p.utc !== null ? p.utc : EL.clock.now() + (this.devs[id].st.clk || 0); };
   P.ntpText = function (id) {
     var p = this.ntpPeer(id);
     if (!p) return '% NTP выключен — ntp enable';
@@ -2779,8 +2798,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return o.join('\n');
   };
   P.arpText = function (id) {
-    var a = this.arp[id], ks = Object.keys(a);
-    return ks.length ? ks.map(function (ip) { return a[ip].mac + '  ' + ip + ' expires in 120 seconds'; }).join('\n') : 'arp table is empty';
+    var s = this, a = this.arp[id], ks = Object.keys(a);
+    return ks.length ? ks.map(function (ip) { return a[ip].mac + '  ' + ip + ' expires in ' + s.ttl(id, 'a', a[ip]) + ' seconds'; }).join('\n') : 'arp table is empty';
   };
   P.macTable = function (id) {
     var t = this.mac[id], o = ['Vlan    Mac Address         Type      Ports', '----    -----------         ----      -----'];
@@ -2896,17 +2915,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var l = s.links[sg.li]; if (!l) return;
       var port = l.a.dev === sg.to ? l.a.port : l.b.port, L = s.lportOf(sg.to, port); if (!L) return;
       var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
-      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name };
+      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name, t: s.now };
     });
   };
 
   // журнал шагов трассы: к каждому шагу прикладывается, что изменилось в ARP/MAC-таблицах с прошлого шага
   P.tabSnap = function () {
     var s = this, o = {};
-    Object.keys(s.arp).forEach(function (d) { Object.keys(s.arp[d]).forEach(function (k) { o['a|' + d + '|' + k] = JSON.stringify(s.arp[d][k]); }); });
-    Object.keys(s.mac).forEach(function (d) { Object.keys(s.mac[d]).forEach(function (k) { o['m|' + d + '|' + k] = JSON.stringify(s.mac[d][k]); }); });
+    Object.keys(s.arp).forEach(function (d) { Object.keys(s.arp[d]).forEach(function (k) { o['a|' + d + '|' + k] = noT(s.arp[d][k]); }); });
+    Object.keys(s.mac).forEach(function (d) { Object.keys(s.mac[d]).forEach(function (k) { o['m|' + d + '|' + k] = noT(s.mac[d][k]); }); });
     return o;
   };
+  // время записи (t) в сравнение не входит: обновление таймера — не новая запись
+  function noT(x) { return JSON.stringify(x, function (k, v) { return k === 't' ? undefined : v; }); }
   function tabDiff(a, b) {
     var out = [];
     Object.keys(b).forEach(function (k) { if (a[k] !== b[k]) out.push({ k: k, o: a[k] || null, n: b[k] }); });
@@ -3012,6 +3033,85 @@ vesr(config)#         do confirm  — подтвердить</pre>
     E.cmd(m, pre + 'show arp', function (st) { return st.net ? arpMes(st) : ''; });
     E.cmd(m, pre + 'clear arp-cache', function (st) { if (st.net) st.net.arp[st.dev] = {}; });
     E.cmd(m, pre + 'clear mac address-table dynamic', function (st) { if (st.net) st.net.mac[st.dev] = {}; });
+  });
+})(typeof window !== 'undefined' ? window : global);
+
+/* Старение записей MAC и ARP по модельному времени сети (net.now, секунды).
+   Таймеры по умолчанию — из руководств Eltex:
+     MES 10.x  mac-address-table aging-time 10..400 (300),  arp timeout 30..86400 (60000);
+     MES 6.x/4.x mac address-table aging-time 10..400 (300), arp timeout 1..40000000 (60000);
+     MES 8.x   bridge aging-time 10..1000000 (300),        arp timeout 15..21600 (1200);
+     ESR       ip arp reachable-time 5000..100000000 мс на интерфейсе (160000);
+     VPC — 120 с, Debian — REACHABLE 30 с, затем STALE, удаление через 60 с. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, S = EL.esr, P = EL.Net.prototype, CMDS = E.CMDS;
+
+  var MAC_AGE = 300, ARP_MES = { '10': 60000, '6': 60000, '8': 1200 }, ARP_ESR_MS = 160000, ARP_VPC = 120, ARP_DEB = 60, DEB_REACH = 30;
+
+  P.macAge = function (id) { var d = this.devs[id]; return d.st.macAge || MAC_AGE; };
+  P.arpAge = function (id, ifn) {
+    var d = this.devs[id], st = d.st;
+    if (d.type === 'mes') return st.arpTo || ARP_MES[st.dialect] || 60000;
+    if (d.type === 'esr') { var x = ifn && st.run.ifs[ifn]; return Math.round(((x && x.arpRt) || ARP_ESR_MS) / 1000); }
+    return d.type === 'vpc' ? ARP_VPC : ARP_DEB;
+  };
+  // сколько секунд записи осталось жить
+  P.ttl = function (id, kind, e) {
+    var age = kind === 'a' ? this.arpAge(id, e.ifn) : this.macAge(id);
+    return Math.max(0, Math.ceil(age - (this.now - (e.t === undefined ? this.now : e.t))));
+  };
+  // состояние записи соседа в Linux: свежая — REACHABLE, старше 30 с — STALE
+  P.neighState = function (id, e) { return this.now - (e.t || 0) < DEB_REACH ? 'REACHABLE' : 'STALE'; };
+
+  // ход часов: удаляет истёкшие записи, возвращает список удалённых
+  P.tick = function (dt) {
+    var s = this, gone = [];
+    s.now += dt;
+    s.order.forEach(function (id) {
+      var d = s.devs[id], a = s.arp[id] || {}, m = s.mac[id] || {};
+      Object.keys(a).forEach(function (k) { if (s.ttl(id, 'a', a[k]) <= 0) { gone.push({ dev: d.name, kind: 'ARP', what: k + ' → ' + a[k].mac }); delete a[k]; } });
+      Object.keys(m).forEach(function (k) { if (s.ttl(id, 'm', m[k]) <= 0) { gone.push({ dev: d.name, kind: 'MAC', what: m[k].mac + ' (VLAN ' + m[k].vlan + ', ' + m[k].port + ')' }); delete m[k]; } });
+    });
+    return gone;
+  };
+  P.clockText = function () {
+    var t = Math.floor(this.now), p = function (n) { return ('0' + n).slice(-2); };
+    return p(Math.floor(t / 3600)) + ':' + p(Math.floor(t / 60) % 60) + ':' + p(t % 60);
+  };
+
+  // ---------------------------------------------------------------- команды MES
+  function cmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function num(v, lo, hi, set) { var n = +v; if (!/^\d+$/.test(v) || n < lo || n > hi) return '% Допустимо ' + lo + '..' + hi; set(n); }
+  cmd(['10'], 'config', 'mac-address-table aging-time <w>', function (st, a) { return num(a[0], 10, 400, function (n) { st.macAge = n; }); }, 'Время жизни MAC-записей, с');
+  cmd(['10'], 'config', 'no mac-address-table aging-time', function (st) { delete st.macAge; });
+  cmd(['6'], 'config', 'mac address-table aging-time <w>', function (st, a) { return num(a[0], 10, 400, function (n) { st.macAge = n; }); }, 'Время жизни MAC-записей, с');
+  cmd(['6'], 'config', 'no mac address-table aging-time', function (st) { delete st.macAge; });
+  cmd(['8'], 'config', 'bridge aging-time <w>', function (st, a) { return num(a[0], 10, 1000000, function (n) { st.macAge = n; }); }, 'Время жизни MAC-записей, с');
+  cmd(['8'], 'config', 'no bridge aging-time', function (st) { delete st.macAge; });
+  var ARP_RNG = { '10': [30, 86400], '6': [1, 40000000], '8': [15, 21600] };
+  cmd(['10', '6', '8'], 'config', 'arp timeout <w>', function (st, a) { var r = ARP_RNG[st.dialect] || ARP_RNG['10'];
+    return num(a[0], r[0], r[1], function (n) { st.arpTo = n; }); }, 'Время жизни ARP-записей, с');
+  cmd(['10', '6', '8'], 'config', 'no arp timeout', function (st) { delete st.arpTo; });
+  function agingShow(st) { return 'Aging time is ' + (st.macAge || MAC_AGE) + ' sec'; }
+  ['', 'do '].forEach(function (pre) {
+    var m = pre ? E.CFG : 'priv';
+    cmd(['10'], m, pre + 'show mac-address-table aging-time', agingShow);
+    cmd(['10', '6'], m, pre + 'show mac address-table aging-time', agingShow);
+    cmd(['8'], m, pre + 'show forwardingdb agetime', function (st) { return 'Address Aging Timeout: ' + (st.macAge || MAC_AGE); });
+  });
+  E.RUNX.push(function (st, o) {
+    if (st.macAge) o.push(st.dialect === '8' ? 'bridge aging-time ' + st.macAge : st.dialect === '6' ? 'mac address-table aging-time ' + st.macAge : 'mac-address-table aging-time ' + st.macAge);
+    if (st.arpTo) o.push('arp timeout ' + st.arpTo);
+  });
+
+  // ---------------------------------------------------------------- команды ESR (на интерфейсе, через commit)
+  function ifs(st) { return (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).map(function (k) { return st.cand.ifs[k]; }).filter(Boolean); }
+  S.cmd('gi sub bridge', 'ip arp reachable-time <w>', function (st, a) {
+    return num(a[0], 5000, 100000000, function (n) { ifs(st).forEach(function (x) { x.arpRt = n; }); st.pending = true; }); }, 'Время жизни ARP-записей, мс');
+  S.cmd('gi sub bridge', 'no ip arp reachable-time', function (st) { ifs(st).forEach(function (x) { delete x.arpRt; }); st.pending = true; });
+  S.RUNX.push(function (c, o) {
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k]; if (x.arpRt) o.push('interface ' + S.longIf(k), '  ip arp reachable-time ' + x.arpRt, 'exit'); });
   });
 })(typeof window !== 'undefined' ? window : global);
 
@@ -3517,7 +3617,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         { t: 'vESR gi1/0/1 — 192.168.1.1/24 (экран отключён); Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
             return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
         { t: 'На сервере выставьте время ' + W + ' (местное, пояс GMT+' + p.tz + '): timedatectl set-ntp false, затем set-time', ok: function (n) {
-            var s = dev(n, 'Server'); return Math.abs(Date.now() + s.clk - target) < 6 * 3600e3; } },
+            var s = dev(n, 'Server'); return Math.abs(EL.clock.now() + s.clk - target) < 6 * 3600e3; } },
         { t: 'vESR: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4)', ok: function (n) { var c = run(n, 'vESR').ntp, x = c && c.servers['192.168.1.10'];
             return c && c.on && x && x.minpoll === 1 && x.maxpoll === 4; } },
         { t: 'vESR синхронизирован с сервером (show ntp peers — звёздочка у 192.168.1.10)', ok: function (n) {
@@ -4039,6 +4139,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
     stat();
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
+  // ================================================================== модельное время: старение MAC/ARP
+  var speed = 1;
+  function advance(dt, jump) {
+    var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
+    $('clkT').textContent = net.clockText();
+    if (gone.length) { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
+      $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
+    if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
+    return gone.length;
+  }
+  setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
+  $('clk').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ff) { if (!advance(+b.dataset.ff, true)) toast('Промотано ' + (b.dataset.ff / 60) + ' мин модельного времени'); return; }
+    speed = +b.dataset.sp; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x === b); }); });
   function stat() {
     $('stat').innerHTML = 'УСТРОЙСТВ <b>' + net.list().length + '</b> · КАБЕЛЕЙ <b>' + net.links.length + '</b><br>' +
       (lab ? 'ЛАБА <b>' + lab.id + '</b>' : task ? 'ЗАДАНИЕ <b>' + (task.kind === 'base' ? 'БАЗА' : 'VLAN') + '</b>' : 'СВОБОДНАЯ СХЕМА');
@@ -4296,9 +4410,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var h = '<div class="k">' + esc(d.model) + (d.off ? ' · выключено' : '') + '</div><h2>' + esc(d.name) + '</h2>';
     var hot = tview ? tview.hot : {};
     function mark(row, key) { if (hot[key]) row.hot = true; return row; }
-    var arp = net.arpRows(id).map(function (r) { return mark([r.ip, r.mac, r.ifn], 'a|' + id + '|' + r.ip); });
+    var arp = net.arpRows(id).map(function (r) { var e = net.arp[id][r.ip];
+      return mark([r.ip, r.mac, r.ifn, net.ttl(id, 'a', e) + (d.type === 'deb' ? ' · ' + net.neighState(id, e) : '')], 'a|' + id + '|' + r.ip); });
     if (d.type === 'mes') {
-      h += '<h3>MAC-таблица (коммутация)</h3>' + tbl(['VLAN', 'MAC', 'Порт'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
+      h += '<h3>MAC-таблица (коммутация) · aging ' + net.macAge(id) + ' с</h3>' + tbl(['VLAN', 'MAC', 'Порт', 'Осталось, с'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port, net.ttl(id, 'm', r)], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
@@ -4306,9 +4421,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
       h += '<h3>VLAN и порты</h3>' + tbl(['VLAN', 'Имя', 'Порты'], Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (v) {
         var p = by[v].filter(function (x) { return net.linked(id, x.replace('(T)', '')) || x.indexOf('po') === 0; });
         return [v, d.st.vlans[v] || '—', p.join(', ') || '(подключённых нет)']; }), '');
-      if (Object.keys(d.st.svi).length) h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто');
+      if (Object.keys(d.st.svi).length) h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс', 'Осталось, с'], arp, 'пусто');
     } else {
-      h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто — заполняется ARP-запросами и ответами (ping)');
+      h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс', 'Осталось, с'], arp, 'пусто — заполняется ARP-запросами и ответами (ping)');
     }
     if (d.type !== 'mes' || Object.keys(d.st.svi).length) {
       var by2 = net.best(id), rows = Object.keys(by2).map(function (k) { var r = by2[k]; return [r.p, r.net, r.nh ? 'через ' + r.nh : 'подключена', r.ifn || '—', r.ad + '/' + r.m]; });

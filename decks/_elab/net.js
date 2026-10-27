@@ -14,7 +14,7 @@
   MODELS['Debian-server'] = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Сервер Debian: веб-сервер apache2 (80/tcp) и NTP chronyd', opts: { host: 'debian-serv', web: true, tz: 8 } };
   MODELS.Docker = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Docker-браузер: open http://A.B.C.D (как pnet-chrome)', opts: { host: 'docker', auto: true, browser: true } };
 
-  function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; }
+  function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; this.now = 0; }
   var P = Net.prototype;
 
   P.portsOf = function (d) {
@@ -393,7 +393,7 @@
     }
     function inMes(dev, inPort, v, path) {
       var st = s.devs[dev].st;
-      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort };
+      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort, t: s.now };
       var gk = dev + '|' + v; got[gk] = (got[gk] || 0) + 1;
       if (got[gk] > 1) { if (!storm) notes.push(s.devs[dev].name + ': тот же широковещательный кадр пришёл второй раз — петля без STP, широковещательный шторм'); storm = true; return; }
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
@@ -502,8 +502,8 @@
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
-      this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name };
-      this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name };   // отвечающий тоже запоминает спросившего
+      this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
+      this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
       this.learn(back, dmac); this.learn(ep.path, srcMac);
       if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
@@ -640,12 +640,12 @@
     var s = this, best = null;
     Object.keys(n.servers).some(function (ip) {
       var r = s.request(id, ip, 'udp', 123);
-      if (r.ok) { var sd = s.devs[r.dev]; best = { ip: ip, utc: Date.now() + (sd.st.clk || 0), poll: Math.pow(2, n.servers[ip].maxpoll) }; return true; }
+      if (r.ok) { var sd = s.devs[r.dev]; best = { ip: ip, utc: EL.clock.now() + (sd.st.clk || 0), poll: Math.pow(2, n.servers[ip].maxpoll) }; return true; }
       return false;
     });
     return best || { ip: Object.keys(n.servers)[0], utc: null };
   };
-  P.esrUtc = function (id) { var p = this.ntpPeer(id); return p && p.utc !== null ? p.utc : Date.now() + (this.devs[id].st.clk || 0); };
+  P.esrUtc = function (id) { var p = this.ntpPeer(id); return p && p.utc !== null ? p.utc : EL.clock.now() + (this.devs[id].st.clk || 0); };
   P.ntpText = function (id) {
     var p = this.ntpPeer(id);
     if (!p) return '% NTP выключен — ntp enable';
@@ -692,8 +692,8 @@
     return o.join('\n');
   };
   P.arpText = function (id) {
-    var a = this.arp[id], ks = Object.keys(a);
-    return ks.length ? ks.map(function (ip) { return a[ip].mac + '  ' + ip + ' expires in 120 seconds'; }).join('\n') : 'arp table is empty';
+    var s = this, a = this.arp[id], ks = Object.keys(a);
+    return ks.length ? ks.map(function (ip) { return a[ip].mac + '  ' + ip + ' expires in ' + s.ttl(id, 'a', a[ip]) + ' seconds'; }).join('\n') : 'arp table is empty';
   };
   P.macTable = function (id) {
     var t = this.mac[id], o = ['Vlan    Mac Address         Type      Ports', '----    -----------         ----      -----'];
@@ -809,17 +809,19 @@
       var l = s.links[sg.li]; if (!l) return;
       var port = l.a.dev === sg.to ? l.a.port : l.b.port, L = s.lportOf(sg.to, port); if (!L) return;
       var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
-      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name };
+      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name, t: s.now };
     });
   };
 
   // журнал шагов трассы: к каждому шагу прикладывается, что изменилось в ARP/MAC-таблицах с прошлого шага
   P.tabSnap = function () {
     var s = this, o = {};
-    Object.keys(s.arp).forEach(function (d) { Object.keys(s.arp[d]).forEach(function (k) { o['a|' + d + '|' + k] = JSON.stringify(s.arp[d][k]); }); });
-    Object.keys(s.mac).forEach(function (d) { Object.keys(s.mac[d]).forEach(function (k) { o['m|' + d + '|' + k] = JSON.stringify(s.mac[d][k]); }); });
+    Object.keys(s.arp).forEach(function (d) { Object.keys(s.arp[d]).forEach(function (k) { o['a|' + d + '|' + k] = noT(s.arp[d][k]); }); });
+    Object.keys(s.mac).forEach(function (d) { Object.keys(s.mac[d]).forEach(function (k) { o['m|' + d + '|' + k] = noT(s.mac[d][k]); }); });
     return o;
   };
+  // время записи (t) в сравнение не входит: обновление таймера — не новая запись
+  function noT(x) { return JSON.stringify(x, function (k, v) { return k === 't' ? undefined : v; }); }
   function tabDiff(a, b) {
     var out = [];
     Object.keys(b).forEach(function (k) { if (a[k] !== b[k]) out.push({ k: k, o: a[k] || null, n: b[k] }); });

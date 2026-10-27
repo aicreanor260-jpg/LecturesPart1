@@ -117,7 +117,7 @@
     if (c === 'clear') { if (ui) ui.clear(); return ''; }
     if (c === 'hostname') return st.host;
     if (c === 'whoami') return st.user;
-    if (c === 'ip') {
+    if (c === 'ip' && !/^n(eigh(bour)?)?$/.test(t[1] || '')) {
       var sub = t[1] || '';
       if (/^a(ddr(ess)?)?$/.test(sub) && (!t[2] || t[2] === 'show')) return ipA(st);
       if (/^a(ddr(ess)?)?$/.test(sub) && t[2] === 'add') {
@@ -169,7 +169,7 @@
       var R = st.net.arpRows(st.dev);
       return c === 'arp' ? ['Address                  HWtype  HWaddress           Flags Mask            Iface'].concat(R.map(function (r) {
           return (r.ip + '                         ').slice(0, 25) + 'ether   ' + r.mac + '   C                     ens3'; })).join('\n')
-        : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' REACHABLE'; }).join('\n');
+        : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' ' + st.net.neighState(st.dev, st.net.arp[st.dev][r.ip]); }).join('\n');
     }
     if (c === 'telnet') {
       if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D';
@@ -182,24 +182,24 @@
     if (c === 'curl' || c === 'wget') return st.net ? web(st, t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0], false) : '';
     if (c === 'open' || c === 'firefox' || c === 'chromium') return st.net ? web(st, t[1], true) : '';
     if (c === 'date') {
-      if (!t[1]) return EL.clock.linux(Date.now() + st.clk, st.tz);
+      if (!t[1]) return EL.clock.linux(EL.clock.now() + st.clk, st.tz);
       var e7 = needRoot(); if (e7) return 'date: cannot set date: Operation not permitted';
       var dm = t[1].match(/^(\d\d)(\d\d)(\d\d)(\d\d)(\d{2}|\d{4})?$/);
       if (!dm) return 'date: invalid date «' + t[1] + '» (формат MMDDhhmm[[CC]YY])';
-      var cy = new Date(Date.now() + st.clk + st.tz * 3600e3).getUTCFullYear(), y = dm[5] ? (dm[5].length === 2 ? 2000 + +dm[5] : +dm[5]) : cy;
-      st.clk = Date.UTC(y, +dm[1] - 1, +dm[2], +dm[3], +dm[4], 0) - st.tz * 3600e3 - Date.now();
-      return EL.clock.linux(Date.now() + st.clk, st.tz);
+      var cy = new Date(EL.clock.now() + st.clk + st.tz * 3600e3).getUTCFullYear(), y = dm[5] ? (dm[5].length === 2 ? 2000 + +dm[5] : +dm[5]) : cy;
+      st.clk = Date.UTC(y, +dm[1] - 1, +dm[2], +dm[3], +dm[4], 0) - st.tz * 3600e3 - EL.clock.now();
+      return EL.clock.linux(EL.clock.now() + st.clk, st.tz);
     }
     if (c === 'timedatectl') {
-      if (!t[1] || t[1] === 'status') return '               Local time: ' + EL.clock.linux(Date.now() + st.clk, st.tz) + '\n           Universal time: ' +
-        EL.clock.fmt(Date.now() + st.clk) + ' UTC\n                Time zone: Etc/GMT' + (st.tz >= 0 ? '-' : '+') + Math.abs(st.tz) + '\nNTP service: ' + (st.ntp ? 'active' : 'inactive');
+      if (!t[1] || t[1] === 'status') return '               Local time: ' + EL.clock.linux(EL.clock.now() + st.clk, st.tz) + '\n           Universal time: ' +
+        EL.clock.fmt(EL.clock.now() + st.clk) + ' UTC\n                Time zone: Etc/GMT' + (st.tz >= 0 ? '-' : '+') + Math.abs(st.tz) + '\nNTP service: ' + (st.ntp ? 'active' : 'inactive');
       var e8 = needRoot(); if (e8) return 'Failed: Access denied';
       if (t[1] === 'set-ntp') { st.ntp = t[2] === 'true' || t[2] === 'yes' || t[2] === '1'; return ''; }
       if (t[1] === 'set-time') {
         if (st.ntp) return 'Failed to set time: Automatic time synchronization is enabled';
         var q = line.match(/set-time\s+['"]?(\d{4})-(\d\d)-(\d\d)\s+(\d\d):(\d\d):(\d\d)['"]?/);
         if (!q) return 'Failed to parse time specification: ' + t.slice(2).join(' ');
-        st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - Date.now(); return '';
+        st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - EL.clock.now(); return '';
       }
       return 'Unknown command verb ' + t[1] + '.';
     }

@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -145,6 +145,40 @@ EL.labs.LABS.forEach(runLab);
   chk('таблицы: устаревшая ARP-запись после смены VLAN', !r4.ok && !n.arp[v[0].id]['10.0.0.2'] && !r5.ok && r5.why === 'Host unreachable');
   chk('таблицы: show mac address-table / show arp', /Learnt/.test(n.exec(s.id, 'show mac address-table')) && /10\.0\.0\.1/.test(n.exec(v[1].id, 'arp')));
   console.log('✓ таблицы ARP и MAC');
+})();
+
+// старение: MAC 300 с, ARP по типу устройства, настройка таймеров, промотка времени
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s = n.add('MES2428', 'SW1'), a = n.add('VPC', 'A'), b = n.add('Debian', 'B');
+  n.connect(a.id, 'eth0', s.id, 'gi1/0/1'); n.connect(b.id, 'ens3', s.id, 'gi1/0/2');
+  EL.labs.apply(n, { A: ['ip 10.0.0.1/24'], B: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.2/24 dev ens3'] });
+  var r = n.ping(a.id, '10.0.0.2');
+  chk('старение: исходный ping', r.ok, r.why);
+  chk('старение: VPC показывает остаток 120 с', /expires in 120 seconds/.test(n.exec(a.id, 'arp')), n.exec(a.id, 'arp'));
+  n.tick(40);
+  chk('старение: Debian через 40 с — STALE', /STALE/.test(n.exec(b.id, 'ip neigh')), n.exec(b.id, 'ip neigh'));
+  n.tick(30);
+  chk('старение: Debian удалил запись через 60 с', !Object.keys(n.arp[b.id]).length);
+  chk('старение: VPC через 70 с ещё помнит (50 с)', /expires in 50 seconds/.test(n.exec(a.id, 'arp')), n.exec(a.id, 'arp'));
+  n.tick(60);
+  chk('старение: VPC забыл через 120 с', !Object.keys(n.arp[a.id]).length);
+  chk('старение: MAC-записи живы до 300 с', n.macRows(s.id).length === 2);
+  var g = n.tick(200);
+  chk('старение: MAC-записи удалены после 300 с', !n.macRows(s.id).length && g.filter(function (x) { return x.kind === 'MAC'; }).length === 2, JSON.stringify(g));
+  var r2 = n.ping(a.id, '10.0.0.2');
+  chk('старение: после старения снова ARP-запрос', r2.ok && r2.steps.some(function (x) { return x.k === 'arp'; }));
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'mac-address-table aging-time 20', 'end'] });
+  n.tick(21);
+  chk('старение: aging-time 20 на 10.x', !n.macRows(s.id).length && /mac-address-table aging-time 20/.test(n.exec(s.id, 'show running-config')));
+  chk('старение: диапазон aging-time', /10\.\.400/.test(n.exec(s.id, 'configure') + n.exec(s.id, 'mac-address-table aging-time 5')));
+  var n6 = new EL.Net(), x6 = n6.add('MES3348', 'G'); EL.labs.apply(n6, { G: ['enable', 'configure', 'mac address-table aging-time 100', 'arp timeout 500', 'end'] });
+  chk('старение: 6.x mac address-table aging-time / arp timeout', x6.st.macAge === 100 && x6.st.arpTo === 500 && n6.arpAge(x6.id) === 500);
+  var n8 = new EL.Net(), x8 = n8.add('MES5448', 'F'); EL.labs.apply(n8, { F: ['enable', 'configure', 'bridge aging-time 1000', 'end'] });
+  chk('старение: 8.x bridge aging-time, ARP по умолчанию 1200', x8.st.macAge === 1000 && n8.arpAge(x8.id) === 1200 && /1000/.test(n8.exec(x8.id, 'show forwardingdb agetime')));
+  var ne = new EL.Net(), e = ne.add('vESR', 'R'); EL.labs.apply(ne, { R: ['configure', 'interface gi1/0/1', 'ip arp reachable-time 6000', 'do commit', 'do confirm', 'end'] });
+  chk('старение: ESR ip arp reachable-time', ne.arpAge(e.id, 'gi1/0/1') === 6 && ne.arpAge(e.id, 'gi1/0/2') === 160, ne.arpAge(e.id, 'gi1/0/1') + '/' + e.st.mode);
+  console.log('✓ старение MAC и ARP');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

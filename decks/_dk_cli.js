@@ -181,6 +181,7 @@
     return eachPort(st, function (p) { p.guntag = uniq(p.guntag.concat(a[0])); p.gtag = p.gtag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
 
   // --- show
+  var RUNX = [];                              // доп. строки running-config от модулей эмулятора
   function showRun(st) {
     var o = [];
     var vl = Object.keys(st.vlans).map(Number).filter(function (v) { return v !== 1; });
@@ -214,6 +215,7 @@
     if (st.gw) o.push('ip default-gateway ' + st.gw);
     if (st.ssh) o.push('ip ssh server');
     if (!st.http) o.push('no ip http server');
+    RUNX.forEach(function (f) { f(st, o); });
     o.push('!');
     return o.join('\n');
   }
@@ -493,7 +495,7 @@
   // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
   var api = { NPORTS: NPORTS, longIf: longIf, portGroups: portGroups, PFX: PFX, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
               normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
-              showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
+              showRun: showRun, RUNX: RUNX, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
               pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
   if (typeof window !== 'undefined') window.EltexCLI = api;
   if (typeof module !== 'undefined') module.exports = api;

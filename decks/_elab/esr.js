@@ -76,9 +76,9 @@
     if (mi < 0) return '% Месяц словом по-английски: January … December';
     var t = a[0].split(':'), local = Date.UTC(a[3], mi, a[1], +t[0], +t[1], +t[2]);
     st.date = a[0] + ' ' + a[1] + ' ' + a[2] + ' ' + a[3];
-    st.clk = local - EL.clock.tzMs(st.run.tz) - Date.now(); }, 'Установить дату и время');
+    st.clk = local - EL.clock.tzMs(st.run.tz) - EL.clock.now(); }, 'Установить дату и время');
   cmd('priv', 'show date', function (st) {
-    var utc = st.net ? st.net.esrUtc(st.dev) : Date.now() + (st.clk || 0);
+    var utc = st.net ? st.net.esrUtc(st.dev) : EL.clock.now() + (st.clk || 0);
     return '"' + EL.clock.fmt(utc + EL.clock.tzMs(st.run.tz)) + '"'; }, 'Текущие дата и время');
   cmd('config', 'username <w>', function (st, a) {
     if (!st.cand.users[a[0]]) st.cand.users[a[0]] = { pw: null, priv: 1 };

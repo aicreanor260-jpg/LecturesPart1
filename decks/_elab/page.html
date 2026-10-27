@@ -34,6 +34,17 @@ button,input,select{font:inherit;color:inherit}
 .bar{width:160px;height:26px;background:repeating-linear-gradient(90deg,var(--cy) 0 2px,transparent 2px 4px,var(--cy) 4px 5px,transparent 5px 9px,var(--cy) 9px 12px,transparent 12px 14px);opacity:.75}
 .tbtn{border:1px solid var(--cy2);background:var(--cyd);color:var(--cy);padding:6px 12px;clip-path:var(--cut-s);cursor:pointer;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px}
 .tbtn:hover{background:var(--cy);color:#0e1b1e}
+.clk{display:flex;align-items:center;gap:8px;font:500 12px var(--m);color:var(--dim)}
+.clk .ck{letter-spacing:.12em;color:var(--rd)}
+.clk b{font:700 18px var(--m);color:var(--cy);min-width:84px;text-shadow:0 0 10px rgba(111,227,234,.45)}
+.clk .cb{display:flex;border:1px solid var(--cy2);clip-path:var(--cut-s)}
+.clk .cb button{background:transparent;border:0;border-right:1px solid rgba(111,227,234,.25);color:var(--cy);padding:4px 8px;cursor:pointer;font:700 12px var(--m)}
+.clk .cb button:last-child{border-right:0}
+.clk .cb button:hover{background:var(--cyd)}
+.clk .cb button.on{background:var(--cy);color:#0e1b1e}
+.clk .ff button{color:var(--arp)}
+.clk.flash b{color:var(--arp)}
+@media (max-width:1200px){.clk .ck,.bar{display:none}}
 /* ---------- поле */
 #cv{position:fixed;left:0;top:54px;width:100%;height:calc(100% - 100px);display:block;cursor:default;
   background-image:linear-gradient(rgba(111,227,234,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(111,227,234,.05) 1px,transparent 1px);background-size:32px 32px}
@@ -179,7 +190,11 @@ button,input,select{font:inherit;color:inherit}
   <div class="logo"><i>E</i><div>ELTEX // NETLAB<small>NTF-2 · СЕТЕВАЯ ЛАБОРАТОРИЯ</small></div></div>
   <div class="rule"></div>
   <div class="stat" id="stat"></div>
-  <div class="bar" aria-hidden="true"></div>
+  <div class="clk" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
+    <span class="ck">ВРЕМЯ СЕТИ</span><b id="clkT">00:00:00</b>
+    <span class="cb"><button data-sp="0" title="Пауза">❚❚</button><button data-sp="1" class="on">×1</button><button data-sp="10">×10</button><button data-sp="60">×60</button></span>
+    <span class="cb ff"><button data-ff="60" title="Промотать 1 минуту">⏩ 1 мин</button><button data-ff="300" title="Промотать 5 минут — MAC-записи с таймером 300 с истекут">⏩ 5 мин</button></span>
+  </div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
 </header>
 <svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
