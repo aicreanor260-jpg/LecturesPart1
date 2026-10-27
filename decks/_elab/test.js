@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -179,6 +179,49 @@ EL.labs.LABS.forEach(runLab);
   var ne = new EL.Net(), e = ne.add('vESR', 'R'); EL.labs.apply(ne, { R: ['configure', 'interface gi1/0/1', 'ip arp reachable-time 6000', 'do commit', 'do confirm', 'end'] });
   chk('старение: ESR ip arp reachable-time', ne.arpAge(e.id, 'gi1/0/1') === 6 && ne.arpAge(e.id, 'gi1/0/2') === 160, ne.arpAge(e.id, 'gi1/0/1') + '/' + e.st.mode);
   console.log('✓ старение MAC и ARP');
+})();
+
+// расширенный CLI MES: сокращения, port security, BPDU guard, статические MAC, show-команды
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function x(n, d, lines) { return lines.map(function (l) { return n.exec(d.id, l); }); }
+  // сокращения как на железе
+  var n = new EL.Net(), s = n.add('MES2428', 'SW1');
+  var o = x(n, s, ['en', 'conf t', 'int gi 1/0/1', 'desc UPLINK', 'sw mode trunk', 'end', 'sh ru', 'sh int desc', 'sh run int gi1/0/1']);
+  chk('CLI: int gi 1/0/1, sw mode trunk, sh ru', s.st.ports['gi1/0/1'].mode === 'trunk' && /switchport mode trunk/.test(o[6]) && /description UPLINK/.test(o[6]), o[6]);
+  chk('CLI: sh int desc / sh run int', /UPLINK/.test(o[7]) && /^interface gigabitethernet1\/0\/1/.test(o[8]) && /description UPLINK/.test(o[8]), o[8]);
+  chk('CLI: sh ver / sh clock', /10\.4\.6/.test(n.exec(s.id, 'sh ver')) && /UTC/.test(n.exec(s.id, 'sh clock')));
+  x(n, s, ['clock set 10:20:30 5 Mar 2026']);
+  chk('CLI: clock set', /^10:20:3\d UTC Thu Mar 5 2026/.test(n.exec(s.id, 'show clock')), n.exec(s.id, 'show clock'));
+  // port security 10.x: на порту разрешён один MAC — второй ПК через хаб не проходит
+  var w = new EL.Net(), sw = w.add('MES2428', 'SW'), a = w.add('VPC', 'A'), b = w.add('VPC', 'B'), c = w.add('VPC', 'C');
+  w.connect(a.id, 'eth0', sw.id, 'gi1/0/1'); w.connect(b.id, 'eth0', sw.id, 'gi1/0/2'); w.connect(c.id, 'eth0', sw.id, 'gi1/0/3');
+  EL.labs.apply(w, { A: ['ip 10.0.0.1/24'], B: ['ip 10.0.0.2/24'], C: ['ip 10.0.0.3/24'],
+    SW: ['en', 'conf', 'int gi1/0/2', 'switchport port-security mode max-addresses', 'switchport port-security mac-limit 1', 'switchport port-security enable', 'end'] });
+  chk('port security: первый MAC на порту разрешён', w.ping(a.id, '10.0.0.2').ok);
+  w.disconnect(1); w.disconnect(1); w.connect(c.id, 'eth0', sw.id, 'gi1/0/2');   // на gi1/0/2 теперь другой ПК
+  var r = w.ping(a.id, '10.0.0.3');
+  chk('port security: чужой MAC отброшен', !r.ok && r.steps.some(function (st) { return /port security/.test(st.t); }), r.why);
+  chk('port security: show port-security и show run', /gi1\/0\/2\s+Enabled\s+max-addresses\s+1/.test(w.exec(sw.id, 'show port-security')) &&
+      /switchport port-security enable/.test(w.exec(sw.id, 'show running-config')));
+  chk('port security: secure-запись не стареет', (w.tick(1000), w.macRows(sw.id).some(function (e) { return e.sec; })));
+  // 6.x: discard-shutdown выключает порт
+  var w6 = new EL.Net(), s6 = w6.add('MES3348', 'S'), p1 = w6.add('VPC', 'P1'), p2 = w6.add('VPC', 'P2');
+  w6.connect(p1.id, 'eth0', s6.id, s6.st.ports['gi1/0/1'] ? 'gi1/0/1' : Object.keys(s6.st.ports)[0]);
+  var k2 = Object.keys(s6.st.ports)[1]; w6.connect(p2.id, 'eth0', s6.id, k2);
+  EL.labs.apply(w6, { P1: ['ip 10.1.1.1/24'], P2: ['ip 10.1.1.2/24'], S: ['en', 'conf', 'int ' + k2, 'port security', 'port security discard-shutdown', 'end'] });
+  var r6 = w6.ping(p1.id, '10.1.1.2');
+  chk('6.x port security lock + discard-shutdown', !r6.ok && s6.st.ports[k2].shut && s6.st.ports[k2].errdis === 'port-security', r6.why + ' ' + JSON.stringify(s6.st.ports[k2].psec));
+  // BPDU guard: к порту с защитой подключили коммутатор — порт выключается
+  var g = new EL.Net(), g1 = g.add('MES2428', 'G1'), g2 = g.add('MES2428', 'G2');
+  EL.labs.apply(g, { G1: ['en', 'conf', 'int gi1/0/5', 'spanning-tree portfast', 'spanning-tree bpduguard enable', 'end'] });
+  g.connect(g1.id, 'gi1/0/5', g2.id, 'gi1/0/5'); g.stp();
+  chk('BPDU guard выключает порт', g1.st.ports['gi1/0/5'].shut && g1.st.ports['gi1/0/5'].errdis === 'bpduguard' && /bpduguard enable/.test(g.exec(g1.id, 'show running-config')));
+  // статическая MAC-запись
+  var m = new EL.Net(), sm = m.add('MES2428', 'M');
+  var e = x(m, sm, ['en', 'conf', 'mac-address-table static unicast 00:11:22:33:44:55 vlan 1 interface gi 1/0/7 status permanent', 'end', 'show mac address-table']);
+  chk('статический MAC (10.x)', /00:11:22:33:44:55\s+Static\s+gi1\/0\/7/.test(e[4]) && isFinite(m.ttl(sm.id, 'm', m.macRows(sm.id)[0])) === false, e[2] + e[4]);
+  console.log('✓ расширенный CLI MES');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

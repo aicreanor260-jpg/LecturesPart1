@@ -181,7 +181,7 @@
     return eachPort(st, function (p) { p.guntag = uniq(p.guntag.concat(a[0])); p.gtag = p.gtag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
 
   // --- show
-  var RUNX = [];                              // доп. строки running-config от модулей эмулятора
+  var RUNX = [], PORTX = [];                  // PORTX: доп. строки внутри блока interface                              // доп. строки running-config от модулей эмулятора
   function showRun(st) {
     var o = [];
     var vl = Object.keys(st.vlans).map(Number).filter(function (v) { return v !== 1; });
@@ -201,7 +201,7 @@
       if (c.auth) o.push(' login authentication ' + c.auth); if (c.pw) o.push(' password encrypted ' + hash(c.pw)); o.push('exit', '!'); });
     if (st.aaa) o.push('aaa authentication login ' + st.aaa, '!');
     Object.keys(st.ports).forEach(function (k) {
-      var p = st.ports[k], d = [];
+      var p = st.ports[k], d = p.desc ? [' description ' + p.desc] : [];
       if (p.mode === 'access' && p.access !== 1) d.push(' switchport access vlan ' + p.access);
       if (p.mode === 'trunk') { d.push(' switchport mode trunk'); if (p.allowed.length) d.push(' switchport trunk allowed vlan add ' + fmtList(p.allowed));
         if (p.native !== 1) d.push(' switchport trunk native vlan ' + p.native); }
@@ -209,6 +209,7 @@
         if (p.gtag.length) d.push(' switchport general allowed vlan add ' + fmtList(p.gtag) + ' tagged');
         var u = p.guntag.filter(function (v) { return v !== 1; }); if (u.length) d.push(' switchport general allowed vlan add ' + fmtList(u) + ' untagged');
         if (p.pvid !== 1) d.push(' switchport general pvid ' + p.pvid); }
+      PORTX.forEach(function (f) { f(st, k, p, d); });
       if (d.length) o.push('interface ' + longIf(k).replace(' ', ''), d.join('\n'), 'exit', '!');
     });
     Object.keys(st.svi).forEach(function (v) { o.push('interface vlan ' + v, ' ip address ' + st.svi[v].replace('/', ' /'), 'exit', '!'); });
@@ -495,7 +496,7 @@
   // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
   var api = { NPORTS: NPORTS, longIf: longIf, portGroups: portGroups, PFX: PFX, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
               normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
-              showRun: showRun, RUNX: RUNX, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
+              showRun: showRun, RUNX: RUNX, PORTX: PORTX, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
               pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
   if (typeof window !== 'undefined') window.EltexCLI = api;
   if (typeof module !== 'undefined') module.exports = api;

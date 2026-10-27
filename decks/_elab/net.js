@@ -265,6 +265,7 @@
     return pf + +n.split('/')[2]; }
   P.stp = function () {
     if (this._stp && this._stp.gen === this.gen) return this._stp.t;
+    if (this.bpduGuard && this.bpduGuard()) this.gen++;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
     var on = {}; br.forEach(function (id) { on[id] = true; });
     var edges = [];
@@ -393,7 +394,7 @@
     }
     function inMes(dev, inPort, v, path) {
       var st = s.devs[dev].st;
-      if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort, t: s.now };
+      if (inPort && srcMac) { var pv = s.macIn(dev, inPort, v, srcMac); if (pv) { notes.push(pv); return; } }
       var gk = dev + '|' + v; got[gk] = (got[gk] || 0) + 1;
       if (got[gk] > 1) { if (!storm) notes.push(s.devs[dev].name + ': тот же широковещательный кадр пришёл второй раз — петля без STP, широковещательный шторм'); storm = true; return; }
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
@@ -502,10 +503,12 @@
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
+      var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      var viol = this.learn(back, dmac);
+      if (viol) { steps.push({ k: 'drop', segs: back, t: nd.name + ': ARP-ответ отброшен — ' + viol }); return { ok: false, why: 'Host unreachable', pk: pk }; }
       this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
       this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
-      var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
-      this.learn(back, dmac); this.learn(ep.path, srcMac);
+      this.learn(ep.path, srcMac);
       if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
         nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac });
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
@@ -697,8 +700,10 @@
   };
   P.macTable = function (id) {
     var t = this.mac[id], o = ['Vlan    Mac Address         Type      Ports', '----    -----------         ----      -----'];
-    Object.keys(t).forEach(function (k) { var x = t[k]; o.push((x.vlan + '        ').slice(0, 8) + x.mac + '   Learnt    ' + x.port); });
-    return o.join('\n') + '\nTotal Mac Addresses displayed: ' + Object.keys(t).length;
+    Object.keys(t).forEach(function (k) { var x = t[k]; o.push((x.vlan + '        ').slice(0, 8) + x.mac + '   ' + (x.st ? 'Static ' : x.sec ? 'Secure ' : 'Learnt ') + '   ' + x.port); });
+    var sm = this.devs[id].st.smac || {};
+    Object.keys(sm).forEach(function (k) { var x = sm[k]; o.push((x.vlan + '        ').slice(0, 8) + x.mac + '   Static    ' + x.port); });
+    return o.join('\n') + '\nTotal Mac Addresses displayed: ' + (Object.keys(t).length + Object.keys(sm).length);
   };
 
   // ------------------------------------------------------------------ SSH с компьютера Debian
@@ -803,15 +808,18 @@
     return EL.mac(d.name + (f.port || f.name.split(':')[0]));
   };
   P.learn = function (path, mac) {
-    var s = this;
+    var s = this, viol = null;
     path.forEach(function (sg) {
-      var d = s.devs[sg.to]; if (!d || d.type !== 'mes') return;
+      var d = s.devs[sg.to]; if (!d || d.type !== 'mes' || viol) return;
       var l = s.links[sg.li]; if (!l) return;
       var port = l.a.dev === sg.to ? l.a.port : l.b.port, L = s.lportOf(sg.to, port); if (!L) return;
       var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
-      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name, t: s.now };
+      viol = s.macIn(sg.to, L.name, v, mac);
     });
+    return viol;
   };
+  // запись MAC отправителя на входном порту; модуль mes_full добавляет port security и статические записи
+  P.macIn = function (dev, port, v, mac) { this.mac[dev][v + '|' + mac] = { vlan: v, mac: mac, port: port, t: this.now }; return null; };
 
   // журнал шагов трассы: к каждому шагу прикладывается, что изменилось в ARP/MAC-таблицах с прошлого шага
   P.tabSnap = function () {

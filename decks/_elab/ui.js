@@ -358,7 +358,7 @@
     var arp = net.arpRows(id).map(function (r) { var e = net.arp[id][r.ip];
       return mark([r.ip, r.mac, r.ifn, net.ttl(id, 'a', e) + (d.type === 'deb' ? ' · ' + net.neighState(id, e) : '')], 'a|' + id + '|' + r.ip); });
     if (d.type === 'mes') {
-      h += '<h3>MAC-таблица (коммутация) · aging ' + net.macAge(id) + ' с</h3>' + tbl(['VLAN', 'MAC', 'Порт', 'Осталось, с'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port, net.ttl(id, 'm', r)], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
+      h += '<h3>MAC-таблица (коммутация) · aging ' + net.macAge(id) + ' с</h3>' + tbl(['VLAN', 'MAC', 'Порт', 'Осталось, с'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port + (r.st ? ' · static' : r.sec ? ' · secure' : ''), isFinite(net.ttl(id, 'm', r)) ? net.ttl(id, 'm', r) : '—'], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);

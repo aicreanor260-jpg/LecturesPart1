@@ -20,6 +20,7 @@
   };
   // сколько секунд записи осталось жить
   P.ttl = function (id, kind, e) {
+    if (e.sec || e.st) return Infinity;                 // secure и статические записи не стареют
     var age = kind === 'a' ? this.arpAge(id, e.ifn) : this.macAge(id);
     return Math.max(0, Math.ceil(age - (this.now - (e.t === undefined ? this.now : e.t))));
   };

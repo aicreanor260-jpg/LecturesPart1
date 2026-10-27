@@ -55,6 +55,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
 <tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
 <tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
+<tr><td>sh ru · sh int st · int gi 1/0/1 · sw mode trunk · conf t · wr</td><td>сокращения как на железе: любое слово сокращается до однозначного начала</td></tr>
+<tr><td>10.x: switchport port-security enable · mac-limit N · mode max-addresses|lock|secure-permanent · violation restrict|protect|discard-shutdown · show port-security</td><td>port security: кадры с чужих MAC отбрасываются, discard-shutdown выключает порт</td></tr>
+<tr><td>6.x/4.x: port security · port security max N · port security mode lock|max-addresses · port security forward|discard|discard-shutdown · show ports security</td><td>port security в ветке 6.x</td></tr>
+<tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
+<tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
+<tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
+<tr><td>show version · show system · show clock · clock set 10:20:30 5 Mar 2026 · clock timezone MSK +3 · show users</td><td>версия, время</td></tr>
+<tr><td>show interfaces description · show running-config interface gi1/0/1 · show lldp neighbors · traceroute A.B.C.D (6.x: traceroute ip A.B.C.D)</td><td>описания портов, конфиг порта, соседи, маршрут</td></tr>
 </table>
 <h2>Команды ESR (маршрутизатор)</h2>
 <table>

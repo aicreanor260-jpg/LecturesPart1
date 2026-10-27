@@ -7,7 +7,8 @@
     var a = this.arp[id]; return Object.keys(a).sort(function (x, y) { return EL.ip.ip2n(x) - EL.ip.ip2n(y); }).map(function (ip) { return { ip: ip, mac: a[ip].mac, ifn: a[ip].ifn }; });
   };
   EL.Net.prototype.macRows = function (id) {
-    var t = this.mac[id]; return Object.keys(t).map(function (k) { return t[k]; }).sort(function (x, y) { return x.vlan - y.vlan || (x.port < y.port ? -1 : 1); });
+    var t = this.mac[id], sm = this.devs[id].st.smac || {};
+    return Object.keys(t).map(function (k) { return t[k]; }).concat(Object.keys(sm).map(function (k) { return { vlan: sm[k].vlan, mac: sm[k].mac, port: sm[k].port, st: true }; })).sort(function (x, y) { return x.vlan - y.vlan || (x.port < y.port ? -1 : 1); });
   };
   function arpEsr(st) { var R = st.net.arpRows(st.dev);
     return ['IP address          MAC address         Interface        Type', '------------------- ------------------- ---------------- -------']
