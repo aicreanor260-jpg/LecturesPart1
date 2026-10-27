@@ -33,7 +33,7 @@ HTML = CSS + bg("bg3", W, H) + "".join([
               for k, s in enumerate(IPS))
     + '</div>',
     '<div class="step">'
-    + p(976, 672, 1286, 740, "#fff6cf", "Внутренняя тополеия:<br>LSA-1 и LSA-2")
+    + p(976, 672, 1286, 740, "#fff6cf", "Внутренняя топология:<br>LSA-1 и LSA-2")
     + '</div>',
     '<div class="step">'
     + p(895, 430, 1348, 478, "#2f8fe8", "<span style='color:#fff'>0.0.0.0/0 • LSA-3 • маршрут по умолчанию</span>", "transform:rotate(-1.5deg);border-radius:6px")

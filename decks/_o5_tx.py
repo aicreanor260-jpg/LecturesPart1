@@ -457,12 +457,12 @@ TX = {
             {"t": "cmd", "text": "esr(config-if-gi)# <b>ip ospf cost &lt;1-65535&gt;</b>"},
             {"t": "p", "text": "Отключение детектирования несовпадения MTU на интерфейсе:"},
             {"t": "cmd", "text": "esr(config-if-gi)# <b>ip ospf mtu-ignore</b>"},
-            {"t": "p", "text": "Установить OSPF приоритет, учитывающийся при выборе DR и BDF:"},
+            {"t": "p", "text": "Установить OSPF приоритет, учитывающийся при выборе DR и BDR:"},
             {"t": "cmd", "text": "esr(config-if-gi)# <b>ip ospf priority &lt;0-255&gt;</b>"},
         ],
         "note": "Склейка двух страниц методички (стр. 75 → следующая, с логотипом «Академия Eltex»); "
                 "«DR.» — обрезанный хвост предыдущего абзаца; «<password>» в оригинале перенесено на новую строку.",
-        "orig_errors": ["«DR и BDF» — опечатка, должно быть BDR"],
+        "orig_errors": ["«DR и BDR» — опечатка, должно быть BDR"],
     },
     # ---------- s81 ----------
     "s81_image121": {
@@ -478,7 +478,7 @@ TX = {
             {"t": "cmd", "text": "esr(config-ospf)# <b>redistribute rip [route-map &lt;NAME-RM&gt;]</b>"},
             {"t": "p", "text": "Анонсирование  маршрутов, полученных по протоколу OSPF:"},
             {"t": "cmd", "text": "esr(config-ospf)# <b>redistribute ospf  &lt;ID&gt; &lt;ROUTE-TYPE&gt; "
-                                 "[[route-map &lt;NAME-RM&gt;]</b>"},
+                                 "[route-map &lt;NAME-RM&gt;]</b>"},
             {"t": "p", "text": "Анонсирование маршрутов из таблицы маршрутизации для других BGP процессов:"},
             {"t": "cmd", "text": "esr(config-ospf)# <b>redistribute bgp &lt;ASN&gt; [route-map &lt;NAME-RM&gt;]</b>"},
             {"t": "p", "text": "Например, создана новая LAN на маршрутизаторе, и настроен шлюз по умолчанию, "
@@ -486,7 +486,7 @@ TX = {
         ],
         "note": "Двойные пробелы «Анонсирование  маршрутов» и «ospf  <ID>» — как в оригинале; "
                 "в оригинале «route-/map» перенесено на новую строку.",
-        "orig_errors": ["«[[route-map <NAME-RM>]» — лишняя открывающая скобка"],
+        "orig_errors": ["«[route-map <NAME-RM>]» — лишняя открывающая скобка"],
     },
     "s81_image120": {
         "kind": "cli",
@@ -511,19 +511,19 @@ TX = {
                                "чтобы маршрут в эту подсеть был в таблице маршрутизации самого маршрутизатора, "
                                "который будет анонсировать."},
             {"t": "p", "text": "Включить анонсирование подсетей для OSPF:"},
-            {"t": "cmd", "text": "esr(config)# <b>router ospf &lt;Proccess-ID&gt;</b>"},
+            {"t": "cmd", "text": "esr(config)# <b>router ospf &lt;Process-ID&gt;</b>"},
             {"t": "cmd", "text": "esr(config-ospf)# <b>area &lt;AREA-NUM&gt;</b>"},
-            {"t": "cmd", "text": "esr(config-ospf)# <b>enable</b>"},
+            {"t": "cmd", "text": "esr(config-ospf-area)# <b>enable</b>"},
             {"t": "cmd", "text": "esr(config-ospf-area)# <b>network &lt;AAA.BBB.CCC.DDD/EE&gt;</b>"},
             {"t": "cmd", "text": "esr(config-ospf-area)# <b>enable</b>"},
-            {"t": "li", "text": "&lt;ID&gt; – номер процесса OSPF, значение [1-65535];"},
+            {"t": "li", "text": "&lt;Process-ID&gt; – номер процесса OSPF, значение [1-65535];"},
             {"t": "li", "text": "&lt;AREA-NUM&gt; – номер области OSPF, значения в формате XXX.XXX.XXX.XXX, "
                                 "где каждая часть XXX принимает значение [0-255]."},
         ],
         "note": "Двойной пробел «area,  с» — как в оригинале.",
-        "orig_errors": ["«Proccess-ID» — опечатка (Process)",
+        "orig_errors": ["«Process-ID» — опечатка (Process)",
                         "после «area <AREA-NUM>» стоит приглашение «esr(config-ospf)# enable» вместо «esr(config-ospf-area)#»",
-                        "в пояснении параметр называется «<ID>», а в команде — «<Proccess-ID>»"],
+                        "в пояснении параметр называется «<ID>», а в команде — «<Process-ID>»"],
     },
     "s82_image122": {
         "kind": "cli",
@@ -654,7 +654,7 @@ TX = {
             {"t": "p", "text": "1) Настроить протокол OSPF на маршрутизаторе для обмена маршрутной информацией "
                                "с соседними маршрутизаторами;"},
             {"t": "p", "text": "2) Маршрутизатор должен находиться в области с идентификатором 1.1.1.1;"},
-            {"t": "p", "text": "<b>Решение:</b> Необходимо предварительно настроить и включить протокол RIP."},
+            {"t": "p", "text": "<b>Решение:</b> Необходимо предварительно настроить и включить протокол OSPF."},
             {"t": "p", "text": "1) Настроим IP-адреса на интерфейсах и отключим межсетевой экран согласно топологии:"},
             {"t": "cmd", "text": "R3# <b>config</b>"},
             {"t": "cmd", "text": "R3(config)# <b>interface gi1/0/1</b>"},
@@ -700,6 +700,6 @@ TX = {
         ],
         "note": "Склейка страниц методички (стр. 79 → следующая). Команды шага 5 в оригинале набраны другим "
                 "(узким, не моноширинным) шрифтом. Красное/синее выделение — как в оригинале.",
-        "orig_errors": ["«Необходимо предварительно настроить и включить протокол RIP» — в задаче про OSPF"],
+        "orig_errors": ["«Необходимо предварительно настроить и включить протокол OSPF» — в задаче про OSPF"],
     },
 }

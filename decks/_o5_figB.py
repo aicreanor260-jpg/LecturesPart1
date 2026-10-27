@@ -94,9 +94,9 @@ def s33_image42():
         o.append(ed([R[a], R[b]], head=False, col="#3a3550", w=4))
     o += [T(190, 45, "AS 64500", 22, INK, 800), ml(170, 105, "ISP|IS-IS", 21, INK, 800),
           ml(185, 345, "Not-So-Stubby area, NSSA|Area 0.0.0.4", 20, INK, 800),
-          ml(345, 495, "Totaly NSSA|Area 0.0.0.5", 20, INK, 800),
+          ml(345, 495, "Totally NSSA|Area 0.0.0.5", 20, INK, 800),
           ml(600, 375, "Backbone area|Area 0.0.0.0", 20, INK, 800),
-          ml(790, 560, "Totaly Stubby area|Area 0.0.0.3", 20, INK, 800),
+          ml(790, 560, "Totally Stubby area|Area 0.0.0.3", 20, INK, 800),
           ml(960, 345, "Standard area|Area 0.0.0.1", 20, INK, 800),
           ml(1240, 345, "Stub area|Area 0.0.0.2", 20, INK, 800), T(560, 595, "AS 64511", 22, INK, 800)]
     for k, lab in [("l2", "L2"), ("r1", "R-1"), ("asbr", "ASBR-1"), ("r2", "R-2"), ("abr", "ABR-1"), ("r3", "R-3"),
@@ -335,22 +335,21 @@ def s49_image75():
         o.append(band(*_ax(0), y0 + 222, "LSA-2", 2, "both", ph=2, h=38))
         o.append(band(*_ax(2), y0 + 170, "LSA-1", 1, "both", ph=1, h=38))
         o.append(band(*_ax(2), y0 + 222, "LSA-2", 2, "both", ph=2, h=38))
-    # верхний ряд: NSSA и STUB
-    o.append(band(*_ax(0), 10 + 326, "LSA-4 EX=> 0.0.0.0/0", 0, "l", ph=4, h=38, size=18))
-    o.append(band(*_ax(0), 10 + 378, "LSA-7", 7, "l", ph=6, h=38))
-    o.append(band(*_ax(2, 12, 12), 10 + 326, "LSA-4 EX=>IA 0.0.0.0/0", 0, "r", ph=4, h=38, size=18))
-    # нижний ряд: Totally NSSA и Totally STUBBY
-    o.append(band(*_ax(0), 440 + 274, "LSA-3 IA=> 0.0.0.0/0", 0, "l", ph=3, h=38, size=18))
-    o.append(band(*_ax(0), 440 + 326, "EX=> 0.0.0.0/0", 0, "l", ph=4, h=38, size=18))
-    o.append(band(*_ax(0), 440 + 378, "LSA-7", 7, "l", ph=6, h=38))
-    o.append(band(*_ax(2, 12, 12), 440 + 274, "LSA-3 IA=>IA 0.0.0.0/0", 0, "r", ph=3, h=38, size=18))
-    o.append(band(*_ax(2, 12, 12), 440 + 326, "LSA-4 EX=>IA 0.0.0.0/0", 0, "r", ph=4, h=38, size=18))
+    # верхний ряд: NSSA и STUB — межобластные LSA-3 проходят, LSA-4/LSA-5 нет
+    o.append(band(*_ax(0), 10 + 274, "LSA-3 IA", 3, "l", ph=3, h=38, size=18))
+    o.append(band(*_ax(0), 10 + 326, "LSA-7 0.0.0.0/0 (от ABR)", 7, "l", ph=6, h=38, size=18))
+    o.append(band(*_ax(0), 10 + 378, "LSA-7 от ASBR → ABR", 7, "r", ph=6, h=38, size=18))
+    o.append(band(*_ax(2, 12, 12), 10 + 274, "LSA-3 IA + 0.0.0.0/0", 3, "r", ph=3, h=38, size=18))
+    # нижний ряд: Totally NSSA и Totally STUBBY — только LSA-3 с маршрутом по умолчанию
+    o.append(band(*_ax(0), 440 + 274, "LSA-3 0.0.0.0/0", 3, "l", ph=3, h=38, size=18))
+    o.append(band(*_ax(0), 440 + 378, "LSA-7 от ASBR → ABR", 7, "r", ph=6, h=38, size=18))
+    o.append(band(*_ax(2, 12, 12), 440 + 274, "LSA-3 0.0.0.0/0", 3, "r", ph=3, h=38, size=18))
     return scene(svg_only("0 0 1220 850", "".join(o), DEFS),
                  ["NSSA — Backbone — STUB и Totally NSSA — Backbone — Totally STUBBY",
                   "LSA-1 — во всех областях", "LSA-2 — во всех областях",
-                  "LSA-3 — в Backbone; в Totally NSSA: IA=> 0.0.0.0/0, в Totally STUBBY: IA=>IA 0.0.0.0/0",
-                  "LSA-4 — в Backbone; в NSSA, STUB, Totally NSSA, Totally STUBBY — EX=> 0.0.0.0/0",
-                  "LSA-5 — только в Backbone", "LSA-7 — в NSSA и Totally NSSA"])
+                  "LSA-3 — межобластные маршруты; в STUB с ними приходит 0.0.0.0/0, в Totally-областях — только 0.0.0.0/0",
+                  "LSA-4 — только в Backbone: в STUB и NSSA-области не передаётся",
+                  "LSA-5 — только в Backbone", "LSA-7 — только внутри NSSA и Totally NSSA: от ASBR к ABR, который переводит его в LSA-5; в NSSA ABR может дать 0.0.0.0/0 через LSA-7"])
 
 
 # ================================================================ диаграммы-последовательности

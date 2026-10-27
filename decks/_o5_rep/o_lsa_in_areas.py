@@ -75,7 +75,7 @@ HTML = CSS + bg("bg4", W, H) + "".join([
     + p(946, 808, 1060, 853, "#fff1b8", "<b style='font-size:19px'>ASBR-NSSA</b>(в NSSA)", "align-items:flex-start;font-size:16px")
     + p(666, 656, 872, 713, "#fff1b8", "<b style='font-size:26px'>NSSA</b>(не совсем обычная область)", "font-weight:700;font-size:14px")
     + p(434, 643, 596, 692, "#fff", "<b style='font-size:15px'>Внешняя сеть</b>(например, Интернет)")
-    + p(656, 822, 800, 866, "#fff", "<b style='font-size:15px'>Внешняя сеть</b>(например, финлал)")
+    + p(656, 822, 800, 866, "#fff", "<b style='font-size:15px'>Внешняя сеть</b>(например, филиал)")
     + p(368, 724, 516, 828, "#fff", "Разные<br>типы LSA —<br>разные области<br>и правила<br>распространения",
         "font-size:15px;align-items:flex-start;text-align:left;transform:rotate(-4deg)")
     + '</div>',
