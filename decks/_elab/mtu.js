@@ -8,7 +8,7 @@
    Стратегии как в Linux: do — DF и запрет даже своей фрагментации; want (по умолчанию у ESR и Debian) — DF в сети,
    после «Fragmentation needed» узел запоминает MTU пути и дальше режет пакет сам; dont — DF не ставится.
    У VPC и MES по умолчанию DF не ставится (-D / df-bit — ставится).
-   Упрощения: MTU коммутатора MES (mtu, system mtu — размер кадра L2) не моделируется, у хостов MTU 1500;
+   Упрощения: у хостов MTU 1500 (MTU коммутаторов MES — physics.js);
    накладные расходы инкапсуляции внутри туннеля учтены только через MTU туннеля. */
 (function (G) {
   'use strict';
@@ -54,15 +54,16 @@
     function attempt(df, local) { var c = s._mtuPing = { size: total, df: df, local: local }, r;
       try { r = s.ping(id, dst); } finally { s._mtuPing = null; } return { r: r, hit: c.hit || null }; }
     var res = [], a, hit = null, localErr = false;
+    function lossy(r) { return !!(s.echoLoss && s.echoLoss(r)); }      // несовпадение дуплекса (physics.js)
     if (EL.ip.ip2n(dst) === null) return this.pingText(id, dst, style);
     s.pmtu = s.pmtu || {}; var key = id + '|' + dst, known = s.pmtu[key];
-    if (o.mode === 'dont' || (o.mode === 'want' && known)) { a = attempt(false, 'frag'); for (var i = 0; i < cnt; i++) res.push(a.r.ok ? 'ok' : 'lost'); }
+    if (o.mode === 'dont' || (o.mode === 'want' && known)) { a = attempt(false, 'frag'); for (var i = 0; i < cnt; i++) res.push(a.r.ok && !lossy(a.r) ? 'ok' : 'lost'); }
     else {
       a = attempt(true, o.mode === 'do' ? 'err' : 'frag'); hit = a.hit;
       if (hit && hit.local) localErr = true;
       else if (hit && o.mode === 'want') {                  // узнали MTU пути — дальше режем сами
-        s.pmtu[key] = hit.mtu; res.push('frag'); var b = attempt(false, 'frag'); for (var j = 1; j < cnt; j++) res.push(b.r.ok ? 'ok' : 'lost'); a = b;
-      } else for (var k = 0; k < cnt; k++) res.push(a.r.ok ? 'ok' : hit ? 'frag' : 'lost');
+        s.pmtu[key] = hit.mtu; res.push('frag'); var b = attempt(false, 'frag'); for (var j = 1; j < cnt; j++) res.push(b.r.ok && !lossy(b.r) ? 'ok' : 'lost'); a = b;
+      } else for (var k = 0; k < cnt; k++) res.push(a.r.ok ? (lossy(a.r) ? 'lost' : 'ok') : hit ? 'frag' : 'lost');
     }
     if (this.onTrace) this.onTrace(a.r, id, dst);
     var ok = res.filter(function (x) { return x === 'ok'; }).length, err = res.filter(function (x) { return x === 'frag'; }).length, hops = (a.r.hops || []).length;

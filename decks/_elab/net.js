@@ -580,6 +580,9 @@
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
+      if (this.l2Mtu && this._mtuPing) { var s2 = this, l2m = null;          // MTU коммутаторов по пути (physics.js): большой кадр отбрасывается молча
+        ep.path.some(function (sg) { var l = s2.links[sg.li]; if (!l) return false; var pt = l.a.dev === sg.to ? l.a.port : l.b.port; l2m = s2.l2Mtu(sg.to, pt, sg.tag); return !!l2m; });
+        if (l2m) { steps.push({ k: 'drop', t: l2m, segs: ep.path }); return { ok: false, why: 'Request timed out', pk: pk }; } }
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag, qtag: sg.qtag }; });
       this._arpSip = r.nh; var viol; try { viol = this.learn(back, dmac); } finally { this._arpSip = null; }
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd.name + ': ARP-ответ отброшен — ' + viol }); return { ok: false, why: 'Host unreachable', pk: pk }; }
@@ -760,27 +763,29 @@
 
   // ------------------------------------------------------------------ текстовые выводы
   P.pingText = function (id, dst, style) {
-    var r = this.ping(id, dst), n = 5, o = [];
+    var r = this.ping(id, dst), n = 5, o = [], s = this, E = [];
+    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)));   // несовпадение дуплекса: часть эхо теряется (physics.js)
+    var got = function (k) { return E.slice(0, k).filter(Boolean).length; };
     if (this.onTrace) this.onTrace(r, id, dst);
     if (IP.ip2n(dst) === null) return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : '% Неверный адрес';
-    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(r.ok ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
+    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
                                                                : (r.why === 'Host unreachable' || r.why === 'No IP address' ? 'host (' + dst + ') not reachable' : dst + ' icmp_seq=' + i + ' timeout'));
       return o.join('\n'); }
     if (style === 'linux') {
       o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.');
-      for (var j = 1; j <= 4; j++) if (r.ok) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
+      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
       if (!r.ok && /unreach/i.test(r.why || '')) o.push('From ' + (this.ifaces(id)[0] || { ip: dst }).ip + ' icmp_seq=1 Destination Host Unreachable');
       if (!r.ok && /No IP/.test(r.why || '')) return 'ping: connect: Network is unreachable';
-      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + (r.ok ? 4 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 3004ms');
+      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + got(4) + ' received, ' + Math.round((4 - got(4)) * 25) + '% packet loss, time 3004ms');
       return o.join('\n');
     }
     if (style === 'esr') {
-      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.', r.ok ? '!!!!!' : '.....', '--- ' + dst + ' ping statistics ---',
-             '5 packets transmitted, ' + (r.ok ? 5 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 4005ms');
+      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.', E.map(function (x) { return x ? '!' : '.'; }).join(''), '--- ' + dst + ' ping statistics ---',
+             '5 packets transmitted, ' + got(5) + ' received, ' + (5 - got(5)) * 20 + '% packet loss, time 4005ms');
       return o.join('\n');
     }
-    for (var k = 1; k <= n; k++) o.push(r.ok ? 'Reply Received From :' + dst + ', TimeTaken : ' + k + ' msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs');
-    o.push('', '--- ' + dst + ' Ping Statistics ---', n + ' Packets Transmitted, ' + (r.ok ? n : 0) + ' Packets Received, ' + (r.ok ? '0' : '100') + '% Packets Loss');
+    for (var k = 1; k <= n; k++) o.push(E[k - 1] ? 'Reply Received From :' + dst + ', TimeTaken : ' + k + ' msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs');
+    o.push('', '--- ' + dst + ' Ping Statistics ---', n + ' Packets Transmitted, ' + got(n) + ' Packets Received, ' + (n - got(n)) * 20 + '% Packets Loss');
     return o.join('\n');
   };
   P.traceText = function (id, dst) {

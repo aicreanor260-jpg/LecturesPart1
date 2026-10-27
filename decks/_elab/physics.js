@@ -5,11 +5,19 @@
    Правила: медь — скорость согласуется (максимум 1G); оптика — скорость модуля, медный порт gi оптику не принимает, SFP+ 10G в порт 1G — нет линка.
    Одна сторона принудительно (без автосогласования), другая auto — auto-сторона определяет скорость, но выбирает half-duplex (как в стандарте 802.3):
    несовпадение дуплекса — линк есть, но на full-стороне растут FCS-ошибки, на half-стороне — поздние коллизии. Разные принудительные скорости — линка нет.
-   Упрощение: кадры при несовпадении дуплекса не теряются (потери не моделируются), только ошибки в счётчиках. */
+   Несовпадение дуплекса: каждый кадр по линку — FCS-ошибка у full-стороны / поздняя коллизия у half-стороны, и ~20 % кадров теряются
+   (ping показывает пропуски; последовательность псевдослучайная, но повторяемая).
+   Трансиверы: модуль задаётся на каждом конце (по умолчанию одинаковый): 1G SX (многомод, 850 нм), 1G LX (одномод, 1310 нм), 10G SR (многомод, 850 нм),
+   10G LR (одномод, 1310 нм), DAC 10G (медный кабель с впаянными модулями, только с обеих сторон). Разные скорость или длина волны / тип волокна — линка нет.
+   MTU коммутатора (кадр больше — отбрасывается молча, без ICMP): MES 10.x — system mtu 128..12288 (12288, включает 18 байт заголовка и FCS) и mtu на порту;
+   MES 6.x — port jumbo-frame (по умолчанию MTU 1500, с ним 10240), действует после перезагрузки. */
 (function (G) {
   'use strict';
   var EL = G.EL, E = EL.E, S = EL.esr, P = EL.Net.prototype, CMDS = E.CMDS;
-  var CAB = { cu: 'Медь (RJ-45)', sfp1g: 'Оптика SFP 1G', sfp10g: 'Оптика SFP+ 10G' };
+  var CAB = { cu: 'Медь (RJ-45)', sfp1g: 'Оптика SFP 1G SX (многомод, 850 нм)', 'sfp1g-lx': 'Оптика SFP 1G LX (одномод, 1310 нм)',
+    sfp10g: 'Оптика SFP+ 10G SR (многомод, 850 нм)', 'sfp10g-lr': 'Оптика SFP+ 10G LR (одномод, 1310 нм)', dac10g: 'DAC SFP+ 10G (медный кабель с модулями)' };
+  var MOD = { sfp1g: { sp: 1000, wl: 850, mm: true, std: '1000BASE-SX' }, 'sfp1g-lx': { sp: 1000, wl: 1310, mm: false, std: '1000BASE-LX' },
+    sfp10g: { sp: 10000, wl: 850, mm: true, std: '10GBASE-SR' }, 'sfp10g-lr': { sp: 10000, wl: 1310, mm: false, std: '10GBASE-LR' }, dac10g: { sp: 10000, dac: true, std: '10G DAC' } };
   EL.CABLES = CAB;
   function xg(port) { return /^(te|tw|fo|hu)/.test(port) || /^1\/0\//.test(port); }       // порт SFP+ и выше (MES 8.x — 1/0/N, 10G)
   function maxOf(port) { return xg(port) ? 10000 : 1000; }
@@ -26,14 +34,22 @@
     var pr = this.peer(id, port); if (!pr) return { up: false, why: 'нет кабеля' };
     var l = this.links[pr.li], cab = l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port);
     var A = { id: id, port: port, c: cfg(this, id, port) }, B = { id: pr.dev, port: pr.port, c: cfg(this, pr.dev, pr.port) }, out = { dup: {} };
+    var cb = l.cabB && l.cabB !== cab ? l.cabB : null;          // модуль на конце B, если отличается
+    if (cb) { var ma = MOD[cab], mb = MOD[cb], nmA = l.a.dev === id ? cab : cb;
+      if (!ma || !mb) return { up: false, why: 'с одной стороны медь, с другой — оптический модуль: соединить нельзя' };
+      if (ma.dac || mb.dac) return { up: false, why: 'DAC — это кабель с модулями на обоих концах, с оптическим модулем не соединяется' };
+      if (ma.sp !== mb.sp) return { up: false, why: 'модули ' + ma.std + ' и ' + mb.std + ' — разные скорости (' + ma.sp + ' и ' + mb.sp + ' Мбит/с), линка нет' };
+      if (ma.wl !== mb.wl || ma.mm !== mb.mm) return { up: false, why: 'модули ' + ma.std + ' (' + ma.wl + ' нм, ' + (ma.mm ? 'многомод' : 'одномод') + ') и ' + mb.std +
+        ' (' + mb.wl + ' нм, ' + (mb.mm ? 'многомод' : 'одномод') + ') — разные длина волны и волокно, приёмник не видит сигнал' };
+      void nmA; }
     if (cab !== 'cu') {
-      var fs = cab === 'sfp10g' ? 10000 : 1000;
+      var fs = (MOD[cab] || { sp: 1000 }).sp;
       var bad = [A, B].filter(function (x) { return !xg(x.port); })[0];
       if (bad) return { up: false, why: CAB[cab] + ': порт ' + bad.port + ' — медный, оптический модуль в него не вставить' };
       if (fs > Math.min(maxOf(A.port), maxOf(B.port))) return { up: false, why: 'модуль ' + CAB[cab] + ' не работает в порту 1G' };
       var f2 = [A, B].filter(function (x) { return !x.c.auto && x.c.speed !== fs; })[0];
       if (f2) return { up: false, why: 'на ' + f2.port + ' задана скорость ' + f2.c.speed + ', а оптика работает только на ' + fs };
-      out.up = true; out.speed = fs; out.dup[A.id] = out.dup[B.id] = 'full'; out.cab = cab; return out;
+      out.up = true; out.speed = fs; out.dup[A.id] = out.dup[B.id] = 'full'; out.cab = cab; out.cabB = cb; return out;
     }
     var mx = Math.min(1000, maxOf(A.port), maxOf(B.port));
     var over = [A, B].filter(function (x) { return !x.c.auto && x.c.speed > mx; })[0];
@@ -62,12 +78,51 @@
   };
   // кабель на линке: при прокладке и в файле схемы
   var con0 = P.connect;
-  P.connect = function (a, ap, b, bp, cab) { var r = con0.call(this, a, ap, b, bp); if (!r && cab && CAB[cab]) this.links[this.links.length - 1].cab = cab; return r; };
+  // кабель: 'sfp1g' — одинаковые модули; 'sfp1g|sfp1g-lx' — модуль конца A | модуль конца B
+  function setCab(l, cab) { var q = String(cab || '').split('|'); if (!CAB[q[0]]) return; l.cab = q[0]; if (q[1] && CAB[q[1]] && q[1] !== q[0]) l.cabB = q[1]; }
+  P.connect = function (a, ap, b, bp, cab) { var r = con0.call(this, a, ap, b, bp); if (!r && cab) setCab(this.links[this.links.length - 1], cab); return r; };
   var json0 = P.toJSON;
-  P.toJSON = function () { var j = json0.call(this), s = this; j.links.forEach(function (x, i) { if (s.links[i].cab) x.push(s.links[i].cab); }); return j; };
+  P.toJSON = function () { var j = json0.call(this), s = this; j.links.forEach(function (x, i) { var l = s.links[i]; if (l.cab) x.push(l.cab + (l.cabB ? '|' + l.cabB : '')); }); return j; };
   var from0 = EL.Net.fromJSON;
-  EL.Net.fromJSON = function (j) { var n = from0(j); (j.links || []).forEach(function (l) { if (!l[4] || !CAB[l[4]]) return;
-    var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3]) x.cab = l[4]; }); }); return n; };
+  EL.Net.fromJSON = function (j) { var n = from0(j); (j.links || []).forEach(function (l) { if (!l[4]) return;
+    var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3]) setCab(x, l[4]); }); }); return n; };
+  P.cableText = function (l) { var a = CAB[l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || ''; return l.cabB ? a + ' ↔ ' + CAB[l.cabB] : a; };
+
+  // ---------------------------------------------------------------- потери при несовпадении дуплекса (~20 % кадров на таком линке)
+  P.echoLoss = function (r) {
+    if (!r || !r.ok) return false; var s = this, lis = {};
+    (r.steps || []).forEach(function (x) { (x.segs || []).forEach(function (g) { lis[g.li] = 1; }); });
+    return Object.keys(lis).some(function (li) { var l = s.links[li]; if (!l) return false; var ph = s.phys(l.a.dev, l.a.port); if (!ph.up || !ph.mismatch) return false;
+      var lost = false; for (var k = 0; k < 2; k++) { s._lossSeq = ((s._lossSeq || 0) + 1) >>> 0; if ((((s._lossSeq * 2654435761) >>> 0) + li * 97) % 100 < 20) lost = true; }   // запрос и ответ
+      return lost; });
+  };
+
+  // ---------------------------------------------------------------- MTU коммутатора MES
+  function mesMtu(st, port, tagged) {           // возвращает {lim, frame} или null: lim — предел, frame — что с ним сравнивается
+    if (st.dialect === '6') return { lim: st.jumboOn ? 10240 : 1500, l3: true };
+    if (st.dialect === '10') { var p = st.ports[port] || {}; return { lim: p.mtu || st.sysMtu || 12288, l3: false, tag: tagged ? 4 : 0 }; }
+    return null;
+  }
+  P.l2Mtu = function (dev, port, tag) {
+    var c = this._mtuPing; if (!c) return null; var d = this.devs[dev]; if (d.type !== 'mes') return null;
+    var m = mesMtu(d.st, port, tag !== null && tag !== undefined); if (!m) return null;
+    var sz = m.l3 ? c.size : c.size + 18 + (m.tag || 0);
+    if (sz <= m.lim) return null;
+    c.l2hit = c.l2hit || { dev: dev };
+    return d.name + ': кадр ' + (m.l3 ? 'с пакетом ' + c.size + ' байт' : c.size + 18 + (m.tag || 0) + ' байт') + ' больше MTU ' + m.lim + ' на ' + port +
+      (d.st.dialect === '6' ? ' (без port jumbo-frame — 1500)' : ' (system mtu / mtu, вместе с 18 байтами заголовка и FCS)') + ' — отброшен молча, ICMP не отправляется';
+  };
+  mcmd(['10'], 'config', 'system mtu <n>', function (st, a) { if (a[0] < 128 || a[0] > 12288) return '% Invalid input'; st.sysMtu = a[0]; }, 'MTU коммутатора (кадр с заголовком и FCS), 128..12288');
+  mcmd(['10'], 'config', 'no system mtu', function (st) { delete st.sysMtu; });
+  mcmd(['10'], 'if range', 'mtu <n>', function (st, a) { if (a[0] < 128 || a[0] > 12288) return '% Invalid input'; return each(st, function (p) { p.mtu = a[0]; }); }, 'MTU порта, 128..12288');
+  mcmd(['10'], 'if range', 'no mtu', function (st) { return each(st, function (p) { delete p.mtu; }); });
+  mcmd(['6'], 'config', 'port jumbo-frame', function (st) { st.jumboCfg = true; return 'This setting will take effect only after copying running configuration to startup configuration and resetting the device'; },
+    'Кадры до 10240 байт (после перезагрузки)');
+  mcmd(['6'], 'config', 'no port jumbo-frame', function (st) { delete st.jumboCfg; });
+  E.RUNX.push(function (st, o) { if (st.sysMtu) o.push('system mtu ' + st.sysMtu); if (st.jumboCfg) o.push('port jumbo-frame'); });
+  // jumbo-frame вступает в силу при загрузке: reload поднимает startup-config — что в нём, то и действует
+  CMDS.forEach(function (c) { if (c.pat.join(' ') !== 'reload') return; var f = c.run;
+    c.run = function (st) { var r = f.apply(this, arguments); st.jumboOn = !!st.jumboCfg; return r; }; });
 
   // ---------------------------------------------------------------- MES
   function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
@@ -79,7 +134,7 @@
   mcmd(['10', '6'], 'if range', 'no duplex', function (st) { return each(st, function (p) { delete p.duplex; }); });
   mcmd(['10', '6'], 'if range', 'negotiation', function (st) { return each(st, function (p) { delete p.neg; }); }, 'Включить автосогласование');
   mcmd(['10', '6'], 'if range', 'no negotiation', function (st) { return each(st, function (p) { p.neg = false; }); }, 'Выключить автосогласование');
-  E.PORTX.push(function (st, k, p, d) { if (p.speed) d.push(' speed ' + p.speed); if (p.duplex && p.duplex !== 'full') d.push(' duplex ' + p.duplex); if (p.neg === false) d.push(' no negotiation'); });
+  E.PORTX.push(function (st, k, p, d) { if (p.mtu) d.push(' mtu ' + p.mtu); if (p.speed) d.push(' speed ' + p.speed); if (p.duplex && p.duplex !== 'full') d.push(' duplex ' + p.duplex); if (p.neg === false) d.push(' no negotiation'); });
   // show interfaces status — формат руководства 6.6.8.8
   function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
   function mesStatus(st) {

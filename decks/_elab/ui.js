@@ -200,7 +200,7 @@
     selLink = i; draw(); var l = net.links[i];
     var ph = net.phys ? net.phys(l.a.dev, l.a.port) : null;
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
-      (ph && mode === 'test' ? '<div class="h" style="border:0;text-transform:none;letter-spacing:0">' + esc((EL.CABLES[ph.cab || net.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || '') + ' · ' +
+      (ph && mode === 'test' ? '<div class="h" style="border:0;text-transform:none;letter-spacing:0">' + esc((net.cableText ? net.cableText(l) : EL.CABLES[ph.cab || net.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || '') + ' · ' +
         (ph.up ? ph.speed + ' Мбит/с, ' + ph.dup[l.a.dev] + '/' + ph.dup[l.b.dev] + (ph.mismatch ? ' — дуплекс не совпадает!' : '') : 'нет линка: ' + ph.why)) + '</div>' : '') +
       X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
         return X.run('link', a, i); });
@@ -241,10 +241,12 @@
     body.innerHTML = '<div class="k">Новый кабель</div><label>' + esc(a.name) + ' — порт</label><select id="cpa">' + opts(fa) + '</select>' +
       '<label>' + esc(d.name) + ' — порт</label><select id="cpb">' + opts(fb) + '</select>' +
       '<label>Кабель / модуль</label><select id="cpc"><option value="">Авто: медь, между портами 10G — SFP+</option>' +
-      Object.keys(EL.CABLES || {}).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
-    makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 360, h: 280, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
+      Object.keys(EL.CABLES || {}).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select>' +
+      '<label>Модуль на стороне ' + esc(d.name) + '</label><select id="cpd"><option value="">Такой же</option>' +
+      Object.keys(EL.CABLES || {}).filter(function (k) { return k !== 'cu'; }).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
+    makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 380, h: 330, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
-      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, body.querySelector('#cpc').value || undefined); if (err) { toast(err); return; }
+      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, (body.querySelector('#cpc').value ? body.querySelector('#cpc').value + (body.querySelector('#cpd').value ? '|' + body.querySelector('#cpd').value : '') : undefined)); if (err) { toast(err); return; }
         X.rec({ k: 'con', l: X.linkArr(net.links[net.links.length - 1]) }); draw(); refresh(); toast('Кабель проложен'); }
       closeWin('cable'); });
   }

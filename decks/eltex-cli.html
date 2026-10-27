@@ -320,6 +320,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>lldp timer · lldp hold-multiplier (MES 10.x: lldp transmit-interval · lldp holdtime-multiplier)</td><td>TTL соседа в show lldp neighbors отсчитывается и обновляется каждые timer секунд</td></tr>
 <tr><td>(router bgp / neighbor) timers keepalive N · timers holdtime N · show bgp neighbors</td><td>BGP по таймерам: сосед пропал без разрыва линка — сессия и маршруты живут hold time (180 с); NOTIFICATION или свой линк — сразу</td></tr>
 <tr><td>ipv6 ospf hello-interval · dead-interval · wait-interval · priority · network point-to-point · cost; (config-ripng) timers update|invalid|flush</td><td>OSPFv3/RIPng по таймерам: DR/BDR, ожидание wait, possibly down до flush</td></tr>
+<tr><td>Новый кабель → модули на концах (SX/LX/SR/LR/DAC) · (MES 10.x) system mtu N · mtu N · (MES 6.x) port jumbo-frame + write + reload</td><td>разные модули — нет линка; кадр больше MTU коммутатора отброшен молча; дуплекс не совпадает — ~20 % потерь</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
@@ -2923,6 +2924,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
+      if (this.l2Mtu && this._mtuPing) { var s2 = this, l2m = null;          // MTU коммутаторов по пути (physics.js): большой кадр отбрасывается молча
+        ep.path.some(function (sg) { var l = s2.links[sg.li]; if (!l) return false; var pt = l.a.dev === sg.to ? l.a.port : l.b.port; l2m = s2.l2Mtu(sg.to, pt, sg.tag); return !!l2m; });
+        if (l2m) { steps.push({ k: 'drop', t: l2m, segs: ep.path }); return { ok: false, why: 'Request timed out', pk: pk }; } }
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag, qtag: sg.qtag }; });
       this._arpSip = r.nh; var viol; try { viol = this.learn(back, dmac); } finally { this._arpSip = null; }
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd.name + ': ARP-ответ отброшен — ' + viol }); return { ok: false, why: 'Host unreachable', pk: pk }; }
@@ -3103,27 +3107,29 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
   // ------------------------------------------------------------------ текстовые выводы
   P.pingText = function (id, dst, style) {
-    var r = this.ping(id, dst), n = 5, o = [];
+    var r = this.ping(id, dst), n = 5, o = [], s = this, E = [];
+    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)));   // несовпадение дуплекса: часть эхо теряется (physics.js)
+    var got = function (k) { return E.slice(0, k).filter(Boolean).length; };
     if (this.onTrace) this.onTrace(r, id, dst);
     if (IP.ip2n(dst) === null) return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : '% Неверный адрес';
-    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(r.ok ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
+    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
                                                                : (r.why === 'Host unreachable' || r.why === 'No IP address' ? 'host (' + dst + ') not reachable' : dst + ' icmp_seq=' + i + ' timeout'));
       return o.join('\n'); }
     if (style === 'linux') {
       o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.');
-      for (var j = 1; j <= 4; j++) if (r.ok) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
+      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
       if (!r.ok && /unreach/i.test(r.why || '')) o.push('From ' + (this.ifaces(id)[0] || { ip: dst }).ip + ' icmp_seq=1 Destination Host Unreachable');
       if (!r.ok && /No IP/.test(r.why || '')) return 'ping: connect: Network is unreachable';
-      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + (r.ok ? 4 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 3004ms');
+      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + got(4) + ' received, ' + Math.round((4 - got(4)) * 25) + '% packet loss, time 3004ms');
       return o.join('\n');
     }
     if (style === 'esr') {
-      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.', r.ok ? '!!!!!' : '.....', '--- ' + dst + ' ping statistics ---',
-             '5 packets transmitted, ' + (r.ok ? 5 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 4005ms');
+      o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.', E.map(function (x) { return x ? '!' : '.'; }).join(''), '--- ' + dst + ' ping statistics ---',
+             '5 packets transmitted, ' + got(5) + ' received, ' + (5 - got(5)) * 20 + '% packet loss, time 4005ms');
       return o.join('\n');
     }
-    for (var k = 1; k <= n; k++) o.push(r.ok ? 'Reply Received From :' + dst + ', TimeTaken : ' + k + ' msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs');
-    o.push('', '--- ' + dst + ' Ping Statistics ---', n + ' Packets Transmitted, ' + (r.ok ? n : 0) + ' Packets Received, ' + (r.ok ? '0' : '100') + '% Packets Loss');
+    for (var k = 1; k <= n; k++) o.push(E[k - 1] ? 'Reply Received From :' + dst + ', TimeTaken : ' + k + ' msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs');
+    o.push('', '--- ' + dst + ' Ping Statistics ---', n + ' Packets Transmitted, ' + got(n) + ' Packets Received, ' + (n - got(n)) * 20 + '% Packets Loss');
     return o.join('\n');
   };
   P.traceText = function (id, dst) {
@@ -5627,11 +5633,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
    Правила: медь — скорость согласуется (максимум 1G); оптика — скорость модуля, медный порт gi оптику не принимает, SFP+ 10G в порт 1G — нет линка.
    Одна сторона принудительно (без автосогласования), другая auto — auto-сторона определяет скорость, но выбирает half-duplex (как в стандарте 802.3):
    несовпадение дуплекса — линк есть, но на full-стороне растут FCS-ошибки, на half-стороне — поздние коллизии. Разные принудительные скорости — линка нет.
-   Упрощение: кадры при несовпадении дуплекса не теряются (потери не моделируются), только ошибки в счётчиках. */
+   Несовпадение дуплекса: каждый кадр по линку — FCS-ошибка у full-стороны / поздняя коллизия у half-стороны, и ~20 % кадров теряются
+   (ping показывает пропуски; последовательность псевдослучайная, но повторяемая).
+   Трансиверы: модуль задаётся на каждом конце (по умолчанию одинаковый): 1G SX (многомод, 850 нм), 1G LX (одномод, 1310 нм), 10G SR (многомод, 850 нм),
+   10G LR (одномод, 1310 нм), DAC 10G (медный кабель с впаянными модулями, только с обеих сторон). Разные скорость или длина волны / тип волокна — линка нет.
+   MTU коммутатора (кадр больше — отбрасывается молча, без ICMP): MES 10.x — system mtu 128..12288 (12288, включает 18 байт заголовка и FCS) и mtu на порту;
+   MES 6.x — port jumbo-frame (по умолчанию MTU 1500, с ним 10240), действует после перезагрузки. */
 (function (G) {
   'use strict';
   var EL = G.EL, E = EL.E, S = EL.esr, P = EL.Net.prototype, CMDS = E.CMDS;
-  var CAB = { cu: 'Медь (RJ-45)', sfp1g: 'Оптика SFP 1G', sfp10g: 'Оптика SFP+ 10G' };
+  var CAB = { cu: 'Медь (RJ-45)', sfp1g: 'Оптика SFP 1G SX (многомод, 850 нм)', 'sfp1g-lx': 'Оптика SFP 1G LX (одномод, 1310 нм)',
+    sfp10g: 'Оптика SFP+ 10G SR (многомод, 850 нм)', 'sfp10g-lr': 'Оптика SFP+ 10G LR (одномод, 1310 нм)', dac10g: 'DAC SFP+ 10G (медный кабель с модулями)' };
+  var MOD = { sfp1g: { sp: 1000, wl: 850, mm: true, std: '1000BASE-SX' }, 'sfp1g-lx': { sp: 1000, wl: 1310, mm: false, std: '1000BASE-LX' },
+    sfp10g: { sp: 10000, wl: 850, mm: true, std: '10GBASE-SR' }, 'sfp10g-lr': { sp: 10000, wl: 1310, mm: false, std: '10GBASE-LR' }, dac10g: { sp: 10000, dac: true, std: '10G DAC' } };
   EL.CABLES = CAB;
   function xg(port) { return /^(te|tw|fo|hu)/.test(port) || /^1\/0\//.test(port); }       // порт SFP+ и выше (MES 8.x — 1/0/N, 10G)
   function maxOf(port) { return xg(port) ? 10000 : 1000; }
@@ -5648,14 +5662,22 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var pr = this.peer(id, port); if (!pr) return { up: false, why: 'нет кабеля' };
     var l = this.links[pr.li], cab = l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port);
     var A = { id: id, port: port, c: cfg(this, id, port) }, B = { id: pr.dev, port: pr.port, c: cfg(this, pr.dev, pr.port) }, out = { dup: {} };
+    var cb = l.cabB && l.cabB !== cab ? l.cabB : null;          // модуль на конце B, если отличается
+    if (cb) { var ma = MOD[cab], mb = MOD[cb], nmA = l.a.dev === id ? cab : cb;
+      if (!ma || !mb) return { up: false, why: 'с одной стороны медь, с другой — оптический модуль: соединить нельзя' };
+      if (ma.dac || mb.dac) return { up: false, why: 'DAC — это кабель с модулями на обоих концах, с оптическим модулем не соединяется' };
+      if (ma.sp !== mb.sp) return { up: false, why: 'модули ' + ma.std + ' и ' + mb.std + ' — разные скорости (' + ma.sp + ' и ' + mb.sp + ' Мбит/с), линка нет' };
+      if (ma.wl !== mb.wl || ma.mm !== mb.mm) return { up: false, why: 'модули ' + ma.std + ' (' + ma.wl + ' нм, ' + (ma.mm ? 'многомод' : 'одномод') + ') и ' + mb.std +
+        ' (' + mb.wl + ' нм, ' + (mb.mm ? 'многомод' : 'одномод') + ') — разные длина волны и волокно, приёмник не видит сигнал' };
+      void nmA; }
     if (cab !== 'cu') {
-      var fs = cab === 'sfp10g' ? 10000 : 1000;
+      var fs = (MOD[cab] || { sp: 1000 }).sp;
       var bad = [A, B].filter(function (x) { return !xg(x.port); })[0];
       if (bad) return { up: false, why: CAB[cab] + ': порт ' + bad.port + ' — медный, оптический модуль в него не вставить' };
       if (fs > Math.min(maxOf(A.port), maxOf(B.port))) return { up: false, why: 'модуль ' + CAB[cab] + ' не работает в порту 1G' };
       var f2 = [A, B].filter(function (x) { return !x.c.auto && x.c.speed !== fs; })[0];
       if (f2) return { up: false, why: 'на ' + f2.port + ' задана скорость ' + f2.c.speed + ', а оптика работает только на ' + fs };
-      out.up = true; out.speed = fs; out.dup[A.id] = out.dup[B.id] = 'full'; out.cab = cab; return out;
+      out.up = true; out.speed = fs; out.dup[A.id] = out.dup[B.id] = 'full'; out.cab = cab; out.cabB = cb; return out;
     }
     var mx = Math.min(1000, maxOf(A.port), maxOf(B.port));
     var over = [A, B].filter(function (x) { return !x.c.auto && x.c.speed > mx; })[0];
@@ -5684,12 +5706,51 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
   // кабель на линке: при прокладке и в файле схемы
   var con0 = P.connect;
-  P.connect = function (a, ap, b, bp, cab) { var r = con0.call(this, a, ap, b, bp); if (!r && cab && CAB[cab]) this.links[this.links.length - 1].cab = cab; return r; };
+  // кабель: 'sfp1g' — одинаковые модули; 'sfp1g|sfp1g-lx' — модуль конца A | модуль конца B
+  function setCab(l, cab) { var q = String(cab || '').split('|'); if (!CAB[q[0]]) return; l.cab = q[0]; if (q[1] && CAB[q[1]] && q[1] !== q[0]) l.cabB = q[1]; }
+  P.connect = function (a, ap, b, bp, cab) { var r = con0.call(this, a, ap, b, bp); if (!r && cab) setCab(this.links[this.links.length - 1], cab); return r; };
   var json0 = P.toJSON;
-  P.toJSON = function () { var j = json0.call(this), s = this; j.links.forEach(function (x, i) { if (s.links[i].cab) x.push(s.links[i].cab); }); return j; };
+  P.toJSON = function () { var j = json0.call(this), s = this; j.links.forEach(function (x, i) { var l = s.links[i]; if (l.cab) x.push(l.cab + (l.cabB ? '|' + l.cabB : '')); }); return j; };
   var from0 = EL.Net.fromJSON;
-  EL.Net.fromJSON = function (j) { var n = from0(j); (j.links || []).forEach(function (l) { if (!l[4] || !CAB[l[4]]) return;
-    var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3]) x.cab = l[4]; }); }); return n; };
+  EL.Net.fromJSON = function (j) { var n = from0(j); (j.links || []).forEach(function (l) { if (!l[4]) return;
+    var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3]) setCab(x, l[4]); }); }); return n; };
+  P.cableText = function (l) { var a = CAB[l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || ''; return l.cabB ? a + ' ↔ ' + CAB[l.cabB] : a; };
+
+  // ---------------------------------------------------------------- потери при несовпадении дуплекса (~20 % кадров на таком линке)
+  P.echoLoss = function (r) {
+    if (!r || !r.ok) return false; var s = this, lis = {};
+    (r.steps || []).forEach(function (x) { (x.segs || []).forEach(function (g) { lis[g.li] = 1; }); });
+    return Object.keys(lis).some(function (li) { var l = s.links[li]; if (!l) return false; var ph = s.phys(l.a.dev, l.a.port); if (!ph.up || !ph.mismatch) return false;
+      var lost = false; for (var k = 0; k < 2; k++) { s._lossSeq = ((s._lossSeq || 0) + 1) >>> 0; if ((((s._lossSeq * 2654435761) >>> 0) + li * 97) % 100 < 20) lost = true; }   // запрос и ответ
+      return lost; });
+  };
+
+  // ---------------------------------------------------------------- MTU коммутатора MES
+  function mesMtu(st, port, tagged) {           // возвращает {lim, frame} или null: lim — предел, frame — что с ним сравнивается
+    if (st.dialect === '6') return { lim: st.jumboOn ? 10240 : 1500, l3: true };
+    if (st.dialect === '10') { var p = st.ports[port] || {}; return { lim: p.mtu || st.sysMtu || 12288, l3: false, tag: tagged ? 4 : 0 }; }
+    return null;
+  }
+  P.l2Mtu = function (dev, port, tag) {
+    var c = this._mtuPing; if (!c) return null; var d = this.devs[dev]; if (d.type !== 'mes') return null;
+    var m = mesMtu(d.st, port, tag !== null && tag !== undefined); if (!m) return null;
+    var sz = m.l3 ? c.size : c.size + 18 + (m.tag || 0);
+    if (sz <= m.lim) return null;
+    c.l2hit = c.l2hit || { dev: dev };
+    return d.name + ': кадр ' + (m.l3 ? 'с пакетом ' + c.size + ' байт' : c.size + 18 + (m.tag || 0) + ' байт') + ' больше MTU ' + m.lim + ' на ' + port +
+      (d.st.dialect === '6' ? ' (без port jumbo-frame — 1500)' : ' (system mtu / mtu, вместе с 18 байтами заголовка и FCS)') + ' — отброшен молча, ICMP не отправляется';
+  };
+  mcmd(['10'], 'config', 'system mtu <n>', function (st, a) { if (a[0] < 128 || a[0] > 12288) return '% Invalid input'; st.sysMtu = a[0]; }, 'MTU коммутатора (кадр с заголовком и FCS), 128..12288');
+  mcmd(['10'], 'config', 'no system mtu', function (st) { delete st.sysMtu; });
+  mcmd(['10'], 'if range', 'mtu <n>', function (st, a) { if (a[0] < 128 || a[0] > 12288) return '% Invalid input'; return each(st, function (p) { p.mtu = a[0]; }); }, 'MTU порта, 128..12288');
+  mcmd(['10'], 'if range', 'no mtu', function (st) { return each(st, function (p) { delete p.mtu; }); });
+  mcmd(['6'], 'config', 'port jumbo-frame', function (st) { st.jumboCfg = true; return 'This setting will take effect only after copying running configuration to startup configuration and resetting the device'; },
+    'Кадры до 10240 байт (после перезагрузки)');
+  mcmd(['6'], 'config', 'no port jumbo-frame', function (st) { delete st.jumboCfg; });
+  E.RUNX.push(function (st, o) { if (st.sysMtu) o.push('system mtu ' + st.sysMtu); if (st.jumboCfg) o.push('port jumbo-frame'); });
+  // jumbo-frame вступает в силу при загрузке: reload поднимает startup-config — что в нём, то и действует
+  CMDS.forEach(function (c) { if (c.pat.join(' ') !== 'reload') return; var f = c.run;
+    c.run = function (st) { var r = f.apply(this, arguments); st.jumboOn = !!st.jumboCfg; return r; }; });
 
   // ---------------------------------------------------------------- MES
   function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
@@ -5701,7 +5762,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   mcmd(['10', '6'], 'if range', 'no duplex', function (st) { return each(st, function (p) { delete p.duplex; }); });
   mcmd(['10', '6'], 'if range', 'negotiation', function (st) { return each(st, function (p) { delete p.neg; }); }, 'Включить автосогласование');
   mcmd(['10', '6'], 'if range', 'no negotiation', function (st) { return each(st, function (p) { p.neg = false; }); }, 'Выключить автосогласование');
-  E.PORTX.push(function (st, k, p, d) { if (p.speed) d.push(' speed ' + p.speed); if (p.duplex && p.duplex !== 'full') d.push(' duplex ' + p.duplex); if (p.neg === false) d.push(' no negotiation'); });
+  E.PORTX.push(function (st, k, p, d) { if (p.mtu) d.push(' mtu ' + p.mtu); if (p.speed) d.push(' speed ' + p.speed); if (p.duplex && p.duplex !== 'full') d.push(' duplex ' + p.duplex); if (p.neg === false) d.push(' no negotiation'); });
   // show interfaces status — формат руководства 6.6.8.8
   function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
   function mesStatus(st) {
@@ -7107,7 +7168,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
    Стратегии как в Linux: do — DF и запрет даже своей фрагментации; want (по умолчанию у ESR и Debian) — DF в сети,
    после «Fragmentation needed» узел запоминает MTU пути и дальше режет пакет сам; dont — DF не ставится.
    У VPC и MES по умолчанию DF не ставится (-D / df-bit — ставится).
-   Упрощения: MTU коммутатора MES (mtu, system mtu — размер кадра L2) не моделируется, у хостов MTU 1500;
+   Упрощения: у хостов MTU 1500 (MTU коммутаторов MES — physics.js);
    накладные расходы инкапсуляции внутри туннеля учтены только через MTU туннеля. */
 (function (G) {
   'use strict';
@@ -7153,15 +7214,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
     function attempt(df, local) { var c = s._mtuPing = { size: total, df: df, local: local }, r;
       try { r = s.ping(id, dst); } finally { s._mtuPing = null; } return { r: r, hit: c.hit || null }; }
     var res = [], a, hit = null, localErr = false;
+    function lossy(r) { return !!(s.echoLoss && s.echoLoss(r)); }      // несовпадение дуплекса (physics.js)
     if (EL.ip.ip2n(dst) === null) return this.pingText(id, dst, style);
     s.pmtu = s.pmtu || {}; var key = id + '|' + dst, known = s.pmtu[key];
-    if (o.mode === 'dont' || (o.mode === 'want' && known)) { a = attempt(false, 'frag'); for (var i = 0; i < cnt; i++) res.push(a.r.ok ? 'ok' : 'lost'); }
+    if (o.mode === 'dont' || (o.mode === 'want' && known)) { a = attempt(false, 'frag'); for (var i = 0; i < cnt; i++) res.push(a.r.ok && !lossy(a.r) ? 'ok' : 'lost'); }
     else {
       a = attempt(true, o.mode === 'do' ? 'err' : 'frag'); hit = a.hit;
       if (hit && hit.local) localErr = true;
       else if (hit && o.mode === 'want') {                  // узнали MTU пути — дальше режем сами
-        s.pmtu[key] = hit.mtu; res.push('frag'); var b = attempt(false, 'frag'); for (var j = 1; j < cnt; j++) res.push(b.r.ok ? 'ok' : 'lost'); a = b;
-      } else for (var k = 0; k < cnt; k++) res.push(a.r.ok ? 'ok' : hit ? 'frag' : 'lost');
+        s.pmtu[key] = hit.mtu; res.push('frag'); var b = attempt(false, 'frag'); for (var j = 1; j < cnt; j++) res.push(b.r.ok && !lossy(b.r) ? 'ok' : 'lost'); a = b;
+      } else for (var k = 0; k < cnt; k++) res.push(a.r.ok ? (lossy(a.r) ? 'lost' : 'ok') : hit ? 'frag' : 'lost');
     }
     if (this.onTrace) this.onTrace(a.r, id, dst);
     var ok = res.filter(function (x) { return x === 'ok'; }).length, err = res.filter(function (x) { return x === 'frag'; }).length, hops = (a.r.hops || []).length;
@@ -10134,7 +10196,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     selLink = i; draw(); var l = net.links[i];
     var ph = net.phys ? net.phys(l.a.dev, l.a.port) : null;
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
-      (ph && mode === 'test' ? '<div class="h" style="border:0;text-transform:none;letter-spacing:0">' + esc((EL.CABLES[ph.cab || net.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || '') + ' · ' +
+      (ph && mode === 'test' ? '<div class="h" style="border:0;text-transform:none;letter-spacing:0">' + esc((net.cableText ? net.cableText(l) : EL.CABLES[ph.cab || net.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || '') + ' · ' +
         (ph.up ? ph.speed + ' Мбит/с, ' + ph.dup[l.a.dev] + '/' + ph.dup[l.b.dev] + (ph.mismatch ? ' — дуплекс не совпадает!' : '') : 'нет линка: ' + ph.why)) + '</div>' : '') +
       X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
         return X.run('link', a, i); });
@@ -10175,10 +10237,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
     body.innerHTML = '<div class="k">Новый кабель</div><label>' + esc(a.name) + ' — порт</label><select id="cpa">' + opts(fa) + '</select>' +
       '<label>' + esc(d.name) + ' — порт</label><select id="cpb">' + opts(fb) + '</select>' +
       '<label>Кабель / модуль</label><select id="cpc"><option value="">Авто: медь, между портами 10G — SFP+</option>' +
-      Object.keys(EL.CABLES || {}).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
-    makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 360, h: 280, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
+      Object.keys(EL.CABLES || {}).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select>' +
+      '<label>Модуль на стороне ' + esc(d.name) + '</label><select id="cpd"><option value="">Такой же</option>' +
+      Object.keys(EL.CABLES || {}).filter(function (k) { return k !== 'cu'; }).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
+    makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 380, h: 330, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
-      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, body.querySelector('#cpc').value || undefined); if (err) { toast(err); return; }
+      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, (body.querySelector('#cpc').value ? body.querySelector('#cpc').value + (body.querySelector('#cpd').value ? '|' + body.querySelector('#cpd').value : '') : undefined)); if (err) { toast(err); return; }
         X.rec({ k: 'con', l: X.linkArr(net.links[net.links.length - 1]) }); draw(); refresh(); toast('Кабель проложен'); }
       closeWin('cable'); });
   }

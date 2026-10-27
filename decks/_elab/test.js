@@ -253,6 +253,55 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ таймеры служб: LLDP, LACP');
 })();
 
+// физика: потери при несовпадении дуплекса, совместимость трансиверов, MTU коммутатора
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ физика: ' + name + (extra !== undefined ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s = n.add('MES2428', 'SW1'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B');
+  n.connect(a.id, 'eth0', s.id, 'gi1/0/1'); n.connect(b.id, 'eth0', s.id, 'gi1/0/2');
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'interface gi1/0/1', 'no negotiation', 'speed 100', 'end'], A: ['ip 10.8.0.1/24'], B: ['ip 10.8.0.2/24'] });
+  var out = ''; for (var i = 0; i < 6; i++) out += n.exec(a.id, 'ping 10.8.0.2') + '\n';
+  var lost = (out.match(/timeout/g) || []).length, okc = (out.match(/bytes from/g) || []).length;
+  chk('дуплекс не совпадает (100 full против auto→half): часть эхо теряется, но не все', lost > 0 && okc > 0 && lost < okc, lost + ' потерь из 30');
+  var ph = n.phys(s.id, 'gi1/0/1');
+  chk('несовпадение видно: 100 Мбит/с, full у коммутатора, half у ПК', ph.up && ph.mismatch && ph.speed === 100 && ph.dup[s.id] === 'full' && ph.dup[a.id] === 'half');
+  EL.labs.apply(n, { SW1: ['configure', 'interface gi1/0/1', 'negotiation', 'end'] });
+  out = ''; for (i = 0; i < 4; i++) out += n.exec(a.id, 'ping 10.8.0.2') + '\n';
+  chk('автосогласование с обеих сторон — потерь нет', !/timeout/.test(out));
+  // трансиверы: разные модули на концах
+  var m = new EL.Net(), x = m.add('MES5332A rev.C', 'X'), y = m.add('MES5332A rev.C', 'Y');
+  m.connect(x.id, 'te1/0/1', y.id, 'te1/0/1', 'sfp10g|sfp10g-lr'); m.connect(x.id, 'te1/0/2', y.id, 'te1/0/2', 'sfp1g|sfp10g');
+  m.connect(x.id, 'te1/0/3', y.id, 'te1/0/3', 'dac10g|sfp10g'); m.connect(x.id, 'te1/0/4', y.id, 'te1/0/4', 'sfp1g-lx');
+  m.connect(x.id, 'te1/0/5', y.id, 'te1/0/5', 'sfp10g-lr|sfp10g-lr');
+  var p1 = m.phys(x.id, 'te1/0/1'), p2 = m.phys(x.id, 'te1/0/2'), p3 = m.phys(x.id, 'te1/0/3'), p4 = m.phys(x.id, 'te1/0/4'), p5 = m.phys(x.id, 'te1/0/5');
+  chk('10G SR ↔ 10G LR — линка нет (850 и 1310 нм, многомод/одномод)', !p1.up && /850 нм/.test(p1.why) && /1310 нм/.test(p1.why), p1.why);
+  chk('1G SX ↔ 10G SR — линка нет (разные скорости)', !p2.up && /разные скорости/.test(p2.why), p2.why);
+  chk('DAC ↔ оптика — нельзя', !p3.up && /DAC/.test(p3.why), p3.why);
+  chk('1G LX с обеих сторон в порту SFP+ — линк 1000', p4.up && p4.speed === 1000, JSON.stringify(p4));
+  chk('10G LR с обеих сторон — линк 10000', p5.up && p5.speed === 10000);
+  chk('модули концов сохраняются в файле схемы', JSON.stringify(m.toJSON()).indexOf('sfp10g|sfp10g-lr') >= 0 && EL.Net.fromJSON(m.toJSON()).links[0].cabB === 'sfp10g-lr');
+  // MTU коммутатора MES 10.x: system mtu 1000 — большой кадр отброшен молча
+  var t = new EL.Net(), sw = t.add('MES2428', 'SW'), c = t.add('VPC', 'C'), d = t.add('VPC', 'D');
+  t.connect(c.id, 'eth0', sw.id, 'gi1/0/1'); t.connect(d.id, 'eth0', sw.id, 'gi1/0/2');
+  EL.labs.apply(t, { SW: ['enable', 'configure', 'system mtu 1000', 'end'], C: ['ip 10.9.9.1/24'], D: ['ip 10.9.9.2/24'] });
+  chk('system mtu 1000: обычный ping идёт', /bytes from/.test(t.exec(c.id, 'ping 10.9.9.2')));
+  var big = t.exec(c.id, 'ping 10.9.9.2 -l 1200');
+  chk('system mtu 1000: пакет 1228 байт (кадр 1246) отброшен', !/bytes from/.test(big) && /system mtu 1000/.test(t.exec(sw.id, 'show running-config')), big);
+  // MES 6.x: MTU 1500, port jumbo-frame — после записи и перезагрузки
+  var j = new EL.Net(), r1 = j.add('vESR', 'R1'), m6 = j.add('MES3348', 'S6'), r2 = j.add('vESR', 'R2');
+  j.connect(r1.id, 'gi1/0/1', m6.id, 'gi1/0/1'); j.connect(r2.id, 'gi1/0/1', m6.id, 'gi1/0/2');
+  function esr(ip) { return ['configure', 'interface gi1/0/1', 'ip address ' + ip + '/24', 'ip firewall disable', 'mtu 9000', 'exit', 'end', 'commit', 'confirm']; }
+  EL.labs.apply(j, { R1: esr('10.6.0.1'), R2: esr('10.6.0.2') });
+  var j1 = j.exec(r1.id, 'ping 10.6.0.2 size 3000');
+  chk('6.x без jumbo-frame: пакет 3028 байт через коммутатор не проходит', !/ 0% packet loss/.test(j1), j1);
+  j.exec(m6.id, 'enable'); j.exec(m6.id, 'configure');
+  var jm = j.exec(m6.id, 'port jumbo-frame'); j.exec(m6.id, 'end');
+  chk('port jumbo-frame — сообщение о перезагрузке, до неё не действует', /resetting the device/.test(jm) && !/ 0% packet loss/.test(j.exec(r1.id, 'ping 10.6.0.2 size 3000')), jm);
+  j.exec(m6.id, 'write'); j.exec(m6.id, 'reload');
+  var j2 = j.exec(r1.id, 'ping 10.6.0.2 size 3000');
+  chk('после write и reload jumbo-frame действует — 3028 байт проходят', / 0% packet loss/.test(j2), j2);
+  console.log('✓ физика: дуплекс, трансиверы, MTU коммутатора');
+})();
+
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
