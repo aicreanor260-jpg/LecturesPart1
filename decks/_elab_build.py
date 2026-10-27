@@ -19,6 +19,9 @@ def main():
     js = "\n".join(read(p) for p in ORDER)
     page = read("page.html")
     helpsrc = '<template id="helpSrc">' + read("help.html") + "</template>\n"
+    sys.path.insert(0, SRC)
+    import sprite                    # иконки устройств из деки главы 7, перекрашенные в палитру эмулятора
+    helpsrc = sprite.sprite() + "\n" + helpsrc
     html = page.replace("/*__JS__*/", js.replace("</script", "<\\/script")).replace("<script>\n", helpsrc + "<script>\n", 1)
     tmp = os.path.join(SRC, "_bundle.js")
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:

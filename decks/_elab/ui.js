@@ -11,36 +11,18 @@
   // ================================================================== иконки устройств (HUD)
   // Иконки можно заменить своими SVG: ICONS[тип] = function (g, d) {...}
   var ICONS = {
-    mes: function (g) {
-      el('path', { d: 'M-54 -22h96l12 12v32h-96l-12-12z', fill: 'rgba(111,227,234,.08)', stroke: '#6fe3ea', 'stroke-width': 2 }, g);
-      for (var i = 0; i < 10; i++) el('rect', { x: -44 + i * 8, y: -8, width: 5, height: 5, fill: i < 8 ? '#6fe3ea' : '#d4574f', opacity: .85 }, g);
-      for (var j = 0; j < 10; j++) el('rect', { x: -44 + j * 8, y: 1, width: 5, height: 5, fill: '#6fe3ea', opacity: .45 }, g);
-      el('path', { d: 'M40 -6h8M40 2h8', stroke: '#d4574f', 'stroke-width': 2 }, g);
-    },
-    esr: function (g) {
-      el('path', { d: 'M-30 0l15 -26h30l15 26l-15 26h-30z', fill: 'rgba(212,87,79,.12)', stroke: '#d4574f', 'stroke-width': 2 }, g);
-      el('path', { d: 'M-14 0h28M0 -14v28M8 -6l6 6-6 6M-8 -6l-6 6 6 6', fill: 'none', stroke: '#6fe3ea', 'stroke-width': 2.4 }, g);
-    },
-    vpc: function (g) {
-      el('path', { d: 'M-26 -22h52v32h-52z', fill: 'rgba(111,227,234,.08)', stroke: '#6fe3ea', 'stroke-width': 2 }, g);
-      el('path', { d: 'M-20 -16h40v20h-40z', fill: 'rgba(111,227,234,.18)' }, g);
-      el('path', { d: 'M-12 20h24M0 10v10', stroke: '#6fe3ea', 'stroke-width': 2.4 }, g);
-    },
-    deb: function (g, d) {
-      if (d.model === 'Debian-server') {
-        el('path', { d: 'M-18 -28h36v56h-36z', fill: 'rgba(111,227,234,.08)', stroke: '#6fe3ea', 'stroke-width': 2 }, g);
-        [-18, -8, 2].forEach(function (y) { el('path', { d: 'M-12 ' + y + 'h24', stroke: '#6fe3ea', 'stroke-width': 2 }, g); });
-        el('circle', { cx: 0, cy: 16, r: 4, fill: '#d4574f' }, g); return;
-      }
-      if (d.model === 'Docker') {
-        el('path', { d: 'M-28 -20h56v34h-56z', fill: 'rgba(199,155,255,.1)', stroke: '#c79bff', 'stroke-width': 2 }, g);
-        el('path', { d: 'M-20 -10h40M-20 -2h40M-20 6h26', stroke: '#c79bff', 'stroke-width': 2 }, g); return;
-      }
-      ICONS.vpc(g); el('path', { d: 'M6 -12a7 7 0 1 0 0 10', fill: 'none', stroke: '#d4574f', 'stroke-width': 2.6 }, g);
-    }
+    mes: function (g, d) { var m = EL.MODELS[d.model] || {}, big = /агрегации|ЦОД/.test(m.group || '');
+      use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
+    esr: function (g) { use(g, 'ic-router', 96); },
+    vpc: function (g) { use(g, 'ic-pc', 78); },
+    deb: function (g, d) { use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);
+      if (d.model === 'Debian') el('path', { d: 'M24 -26a7 7 0 1 0 0 10', fill: 'none', stroke: '#d4574f', 'stroke-width': 3 }, g); }
   };
+  // объёмные иконки из деки главы 7 (спрайт #ic-* вставляет сборщик, палитра — _elab/sprite.py)
+  function use(g, id, w) { var u = el('use', { x: -w / 2, y: -w * 0.42, width: w, height: w * 0.84 }, g);
+    u.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + id); u.setAttribute('href', '#' + id); return u; }
   function iconSvg(type, model) {
-    var s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '-60 -32 120 64');
+    var s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '-56 -46 112 92');
     ICONS[type](s, { model: model }); return s.outerHTML;
   }
   function el(tag, attrs, parent) { var x = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { x.setAttribute(k, attrs[k]); });
@@ -91,7 +73,6 @@
       var g = el('g', { 'class': 'dev' + (sel === d.id ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : '') + (d.off ? ' off' : ''),
                         transform: 'translate(' + d.x + ',' + d.y + ')', 'data-id': d.id }, gd);
       el('rect', { 'class': 'ring', x: -66, y: -38, width: 132, height: 76 }, g);
-      el('rect', { x: -60, y: -32, width: 120, height: 64, fill: '#170b0f', opacity: .92 }, g);
       ICONS[d.type](g, d);
       el('circle', { 'class': 'led', cx: 56, cy: -26, r: 4.5, fill: d.off ? '#ff6b62' : '#7dffb0' }, g);
       el('text', { y: 50, 'class': 'lbl' }, g).textContent = d.name;
