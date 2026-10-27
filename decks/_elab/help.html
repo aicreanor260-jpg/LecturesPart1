@@ -168,6 +168,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>router bgp AS → address-family ipv4 unicast → network, neighbor A → remote-as, enable · show bgp summary · show bgp ipv4 unicast</td><td>BGP (eBGP/iBGP, AS_PATH)</td></tr>
 </table>
 
+<h2>MES: 802.1X, IGMP snooping, стек, QinQ, MSTP</h2>
+<table>
+<tr><td>dot1x system-auth-control · aaa authentication dot1x default local | group radius · radius-server host A key K · порт: dot1x port-control auto</td><td>Debian: wpa_supplicant -B -D wired -i ens3 -c /etc/wpa_supplicant/wired.conf; RADIUS — freeradius на Debian-server</td></tr>
+<tr><td>ip igmp snooping · ip igmp snooping vlan N · show ip igmp snooping groups</td><td>Debian: ip addr add 239.1.1.1/32 dev ens3 autojoin · ping 239.1.1.1</td></tr>
+<tr><td>stack configuration unit-id N · stack configuration links tengigabitethernet 1-2 · reload · show stack</td><td>стек: общая база VLAN, стековый линк — все VLAN</td></tr>
+<tr><td>6.x: switchport mode customer · switchport customer vlan N</td><td>QinQ (двойной тег)</td></tr>
+<tr><td>spanning-tree mst configuration → instance 1 vlan 10 · spanning-tree mst 1 priority 4096 · show spanning-tree mst 1</td><td>MSTP-экземпляры</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

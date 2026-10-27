@@ -287,7 +287,7 @@
       t[id] = {};
       s.lports(id).forEach(function (L) {
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
-        if (L.cfg.stpOff || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
+        if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
         edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
@@ -383,6 +383,7 @@
   // egress: как порт коммутатора отправит кадр VLAN v — 'u' без тега, 't' с тегом, null — не отправит
   function egress(p, v) {
     if (p.shut) return null;
+    if (p.stackLink) return p.stackLink === 'active' ? 't' : null;   // стековый линк: внутренняя шина стека, все VLAN (резервный — standby)
     if (p.mode === 'access') return p.access === v ? 'u' : null;
     if (p.mode === 'customer') return p.cvlan === v ? 'c' : null;
     if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allowed.indexOf(v) >= 0 ? 't' : null);
@@ -394,6 +395,8 @@
     p = p || st.ports[port];
     if (p.shut) return { drop: 'порт ' + port + ' выключен (shutdown)' };
     var v;
+    if (p.stackLink === 'standby') return { drop: 'стековый линк ' + port + ' в резерве (standby)' };
+    if (p.stackLink) { v = tag === null ? 1 : tag; return st.vlans[v] ? { v: v } : { drop: 'VLAN ' + v + ' не создана на коммутаторе' }; }
     if (p.mode === 'customer') { if (!st.vlans[p.cvlan]) return { drop: 'VLAN ' + p.cvlan + ' не создана на коммутаторе' }; return { v: p.cvlan, inner: tag }; }   // QinQ: любой кадр клиента — в S-VLAN
     if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
     else {
@@ -437,6 +440,7 @@
       Object.keys(c.ifs).forEach(function (q2) { var x = c.ifs[q2];
         if (q2 === inPort || !x.sw || x.shut || x.sw.vlan !== v || !s.linked(dev, q2)) return; send(dev, q2, null, path); });
     }
+    if (s.stackSync) s.stackSync();
     var bgSeen = {};
     function inBg(dev, from, N, path) {           // bridge-group N на ESR: L2-домен из интерфейсов, саб-интерфейсов и туннелей L2TPv3
       if (bgSeen[dev + '|' + N]) return; bgSeen[dev + '|' + N] = 1;

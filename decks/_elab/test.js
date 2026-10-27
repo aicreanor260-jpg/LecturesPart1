@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1033,6 +1033,32 @@ EL.labs.LABS.forEach(runLab);
   chk('Debian ping 239.1.1.1 — вывод Linux', /4 packets transmitted, 0 received/.test(n.exec(src.id, 'ping 239.1.1.1')));
   chk('running-config: ip igmp snooping', /ip igmp snooping\nip igmp snooping vlan 1\nip igmp snooping vlan 1 mrouter gigabitethernet 1\/0\/4/.test(n.exec(sw.id, 'show running-config')), n.exec(sw.id, 'show running-config'));
   console.log('✓ IGMP snooping');
+})();
+
+// стек MES: два MES3400-24 через te1/0/1-2, VLAN 10 — с мастера
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('MES3400-24', 'U1'), b = n.add('MES3400-24', 'U2'), p1 = n.add('VPC', 'P1'), p2 = n.add('VPC', 'P2');
+  n.connect(a.id, 'te1/0/1', b.id, 'te1/0/1'); n.connect(a.id, 'te1/0/2', b.id, 'te1/0/2'); n.connect(p1.id, 'eth0', a.id, 'gi1/0/1'); n.connect(p2.id, 'eth0', b.id, 'gi1/0/1');
+  var e = EL.labs.apply(n, { U1: ['enable', 'configure', 'stack configuration unit-id 1', 'stack configuration links tengigabitethernet 1-2', 'end'],
+                             U2: ['enable', 'configure', 'stack configuration unit-id 2', 'stack configuration links tengigabitethernet 1-2', 'end'], P1: ['ip 10.0.10.1/24'], P2: ['ip 10.0.10.2/24'] });
+  chk('стек: команды без ошибок', !e.length, e.join('; '));
+  chk('до перезагрузки стека нет', /Stack is not formed/.test(n.exec(a.id, 'show stack')));
+  n.reboot(a.id); n.reboot(b.id); a.st.mode = 'priv'; b.st.mode = 'priv';
+  chk('после перезагрузки: U1 master, U2 slave', /1\s+\S+\s+master\s+MES3400-24\n2\s+\S+\s+slave/.test(n.exec(b.id, 'show stack')), n.exec(b.id, 'show stack'));
+  EL.labs.apply(n, { U1: ['configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'end'] });
+  n.stackSync();
+  chk('база VLAN общая: VLAN 10 появилась на U2', !!b.st.vlans[10]);
+  EL.labs.apply(n, { U2: ['configure', 'interface gi1/0/1', 'switchport access vlan 10', 'end'] });
+  var r = n.ping(p1.id, '10.0.10.2');
+  chk('VLAN 10 проходит по стековому линку без trunk-настроек', r.ok, r.steps.map(function (s) { return s.t + JSON.stringify(s.notes || []); }).join(' | '));
+  chk('два стековых линка не блокируются STP и не дают шторма', r.ok && !JSON.stringify(r.steps).match(/шторм/));
+  chk('show stack links', /te1\/0\/1\s+te2\/0\/1\s+10G/.test(n.exec(a.id, 'show stack links')), n.exec(a.id, 'show stack links'));
+  var m = new EL.Net(), c = m.add('MES3400-24', 'C1'), d2 = m.add('MES3400-24', 'C2'); m.connect(c.id, 'te1/0/1', d2.id, 'te1/0/1');
+  EL.labs.apply(m, { C1: ['enable', 'configure', 'stack configuration links tengigabitethernet 1', 'end'], C2: ['enable', 'configure', 'stack configuration links tengigabitethernet 1', 'end'] });
+  m.reboot(c.id); m.reboot(d2.id); c.st.mode = 'priv';
+  chk('одинаковые unit-id — стек не собирается', /Stack is not formed/.test(m.exec(c.id, 'show stack')));
+  console.log('✓ стек MES');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
