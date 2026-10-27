@@ -399,7 +399,8 @@
     var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false, reach = [];   // reach — куда дошёл кадр (для IPv6)
     function send(dev, port, tag, path) {
       var pr = s.peer(dev, port); if (!pr) return;
-      var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag };
+      if (s.phys && !s.phys(dev, port).up) { notes.push(s.devs[dev].name + ' ' + port + ': нет линка (' + s.phys(dev, port).why + ')'); return; }   // физика: кабель, скорость
+      var seg ={ li: pr.li, from: dev, to: pr.dev, tag: tag };
       segs.push(seg); q.push({ dev: pr.dev, port: pr.port, tag: tag, path: path.concat([seg]) });
     }
     function inMes(dev, inPort, v, path) {

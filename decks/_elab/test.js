@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -702,6 +702,39 @@ EL.labs.LABS.forEach(runLab);
   chk('route-based: PA → PB через vti 1', r3.ok && r3.steps.some(function (s) { return /vti 1 — пакет .* зашифрован в ESP/.test(s.t); }), r3.steps.map(function (s) { return s.t; }).join(' | '));
   chk('show tunnels status: vti 1', /vti 1\s+Up/.test(m.exec(q.ra.id, 'show tunnels status')));
   console.log('✓ IPsec');
+})();
+
+// физика: кабели/трансиверы, автосогласование, speed/duplex и ошибки
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('MES2428', 'SW1'), b = n.add('MES2428', 'SW2'), r = n.add('ESR-1000', 'R1'), r2 = n.add('ESR-1000', 'R2');
+  n.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1');
+  chk('по умолчанию: медь, 1000 Full, линк есть', n.linkUp(a.id, 'gi1/0/1') && n.phys(a.id, 'gi1/0/1').speed === 1000 && n.phys(a.id, 'gi1/0/1').dup[a.id] === 'full');
+  a.st.mode = 'priv'; b.st.mode = 'priv';
+  ['configure', 'interface gi1/0/1', 'no negotiation', 'speed 100', 'duplex full', 'end'].forEach(function (l) { n.exec(a.id, l); });
+  var ph = n.phys(a.id, 'gi1/0/1');
+  chk('SW1 100/full принудительно, SW2 auto — линк 100, у SW2 half (несовпадение дуплекса)', ph.up && ph.speed === 100 && ph.dup[b.id] === 'half' && ph.mismatch, JSON.stringify(ph));
+  chk('show interfaces status: Half 100 у SW2', /gi1\/0\/1\s+1G-Copper\s+Half\s+100\s+Enabled/.test(n.exec(b.id, 'show interfaces status')), n.exec(b.id, 'show interfaces status').split('\n').slice(0, 4).join('\n'));
+  chk('running-config: no negotiation, speed 100', /speed 100[\s\S]*no negotiation/.test(n.exec(a.id, 'show running-config')));
+  ['configure', 'interface vlan 1', 'ip address 10.0.0.1 255.255.255.0', 'end'].forEach(function (l) { n.exec(a.id, l); });
+  ['configure', 'interface vlan 1', 'ip address 10.0.0.2 255.255.255.0', 'end'].forEach(function (l) { n.exec(b.id, l); });
+  n.ping(a.id, '10.0.0.2');
+  chk('несовпадение дуплекса: FCS-ошибки у full-стороны, коллизии у half', n.ctrOf(a.id, 'gi1/0/1').ie > 0 && n.ctrOf(b.id, 'gi1/0/1').oe > 0 && /FCS Errors: [1-9]/.test(n.exec(a.id, 'show interfaces counters gi1/0/1')));
+  ['configure', 'interface gi1/0/1', 'no negotiation', 'speed 10', 'end'].forEach(function (l) { n.exec(b.id, l); });
+  chk('разные принудительные скорости — линка нет', !n.linkUp(a.id, 'gi1/0/1') && !n.ping(a.id, '10.0.0.2').ok && /разные принудительные скорости/.test(n.phys(a.id, 'gi1/0/1').why));
+  ['configure', 'interface gi1/0/1', 'speed 100', 'end'].forEach(function (l) { n.exec(b.id, l); });
+  chk('обе стороны 100/full принудительно — линк без ошибок', n.phys(a.id, 'gi1/0/1').up && !n.phys(a.id, 'gi1/0/1').mismatch && n.ping(a.id, '10.0.0.2').ok);
+  // оптика
+  n.connect(r.id, 'te1/0/1', r2.id, 'te1/0/1');
+  chk('te ↔ te по умолчанию — SFP+ 10G', n.phys(r.id, 'te1/0/1').speed === 10000 && n.phys(r.id, 'te1/0/1').cab === 'sfp10g');
+  chk('SFP+ в медный порт gi — нет линка', n.connect(a.id, 'gi1/0/2', r.id, 'te1/0/2', 'sfp10g') === null && !n.linkUp(a.id, 'gi1/0/2') && /медный/.test(n.phys(a.id, 'gi1/0/2').why));
+  chk('медь gi ↔ te — линк 1G (медный модуль)', n.connect(b.id, 'gi1/0/3', r2.id, 'te1/0/2') === null && n.phys(b.id, 'gi1/0/3').up && n.phys(b.id, 'gi1/0/3').speed === 1000);
+  ['configure', 'interface te1/0/1', 'speed 1000M full-duplex', 'end', 'commit', 'confirm'].forEach(function (l) { n.exec(r.id, l); });
+  chk('ESR: speed 1000M на оптике 10G — линка нет', !n.phys(r.id, 'te1/0/1').up && /только на 10000/.test(n.phys(r.id, 'te1/0/1').why));
+  chk('ESR running-config: speed', /speed 1000M full-duplex/.test(n.exec(r.id, 'show running-config')));
+  var j = n.toJSON(), m = EL.Net.fromJSON(j);
+  chk('тип кабеля сохраняется в файле схемы', m.links.some(function (l) { return l.cab === 'sfp10g'; }));
+  console.log('✓ физика: кабели, speed/duplex');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

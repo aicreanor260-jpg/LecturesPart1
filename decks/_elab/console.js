@@ -191,7 +191,7 @@
     var up = s && s.linkUp(st.dev, p), c = s ? s.ctrOf(st.dev, p) : ctr({}, 0, p);
     return [E.longIf(p).replace(' ', '') + ' is ' + (x.shut ? 'administratively down' : up ? 'up (connected)' : 'down (not connected)'),
       '  Hardware is ' + (/^te/.test(p) ? '10G-Fiber' : '1G-Copper') + ', MAC address is ' + EL.mac(st.host + p),
-      '  Interface MTU is 1500', '  ' + (up ? 'Full-duplex, ' + (/^te/.test(p) ? '10000' : '1000') + 'Mbps' : 'Duplex unknown, speed unknown') + ', auto negotiation enabled',
+      '  Interface MTU is 1500', '  ' + (s && s.physText ? s.physText(st.dev, p) : 'Duplex unknown, speed unknown') + ', auto negotiation ' + (x.neg === false ? 'disabled' : 'enabled'),
       '  ' + (c.iu + c.im + c.ib) + ' packets input, ' + c.io + ' bytes',
       '  Received ' + c.ib + ' broadcasts, ' + c.im + ' multicasts', '  ' + c.ie + ' input errors, ' + c.ie + ' FCS',
       '  ' + (c.ou + c.om + c.ob) + ' packets output, ' + c.oo + ' bytes', '  ' + c.oe + ' output errors, ' + c.oe + ' collisions'].join('\n');

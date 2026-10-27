@@ -139,6 +139,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show security ipsec vpn status</td><td>Established / Down</td></tr>
 </table>
 
+<h2>Физика портов</h2>
+<table>
+<tr><td>MES: no negotiation · speed 100 · duplex half · show interfaces status</td><td>скорость/дуплекс; auto против принудительного — half-duplex у auto-стороны, ошибки в show interfaces counters</td></tr>
+<tr><td>ESR: speed 100M full-duplex · speed auto</td><td>то же на маршрутизаторе</td></tr>
+<tr><td>Новый кабель → Кабель / модуль</td><td>медь, SFP 1G, SFP+ 10G; оптика в медный порт — нет линка</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
