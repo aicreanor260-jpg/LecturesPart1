@@ -3653,7 +3653,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function replyState(x) { return x.proto === 'tcp' ? (KEEP_OPEN.indexOf(x.dport) >= 0 ? 'ESTABLISHED' : 'TIME_WAIT') : x.proto === 'udp' ? 'ASSURED' : x.state; }
 
   function touch(st) { st.pending = true; }
-  var M = { zone: '(config-zone)#', zpair: '(config-zone-pair)#', zrule: '(config-zone-pair-rule)#',
+  var M = { zone: '(config-security-zone)#', zpair: '(config-security-zone-pair)#', zrule: '(config-security-zone-pair-rule)#',
             ogn: '(config-object-group-network)#', ogs: '(config-object-group-service)#' };
   Object.keys(M).forEach(function (k) { S.PROMPT[k] = M[k]; });
   S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes = c.modes.concat(Object.keys(M)); });

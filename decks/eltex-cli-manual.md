@@ -140,6 +140,7 @@ show running-config | ip interfaces | ip route | interfaces status | users    pi
 **Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`, `dhclient ens3`, `curl http://IP`, `date`, `timedatectl set-ntp false` / `set-time '2010-09-01 10:12:00'`, `systemctl status|restart chronyd|apache2|rsyslog|tftpd-hpa` (или `service tftpd-hpa status`), `ls /tftp`, `cat`, `telnet IP`, `tcpdump` (анализатор на зеркальном порту). Docker-браузер: `open http://IP`.
 
 ### Межсетевой экран ESR по зонам (справочник ESR-Series CLI 1.23)
+Приглашения — как в прошивках ESR 1.20.4–1.40.4: `(config-security-zone)#`, `(config-security-zone-pair)#`, `(config-security-zone-pair-rule)#` (в справочнике 1.23 — `(config-zone…)`; решение автора — как в прошивке).
 ```
 security zone trusted
 exit
