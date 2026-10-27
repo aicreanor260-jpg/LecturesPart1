@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1300,6 +1300,45 @@ EL.labs.LABS.forEach(runLab);
   var z = new EL.Net(), zr = z.add('vESR', 'RZ'), zp = [];
   ['configure', 'security zone trusted', 'exit', 'security zone-pair trusted self', 'rule 10'].forEach(function (l) { z.exec(zr.id, l); zp.push(z.prompt(zr.id)); });
   chk('приглашения зон как в прошивке ESR: config-security-zone / -pair / -pair-rule', zp[1] === 'vesr(config-security-zone)#' && zp[3] === 'vesr(config-security-zone-pair)#' && zp[4] === 'vesr(config-security-zone-pair-rule)#', zp.join(' | '));
+})();
+
+// контроллер Wi-Fi WLC и точки доступа: заводская конфигурация, DHCP с опцией 43, регистрация, статусы
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), w = n.add('WLC-15', 'WLC'), sw = n.add('MES2428', 'SW1'), a1 = n.add('WEP-3ax', 'AP1'), a2 = n.add('WOP-30L', 'AP2');
+  n.connect(w.id, 'gi1/0/2', sw.id, 'gi1/0/24'); n.connect(a1.id, 'LAN', sw.id, 'gi1/0/1'); n.connect(a2.id, 'LAN', sw.id, 'gi1/0/2');
+  var run = n.exec(w.id, 'show running-config');
+  chk('WLC: приглашение wlc#, заводская конфигурация по РЭ §10.1.1', n.prompt(w.id) === 'wlc#' && /bridge 1\n  security-zone trusted|bridge 1\n  vlan 1/.test(run) && /ip dhcp-server pool ap-pool[\s\S]*vendor-specific\n    suboption 12 ascii-text "192\.168\.1\.1"\n    suboption 15 ascii-text "https:\/\/192\.168\.1\.1:8043"/.test(run) &&
+    /^wlc\n  enable\n  outside-address 192\.168\.1\.1/m.test(run), run.slice(-1500));
+  chk('WLC: порты gi1/0/1 и gi1/0/6 — аплинк (vlan 2), остальные в switchport', w.st.run.ifs['gi1/0/1'].sw.vlan === 2 && w.st.run.ifs['gi1/0/6'].sw.vlan === 2 && w.st.run.ifs['gi1/0/3'].sw.vlan === 1);
+  var ap = n.exec(w.id, 'show wlc ap');
+  chk('show wlc ap: обе ТД Active в default-location', (ap.match(/ Active /g) || []).length === 2 && /WEP-3ax\s+default-location/.test(ap) && /WOP-30L\s+default-location/.test(ap), ap);
+  chk('ТД получили адрес из ap-pool и опцию 43', /^192\.168\.1\.\d+$/.test(a1.st.ip) && a1.st.opt43[15] === 'https://192.168.1.1:8043');
+  chk('show wlc service-activator aps join-auto', /Join-auto\s+192\.168\.1\.\d+\s+WEP-3ax/.test(n.exec(w.id, 'show wlc service-activator aps join-auto')));
+  chk('ТД: пароль из ap-profile default-ap', a1.st.apPw === 'password');
+  // outside-address не совпадает с подопцией 15 — ТД не подключается
+  var e = EL.labs.apply(n, { WLC: ['configure', 'wlc', 'outside-address 192.168.1.100', 'end', 'commit', 'confirm'] });
+  chk('outside-address 192.168.1.100 ≠ подопции 15 — ТД пропали из show wlc ap', !e.length && !/ Active /.test(n.exec(w.id, 'show wlc ap')) && /Registering/.test(n.exec(w.id, 'show wlc service-activator aps')), e.join('; '));
+  EL.labs.apply(n, { WLC: ['configure', 'wlc', 'outside-address 192.168.1.1', 'service-activator', 'no aps join auto', 'end', 'commit', 'confirm'] });
+  var mac = Object.keys(w.st.aps)[0];
+  chk('без aps join auto — Awaited, после join wlc ap <MAC> — Active', /Awaited/.test(n.exec(w.id, 'show wlc service-activator aps')) && (n.exec(w.id, 'join wlc ap ' + mac), new RegExp(mac + ' Active').test(n.exec(w.id, 'show wlc ap'))));
+  EL.labs.apply(n, { WLC: ['configure', 'wlc', 'service-activator', 'aps join auto', 'exit', 'ip-pool default-ip-pool', 'network 10.0.0.0/8', 'end', 'commit', 'confirm'] });
+  n.exec(w.id, 'show wlc ap');
+  chk('ip-pool network 10.0.0.0/8 — адрес ТД не попал, локации нет: Sandboxed', w.st.aps[mac].status === 'Sandboxed', w.st.aps[mac].status);
+  EL.labs.apply(n, { WLC: ['configure', 'wlc', 'ap ' + mac, 'ap-location default-location', 'end', 'commit', 'confirm'] });
+  chk('индивидуальный профиль ap <MAC> — снова Active', (n.exec(w.id, 'show wlc ap'), w.st.aps[mac].status === 'Active'));
+  chk('show wlc ap all: заданная ТД без подключения — Pre-configured', (EL.labs.apply(n, { WLC: ['configure', 'wlc', 'ap 00:11:22:33:44:55', 'end', 'commit', 'confirm'] }), /00:11:22:33:44:55 Pre-configured/.test(n.exec(w.id, 'show wlc ap all'))));
+  chk('show wlc ap <MAC> detailed', /Board type:\s+WEP-3ax|Board type:\s+WOP-30L/.test(n.exec(w.id, 'show wlc ap ' + mac + ' detailed')));
+  chk('радиопрофиль 6 ГГц: work-mode anacax — ошибка (по таблице РЭ — ax | axbe)', /Illegal/.test(n.exec(w.id, 'configure') || n.exec(w.id, 'wlc') || n.exec(w.id, 'radio-6g-profile default_6g') || n.exec(w.id, 'work-mode anacax')) && !/Illegal/.test(n.exec(w.id, 'work-mode axbe')) && (n.exec(w.id, 'end'), true));
+  chk('приглашения WLC', (n.exec(w.id, 'configure'), n.exec(w.id, 'wlc'), n.exec(w.id, 'ssid-profile s1'), n.prompt(w.id) === 'wlc(config-wlc-ssid-profile)#') && (n.exec(w.id, 'exit'), n.prompt(w.id) === 'wlc(config-wlc)#') && (n.exec(w.id, 'end'), true));
+  chk('switchport mode trunk без mode switchport — ошибка (вариант А)', /Unknown/.test(n.exec(w.id, 'configure') || n.exec(w.id, 'interface gi1/0/5') || n.exec(w.id, 'mode routerport') || n.exec(w.id, 'switchport mode trunk')) && (n.exec(w.id, 'end'), true));
+  // CLI точки доступа (РЭ WEP-3ax §6.2): вход admin/пароль из ap-profile, статический адрес
+  a1.st.apCli.stage = 'user'; n.exec(a1.id, 'admin'); n.exec(a1.id, 'password');
+  chk('ТД: вход admin, приглашение WEP-3ax(root):/#', n.prompt(a1.id) === 'WEP-3ax(root):/# ', n.prompt(a1.id));
+  chk('ТД: monitoring wan-status — protocol dhcp', /protocol \| dhcp/.test(n.exec(a1.id, 'monitoring wan-status')));
+  ['configure', 'interface', 'br0', 'common', 'static-ip 192.168.1.50', 'netmask 255.255.255.0', 'protocol static-ip', 'save'].forEach(function (l) { n.exec(a1.id, l); });
+  chk('ТД: статический адрес после save, приглашение по пути', a1.st.ip === '192.168.1.50' && n.prompt(a1.id) === 'WEP-3ax(config):/interface/br0/common# ' && n.ping(sw.id === 0 ? 0 : w.id, '192.168.1.50').ok, a1.st.ip);
+  console.log('✓ WLC и точки доступа');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

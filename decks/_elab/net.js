@@ -20,7 +20,7 @@
   P.portsOf = function (d) {
     var m = MODELS[d.model];
     if (d.type === 'vpc') return ['eth0'];
-    if (d.type === 'deb') return ['ens3'];
+    if (d.type === 'deb') return [d.st.port || 'ens3'];
     if (m.portList) return m.portList.slice();
     var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
   };
@@ -73,7 +73,7 @@
   P.ifaces = function (id) {
     var self = this, d = this.devs[id], st = d.st, o = [];
     if (d.type === 'vpc' && st.ip) o.push({ name: 'eth0', ip: st.ip, len: st.len, port: 'eth0', tag: null });
-    if (d.type === 'deb' && st.ip && st.up) o.push({ name: 'ens3', ip: st.ip, len: st.len, port: 'ens3', tag: null });
+    if (d.type === 'deb' && st.ip && st.up) o.push({ name: st.port || 'ens3', ip: st.ip, len: st.len, port: st.port || 'ens3', tag: null });
     if (d.type === 'mes') Object.keys(st.svi).forEach(function (v) {
       var p = st.svi[v].split('/'); if (!EL.mes.sviUp(st, +v)) return;
       o.push({ name: 'vlan' + v, ip: p[0], len: +p[1], vlan: +v }); });
@@ -503,10 +503,11 @@
   function natRules(d, kind, ifn) {
     var n = d.st.run[kind], out = [];
     if (!n) return out;
-    Object.keys(n.rulesets).forEach(function (k) { var rs = n.rulesets[k]; if (rs.ifn !== ifn) return;
+    Object.keys(n.rulesets).forEach(function (k) { var rs = n.rulesets[k]; if (rs.ifn !== ifn && !(rs.zone && ifZone(d.st.run, ifn) === rs.zone)) return;   // to zone (WLC)
       Object.keys(rs.rules).sort(function (a, b) { return a - b; }).forEach(function (q) { if (rs.rules[q].on) out.push(rs.rules[q]); }); });
     return out;
   }
+  function ifZone(c, ifn) { var b = String(ifn).match(/^bridge(\d+)$/), x = b ? (c.bridges || {})[b[1]] : c.ifs[String(ifn).split(':')[0]]; return x ? x.zone : null; }
   function ruleHit(r, pk, c) {
     if (r.src && !inRange(pk.src, r.src)) return false;
     if (r.dst && !inRange(pk.dst, r.dst)) return false;
@@ -671,7 +672,7 @@
   // ------------------------------------------------------------------ DHCP: DISCOVER широковещательно, сервер или ретранслятор
   P.dhcp = function (id) {
     var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
-    var port = d.type === 'vpc' ? 'eth0' : 'ens3', cname = d.name;
+    var port = d.type === 'vpc' ? 'eth0' : (d.st.port || 'ens3'), cname = d.name;   // st.port — точка доступа (порт LAN)
     var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
     steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
       f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
@@ -679,7 +680,7 @@
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
       var c = rd.st.run;
-      var fw = s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', dport: 67 }, []);
+      var fw = s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', sport: 68, dport: 67 }, []);
       if (!fw.ok) { steps.push({ k: 'drop', t: fw.t + ' — DHCP не принят' }); return false; }
       var sv = s.snoopReply ? s.snoopReply(ep.path) : null; if (sv) { steps.push({ k: 'drop', t: sv }); return false; }
       lpath = ep.path;
@@ -705,7 +706,7 @@
     if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
-    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw };
+    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server };   // pool — опции пула (WLC: опция 43)
   };
   function poolFor(c, giaddr) {
     var hit = null;
@@ -715,12 +716,12 @@
   }
   function alloc(rd, pl, cname) {
     var st = rd.st, L = st.leases = st.leases || {}, p = pl.p, net = rd.st.net || null;
-    if (L[cname] && IP.sameNet(L[cname], p.net.split('/')[0], +p.net.split('/')[1])) return { ip: L[cname], len: +p.net.split('/')[1], gw: p.gw };
+    if (L[cname] && IP.sameNet(L[cname], p.net.split('/')[0], +p.net.split('/')[1])) return { ip: L[cname], len: +p.net.split('/')[1], gw: p.gw, pool: p };
     var used = Object.keys(L).map(function (k) { return L[k]; });
     for (var n = IP.ip2n(p.range[0]); n <= IP.ip2n(p.range[1]); n++) {
       var ip = IP.n2ip(n);
       if (used.indexOf(ip) >= 0 || (net && net.owner(ip))) continue;
-      L[cname] = ip; return { ip: ip, len: +p.net.split('/')[1], gw: p.gw };
+      L[cname] = ip; return { ip: ip, len: +p.net.split('/')[1], gw: p.gw, pool: p };
     }
     return null;
   }

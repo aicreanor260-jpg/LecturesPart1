@@ -99,6 +99,21 @@ def main():
                                   "note": "%s × RS-232 (aux) + %s" % (na.group(1), " + ".join("%d×%s" % (p["count"], p["speed"]) for p in m["ports"])),
                                   "full": " + ".join("%d × %s" % (p["count"], p["type"]) for p in m["ports"]) + " + " + na.group(1) + " × RS-232 (RJ-45) · ПО " + (m.get("sw_version") or "?"),
                                   "url": m.get("url")}
+    # контроллеры WLC и точки доступа (wifi.json; порты WLC — РЭ WLC 1.39.2 §6.1.1, у ТД одно условное имя порта LAN)
+    wsrc = os.path.join(os.path.dirname(SRC), "wifi.json")
+    WLCP = {"WLC-15": ["gi1/0/%d" % i for i in range(1, 7)], "WLC-30": ["gi1/0/1", "gi1/0/2", "gi1/0/3", "gi1/0/4", "te1/0/1", "te1/0/2"],
+            "WLC-3200": ["twe1/0/%d" % i for i in range(1, 13)], "WLC-3250": ["gi1/0/%d" % i for i in range(1, 9)] + ["twe1/0/%d" % i for i in range(1, 5)],
+            "WLC-3350": ["gi1/0/%d" % i for i in range(1, 9)] + ["twe1/0/%d" % i for i in range(1, 5)]}
+    APS = ["WEP-3ax", "WEP-30L", "WEP-30L-Z", "WEP-3L", "WEP-50L", "WEP-500K", "WEP-550K", "WOP-20L", "WOP-2L", "WOP-2ac", "WOP-30L", "WOP-30LS", "WOP-30LI", "WOP-3L-EX"]
+    if os.path.exists(wsrc):
+        for m in json.load(open(wsrc, encoding="utf-8")):
+            k, sv = m["model"], m.get("sw_version") or "?"
+            if k in WLCP:
+                models[k] = {"type": "esr", "kind": "wlc", "ports": len(WLCP[k]), "portList": WLCP[k], "group": "Контроллеры Wi-Fi", "host": "wlc",
+                             "sw": "ПО WLC " + sv, "note": m.get("summary") or "", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k in APS:
+                models[k] = {"type": "deb", "kind": "ap", "ports": 1, "portList": ["LAN"], "group": "Точки доступа Wi-Fi", "swv": sv, "sw": "ПО " + sv,
+                             "note": (m.get("summary") or "") + " · порт LAN (имя условное)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))

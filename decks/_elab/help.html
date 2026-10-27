@@ -155,6 +155,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>Контроллер Wi-Fi WLC и точки доступа</h2>
+<table>
+<tr><td>ТД в порт WLC (gi1/0/2…) → DHCP + опция 43 → https://192.168.1.1:8043</td><td>ТД сама приходит на контроллер; адрес = outside-address</td></tr>
+<tr><td>show wlc ap [all|MAC] [detailed] · show wlc service-activator aps · join wlc ap MAC · renew wlc ap MAC</td><td>статусы ТД: Active, Registering, Sandboxed, Pre-configured</td></tr>
+<tr><td>wlc → ssid-profile · ap-profile · radio-2g/5g/6g-profile · ap-location · ip-pool · service-activator → aps join auto · ap MAC</td><td>настройка контроллера; commit / confirm</td></tr>
+<tr><td>ТД: configure → interface → br0 → common → static-ip · netmask · protocol · save · monitoring wan-status</td><td>консоль точки доступа</td></tr>
+</table>
+
 <h2>Консольный сервер SCS-32</h2>
 <table>
 <tr><td>aux1/0/1…32 ↔ console MES/ESR · кабель «Консольный RS-232»</td><td>консольный порт устройства через SCS</td></tr>

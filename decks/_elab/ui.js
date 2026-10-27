@@ -16,9 +16,10 @@
   var ICONS = {
     mes: function (g, d) { var m = EL.MODELS[d.model] || {}, big = /агрегации|ЦОД/.test(m.group || '');
       use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
-    esr: function (g, d) { var scs = (EL.MODELS[d.model] || {}).kind === 'scs'; use(g, scs ? 'ic-console' : 'ic-router', scs ? 100 : 96); },   // SCS-32 — консольный сервер
+    esr: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; use(g, k === 'scs' ? 'ic-console' : k === 'wlc' ? 'ic-wlc' : 'ic-router', k ? 100 : 96); },   // SCS-32, WLC — свои иконки
     vpc: function (g) { use(g, 'ic-pc', 78); },
-    deb: function (g, d) { use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);
+    deb: function (g, d) { if ((EL.MODELS[d.model] || {}).kind === 'ap') { use(g, 'ic-ap', 84); return; }
+      use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);
       if (d.model === 'Debian') el('path', { d: 'M24 -26a7 7 0 1 0 0 10', fill: 'none', stroke: '#d4574f', 'stroke-width': 3 }, g); }
   };
   // объёмные иконки из деки главы 7 (спрайт #ic-* вставляет сборщик, палитра — _elab/sprite.py)
