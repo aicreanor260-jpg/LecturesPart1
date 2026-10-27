@@ -467,6 +467,11 @@ tunnel l2tpv3 1
 - **Упрощения (в источниках нет или вне учебной модели):** переходы статусов ТД сжаты до Registering → Active; время и сертификаты не проверяются; клиенты Wi-Fi не моделируются (`show wlc clients` пуст); туннели SoftGRE, local-switching, trunk на портах WLC и `ip address dhcp` на мосту только хранятся; радиоблоки в `detailed` не выводятся; номера правил заводского межсетевого экрана условные; смена пароля при первом входе не моделируется; у ТД один порт `LAN` (имя условное).
 
 ### OLT LTP-N / LTX и ONT (справочник CLI и Quick guide LTP 1.12.0, РЭ LTP/LTX)
+**OLT-шасси MA5160 / MA5020** (Quick guide и справочник CLI MA5000 1.12–1.13) — та же CLI, что у LTP-N, с номером слота: `front-port 1/1` (FC/порт), `pon-port 4/2` (слот/порт), ONT `4/2/1`. Отличия:
+- линейная карта работает только после `slot 4` → `type lc16g` и `commit`; состав шасси — `show shelf` (в эмуляторе вставлена одна LC16G: в слоте 4 у MA5160, в слоте 1 у MA5020 — допущение);
+- `commit` запускает таймер (`… has to be confirmed within: 5 minutes`), `confirm` подтверждает и сохраняет в NVRAM — отдельного `save` нет; `commit confirm` — сразу оба;
+- `show interface ont 4 unactivated` — по всем pon-port слота 4.
+
 Палитра → «OLT GPON / XGS-PON» (LTP-4N/8N/16N, LTX-8/16, rev.B, C) и «ONT (абонентские терминалы)» (NTU-1L, NTU-1LC, NTU-1D, NTX-1, NTX-1F). Порты OLT: `front-port N` (к ядру сети), `pon-port N`, `port-oob`; у ONT — `PON` и `LAN`. Кабель «Оптика PON» соединяет pon-port с PON ONT.
 - **CLI OLT:** `LTP-16N#` → `configure` → `LTP-16N(configure)#` → `interface front-port 1` → `LTP-16N(config)(if-front-1)#`, `interface ont 2/1` → `(config)(if-ont-2/1)#`, `profile cross-connect | ports | dba | management N`, `vlan N`. Правки копятся в candidate: `commit` (из подрежима — `do commit`) делает их действующими, `save` пишет в NVRAM — после перезагрузки грузится NVRAM; `show candidate-config` — что не применено, `rollback candidate-config`, `restore running-config`. Вход — `admin` / `password`.
 - **Uplink:** на front-port по умолчанию запрещены все VLAN — `vlan allow 1100,30`; на MES — trunk с теми же VLAN.

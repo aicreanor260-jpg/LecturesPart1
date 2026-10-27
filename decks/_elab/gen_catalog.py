@@ -129,6 +129,12 @@ def main():
                 names = ["front-port %d" % i for i in range(1, fr + 1)] + ["pon-port %d" % i for i in range(1, pn + 1)] + ["port-oob"]
                 models[k] = {"type": "mes", "kind": "olt", "ports": len(names), "portList": names, "group": "OLT GPON / XGS-PON", "host": k, "pon": kind,
                              "sw": "ПО " + sv, "note": "%s + %d × PON + OOB" % (fnote, pn), "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k in ("MA5160", "MA5020"):   # шасси MA5000: FC1 + одна LC16G (в слоте 4 у MA5160, в слоте 1 у MA5020) — допущение эмулятора
+                nf, sl = (10, 4) if k == "MA5160" else (4, 1)
+                names = ["front-port 1/%d" % i for i in range(1, nf + 1)] + ["pon-port %d/%d" % (sl, i) for i in range(1, 17)] + ["port-oob"]
+                models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ma5000", "slots": 16 if k == "MA5160" else 2, "ports": len(names), "portList": names,
+                             "group": "OLT GPON / XGS-PON", "host": k, "pon": "gpon", "sw": "ПО " + sv,
+                             "note": "шасси MA5000: FC + LC16G (16 × GPON) · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
             elif k in ONT:
                 models[k] = {"type": "mes", "kind": "ont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": ONT[k], "swv": sv,
                              "sw": "ПО " + sv, "note": (m.get("summary") or "") + " · мост, настраивается с OLT (OMCI)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}

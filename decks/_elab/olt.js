@@ -17,13 +17,13 @@
   function isOnt(d) { return !!d && d.sub === 'ont'; }
   function cfg() { return { host: null, mgmt: { ip: '192.168.1.2', mask: '255.255.255.0', gw: '0.0.0.0', vid: 1 }, front: {}, ont: {}, cc: {}, pp: {}, dba: {}, mgp: {}, vlans: {}, igmp: false,
     users: { admin: { pw: 'password', priv: 15 } } }; }
-  var CFG = 'configure front pon ont cc pp dba mgp vlan oob';
+  var CFG = 'configure front pon ont cc pp dba mgp vlan oob slot';
 
   // ---------------------------------------------------------------- устройства
   var add0 = P.add;
   P.add = function (model) {
     var d = add0.apply(this, arguments), m = EL.MODELS[model] || {}, st = d.st;
-    if (m.kind === 'olt') { d.sub = 'olt'; st.stp = { on: false }; st.olt = { host: m.host, mode: 'root', ctx: null, cand: cfg(), run: null, nv: null, pon: m.pon };
+    if (m.kind === 'olt') { d.sub = 'olt'; st.stp = { on: false }; st.olt = { host: m.host, mode: 'root', ctx: null, cand: cfg(), run: null, nv: null, pon: m.pon, dl: m.oltDialect || 'ltp-n', slots: m.slots };
       st.olt.run = EL.clone(st.olt.cand); st.olt.nv = EL.clone(st.olt.cand); st.users = { admin: { pw: 'password', priv: 15 } }; st.mode = 'priv'; }
     if (m.kind === 'ont') { d.sub = 'ont'; st.stp = { on: false }; st.serial = 'ELTX' + ('00000000' + (0x73000100 + (EL.Net.seq * 7 % 0xff)).toString(16).toUpperCase()).slice(-8); }
     if (m.kind === 'olt' || m.kind === 'ont') this.oltDirty = true;
@@ -31,7 +31,7 @@
   };
   // PON-кабель: оптика между pon-port и PON ONT
   EL.CABLES.pon = 'Оптика PON (SC/APC)';
-  function ponPort(p) { return /^pon-port \d+$/.test(p) || p === 'PON'; }
+  function ponPort(p) { return /^pon-port \d+(\/\d+)?$/.test(p) || p === 'PON'; }
   var defc0 = P.defaultCable;
   P.defaultCable = function (a, ap, b, bp) { return ponPort(ap) || ponPort(bp) ? 'pon' : defc0.apply(this, arguments); };
   var phys0 = P.phys;
@@ -46,10 +46,10 @@
 
   // ---------------------------------------------------------------- L2: порты OLT и ONT по действующей конфигурации
   function onts(net, olt) { var c = olt.st.olt.run, out = [];
-    Object.keys(c.ont).forEach(function (k) { var o = c.ont[k], pp = +k.split('/')[0], pr = net.peer(olt.id, 'pon-port ' + pp), od = pr && net.devs[pr.dev];
-      var ok = !!(o.serial && isOnt(od) && !od.off && od.st.serial === o.serial && net.phys(olt.id, 'pon-port ' + pp).up && pr.port === 'PON');
+    Object.keys(c.ont).forEach(function (k) { var o = c.ont[k], pp = k.replace(/\/\d+$/, ''), pr = net.peer(olt.id, 'pon-port ' + pp), od = pr && net.devs[pr.dev];
+      var ok = !!(o.serial && isOnt(od) && !od.off && od.st.serial === o.serial && net.phys(olt.id, 'pon-port ' + pp).up && pr.port === 'PON') && slotOk(olt.st, pp);
       var vids = Object.keys(o.svc || {}).map(function (s) { var cc = c.cc[(o.svc[s] || {}).cc]; return cc && cc.outer ? { outer: cc.outer, user: cc.user || null, mode: cc.mode || null } : null; }).filter(Boolean);
-      out.push({ key: k, pp: pp, id: +k.split('/')[1], o: o, dev: ok ? od : null, vids: vids }); });
+      out.push({ key: k, pp: pp, id: +k.split('/').pop(), o: o, dev: ok ? od : null, vids: vids }); });
     return out; }
   P.oltSync = function () {
     var s = this;
@@ -75,23 +75,37 @@
   P.flood = function () { if (this.oltGen !== this.gen && this.list().some(function (d) { return d.sub === 'olt' || d.sub === 'ont'; })) this.oltSync(); return flood0.apply(this, arguments); };
 
   // ---------------------------------------------------------------- CLI OLT
-  var PRM = { front: function (c) { return 'if-front-' + c; }, pon: function (c) { return 'if-pon-' + c; }, ont: function (c) { return 'if-ont-' + c; }, oob: function () { return 'if-port-oob'; },
+  var PRM = { slot: function (c) { return 'slot-' + c; }, front: function (c) { return 'if-front-' + c; }, pon: function (c) { return 'if-pon-' + c; }, ont: function (c) { return 'if-ont-' + c; }, oob: function () { return 'if-port-oob'; },
     cc: function (c) { return 'profile-cross-connect-' + c; }, pp: function (c) { return 'profile-ports-' + c; }, dba: function (c) { return 'profile-dba-' + c; },
     mgp: function (c) { return 'profile-management-' + c; }, vlan: function (c) { return 'vlan-' + c; } };
   function prompt(st) { var o = st.olt, h = o.run.host || o.host;
     if (o.mode === 'root') return h + '#'; if (o.mode === 'configure') return h + '(configure)#'; return h + '(config)(' + PRM[o.mode](o.ctx) + ')#'; }
   function C(st) { return st.olt.cand; }
+  // MA5160/MA5020: линейная карта слота работает, если задан тип (slot N → type lc16g) и сделан commit
+  function slotOk(st, pp) { if (st.olt.dl !== 'ma5000') return true; var sl = (st.olt.run.slots || {})[String(pp).split('/')[0]]; return !!(sl && sl.type && sl.type !== 'unknown'); }
+  // номера портов: N, N-M, a,b; с слотом/FC: S/P, A-B/P; у MA5000 «4» в show interface ont — все pon-port слота 4
+  function portIds(st, kind, w, slotAll) { var pre = kind + ' ', have = Object.keys(st.ports).filter(function (k) { return k.indexOf(pre) === 0; }).map(function (k) { return k.slice(pre.length); });
+    var out = [], bad = false;
+    String(w).split(',').forEach(function (x) { var m = x.match(/^(\d+)(?:-(\d+))?(?:\/(\d+)(?:-(\d+))?)?$/); if (!m) { bad = true; return; }
+      for (var a = +m[1]; a <= +(m[2] || m[1]); a++) { if (m[3] === undefined) { if (slotAll && st.olt.dl === 'ma5000') have.forEach(function (h) { if (h.split('/')[0] === String(a)) out.push(h); }); else out.push(String(a)); }
+        else for (var b = +m[3]; b <= +(m[4] || m[3]); b++) out.push(a + '/' + b); } });
+    if (bad || !out.length || out.some(function (x) { return have.indexOf(x) < 0; })) return null; return out; }
   function nums(w, max) { var L = []; String(w).split(',').forEach(function (x) { var m = x.match(/^(\d+)(?:-(\d+))?$/); if (!m) { L = null; return; } if (!L) return;
     for (var i = +m[1]; i <= +(m[2] || m[1]); i++) L.push(i); }); return L && L.every(function (n) { return n >= 1 && n <= max; }) ? L : null; }
   function nfront(st) { return Object.keys(st.ports).filter(function (k) { return /^front-port/.test(k); }).length; }
   function npon(st) { return Object.keys(st.ports).filter(function (k) { return /^pon-port/.test(k); }).length; }
   // ONT на pon-port: GPON — до 128, XGS-PON — до 256; LTX по умолчанию в GPON (справочник CLI, вариант А), у C-моделей чётные порты — XGS-PON
-  function maxOnt(st, pp) { return st.olt.pon === 'combo' && pp % 2 === 0 ? 256 : 128; }
+  function maxOnt(st, pp) { var n = +String(pp).split('/').pop(); return st.olt.pon === 'combo' && n % 2 === 0 ? 256 : 128; }
   var ERR = '% Invalid input';
   cmd('root', 'configure', function (st) { st.olt.mode = 'configure'; }, 'Режим конфигурации');
   cmd('root', 'configure terminal', function (st) { st.olt.mode = 'configure'; });
-  cmd('root', 'commit', function (st) { st.olt.run = EL.clone(st.olt.cand); if (st.net) st.net.gen++; return 'Configuration committed successfully'; }, 'Применить candidate-конфигурацию');
-  cmd('root', 'save', function (st) { st.olt.nv = EL.clone(st.olt.run); return 'Configuration successfully saved to file'; }, 'Сохранить в NVRAM');
+  function commit(st) { st.olt.run = EL.clone(st.olt.cand); if (st.net) st.net.gen++;
+    return st.olt.dl === 'ma5000' ? 'After commit operation, the configuration has to be confirmed within: 5 minutes\nConfiguration committed successfully' : 'Configuration committed successfully'; }
+  function confirm(st) { st.olt.nv = EL.clone(st.olt.run); return 'Configuration is confirmed for master device (all changes are saved in NVRAM)'; }
+  cmd('root', 'confirm', function (st) { if (st.olt.dl !== 'ma5000') return ERR; return confirm(st); }, 'MA5160/MA5020: подтвердить и сохранить в NVRAM');
+  cmd('root', 'commit confirm', function (st) { if (st.olt.dl !== 'ma5000') return ERR; return commit(st) + '\n' + confirm(st); });
+  cmd('root', 'commit', function (st) { return commit(st); }, 'Применить candidate-конфигурацию');
+  cmd('root', 'save', function (st) { if (st.olt.dl === 'ma5000') return ERR; st.olt.nv = EL.clone(st.olt.run); return 'Configuration successfully saved to file'; }, 'Сохранить в NVRAM');
   cmd('root', 'rollback candidate-config', function (st) { st.olt.cand = EL.clone(st.olt.run); return 'Candidate configuration is rolled back successfully'; });
   cmd('root', 'restore running-config', function (st) { st.olt.run = EL.clone(st.olt.nv); st.olt.cand = EL.clone(st.olt.nv); if (st.net) st.net.gen++; return 'Restore configuration success'; });
   cmd('root', 'show version', function (st) { var d = st.net && st.net.devs[st.dev], m = EL.MODELS[d ? d.model : ''] || {};
@@ -108,11 +122,13 @@
   cmd('configure', 'user <w> password <w> privilege <n>', function (st, a) { if (a[1].length < 8 || a[1].length > 31 || a[2] < 0 || a[2] > 15) return ERR; C(st).users[a[0]] = { pw: a[1], priv: a[2] }; }, 'Пользователь (пароль 8–31)');
   cmd('configure', 'ip igmp snooping enable', function (st) { C(st).igmp = true; });
   function enter(mode, keyFn) { return function (st, a) { var k = keyFn(st, a); if (k === null) return ERR; st.olt.mode = mode; st.olt.ctx = k; }; }
-  cmd('configure', 'interface front-port <w>', enter('front', function (st, a) { var L = nums(a[0], nfront(st)); if (!L) return null;
+  cmd('configure', 'interface front-port <w>', enter('front', function (st, a) { var L = portIds(st, 'front-port', a[0]); if (!L) return null;
     L.forEach(function (n) { C(st).front[n] = C(st).front[n] || { allow: [] }; }); return a[0]; }), 'Порт к ядру сети');
-  cmd('configure', 'interface pon-port <w>', enter('pon', function (st, a) { return nums(a[0], npon(st)) ? a[0] : null; }), 'PON-порт');
+  cmd('configure', 'interface pon-port <w>', enter('pon', function (st, a) { return portIds(st, 'pon-port', a[0]) ? a[0] : null; }), 'PON-порт');
+  cmd('configure', 'slot <n>', enter('slot', function (st, a) { if (st.olt.dl !== 'ma5000' || a[0] < 1 || a[0] > (st.olt.slots || 16)) return null; var S = C(st).slots = C(st).slots || {}; S[a[0]] = S[a[0]] || {}; return a[0]; }), 'MA5160/MA5020: слот линейной карты');
+  cmd('slot', 'type <w>', function (st, a) { if (['lc16g', 'lc16xg', 'lc16c', 'unknown'].indexOf(a[0]) < 0) return ERR; C(st).slots[st.olt.ctx].type = a[0]; }, 'Тип линейной карты: lc16g | lc16xg | lc16c');
   cmd('configure', 'interface port-oob', enter('oob', function () { return ''; }));
-  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+)\/(\d+)$/); if (!m || +m[1] < 1 || +m[1] > npon(st) || +m[2] < 1 || +m[2] > maxOnt(st, +m[1])) return null;
+  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+(?:\/\d+)?)\/(\d+)$/); if (!m || !st.ports['pon-port ' + m[1]] || +m[2] < 1 || +m[2] > maxOnt(st, m[1])) return null;
     C(st).ont[a[0]] = C(st).ont[a[0]] || { svc: {} }; return a[0]; }), 'ONT P/O');
   cmd('configure', 'no interface ont <w>', function (st, a) { delete C(st).ont[a[0]]; });
   cmd('configure', 'vlan <n>', enter('vlan', function (st, a) { if (a[0] < 1 || a[0] > 4094) return null; C(st).vlans[a[0]] = C(st).vlans[a[0]] || {}; return a[0]; }));
@@ -120,7 +136,7 @@
     cmd('configure', 'profile ' + x[0] + ' <w>', enter(x[1], function (st, a) { C(st)[x[1]][a[0]] = C(st)[x[1]][a[0]] || {}; return a[0]; }), 'Профиль ' + x[0]);
     cmd('configure', 'no profile ' + x[0] + ' <w>', function (st, a) { delete C(st)[x[1]][a[0]]; }); });
   // front-port
-  function fronts(st) { return nums(st.olt.ctx, nfront(st)).map(function (n) { return C(st).front[n]; }); }
+  function fronts(st) { return portIds(st, 'front-port', st.olt.ctx).map(function (n) { return C(st).front[n]; }); }
   cmd('front', 'vlan allow <list>', function (st, a) { if (a[0].some(function (v) { return v < 1 || v > 4094; })) return ERR;
     fronts(st).forEach(function (f) { a[0].forEach(function (v) { if (f.allow.indexOf(v) < 0) f.allow.push(v); }); f.allow.sort(function (x, y) { return x - y; }); }); }, 'Разрешить VLAN на порту');
   cmd('front', 'no vlan allow <list>', function (st, a) { fronts(st).forEach(function (f) { f.allow = f.allow.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
@@ -158,6 +174,7 @@
   // ---------------------------------------------------------------- show
   function runText(c) { var o = [];
     if (c.host) o.push('system hostname ' + c.host);
+    Object.keys(c.slots || {}).forEach(function (n) { o.push('slot ' + n); if (c.slots[n].type) o.push('    type ' + c.slots[n].type); o.push('exit'); });
     var m = c.mgmt; o.push('management ip ' + m.ip, 'management mask ' + m.mask, 'management gateway ' + m.gw, 'management vid ' + m.vid);
     if (c.igmp) o.push('ip igmp snooping enable');
     Object.keys(c.vlans).forEach(function (v) { var x = c.vlans[v]; o.push('vlan ' + v); if (x.igmp) o.push('    ip igmp snooping enable'); if (x.querier) o.push('    ip igmp snooping querier enable'); o.push('exit'); });
@@ -180,29 +197,37 @@
     var d = b.filter(function (l) { return a.indexOf(l) < 0; }); return d.length ? ['configure terminal'].concat(d, ['exit', 'commit', 'exit']).join('\n') : ''; }, 'Неприменённые изменения');
   function dash(t) { return '-----------------------------------\n' + t + '\n-----------------------------------'; }
   function list(st, w, kind) {
-    var net = st.net, d = net.devs[st.dev], pp = nums(w, npon(st)); if (!pp) return ERR;
+    var net = st.net, d = net.devs[st.dev], pp = portIds(st, 'pon-port', w, true); if (!pp) return ERR;
     var X = onts(net, d), rows = [], H = { unactivated: '## PON-port ONT ID Serial Status RSSI\nEquipmentID Version', configured: '## PON-port ONT ID Serial Status Description',
       online: '## PON-port ONT ID Serial Status RSSI\nEquipmentID Version', offline: '## PON-port ONT ID Serial Status\nDescription' }[kind];
     var out = [];
     pp.forEach(function (p) { var R = [];
       if (kind === 'unactivated') { var pr = net.peer(st.dev, 'pon-port ' + p), od = pr && net.devs[pr.dev];
-        if (isOnt(od) && !od.off && net.phys(st.dev, 'pon-port ' + p).up && !X.some(function (x) { return x.dev === od; })) R.push([p, 'n/a', od.st.serial, 'UNACTIVATED', 'n/a', 'n/a', 'n/a']); }
+        if (isOnt(od) && !od.off && net.phys(st.dev, 'pon-port ' + p).up && !X.some(function (x) { return x.dev === od; })) R.push([String(p).split('/').pop(), 'n/a', od.st.serial, 'UNACTIVATED', 'n/a', 'n/a', 'n/a']); }
       X.filter(function (x) { return x.pp === p; }).forEach(function (x) {
-        if (kind === 'configured') R.push([p, x.id, x.o.serial || 'n/a', x.dev ? 'OK' : 'OFFLINE', x.o.desc || 'n/a']);
-        if (kind === 'online' && x.dev) R.push([p, x.id, x.o.serial, 'OK', '-18.50', 'n/a', String((EL.MODELS[x.dev.model] || {}).swv || 'n/a')]);
-        if (kind === 'offline' && !x.dev) R.push([p, x.id, x.o.serial || 'n/a', 'OFFLINE', x.o.desc || 'n/a']); });
-      if (!R.length && pp.length > 1) { out.push('PON-port ' + p + ' has no ' + kind + ' ONTs'); return; }
-      rows = rows.concat(R); if (pp.length === 1) out.push(dash('pon-port ' + p + ' ONT ' + kind + ' list'), H);
+        if (kind === 'configured') R.push([String(p).split('/').pop(), x.id, x.o.serial || 'n/a', x.dev ? 'OK' : 'OFFLINE', x.o.desc || 'n/a']);
+        if (kind === 'online' && x.dev) R.push([String(p).split('/').pop(), x.id, x.o.serial, 'OK', '-18.50', 'n/a', String((EL.MODELS[x.dev.model] || {}).swv || 'n/a')]);
+        if (kind === 'offline' && !x.dev) R.push([String(p).split('/').pop(), x.id, x.o.serial || 'n/a', 'OFFLINE', x.o.desc || 'n/a']); });
+      var bySlot = st.olt.dl === 'ma5000' && String(w).indexOf('/') < 0;   // MA5000: «show interface ont 4 …» — порты слота 4, пустые не выводятся
+      if (!R.length && pp.length > 1) { if (!bySlot) out.push('PON-port ' + p + ' has no ' + kind + ' ONTs'); return; }
+      rows = rows.concat(R); if (pp.length === 1 || bySlot) out.push(dash('pon-port ' + p + ' ONT ' + kind + ' list'), H);
       R.forEach(function (r) { var n = rows.indexOf(r) + 1; out.push(n + ' ' + r.slice(0, kind === 'offline' ? 4 : 5).join(' ') + (r.length > 5 ? '\n' + r.slice(5).join(' ') : kind === 'offline' ? '\n' + r[4] : '')); }); });
     out.push('Total ONT count: ' + rows.length); return out.join('\n'); }
   ['unactivated', 'configured', 'online', 'offline'].forEach(function (k) { cmd('root', 'show interface ont <w> ' + k, function (st, a) { return st.net ? list(st, a[0], k) : ''; }, 'Список ONT: ' + k); });
-  cmd('root', 'show interface ont <w> unconfigured', function (st, a) { var p = +a[0], used = Object.keys(st.olt.run.ont).filter(function (k) { return +k.split('/')[0] === p; }).map(function (k) { return +k.split('/')[1]; });
+  cmd('root', 'show interface ont <w> unconfigured', function (st, a) { var p = a[0], used = Object.keys(st.olt.run.ont).filter(function (k) { return k.replace(/\/\d+$/, '') === p; }).map(function (k) { return +k.split('/').pop(); }); if (!st.ports['pon-port ' + p]) return ERR;
     var free = []; for (var i = 1; i <= maxOnt(st, p); i++) if (used.indexOf(i) < 0) free.push(i); return 'pon-port ' + p + ' ONT unconfigured: ' + E.fmtList(free); });
   cmd('root', 'show interface ont <w> state', function (st, a) { var x = onts(st.net, st.net.devs[st.dev]).filter(function (y) { return y.key === a[0]; })[0]; if (!x) return ERR;
     return [dash('[ONT ' + a[0] + '] state'), 'Serial number: ' + (x.o.serial || 'n/a'), 'Pon-port: ' + x.pp, 'ONT ID: ' + x.id, 'Equipment ID: n/a',
       'Current software version: ' + (x.dev ? (EL.MODELS[x.dev.model] || {}).swv : 'n/a'), 'State: ' + (x.dev ? 'OK' : 'OFFLINE'), 'RSSI: ' + (x.dev ? '-18.50 [dBm]' : 'n/a')].join('\n'); });
-  cmd('root', 'show interface front-port <n> state', function (st, a) { var k = 'front-port ' + a[0]; if (!st.ports[k]) return ERR;
+  cmd('root', 'show interface front-port <w> state', function (st, a) { var k = 'front-port ' + a[0]; if (!st.ports[k]) return ERR;
     return k + ': ' + (st.net && st.net.linkUp(st.dev, k) ? 'up' : 'down'); }, 'Состояние front-port');
+  // MA5160/MA5020: состав шасси (вставлена одна LC16G — допущение эмулятора)
+  cmd('root', 'show shelf', function (st) { if (st.olt.dl !== 'ma5000') return ERR; var r = st.olt.run.slots || {}, n = st.olt.slots || 16, have = {};
+    Object.keys(st.ports).forEach(function (k) { var m = k.match(/^pon-port (\d+)\//); if (m) have[m[1]] = 1; });
+    var o = ['## Configured Detected Serial number Rev. Uptime Status', '--- ---------- ---------- ------------- ----- -------- ---------------'];
+    for (var i = 1; i <= n; i++) { var t = (r[i] || {}).type, det = have[i] ? 'MA5K-LC16G' : '-', ok = have[i] && t === 'lc16g';
+      o.push(i + ' ' + (t && t !== 'unknown' ? t.toUpperCase() : 'Not set') + ' ' + det + ' ' + (have[i] ? 'OL1400003' + i + ' 1v1' : '- -') + ' ' + (ok ? '- running' : have[i] ? '- present' : '- -')); }
+    return o.join('\n'); }, 'Состав шасси: слоты и линейные карты');
   cmd('root', 'show mac', function (st) { return st.net ? st.net.macTable(st.dev) : ''; }, 'Таблица MAC-адресов');
   cmd('root', 'ping <ip>', function (st, a) { return st.net ? st.net.pingText(st.dev, a[0], 'linux') : ''; }, 'Проверка связи с адреса управления');
 

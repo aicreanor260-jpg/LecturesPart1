@@ -1522,5 +1522,29 @@ EL.labs.LABS.forEach(runLab);
   chk('в обычном ESR парольная политика тоже есть', !/Unknown|Illegal/.test((n.exec(r.id, 'configure'), n.exec(r.id, 'security passwords min-length 8'))) && (n.exec(r.id, 'end'), true));
   console.log('✓ безопасная настройка ESR и ESR ФСТЭК');
 })();
+
+// OLT-шасси MA5160 (ветка ma5000): слот и тип карты, front-port 1/1, ONT 4/2/1, commit + confirm (NVRAM)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('MA5160', 'OLT'), sw = n.add('MES2300-24', 'SW1'), t = n.add('NTU-1L', 'ONT1'), pc = n.add('VPC', 'PC1'), sv = n.add('VPC', 'SRV');
+  n.connect(o.id, 'front-port 1/1', sw.id, 'gi1/0/24'); n.connect(t.id, 'PON', o.id, 'pon-port 4/2'); n.connect(pc.id, 'eth0', t.id, 'LAN'); n.connect(sv.id, 'eth0', sw.id, 'gi1/0/1');
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 1100', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 1100', 'exit',
+    'interface gi1/0/1', 'switchport access vlan 1100', 'end'], PC1: ['ip 10.0.0.1/24'], SRV: ['ip 10.0.0.2/24'] });
+  chk('MA5160: приглашение MA5160#, show shelf — слот 4: Not set, MA5K-LC16G', n.prompt(o.id) === 'MA5160#' && /4 Not set MA5K-LC16G/.test(n.exec(o.id, 'show shelf')));
+  chk('show interface ont 4 unactivated — ONT на pon-port 4/2', /pon-port 4\/2 ONT unactivated list[\s\S]*UNACTIVATED/.test(n.exec(o.id, 'show interface ont 4 unactivated')), n.exec(o.id, 'show interface ont 4 unactivated'));
+  var cfg = ['configure terminal', 'interface front-port 1/1', 'vlan allow 1100', 'exit', 'profile cross-connect 1100_bridge', 'ont-mode bridge', 'bridge group 10', 'outer vid 1100', 'exit',
+    'profile ports NTU1', 'port 1 bridge group 10', 'exit', 'interface ont 4/2/2', 'serial ' + t.st.serial, 'profile ports NTU1', 'service 1 profile cross-connect 1100_bridge dba dba1', 'exit', 'exit'];
+  var bad = cfg.filter(function (l) { return /%/.test(n.exec(o.id, l)); });
+  chk('QG прил. Б для MA5160: настройка без ошибок, приглашение (config)(if-ont-4/2/2)#', !bad.length, bad.join('; '));
+  chk('commit — с таймером подтверждения', /confirmed within: 5 minutes\nConfiguration committed successfully/.test(n.exec(o.id, 'commit')));
+  chk('без типа карты (slot 4 → type lc16g) ONT не работает', !n.ping(pc.id, '10.0.0.2').ok);
+  ['configure terminal', 'slot 4', 'type lc16g', 'exit', 'exit'].forEach(function (l) { n.exec(o.id, l); });
+  chk('после type lc16g + commit — ping ПК за ONT → сервер, show shelf: running', (n.exec(o.id, 'commit'), n.ping(pc.id, '10.0.0.2').ok) && /4 LC16G MA5K-LC16G .* running/.test(n.exec(o.id, 'show shelf')));
+  chk('save у MA5160 нет — ошибка; confirm сохраняет в NVRAM', /%/.test(n.exec(o.id, 'save')) && /saved in NVRAM/.test(n.exec(o.id, 'confirm')));
+  n.reboot(o.id); n.exec(o.id, 'x');
+  chk('после confirm перезагрузка сохраняет конфигурацию', n.ping(pc.id, '10.0.0.2').ok);
+  chk('приглашение (config)(slot-4)# и (config)(if-front-1/1)#', (n.exec(o.id, 'configure terminal'), n.exec(o.id, 'slot 4'), /\(config\)\(slot-4\)#$/.test(n.prompt(o.id))) && (n.exec(o.id, 'exit'), n.exec(o.id, 'interface front-port 1/1'), /\(config\)\(if-front-1\/1\)#$/.test(n.prompt(o.id))));
+  console.log('✓ OLT-шасси MA5160');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
