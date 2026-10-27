@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1008,6 +1008,31 @@ EL.labs.LABS.forEach(runLab);
   chk('freeradius остановлен — не авторизован', !n.ping(cl.id, '10.0.0.1').ok);
   chk('running-config: dot1x', /aaa authentication dot1x default group radius[\s\S]*dot1x system-auth-control/.test(n.exec(sw.id, 'show running-config')) && /dot1x port-control auto/.test(n.exec(sw.id, 'show running-config')));
   console.log('✓ 802.1X');
+})();
+
+// IGMP snooping: источник и три приёмника, в группу вступил только один
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), src = n.add('Debian', 'SRC'), a = n.add('Debian', 'RA'), b = n.add('Debian', 'RB'), c = n.add('Debian', 'RC');
+  [[src, 1, 10], [a, 2, 11], [b, 3, 12], [c, 4, 13]].forEach(function (x) { n.connect(sw.id, 'gi1/0/' + x[1], x[0].id, 'ens3');
+    ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.' + x[2] + '/24 dev ens3'].forEach(function (l) { n.exec(x[0].id, l); }); });
+  n.exec(a.id, 'ip addr add 239.1.1.1/32 dev ens3 autojoin');
+  var r0 = n.mcastSend(src.id, '239.1.1.1');
+  chk('без snooping групповой кадр уходит во все порты VLAN', r0.all.length === 3 && r0.got.join() === 'RA', JSON.stringify(r0.all));
+  var e = EL.labs.apply(n, { SW1: ['enable', 'configure', 'ip igmp snooping', 'ip igmp snooping vlan 1', 'end'] });
+  chk('IGMP snooping: команды без ошибок', !e.length, e.join('; '));
+  n.exec(a.id, 'ip addr del 239.1.1.1/32 dev ens3'); n.exec(a.id, 'ip addr add 239.1.1.1/32 dev ens3 autojoin');
+  chk('show ip igmp snooping groups — RA на gi1/0/2', /1\s+239\.1\.1\.1\s+gi1\/0\/2/.test(n.exec(sw.id, 'show ip igmp snooping groups')), n.exec(sw.id, 'show ip igmp snooping groups'));
+  var r1 = n.mcastSend(src.id, '239.1.1.1');
+  chk('со snooping кадр получает только участник группы', r1.all.join() === 'RA', JSON.stringify(r1.all));
+  EL.labs.apply(n, { SW1: ['configure', 'ip igmp snooping vlan 1 mrouter gigabitethernet 1/0/4', 'end'] });
+  var r2 = n.mcastSend(src.id, '239.1.1.1');
+  chk('mrouter-порт тоже получает групповой трафик', r2.all.sort().join() === 'RA,RC', JSON.stringify(r2.all));
+  n.exec(a.id, 'ip addr del 239.1.1.1/32 dev ens3');
+  chk('IGMP Leave — группа удалена', !/239\.1\.1\.1/.test(n.exec(sw.id, 'show ip igmp snooping groups')));
+  chk('Debian ping 239.1.1.1 — вывод Linux', /4 packets transmitted, 0 received/.test(n.exec(src.id, 'ping 239.1.1.1')));
+  chk('running-config: ip igmp snooping', /ip igmp snooping\nip igmp snooping vlan 1\nip igmp snooping vlan 1 mrouter gigabitethernet 1\/0\/4/.test(n.exec(sw.id, 'show running-config')), n.exec(sw.id, 'show running-config'));
+  console.log('✓ IGMP snooping');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

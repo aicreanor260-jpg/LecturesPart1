@@ -423,6 +423,7 @@
         var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
       s.lports(dev).forEach(function (L) {           // логические порты: обычный порт или собранный port-channel
         if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name, v)) return;
+        if (s.mcBlock && s.mcBlock(dev, v, L.name)) return;          // IGMP snooping: групповой кадр — только в порты участников
         var e = egress(L.cfg, v), q2 = inner === undefined ? null : inner;
         if (e === 'c') send(dev, L.members[0], q2, path, null);            // клиентский порт QinQ: S-VLAN снимается, тег клиента остаётся
         else if (e) send(dev, L.members[0], e === 't' ? v : q2, path, e === 't' ? q2 : null);

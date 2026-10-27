@@ -5,7 +5,7 @@
   'use strict';
   var EL = G.EL, P = EL.Net.prototype;
   var SVC = { 500: 'ISAKMP', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
-  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47, esp: 50 };
+  var PNUM = { icmp: 1, igmp: 2, tcp: 6, udp: 17, gre: 47, esp: 50 };
   var CAP_MAX = 2000;
 
   // ---------------------------------------------------------------- захват на кабеле
