@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -651,10 +651,57 @@ EL.labs.LABS.forEach(runLab);
   chk('running-config: tunnel gre 1', /tunnel gre 1\n  ip firewall disable\n  ip address 10\.10\.10\.1\/30\n  local address 100\.0\.0\.2\n  remote address 100\.0\.1\.2\n  enable\nexit/.test(n.exec(ra.id, 'show running-config')), n.exec(ra.id, 'show running-config'));
   EL.labs.apply(n, { RB: ['configure', 'tunnel gre 1', 'no enable', 'end', 'commit', 'confirm'] });
   var r2 = n.ping(pa.id, '192.168.2.10');
-  chk('туннель выключен на RB — GRE отброшен', !r2.ok && r2.steps.some(function (s) { return /нет включённого GRE-туннеля/.test(s.t); }));
+  chk('туннель выключен на RB — GRE отброшен', !r2.ok && r2.steps.some(function (s) { return /нет включённого туннеля gre/.test(s.t); }));
   EL.labs.apply(n, { RB: ['configure', 'tunnel gre 1', 'enable', 'no ip firewall disable', 'end', 'commit', 'confirm'] });
   chk('туннель без зоны и с межсетевым экраном — отброшено', !n.ping(pa.id, '192.168.2.10').ok);
   console.log('✓ GRE');
+})();
+
+// IPsec: policy-based и route-based (VTI) между офисами через провайдера
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function office() {
+    var n = new EL.Net(), ra = n.add('vESR', 'RA'), isp = n.add('vESR', 'ISP'), rb = n.add('vESR', 'RB'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+    n.connect(ra.id, 'gi1/0/1', isp.id, 'gi1/0/1'); n.connect(isp.id, 'gi1/0/2', rb.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
+    EL.labs.apply(n, { ISP: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.1.1/30', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+      RA: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.0.1', 'end', 'commit', 'confirm'],
+      RB: ['configure', 'interface gi1/0/1', 'ip address 100.0.1.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 192.168.2.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.1.1', 'end', 'commit', 'confirm'],
+      PA: ['ip 192.168.1.10/24 192.168.1.1'], PB: ['ip 192.168.2.10/24 192.168.2.1'] });
+    return { n: n, ra: ra, rb: rb, pa: pa, isp: isp };
+  }
+  function vpn(me, peer, ln, rn, key, extra) {
+    return ['configure', 'security ike proposal P1', 'encryption algorithm aes128', 'dh-group 2', 'exit', 'security ike policy POL', 'pre-shared-key ascii-text ' + key, 'proposal P1', 'exit',
+      'security ike gateway GW', 'ike-policy POL', 'local address ' + me, 'remote address ' + peer].concat(extra || ['mode policy-based', 'local network ' + ln, 'remote network ' + rn]).concat(['exit',
+      'security ipsec proposal IP1', 'encryption algorithm aes128', 'exit', 'security ipsec policy IPOL', 'proposal IP1', 'exit',
+      'security ipsec vpn VPN', 'ike establish-tunnel immediate', 'ike gateway GW', 'ike ipsec-policy IPOL', 'enable', 'exit', 'end', 'commit', 'confirm']);
+  }
+  var o = office(), n = o.n;
+  var e = EL.labs.apply(n, { RA: vpn('100.0.0.2', '100.0.1.2', '192.168.1.0/24', '192.168.2.0/24', 'Secret123'), RB: vpn('100.0.1.2', '100.0.0.2', '192.168.2.0/24', '192.168.1.0/24', 'Secret123') });
+  chk('IPsec: конфигурация без ошибок', !e.length, e.join('; '));
+  chk('IPsec: show security ipsec vpn status — Established', /VPN\s+100\.0\.0\.2\s+100\.0\.1\.2\s+0x\S+\s+0x\S+\s+Established/.test(n.exec(o.ra.id, 'show security ipsec vpn status')), n.exec(o.ra.id, 'show security ipsec vpn status'));
+  var cap = n.capStart(0), r = n.ping(o.pa.id, '192.168.2.10');
+  chk('policy-based: PA → PB через ESP', r.ok, r.steps.map(function (s) { return s.t; }).join(' | '));
+  var esp = cap.frames.filter(function (f) { return f.proto === 'ESP'; });
+  chk('захват у провайдера: только ESP 100.0.0.2 ↔ 100.0.1.2, внутренних адресов не видно', esp.length >= 2 && esp[0].sip === '100.0.0.2' && !cap.frames.some(function (f) { return f.sip === '192.168.1.10'; }) &&
+      EL.decode(esp[0].f, null, esp[0].len).some(function (x) { return /Encapsulating Security Payload/.test(x.name); }));
+  chk('захват: IKE ISAKMP (UDP 500)', cap.frames.some(function (f) { return f.proto === 'ISAKMP'; }));
+  chk('running-config: security ike/ipsec', /security ike gateway GW\n  ike-policy POL\n  local address 100\.0\.0\.2\n  local network 192\.168\.1\.0\/24/.test(n.exec(o.ra.id, 'show running-config')) && /security ipsec vpn VPN\n  ike establish-tunnel immediate/.test(n.exec(o.ra.id, 'show running-config')));
+  EL.labs.apply(n, { RB: ['configure', 'security ike policy POL', 'pre-shared-key ascii-text Wrong999', 'exit', 'end', 'commit', 'confirm'] });
+  var r2 = n.ping(o.pa.id, '192.168.2.10');
+  chk('разные ключи — SA нет, пакет политики отброшен', !r2.ok && r2.steps.some(function (s) { return /pre-shared-key не совпадает/.test(s.t); }), r2.steps.map(function (s) { return s.t; }).join(' | '));
+  EL.labs.apply(n, { RB: ['configure', 'security ike policy POL', 'pre-shared-key ascii-text Secret123', 'exit', 'security ipsec proposal IP1', 'encryption algorithm aes256', 'exit', 'end', 'commit', 'confirm'] });
+  chk('разные алгоритмы ESP — SA нет', /Down/.test(n.exec(o.ra.id, 'show security ipsec vpn status')));
+  EL.labs.apply(n, { RB: ['configure', 'security ipsec proposal IP1', 'encryption algorithm aes128', 'exit', 'interface gi1/0/1', 'no ip firewall disable', 'end', 'commit', 'confirm'] });
+  chk('межсетевой экран на RB закрыл IKE — SA нет', /Down/.test(n.exec(o.ra.id, 'show security ipsec vpn status')));
+  // route-based: VTI + маршрут в туннель
+  var q = office(), m = q.n, ex = ['mode route-based', 'bind-interface vti 1'];
+  var e2 = EL.labs.apply(m, { RA: vpn('100.0.0.2', '100.0.1.2', null, null, 'K3y12345', ex).slice(0, -3).concat(['tunnel vti 1', 'local address 100.0.0.2', 'remote address 100.0.1.2', 'ip address 10.0.9.1/30', 'ip firewall disable', 'enable', 'exit', 'ip route 192.168.2.0/24 10.0.9.2', 'end', 'commit', 'confirm']),
+                              RB: vpn('100.0.1.2', '100.0.0.2', null, null, 'K3y12345', ex).slice(0, -3).concat(['tunnel vti 1', 'local address 100.0.1.2', 'remote address 100.0.0.2', 'ip address 10.0.9.2/30', 'ip firewall disable', 'enable', 'exit', 'ip route 192.168.1.0/24 10.0.9.1', 'end', 'commit', 'confirm']) });
+  chk('route-based: конфигурация без ошибок', !e2.length, e2.join('; '));
+  var r3 = m.ping(q.pa.id, '192.168.2.10');
+  chk('route-based: PA → PB через vti 1', r3.ok && r3.steps.some(function (s) { return /vti 1 — пакет .* зашифрован в ESP/.test(s.t); }), r3.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('show tunnels status: vti 1', /vti 1\s+Up/.test(m.exec(q.ra.id, 'show tunnels status')));
+  console.log('✓ IPsec');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

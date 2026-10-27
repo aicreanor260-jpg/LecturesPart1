@@ -132,6 +132,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show tunnels status</td><td>состояние туннелей; в захвате у провайдера виден внешний заголовок и внутренний пакет</td></tr>
 </table>
 
+<h2>IPsec VPN на ESR</h2>
+<table>
+<tr><td>security ike proposal · ike policy (pre-shared-key ascii-text, proposal) · ike gateway (ike-policy, local/remote address, mode, local/remote network | bind-interface vti)</td><td>IKE</td></tr>
+<tr><td>security ipsec proposal · ipsec policy · ipsec vpn (ike establish-tunnel immediate, ike gateway, ike ipsec-policy, enable)</td><td>IPsec; tunnel vti N — для route-based</td></tr>
+<tr><td>show security ipsec vpn status</td><td>Established / Down</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

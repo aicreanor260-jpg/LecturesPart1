@@ -370,6 +370,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show tunnels status</td><td>состояние туннелей; в захвате у провайдера виден внешний заголовок и внутренний пакет</td></tr>
 </table>
 
+<h2>IPsec VPN на ESR</h2>
+<table>
+<tr><td>security ike proposal · ike policy (pre-shared-key ascii-text, proposal) · ike gateway (ike-policy, local/remote address, mode, local/remote network | bind-interface vti)</td><td>IKE</td></tr>
+<tr><td>security ipsec proposal · ipsec policy · ipsec vpn (ike establish-tunnel immediate, ike gateway, ike ipsec-policy, enable)</td><td>IPsec; tunnel vti N — для route-based</td></tr>
+<tr><td>show security ipsec vpn status</td><td>Established / Down</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
@@ -1175,9 +1182,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (n === st.cand.routes.length) return '% Маршрут не найден'; touch(st); });
 
   // ---------------------------------------------------------------- show
-  function ifSort(a, b) { var f = function (k) { return k.indexOf('gre') === 0 ? 2e6 + +k.slice(3) : k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
+  function ifSort(a, b) { var f = function (k) { return k.indexOf('gre') === 0 ? 2e6 + +k.slice(3) : k.indexOf('vti') === 0 ? 3e6 + +k.slice(3) : k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
     return f(a) - f(b); }
-  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); if (k.indexOf('gre') === 0) return 'gre ' + k.slice(3); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
+  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); if (k.indexOf('gre') === 0 || k.indexOf('vti') === 0) return k.slice(0, 3) + ' ' + k.slice(3); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
@@ -1196,7 +1203,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (x.ip) d.push('  ip address ' + x.ip);
       if (x.helper) d.push('  ip helper-address ' + x.helper);
       if (x.tun) { if (x.local) d.push('  local address ' + x.local); if (x.remote) d.push('  remote address ' + x.remote); if (x.on) d.push('  enable');
-        o.push('tunnel gre ' + k.slice(3), d.join('\n'), 'exit'); return; }
+        o.push('tunnel ' + x.tun + ' ' + k.slice(3), d.join('\n'), 'exit'); return; }
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });
@@ -2685,6 +2692,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     while (ttl-- > 0) {
       var cd = this.devs[cur];
       if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      var vf = cd.type === 'esr' && this.ipsecForward ? this.ipsecForward(cur, pk, steps, ct) : null;   // IPsec policy-based: трафик политики уходит в ESP
+      if (vf) { if (!vf.ok) return { ok: false, why: 'Request timed out', pk: pk }; hops.push({ dev: vf.dev, ip: vf.ip }); cur = vf.dev; continue; }
       var r = this.lookup(cur, pk.dst);
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
@@ -2737,7 +2746,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, spi: pk.spi, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -2802,7 +2811,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
                                  (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) || (proto === 'udp' && port === 53 && s.svc && s.svc.bind9) ||
                                  (proto === 'tcp' && port === 22);
-    if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
+    if (d.type === 'esr') return (proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet))) ||
+      (proto === 'udp' && port === 500 && !!s.run.sec && Object.keys(s.run.sec.vpn || {}).some(function (v) { return s.run.sec.vpn[v].on; }));   // IKE
     return false;
   }
   P.ping = function (src, dst) { return this.request(src, dst, 'icmp'); };
@@ -4318,8 +4328,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
 (function (G) {
   'use strict';
   var EL = G.EL, P = EL.Net.prototype;
-  var SVC = { 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
-  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47 };
+  var SVC = { 500: 'ISAKMP', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
+  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47, esp: 50 };
   var CAP_MAX = 2000;
 
   // ---------------------------------------------------------------- захват на кабеле
@@ -4343,6 +4353,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function gin(f) { var i = f.inner; return { type: 'ip', src: i.src, dst: i.dst, proto: i.proto, reply: i.reply, dport: i.dport, sport: i.sport, ttl: (f.ttl || 64) }; }
   function proto(f) {
     if (f.proto === 'gre' && f.inner) return proto(gin(f));
+    if (f.proto === 'esp') return 'ESP';
     if (f.type === 'arp') return 'ARP'; if (f.type === 'stp') return 'STP';
     if (f.dhcp) return 'DHCP';
     if (f.proto === 'icmp') return 'ICMP';
@@ -4351,6 +4362,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return f.proto === 'udp' && p ? p : f.proto.toUpperCase();
   }
   function info(f) {
+    if (f.proto === 'esp') return 'ESP (SPI=' + (f.spi || '0x' + EL.E.hash(f.src + f.dst).slice(0, 8)) + ')';
     if (f.proto === 'gre' && f.inner) return 'GRE · ' + f.inner.src + ' → ' + f.inner.dst + ' · ' + info(gin(f));
     if (f.type === 'arp') return f.op === 1 ? 'Who has ' + f.tip + '? Tell ' + f.sip : f.sip + ' is at ' + f.smac;
     if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
@@ -4405,6 +4417,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     L.push({ osi: 'L3', name: 'Internet Protocol Version 4, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 4], ['Header Length', '20 bytes (5)'],
       ['Differentiated Services Field', '0x00 (DSCP: CS0, ECN: Not-ECT)'], ['Total Length', ipLen], ['Flags', f.proto === 'udp' && f.dhcp ? '0x0' : '0x2, Don\'t fragment'],
       ['Fragment Offset', 0], ['Time to Live', f.ttl], ['Protocol', f.proto.toUpperCase() + ' (' + PNUM[f.proto] + ')'], ['Source Address', f.src], ['Destination Address', f.dst]] });
+    if (f.proto === 'esp') { L.push({ osi: 'L3', name: 'Encapsulating Security Payload', fields: [['ESP SPI', f.spi || '0x' + EL.E.hash(f.src + f.dst).slice(0, 8)], ['ESP Sequence', 1],
+      ['Данные', 'зашифрованы — внутренний пакет (адреса, протокол) не виден']] }); return L; }
     if (f.proto === 'gre' && f.inner) { L.push({ osi: 'L3', name: 'Generic Routing Encapsulation (IP)', fields: [['Flags and Version', '0x0000'], ['Protocol Type', 'IP (0x0800)']] });
       return L.concat(EL.decode(gin(f), null, len - 24).slice(2).map(function (x) { return { osi: x.osi, name: '↳ ' + x.name, fields: x.fields }; })); }
     if (f.proto === 'icmp') L.push({ osi: 'L3', name: 'Internet Control Message Protocol', fields: [['Type', f.reply ? '0 (Echo (ping) reply)' : '8 (Echo (ping) request)'], ['Code', 0],
@@ -5037,7 +5051,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   S.cmd('priv', 'show tunnels status', function (st) {
     var s = st.net, o = ['Tunnel     Admin state        MTU      Local IP           Remote IP          Uptime', '------      ----------       -----    ------------       -----------        ---------------'];
     Object.keys(st.run.ifs).filter(function (k) { return st.run.ifs[k].tun; }).forEach(function (k) { var x = st.run.ifs[k];
-      o.push(rp('gre ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp('1476', 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
+      o.push(rp(x.tun + ' ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp('1476', 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
     return o.join('\n'); }, 'Состояние туннелей');
   function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
   function up(n) { n = Math.floor(n); return Math.floor(n / 60) + ' minute' + (Math.floor(n / 60) === 1 ? '' : 's') + ' and ' + n % 60 + ' seconds'; }
@@ -5046,22 +5060,170 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.tunnel = function (cur, r, pk, steps, ct) {
     var s = this, d = this.devs[cur], k = r.iface.name, x = d.st.run.ifs[k];
     if ((this._tunDepth || 0) > 2) { steps.push({ k: 'drop', t: d.name + ': рекурсивная маршрутизация — адрес удалённого конца туннеля доступен только через сам туннель' }); return { ok: false }; }
-    if (!this.ifaces(cur).some(function (f) { return f.ip === x.local && !f.tun; })) { steps.push({ k: 'drop', t: d.name + ': local address ' + x.local + ' туннеля gre ' + k.slice(3) + ' не принадлежит ни одному интерфейсу' }); return { ok: false }; }
-    steps.push({ k: 'route', t: d.name + ': маршрут через туннель gre ' + k.slice(3) + ' — пакет ' + pk.src + ' → ' + pk.dst + ' инкапсулирован в GRE: внешний заголовок ' + x.local + ' → ' + x.remote + ' (протокол 47)' });
-    var outer = { src: x.local, dst: x.remote, proto: 'gre', dport: null, inner: { src: pk.src, dst: pk.dst, proto: pk.proto, reply: !!pk.reply, dport: pk.dport, sport: pk.sport } };
+    if (!this.ifaces(cur).some(function (f) { return f.ip === x.local && !f.tun; })) { steps.push({ k: 'drop', t: d.name + ': local address ' + x.local + ' туннеля ' + k + ' не принадлежит ни одному интерфейсу' }); return { ok: false }; }
+    var T = x.tun, tn = T + ' ' + k.slice(T.length);
+    if (T === 'vti') { var sa = this.vtiSA(cur, +k.slice(3)); if (!sa.ok) { steps.push({ k: 'drop', t: d.name + ': ' + tn + ' — IPsec SA не установлена: ' + sa.why }); return { ok: false }; } }
+    steps.push({ k: 'route', t: d.name + ': маршрут через туннель ' + tn + ' — пакет ' + pk.src + ' → ' + pk.dst + (T === 'vti' ? ' зашифрован в ESP' : ' инкапсулирован в GRE') + ': внешний заголовок ' + x.local + ' → ' + x.remote + (T === 'vti' ? ' (протокол 50)' : ' (протокол 47)') });
+    var outer = { src: x.local, dst: x.remote, proto: T === 'vti' ? 'esp' : 'gre', dport: null, inner: { src: pk.src, dst: pk.dst, proto: pk.proto, reply: !!pk.reply, dport: pk.dport, sport: pk.sport } };
     this._tunDepth = (this._tunDepth || 0) + 1;
     var o; try { o = this.send(cur, outer, steps, ct); } finally { this._tunDepth--; }
     if (!o.ok) { steps.push({ k: 'drop', t: 'GRE-пакет не дошёл до удалённого конца ' + x.remote }); return { ok: false }; }
     var pd = this.devs[o.dev], pk2 = pd.type === 'esr' ? Object.keys(pd.st.run.ifs).filter(function (q) { var y = pd.st.run.ifs[q];
-      return y.tun === 'gre' && y.on && y.local === x.remote && y.remote === x.local && y.ip; })[0] : null;
-    if (!pk2) { steps.push({ k: 'drop', t: pd.name + ': нет включённого GRE-туннеля с local ' + x.remote + ' и remote ' + x.local + ' — GRE-пакет отброшен' }); return { ok: false }; }
+      return y.tun === T && y.on && y.local === x.remote && y.remote === x.local && y.ip; })[0] : null;
+    if (!pk2) { steps.push({ k: 'drop', t: pd.name + ': нет включённого туннеля ' + T + ' с local ' + x.remote + ' и remote ' + x.local + ' — пакет отброшен' }); return { ok: false }; }
     var y = pd.st.run.ifs[pk2], tf = { name: pk2, ip: y.ip.split('/')[0], fw: y.fw };
     var fw = this.fwPass(o.dev, tf, pk, ct, { src: pk.src, dst: pk.dst });
     if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
     if (!fw.ok) return { ok: false };
-    steps.push({ k: 'route', t: pd.name + ': GRE снят на gre ' + pk2.slice(3) + ' — внутри ' + pk.src + ' → ' + pk.dst });
+    steps.push({ k: 'route', t: pd.name + ': ' + (T === 'vti' ? 'ESP расшифрован' : 'GRE снят') + ' на ' + T + ' ' + pk2.slice(T.length) + ' — внутри ' + pk.src + ' → ' + pk.dst });
     void s; return { ok: true, dev: o.dev, ip: tf.ip };
   };
+})(typeof window !== 'undefined' ? window : global);
+
+/* IPsec VPN на ESR (справочник ESR-Series CLI 1.23, «Управление VPN»):
+   security ike proposal → encryption algorithm (по умолчанию 3des), authentication algorithm (sha1), dh-group (1);
+   security ike policy → pre-shared-key ascii-text, proposal; security ike gateway → ike-policy, local address, remote address,
+   mode policy-based | route-based, local network / remote network (policy-based), bind-interface vti N (route-based);
+   security ipsec proposal → encryption algorithm (3des), authentication algorithm (sha1); security ipsec policy → proposal;
+   security ipsec vpn → ike establish-tunnel by-request | route | immediate, ike gateway, ike ipsec-policy, enable;
+   tunnel vti N → local address, remote address, ip address, enable; show security ipsec vpn status.
+   SA устанавливается, если у пары ESR зеркальные шлюзы, одинаковый ключ и алгоритмы, и UDP 500 (IKE) проходит по сети
+   (межсетевой экран на пути и на самих ESR тоже проверяется). Трафик в туннеле — ESP (протокол 50), содержимое в захвате не видно.
+   Упрощения: IKEv1/v2 не различаются, lifetime/rekey/DPD не моделируются, NAT-T нет. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype, IP = EL.ip;
+  var M = { ikeprop: '(config-ike-proposal)#', ikepol: '(config-ike-policy)#', ikegw: '(config-ike-gw)#', ipprop: '(config-ipsec-proposal)#',
+            ippol: '(config-ipsec-policy)#', ipvpn: '(config-ipsec-vpn)#', vti: '(config-vti)#' };
+  Object.keys(M).forEach(function (k) { S.PROMPT[k] = M[k]; });
+  var ALL = Object.keys(M).join(' ');
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') Object.keys(M).forEach(function (k) { c.modes.push(k); }); });
+  var OK = /^(no )?(ip address|ip firewall disable|security-zone|description|ip ospf|ip rip)\b/;
+  S.T.forEach(function (c) { if (c.modes.indexOf('sub') >= 0 && OK.test(c.pat.join(' ')) && c.modes.indexOf('vti') < 0) c.modes.push('vti'); });
+  function touch(st) { st.pending = true; }
+  function sec(c) { return c.sec || (c.sec = { ikeProp: {}, ikePol: {}, ikeGw: {}, ipProp: {}, ipPol: {}, vpn: {} }); }
+  function obj(st) { var p = st.ctx.split('|'); return sec(st.cand)[p[0]][p[1]]; }
+  function enter(kind, mode, init) { return function (st, a) { var t = sec(st.cand)[kind]; if (!t[a[0]]) t[a[0]] = init(); touch(st); st.mode = mode; st.ctx = kind + '|' + a[0]; }; }
+  function del(kind) { return function (st, a) { delete sec(st.cand)[kind][a[0]]; touch(st); }; }
+  S.cmd('config', 'security ike proposal <w>', enter('ikeProp', 'ikeprop', function () { return {}; }), 'Профиль IKE');
+  S.cmd('config', 'security ike policy <w>', enter('ikePol', 'ikepol', function () { return {}; }), 'Политика IKE');
+  S.cmd('config', 'security ike gateway <w>', enter('ikeGw', 'ikegw', function () { return { mode: 'policy-based' }; }), 'Шлюз IKE');
+  S.cmd('config', 'security ipsec proposal <w>', enter('ipProp', 'ipprop', function () { return {}; }), 'Профиль IPsec');
+  S.cmd('config', 'security ipsec policy <w>', enter('ipPol', 'ippol', function () { return {}; }), 'Политика IPsec');
+  S.cmd('config', 'security ipsec vpn <w>', enter('vpn', 'ipvpn', function () { return { on: false, est: 'by-request' }; }), 'IPsec VPN');
+  [['ike proposal', 'ikeProp'], ['ike policy', 'ikePol'], ['ike gateway', 'ikeGw'], ['ipsec proposal', 'ipProp'], ['ipsec policy', 'ipPol'], ['ipsec vpn', 'vpn']].forEach(function (x) {
+    S.cmd('config', 'no security ' + x[0] + ' <w>', del(x[1])); });
+  function set(f) { return function (st, a) { var r = f(obj(st), a); touch(st); return r; }; }
+  var ENC = ['des', '3des', 'blowfish128', 'blowfish192', 'blowfish256', 'aes128', 'aes192', 'aes256', 'aes128ctr', 'aes192ctr', 'aes256ctr', 'camellia128', 'camellia192', 'camellia256', 'null'];
+  var AUTH = ['md5', 'sha1', 'sha2-256', 'sha2-384', 'sha2-512'];
+  S.cmd('ikeprop ipprop', 'encryption algorithm <w>', set(function (o, a) { if (ENC.indexOf(a[0]) < 0) return 'Syntax error: Illegal parameter'; o.enc = a[0]; }), 'Алгоритм шифрования');
+  S.cmd('ikeprop ipprop', 'authentication algorithm <w>', set(function (o, a) { if (AUTH.indexOf(a[0]) < 0) return 'Syntax error: Illegal parameter'; o.auth = a[0]; }), 'Алгоритм аутентификации');
+  S.cmd('ikeprop', 'dh-group <n>', set(function (o, a) { if ([1, 2, 5].indexOf(a[0]) < 0 && (a[0] < 14 || a[0] > 31)) return 'Syntax error: Illegal parameter'; o.dh = a[0]; }), 'Группа Диффи-Хеллмана');
+  S.cmd('ikepol', 'pre-shared-key ascii-text <w>', set(function (o, a) { o.psk = a[0]; }), 'Общий ключ');
+  S.cmd('ikepol ippol', 'proposal <w>', set(function (o, a) { o.prop = a[0]; }), 'Привязать профиль');
+  S.cmd('ikegw', 'ike-policy <w>', set(function (o, a) { o.pol = a[0]; }), 'Политика IKE');
+  S.cmd('ikegw', 'local address <ip>', set(function (o, a) { o.local = a[0]; }), 'Адрес локального шлюза');
+  S.cmd('ikegw', 'remote address <ip>', set(function (o, a) { o.remote = a[0]; }), 'Адрес удалённого шлюза');
+  S.cmd('ikegw', 'mode <w>', set(function (o, a) { if (a[0] !== 'policy-based' && a[0] !== 'route-based') return 'Syntax error: Illegal parameter'; o.mode = a[0]; }), 'policy-based | route-based');
+  S.cmd('ikegw', 'local network <w>', set(function (o, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter'; o.lnet = IP.netOf(c.ip, c.len); }), 'Локальная подсеть');
+  S.cmd('ikegw', 'remote network <w>', set(function (o, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter'; o.rnet = IP.netOf(c.ip, c.len); }), 'Удалённая подсеть');
+  S.cmd('ikegw', 'bind-interface vti <n>', set(function (o, a) { o.vti = a[0]; }), 'Туннель VTI (route-based)');
+  S.cmd('ipvpn', 'ike establish-tunnel <w>', set(function (o, a) { if (['by-request', 'route', 'immediate'].indexOf(a[0]) < 0) return 'Syntax error: Illegal parameter'; o.est = a[0]; }), 'Режим активации');
+  S.cmd('ipvpn', 'ike gateway <w>', set(function (o, a) { o.gw = a[0]; }), 'Шлюз IKE');
+  S.cmd('ipvpn', 'ike ipsec-policy <w>', set(function (o, a) { o.pol = a[0]; }), 'Политика IPsec');
+  S.cmd('ipvpn', 'enable', set(function (o) { o.on = true; }), 'Включить VPN');
+  S.cmd('ipvpn', 'no enable', set(function (o) { o.on = false; }));
+  S.cmd(ALL, 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  // tunnel vti N — как GRE, но содержимое шифруется
+  S.cmd('config', 'tunnel vti <n>', function (st, a) { var k = 'vti' + a[0];
+    if (!st.cand.ifs[k]) { st.cand.ifs[k] = { ip: null, fw: true, shut: false, tun: 'vti', on: false, local: null, remote: null }; touch(st); }
+    st.mode = 'vti'; st.ctx = k; }, 'Туннель VTI');
+  S.cmd('config', 'no tunnel vti <n>', function (st, a) { delete st.cand.ifs['vti' + a[0]]; touch(st); });
+  S.cmd('vti', 'local address <ip>', function (st, a) { st.cand.ifs[st.ctx].local = a[0]; touch(st); }, 'IP-адрес локального шлюза');
+  S.cmd('vti', 'remote address <ip>', function (st, a) { st.cand.ifs[st.ctx].remote = a[0]; touch(st); }, 'IP-адрес удалённого шлюза');
+  S.cmd('vti', 'enable', function (st) { st.cand.ifs[st.ctx].on = true; touch(st); }, 'Включить туннель');
+  S.cmd('vti', 'no enable', function (st) { st.cand.ifs[st.ctx].on = false; touch(st); });
+
+  S.RUNX.push(function (c, o) { var s = c.sec; if (!s) return;
+    function blk(head, x, lines) { o.push(head); lines.filter(Boolean).forEach(function (l) { o.push('  ' + l); }); o.push('exit'); void x; }
+    Object.keys(s.ikeProp).forEach(function (n) { var x = s.ikeProp[n]; blk('security ike proposal ' + n, x, [x.auth && 'authentication algorithm ' + x.auth, x.enc && 'encryption algorithm ' + x.enc, x.dh && 'dh-group ' + x.dh]); });
+    Object.keys(s.ikePol).forEach(function (n) { var x = s.ikePol[n]; blk('security ike policy ' + n, x, [x.psk && 'pre-shared-key ascii-text encrypted ' + EL.E.hash(x.psk).slice(0, 16), x.prop && 'proposal ' + x.prop]); });
+    Object.keys(s.ikeGw).forEach(function (n) { var x = s.ikeGw[n]; blk('security ike gateway ' + n, x, [x.pol && 'ike-policy ' + x.pol, x.local && 'local address ' + x.local,
+      x.lnet && 'local network ' + x.lnet, x.remote && 'remote address ' + x.remote, x.rnet && 'remote network ' + x.rnet, 'mode ' + x.mode, x.vti && 'bind-interface vti ' + x.vti]); });
+    Object.keys(s.ipProp).forEach(function (n) { var x = s.ipProp[n]; blk('security ipsec proposal ' + n, x, [x.auth && 'authentication algorithm ' + x.auth, x.enc && 'encryption algorithm ' + x.enc]); });
+    Object.keys(s.ipPol).forEach(function (n) { var x = s.ipPol[n]; blk('security ipsec policy ' + n, x, [x.prop && 'proposal ' + x.prop]); });
+    Object.keys(s.vpn).forEach(function (n) { var x = s.vpn[n]; blk('security ipsec vpn ' + n, x, [x.est !== 'by-request' && 'ike establish-tunnel ' + x.est, x.gw && 'ike gateway ' + x.gw, x.pol && 'ike ipsec-policy ' + x.pol, x.on && 'enable']); });
+  });
+  // pre-shared-key из running-config при импорте конфигурации — хеш, ключ не восстанавливается
+  S.cmd('ikepol', 'pre-shared-key ascii-text encrypted <w>', set(function (o, a) { o.pskEnc = a[0]; }));
+
+  // ---------------------------------------------------------------- установление SA
+  function full(c, vname) {      // параметры VPN с подставленными значениями по умолчанию
+    var s = c.sec, v = s && s.vpn[vname]; if (!v) return { why: 'нет VPN ' + vname };
+    var gw = s.ikeGw[v.gw]; if (!gw) return { why: 'не задан ike gateway' };
+    var pol = s.ikePol[gw.pol]; if (!pol) return { why: 'у шлюза ' + v.gw + ' нет ike-policy' };
+    var ip = s.ipPol[v.pol]; if (!ip) return { why: 'не задана ike ipsec-policy' };
+    var ikp = s.ikeProp[pol.prop] || {}, ipp = s.ipProp[ip.prop] || {};
+    if (!pol.prop || !s.ikeProp[pol.prop]) return { why: 'в политике IKE нет proposal' };
+    if (!ip.prop || !s.ipProp[ip.prop]) return { why: 'в политике IPsec нет proposal' };
+    return { v: v, gw: gw, psk: pol.psk || pol.pskEnc || null, ike: [ikp.enc || '3des', ikp.auth || 'sha1', ikp.dh || 1].join('/'), esp: [ipp.enc || '3des', ipp.auth || 'sha1'].join('/') };
+  }
+  P.ipsecSA = function (id, vname) {
+    var s = this, d = this.devs[id], c = d.st.run, a = full(c, vname);
+    if (!a.v) return { ok: false, why: a.why };
+    if (!a.v.on) return { ok: false, why: 'VPN выключен (нет enable)' };
+    if (!a.gw.local || !a.gw.remote) return { ok: false, why: 'у шлюза не задан local или remote address' };
+    if (!a.psk) return { ok: false, why: 'не задан pre-shared-key' };
+    var pid = this.owner(a.gw.remote), pd = pid && this.devs[pid];
+    if (!pd || pd.type !== 'esr') return { ok: false, why: 'по адресу ' + a.gw.remote + ' нет маршрутизатора ESR' };
+    var pv = Object.keys((pd.st.run.sec || {}).vpn || {}).map(function (n) { return { n: n, f: full(pd.st.run, n) }; })
+      .filter(function (x) { return x.f.v && x.f.v.on && x.f.gw.local === a.gw.remote && x.f.gw.remote === a.gw.local; })[0];
+    if (!pv) return { ok: false, why: pd.name + ': нет включённого VPN со шлюзом local ' + a.gw.remote + ' remote ' + a.gw.local };
+    var b = pv.f;
+    if (a.v.est === 'by-request' && b.v.est === 'by-request') return { ok: false, why: 'обе стороны ждут встречного соединения (ike establish-tunnel by-request)' };
+    if (a.gw.mode !== b.gw.mode) return { ok: false, why: 'режимы шлюзов разные: ' + a.gw.mode + ' и ' + b.gw.mode };
+    if (a.psk !== b.psk) return { ok: false, why: 'pre-shared-key не совпадает — IKE аутентификация не прошла' };
+    if (a.ike !== b.ike) return { ok: false, why: 'IKE proposal не совпадает: ' + a.ike + ' и ' + b.ike + ' (шифрование/аутентификация/DH)' };
+    if (a.esp !== b.esp) return { ok: false, why: 'IPsec proposal не совпадает: ' + a.esp + ' и ' + b.esp };
+    if (a.gw.mode === 'policy-based' && (a.gw.lnet !== b.gw.rnet || a.gw.rnet !== b.gw.lnet)) return { ok: false, why: 'подсети политик не зеркальны: ' + a.gw.lnet + '→' + a.gw.rnet + ' и ' + b.gw.lnet + '→' + b.gw.rnet };
+    var r = this.request(id, a.gw.remote, 'udp', 500);
+    if (!r.ok) return { ok: false, why: 'IKE (UDP 500) до ' + a.gw.remote + ' не проходит — ' + (r.why || 'нет ответа'), steps: r.steps };
+    return { ok: true, peer: pid, pv: pv.n, a: a, b: b };
+  };
+  P.vtiSA = function (id, n) {
+    var c = this.devs[id].st.run, s = c.sec || { vpn: {}, ikeGw: {} }, self = this, why = 'нет VPN с ike gateway bind-interface vti ' + n;
+    var hit = Object.keys(s.vpn).filter(function (v) { var gw = s.ikeGw[s.vpn[v].gw]; return gw && gw.mode === 'route-based' && gw.vti === n; });
+    for (var i = 0; i < hit.length; i++) { var r = self.ipsecSA(id, hit[i]); if (r.ok) return r; why = r.why; }
+    return { ok: false, why: why };
+  };
+  // policy-based: пакет из local network в remote network уходит в ESP к удалённому шлюзу
+  P.ipsecForward = function (cur, pk, steps, ct) {
+    if (pk.proto === 'esp' || pk.proto === 'gre' || this._ipsecIn) return null;
+    var d = this.devs[cur], s = (d.st.run.sec || {}), self = this;
+    var vn = Object.keys(s.vpn || {}).filter(function (n) { var f = full(d.st.run, n); return f.v && f.v.on && f.gw.mode === 'policy-based' && f.gw.lnet && f.gw.rnet &&
+      IP.sameNet(pk.src, f.gw.lnet.split('/')[0], +f.gw.lnet.split('/')[1]) && IP.sameNet(pk.dst, f.gw.rnet.split('/')[0], +f.gw.rnet.split('/')[1]); })[0];
+    if (!vn) return null;
+    var sa = this.ipsecSA(cur, vn);
+    if (!sa.ok) { steps.push({ k: 'drop', t: d.name + ': пакет ' + pk.src + ' → ' + pk.dst + ' попадает в политику VPN ' + vn + ', но IPsec SA не установлена: ' + sa.why }); return { ok: false }; }
+    var gw = sa.a.gw;
+    steps.push({ k: 'route', t: d.name + ': политика VPN ' + vn + ' (' + gw.lnet + ' → ' + gw.rnet + ') — пакет зашифрован в ESP: внешний заголовок ' + gw.local + ' → ' + gw.remote + ' (протокол 50, ' + sa.a.esp + ')' });
+    var outer = { src: gw.local, dst: gw.remote, proto: 'esp', dport: null, inner: { src: pk.src, dst: pk.dst, proto: pk.proto, reply: !!pk.reply, dport: pk.dport, sport: pk.sport }, spi: spi(d.name + vn) };
+    this._ipsecIn = true; var o; try { o = this.send(cur, outer, steps, ct); } finally { this._ipsecIn = false; }
+    if (!o.ok || o.dev !== sa.peer) { steps.push({ k: 'drop', t: 'ESP-пакет не дошёл до ' + gw.remote }); return { ok: false }; }
+    var pd = this.devs[o.dev];
+    steps.push({ k: 'route', t: pd.name + ': ESP расшифрован (VPN ' + sa.pv + ') — внутри ' + pk.src + ' → ' + pk.dst });
+    void self; return { ok: true, dev: o.dev, ip: gw.remote };
+  };
+  function spi(x) { return '0x' + EL.E.hash(x).slice(0, 8); }
+  S.cmd('priv', 'show security ipsec vpn status', function (st) {
+    var s = st.net, c = st.run, V = Object.keys((c.sec || {}).vpn || {}); if (!s) return '';
+    var o = ['Name      Local host   Remote host  Initiator spi       Responder spi        State', '--------- ------------ ------------ ---------------     ---------------      ------'];
+    V.forEach(function (n) { var f = full(c, n), r = s.ipsecSA(st.dev, n), gw = f.gw || {};
+      o.push(rp(n, 10) + rp(gw.local || '--', 13) + rp(gw.remote || '--', 13) + rp(r.ok ? '0x' + EL.E.hash(n + 'i').slice(0, 16) : '--', 20) + rp(r.ok ? '0x' + EL.E.hash(n + 'r').slice(0, 16) : '--', 21) + (r.ok ? 'Established' : 'Down')); });
+    return o.join('\n'); }, 'Состояние IPsec VPN');
+  S.cmd('priv', 'show security ipsec vpn status <w>', function (st, a) { var s = st.net; if (!s) return '';
+    var r = s.ipsecSA(st.dev, a[0]); return a[0] + ': ' + (r.ok ? 'Established' : 'Down — ' + r.why); });
+  function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
@@ -6283,6 +6445,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (mode === 'test' || !r || (d.type !== 'mes' && d.type !== 'esr')) return r;
     var L = String(r).split('\n'), keep = [], err = false;
     L.forEach(function (x) {
+      var hm = x.match(/^(  \S+)\s{2,}\S/); if (hm && CYR.test(x)) { keep.push(hm[1]); return; }   // строка подсказки «?»: слово без русского описания
       if (!CYR.test(x)) { keep.push(x); return; }
       if (/^\s*%/.test(x)) { err = true; return; }
       var cut = x.replace(/\s+←.*$/, '').replace(/\s*\([^()]*[А-Яа-яЁё][^()]*\)\s*$/, '');
@@ -6317,8 +6480,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
       else if (e.key === 'ArrowDown') { if (t.hi < t.hist.length) { t.hi++; inp.value = t.hist[t.hi] || ''; } e.preventDefault(); }
       else if (needLogin(net.devs[id]) && !t.auth) { if (e.key === 'Tab' || e.key === '?') e.preventDefault(); }
-      else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, net.help(id, inp.value), 'h'); } }
-      else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, net.help(id, inp.value), 'h'); }
+      else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); } }
+      else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); }
       e.stopPropagation();
     });
     setTimeout(function () { inp.focus(); }, 0);

@@ -178,9 +178,9 @@
     if (n === st.cand.routes.length) return '% Маршрут не найден'; touch(st); });
 
   // ---------------------------------------------------------------- show
-  function ifSort(a, b) { var f = function (k) { return k.indexOf('gre') === 0 ? 2e6 + +k.slice(3) : k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
+  function ifSort(a, b) { var f = function (k) { return k.indexOf('gre') === 0 ? 2e6 + +k.slice(3) : k.indexOf('vti') === 0 ? 3e6 + +k.slice(3) : k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
     return f(a) - f(b); }
-  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); if (k.indexOf('gre') === 0) return 'gre ' + k.slice(3); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
+  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); if (k.indexOf('gre') === 0 || k.indexOf('vti') === 0) return k.slice(0, 3) + ' ' + k.slice(3); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
@@ -199,7 +199,7 @@
       if (x.ip) d.push('  ip address ' + x.ip);
       if (x.helper) d.push('  ip helper-address ' + x.helper);
       if (x.tun) { if (x.local) d.push('  local address ' + x.local); if (x.remote) d.push('  remote address ' + x.remote); if (x.on) d.push('  enable');
-        o.push('tunnel gre ' + k.slice(3), d.join('\n'), 'exit'); return; }
+        o.push('tunnel ' + x.tun + ' ' + k.slice(3), d.join('\n'), 'exit'); return; }
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });

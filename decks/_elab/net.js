@@ -486,6 +486,8 @@
     while (ttl-- > 0) {
       var cd = this.devs[cur];
       if (owns(this, cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      var vf = cd.type === 'esr' && this.ipsecForward ? this.ipsecForward(cur, pk, steps, ct) : null;   // IPsec policy-based: трафик политики уходит в ESP
+      if (vf) { if (!vf.ok) return { ok: false, why: 'Request timed out', pk: pk }; hops.push({ dev: vf.dev, ip: vf.ip }); cur = vf.dev; continue; }
       var r = this.lookup(cur, pk.dst);
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
@@ -538,7 +540,7 @@
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, spi: pk.spi, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -603,7 +605,8 @@
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
                                  (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) || (proto === 'udp' && port === 53 && s.svc && s.svc.bind9) ||
                                  (proto === 'tcp' && port === 22);
-    if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
+    if (d.type === 'esr') return (proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet))) ||
+      (proto === 'udp' && port === 500 && !!s.run.sec && Object.keys(s.run.sec.vpn || {}).some(function (v) { return s.run.sec.vpn[v].on; }));   // IKE
     return false;
   }
   P.ping = function (src, dst) { return this.request(src, dst, 'icmp'); };

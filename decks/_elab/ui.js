@@ -279,6 +279,7 @@
     if (mode === 'test' || !r || (d.type !== 'mes' && d.type !== 'esr')) return r;
     var L = String(r).split('\n'), keep = [], err = false;
     L.forEach(function (x) {
+      var hm = x.match(/^(  \S+)\s{2,}\S/); if (hm && CYR.test(x)) { keep.push(hm[1]); return; }   // строка подсказки «?»: слово без русского описания
       if (!CYR.test(x)) { keep.push(x); return; }
       if (/^\s*%/.test(x)) { err = true; return; }
       var cut = x.replace(/\s+←.*$/, '').replace(/\s*\([^()]*[А-Яа-яЁё][^()]*\)\s*$/, '');
@@ -313,8 +314,8 @@
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
       else if (e.key === 'ArrowDown') { if (t.hi < t.hist.length) { t.hi++; inp.value = t.hist[t.hi] || ''; } e.preventDefault(); }
       else if (needLogin(net.devs[id]) && !t.auth) { if (e.key === 'Tab' || e.key === '?') e.preventDefault(); }
-      else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, net.help(id, inp.value), 'h'); } }
-      else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, net.help(id, inp.value), 'h'); }
+      else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); } }
+      else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); }
       e.stopPropagation();
     });
     setTimeout(function () { inp.focus(); }, 0);

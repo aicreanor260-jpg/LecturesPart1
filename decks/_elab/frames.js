@@ -4,8 +4,8 @@
 (function (G) {
   'use strict';
   var EL = G.EL, P = EL.Net.prototype;
-  var SVC = { 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
-  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47 };
+  var SVC = { 500: 'ISAKMP', 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
+  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47, esp: 50 };
   var CAP_MAX = 2000;
 
   // ---------------------------------------------------------------- захват на кабеле
@@ -29,6 +29,7 @@
   function gin(f) { var i = f.inner; return { type: 'ip', src: i.src, dst: i.dst, proto: i.proto, reply: i.reply, dport: i.dport, sport: i.sport, ttl: (f.ttl || 64) }; }
   function proto(f) {
     if (f.proto === 'gre' && f.inner) return proto(gin(f));
+    if (f.proto === 'esp') return 'ESP';
     if (f.type === 'arp') return 'ARP'; if (f.type === 'stp') return 'STP';
     if (f.dhcp) return 'DHCP';
     if (f.proto === 'icmp') return 'ICMP';
@@ -37,6 +38,7 @@
     return f.proto === 'udp' && p ? p : f.proto.toUpperCase();
   }
   function info(f) {
+    if (f.proto === 'esp') return 'ESP (SPI=' + (f.spi || '0x' + EL.E.hash(f.src + f.dst).slice(0, 8)) + ')';
     if (f.proto === 'gre' && f.inner) return 'GRE · ' + f.inner.src + ' → ' + f.inner.dst + ' · ' + info(gin(f));
     if (f.type === 'arp') return f.op === 1 ? 'Who has ' + f.tip + '? Tell ' + f.sip : f.sip + ' is at ' + f.smac;
     if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
@@ -91,6 +93,8 @@
     L.push({ osi: 'L3', name: 'Internet Protocol Version 4, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 4], ['Header Length', '20 bytes (5)'],
       ['Differentiated Services Field', '0x00 (DSCP: CS0, ECN: Not-ECT)'], ['Total Length', ipLen], ['Flags', f.proto === 'udp' && f.dhcp ? '0x0' : '0x2, Don\'t fragment'],
       ['Fragment Offset', 0], ['Time to Live', f.ttl], ['Protocol', f.proto.toUpperCase() + ' (' + PNUM[f.proto] + ')'], ['Source Address', f.src], ['Destination Address', f.dst]] });
+    if (f.proto === 'esp') { L.push({ osi: 'L3', name: 'Encapsulating Security Payload', fields: [['ESP SPI', f.spi || '0x' + EL.E.hash(f.src + f.dst).slice(0, 8)], ['ESP Sequence', 1],
+      ['Данные', 'зашифрованы — внутренний пакет (адреса, протокол) не виден']] }); return L; }
     if (f.proto === 'gre' && f.inner) { L.push({ osi: 'L3', name: 'Generic Routing Encapsulation (IP)', fields: [['Flags and Version', '0x0000'], ['Protocol Type', 'IP (0x0800)']] });
       return L.concat(EL.decode(gin(f), null, len - 24).slice(2).map(function (x) { return { osi: x.osi, name: '↳ ' + x.name, fields: x.fields }; })); }
     if (f.proto === 'icmp') L.push({ osi: 'L3', name: 'Internet Control Message Protocol', fields: [['Type', f.reply ? '0 (Echo (ping) reply)' : '8 (Echo (ping) request)'], ['Code', 0],

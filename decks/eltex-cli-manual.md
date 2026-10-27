@@ -284,7 +284,25 @@ ip route 192.168.2.0/24 10.10.10.2
 ```
 `show tunnels status` — Admin state, MTU 1476, Local/Remote IP. В режиме `(config-gre)#` есть `ip address`, `ip firewall disable`, `security-zone`, `description`, `local address`, `remote address`, `enable`.
 Пакет, ушедший в туннель, инкапсулируется: внешний IPv4 local → remote, протокол 47 — и идёт через сеть провайдера как обычный (ARP, маршруты, межсетевой экран на пути). На удалённом ESR нужен зеркальный включённый туннель (local/remote наоборот), иначе GRE отбрасывается; межсетевой экран туннельного интерфейса проверяется как у обычного. В трассе — шаги «инкапсулирован в GRE» и «GRE снят», в захвате у провайдера — внешний заголовок 100.0.0.2 → 100.0.1.2 и внутри ICMP (разбор: IPv4 proto 47 → GRE → ↳ внутренний IPv4 → ICMP).
-Упрощения: keepalive нет (туннель Up, когда включён и задан); RIP/OSPF через туннель соседство не строят — маршруты в туннель статические; MTU/фрагментация не моделируются. IPsec, L2TP, BGP, VRF, PBR, BFD — пока нет.
+Упрощения: keepalive нет (туннель Up, когда включён и задан); RIP/OSPF через туннель соседство не строят — маршруты в туннель статические; MTU/фрагментация не моделируются. L2TP, BGP, VRF, PBR, BFD — пока нет.
+
+### IPsec VPN на ESR (справочник ESR-Series CLI 1.23, «Управление VPN»)
+```
+security ike proposal P1            encryption algorithm aes128 · authentication algorithm sha1 · dh-group 2   (по умолчанию 3des / sha1 / 1)
+security ike policy POL             pre-shared-key ascii-text Secret123 · proposal P1
+security ike gateway GW             ike-policy POL · local address 100.0.0.2 · remote address 100.0.1.2
+                                    mode policy-based · local network 192.168.1.0/24 · remote network 192.168.2.0/24
+                                    (или mode route-based · bind-interface vti 1)
+security ipsec proposal IP1         encryption algorithm aes128 · authentication algorithm sha1                 (по умолчанию 3des / sha1)
+security ipsec policy IPOL          proposal IP1
+security ipsec vpn VPN              ike establish-tunnel immediate · ike gateway GW · ike ipsec-policy IPOL · enable
+tunnel vti 1                        local address · remote address · ip address 10.0.9.1/30 · ip firewall disable · enable   (route-based + ip route СЕТЬ 10.0.9.2)
+```
+`show security ipsec vpn status` — Established / Down (`show security ipsec vpn status VPN` — в «Тесте» с причиной).
+SA устанавливается, когда у пары ESR зеркальные шлюзы (local ↔ remote), одинаковые ключ, IKE proposal (шифрование/аутентификация/DH), IPsec proposal, режим, зеркальные подсети политик, хотя бы одна сторона не `by-request` — и IKE (UDP 500) проходит по сети, в том числе через межсетевой экран самих ESR. Трафик политики (policy-based) или маршрута в VTI (route-based) уходит ESP (протокол 50); у провайдера в захвате видны только ESP 100.0.0.2 ↔ 100.0.1.2 и ISAKMP, внутренних адресов не видно. В трассе: «зашифрован в ESP», «ESP расшифрован» или причина, почему SA нет.
+Упрощения: IKEv1/v2 не различаются, lifetime/rekey/DPD/NAT-T не моделируются, ключ в running-config показывается хешем.
+
+В режиме «Работа» подсказка `?` показывает команды без русских описаний (раньше строки с описаниями пропадали).
 
 ## Типовые ошибки
 | Сообщение | Что делать |
