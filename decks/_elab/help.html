@@ -155,6 +155,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>OLT LTP-N и ONT</h2>
+<table>
+<tr><td>configure → interface front-port 1 → vlan allow 1100 · do commit · do save</td><td>uplink к MES; commit — применить, save — в NVRAM</td></tr>
+<tr><td>show interface ont 2 unactivated · interface ont 2/1 → serial ELTX… · service 1 profile cross-connect X · service 1 profile dba dba1</td><td>активация ONT по серийному номеру</td></tr>
+<tr><td>profile cross-connect X → ont-mode bridge · outer vid 1100 · user vid N</td><td>VLAN сервиса</td></tr>
+<tr><td>show interface ont 2 online|offline|configured · show interface ont 2/1 state · show candidate-config</td><td>проверка</td></tr>
+</table>
+
 <h2>Контроллер Wi-Fi WLC и точки доступа</h2>
 <table>
 <tr><td>ТД в порт WLC (gi1/0/2…) → DHCP + опция 43 → https://192.168.1.1:8043</td><td>ТД сама приходит на контроллер; адрес = outside-address</td></tr>

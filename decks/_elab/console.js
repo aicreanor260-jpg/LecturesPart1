@@ -237,6 +237,7 @@
   // MES 10.x: CFA/AST по руководству Syslog; MES 6.x/4.x и ESR — формат %МОДУЛЬ-У-СОБЫТИЕ (в руководствах не приведён, условный)
   function sp(p) { return p.replace(/^([a-z]+)/, '$1 '); }
   function fmt(d, ev) {
+    if (d.sub === 'olt' || d.sub === 'ont' || d.sub === 'ap') return null;   // формат сообщений OLT/ONT/ТД в источниках не приведён
     var b = d.type === 'mes' ? d.st.dialect : 'esr', p = ev.port;
     if (ev.k === 'link') return b === '10' || b === '8' ? (ev.up ? 'CFA-6-Interface ' + sp(p) + ' link status UP' : 'CFA-4-Interface ' + sp(p) + ' link status DOWN')
                                                           : (ev.up ? '%LINK-I-Up:  ' + p : '%LINK-W-Down:  ' + p);

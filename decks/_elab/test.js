@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1339,6 +1339,40 @@ EL.labs.LABS.forEach(runLab);
   ['configure', 'interface', 'br0', 'common', 'static-ip 192.168.1.50', 'netmask 255.255.255.0', 'protocol static-ip', 'save'].forEach(function (l) { n.exec(a1.id, l); });
   chk('ТД: статический адрес после save, приглашение по пути', a1.st.ip === '192.168.1.50' && n.prompt(a1.id) === 'WEP-3ax(config):/interface/br0/common# ' && n.ping(sw.id === 0 ? 0 : w.id, '192.168.1.50').ok, a1.st.ip);
   console.log('✓ WLC и точки доступа');
+})();
+
+// OLT LTP-16N и ONT: commit/save, front-port vlan allow, активация ONT по серийному номеру, трафик MES ↔ OLT ↔ ONT
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('LTP-16N', 'OLT'), sw = n.add('MES2300-24', 'SW1'), t = n.add('NTU-1L', 'ONT1'), pc = n.add('VPC', 'PC1'), sv = n.add('VPC', 'SRV');
+  n.connect(o.id, 'front-port 1', sw.id, 'gi1/0/24'); n.connect(t.id, 'PON', o.id, 'pon-port 2'); n.connect(pc.id, 'eth0', t.id, 'LAN'); n.connect(sv.id, 'eth0', sw.id, 'gi1/0/1');
+  chk('OLT: приглашение LTP-16N#, оптика PON pon-port ↔ PON — линк up', n.prompt(o.id) === 'LTP-16N#' && n.phys(o.id, 'pon-port 2').up && n.phys(o.id, 'pon-port 2').cab === 'pon');
+  chk('медь в pon-port — линка нет', n.connect(o.id, 'pon-port 3', sw.id, 'gi1/0/5') === null && !n.linkUp(o.id, 'pon-port 3'));
+  var u = n.exec(o.id, 'show interface ont 2 unactivated');
+  chk('show interface ont 2 unactivated: серийный номер ONT, UNACTIVATED', u.indexOf(t.st.serial + ' UNACTIVATED') > 0 && /Total ONT count: 1/.test(u), u);
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 1100', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 1100', 'exit',
+    'interface gi1/0/1', 'switchport access vlan 1100', 'end'], PC1: ['ip 10.0.0.1/24'], SRV: ['ip 10.0.0.2/24'] });
+  var cfg = ['configure', 'interface front-port 1', 'vlan allow 1100', 'exit', 'profile cross-connect 1100_bridge', 'ont-mode bridge', 'bridge group 10', 'outer vid 1100', 'exit',
+    'profile ports NTU1', 'port 1 bridge group 10', 'exit', 'interface ont 2/2', 'serial ' + t.st.serial, 'profile ports NTU1', 'service 1 profile cross-connect 1100_bridge', 'service 1 profile dba dba1'];
+  var bad = cfg.filter(function (l) { return /%/.test(n.exec(o.id, l)); });
+  chk('QG прил. Б: настройка без ошибок, приглашение (config)(if-ont-2/2)#', !bad.length && n.prompt(o.id) === 'LTP-16N(config)(if-ont-2/2)#', bad.join('; '));
+  chk('без commit ONT не работает, ping не проходит', !n.ping(pc.id, '10.0.0.2').ok && /\+?configure terminal[\s\S]*interface ont 2\/2/.test(n.exec(o.id, 'do show candidate-config')));
+  chk('do commit — Configuration committed successfully', /Configuration committed successfully/.test(n.exec(o.id, 'do commit')));
+  chk('после commit: ping ПК за ONT → сервер за MES', n.ping(pc.id, '10.0.0.2').ok);
+  n.exec(o.id, 'end');
+  chk('show interface ont 2 online: OK', /1 2 2 ELTX[0-9A-F]+ OK/.test(n.exec(o.id, 'show interface ont 2 online')));
+  chk('show running-config interface front-port 1: vlan allow 1100', /interface front-port 1\n    vlan allow 1100/.test(n.exec(o.id, 'show running-config interface front-port 1')));
+  // без save перезагрузка возвращает NVRAM
+  n.reboot(o.id); n.exec(o.id, 'x');
+  chk('без save после перезагрузки конфигурации нет — ping не проходит', !n.ping(pc.id, '10.0.0.2').ok);
+  cfg.concat(['exit', 'exit']).forEach(function (l) { n.exec(o.id, l); }); n.exec(o.id, 'commit'); n.exec(o.id, 'save'); n.reboot(o.id);
+  chk('после commit + save перезагрузка сохраняет конфигурацию', n.ping(pc.id, '10.0.0.2').ok);
+  // ошибка в серийном номере: ONT остаётся в unactivated, позиция — offline
+  EL.labs.apply(n, { OLT: ['configure', 'interface ont 2/2', 'serial ELTX00000000', 'exit', 'exit', 'commit'] });
+  chk('чужой серийный номер: позиция offline, ONT в unactivated, ping нет', /OFFLINE/.test(n.exec(o.id, 'show interface ont 2 offline')) && /UNACTIVATED/.test(n.exec(o.id, 'show interface ont 2 unactivated')) && !n.ping(pc.id, '10.0.0.2').ok);
+  chk('serial неверного формата — ошибка', /%/.test((n.exec(o.id, 'configure'), n.exec(o.id, 'interface ont 2/2'), n.exec(o.id, 'serial 454C5451A2B3C4D'))) && (n.exec(o.id, 'end'), true));
+  chk('management: адрес управления в VLAN 1', /management ip 192\.168\.1\.2/.test(n.exec(o.id, 'show running-config management')));
+  console.log('✓ OLT LTP-N и ONT');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

@@ -114,6 +114,24 @@ def main():
             elif k in APS:
                 models[k] = {"type": "deb", "kind": "ap", "ports": 1, "portList": ["LAN"], "group": "Точки доступа Wi-Fi", "swv": sv, "sw": "ПО " + sv,
                              "note": (m.get("summary") or "") + " · порт LAN (имя условное)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    # OLT LTP-N/LTX и ONT-мосты (pon.json; порты — как в CLI ПО 1.12.0: front-port N, pon-port N, port-oob — UM табл. 35–37)
+    psrc = os.path.join(os.path.dirname(SRC), "pon.json")
+    OLT = {"LTP-4N": (4, 4, "gpon", "4 × SFP+ 10G"), "LTP-8N": (4, 8, "gpon", "4 × SFP+ 10G"), "LTP-16N": (8, 16, "gpon", "8 × SFP+ 10G"),
+           "LTX-8": (4, 8, "xgs", "4 × QSFP28 100G"), "LTX-16": (4, 16, "xgs", "4 × QSFP28 100G"),
+           "LTX-8 rev.B": (4, 8, "xgs", "2 × QSFP28 100G + 2 × SFP28 25G"), "LTX-16 rev.B": (4, 16, "xgs", "2 × QSFP28 100G + 2 × SFP28 25G"),
+           "LTX-8C": (4, 16, "combo", "2 × QSFP28 100G + 2 × SFP28 25G"), "LTX-16C": (4, 32, "combo", "2 × QSFP28 100G + 2 × SFP28 25G")}
+    ONT = {"NTU-1L": "gpon", "NTU-1LC": "gpon", "NTU-1D": "gpon", "NTX-1": "xgs", "NTX-1F": "xgs"}
+    if os.path.exists(psrc):
+        for m in json.load(open(psrc, encoding="utf-8")):
+            k, sv = m["model"], m.get("sw_version") or "?"
+            if k in OLT:
+                fr, pn, kind, fnote = OLT[k]
+                names = ["front-port %d" % i for i in range(1, fr + 1)] + ["pon-port %d" % i for i in range(1, pn + 1)] + ["port-oob"]
+                models[k] = {"type": "mes", "kind": "olt", "ports": len(names), "portList": names, "group": "OLT GPON / XGS-PON", "host": k, "pon": kind,
+                             "sw": "ПО " + sv, "note": "%s + %d × PON + OOB" % (fnote, pn), "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k in ONT:
+                models[k] = {"type": "mes", "kind": "ont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": ONT[k], "swv": sv,
+                             "sw": "ПО " + sv, "note": (m.get("summary") or "") + " · мост, настраивается с OLT (OMCI)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))
