@@ -7,6 +7,7 @@
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
     undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
+  var msel = {}, mselL = {}, spaceDown = false;    // множественное выделение: устройства и кабели
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
   var terms = {}, wins = {}, z = 60;
@@ -76,8 +77,10 @@
     net.links.forEach(function (l, i) {
       var a = net.devs[l.a.dev], b = net.devs[l.b.dev], o = linkOff(i), A = { x: a.x + o.x, y: a.y + o.y }, B = { x: b.x + o.x, y: b.y + o.y };
       var up = net.linkUp(l.a.dev, l.a.port);
-      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i ? ' sel' : '') + (/^(console|aux)/.test(l.a.port) || /^(console|aux)/.test(l.b.port) ? ' ser' : '') }, gl);   // ser — консольный RS-232
-      ln.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button === 0) { selLink = i; sel = null; draw(); } });
+      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i || mselL[i] ? ' sel' : '') + (/^(console|aux)/.test(l.a.port) || /^(console|aux)/.test(l.b.port) ? ' ser' : '') }, gl);   // ser — консольный RS-232
+      ln.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button !== 0) return;
+        if (e.ctrlKey || e.metaKey) { if (mselL[i]) delete mselL[i]; else mselL[i] = 1; selLink = null; }
+        else { msel = {}; mselL = {}; selLink = i; sel = null; } draw(); });
       ln.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); linkMenu(i, e); });
       [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (zz) {
         var dx = zz[1].x - zz[0].x, dy = zz[1].y - zz[0].y, L = Math.hypot(dx, dy) || 1, k = Math.min(Math.abs(dy) > Math.abs(dx) ? 96 : 84, L * 0.38);
@@ -87,7 +90,7 @@
     });
     stpMarks();
     net.list().forEach(function (d) {
-      var g = el('g', { 'class': 'dev' + (sel === d.id ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : '') + (d.off ? ' off' : ''),
+      var g = el('g', { 'class': 'dev' + (sel === d.id || msel[d.id] ? ' sel' : '') + (cable && cable.a === d.id ? ' pick' : '') + (d.off ? ' off' : ''),
                         transform: 'translate(' + d.x + ',' + d.y + ')', 'data-id': d.id }, gd);
       el('rect', { 'class': 'ring', x: -66, y: -38, width: 132, height: 76 }, g);
       ICONS[d.type](g, d);
@@ -137,23 +140,48 @@
     e.stopPropagation(); closeMenu();
     if (e.button !== 0) return;
     if (cable) { finishCable(d); return; }
-    var p0 = toWorld(e.clientX, e.clientY), x0 = d.x, y0 = d.y;
-    function mv(ev) { var p = toWorld(ev.clientX, ev.clientY); d.x = x0 + p.x - p0.x; d.y = y0 + p.y - p0.y;
-      if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) draw(); }
+    if (e.ctrlKey || e.metaKey) { if (msel[d.id]) delete msel[d.id]; else msel[d.id] = 1; sel = null; selLink = null; draw(); return; }   // Ctrl+клик — добавить/убрать
+    if (!msel[d.id]) { msel = {}; mselL = {}; msel[d.id] = 1; }
+    var grp = Object.keys(msel).map(function (k) { return net.devs[k]; }).filter(Boolean), p0 = toWorld(e.clientX, e.clientY);
+    var start = grp.map(function (x) { return { d: x, x: x.x, y: x.y }; }), moved = false;
+    function mv(ev) { var p = toWorld(ev.clientX, ev.clientY); start.forEach(function (q) { q.d.x = q.x + p.x - p0.x; q.d.y = q.y + p.y - p0.y; });
+      if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) { moved = true; draw(); } }
     function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null;
-      if (d.x !== x0 || d.y !== y0) X.rec({ k: 'move', name: d.name, x: x0, y: y0 }); draw(); }
+      if (moved) start.forEach(function (q) { if (q.d.x !== q.x || q.d.y !== q.y) X.rec({ k: 'move', name: q.d.name, x: q.x, y: q.y }); }); draw(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
-  // панорама пустого поля
-  cv.addEventListener('mousedown', function (e) {
-    closeMenu(); if (e.button !== 0) return;
-    if (cable) { cable = null; $('ghost').style.display = 'none'; draw(); toast('Кабель отменён'); return; }
-    sel = null; selLink = null; draw();
+  // пустое поле: зажатый пробел или средняя кнопка — панорама; ЛКМ — рамка выделения (Ctrl — добавить к выделенному)
+  function pan(e) {
     var sx = e.clientX, sy = e.clientY, vx = view.x, vy = view.y; cv.classList.add('pan');
     function mv(ev) { view.x = vx + ev.clientX - sx; view.y = vy + ev.clientY - sy; applyView(); }
     function up() { cv.classList.remove('pan'); window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  }
+  function band(e) {
+    var add = e.ctrlKey || e.metaKey, sx = e.clientX, sy = e.clientY, r = $('rband'), keep = add ? { d: EL.clone(msel), l: EL.clone(mselL) } : { d: {}, l: {} };
+    if (!add) { msel = {}; mselL = {}; } sel = null; selLink = null; draw();
+    function box(ev) { return { x0: Math.min(sx, ev.clientX), y0: Math.min(sy, ev.clientY), x1: Math.max(sx, ev.clientX), y1: Math.max(sy, ev.clientY) }; }
+    function mv(ev) { var b = box(ev); if (b.x1 - b.x0 + b.y1 - b.y0 < 4) return; r.style.display = 'block';
+      r.style.left = b.x0 + 'px'; r.style.top = b.y0 + 'px'; r.style.width = (b.x1 - b.x0) + 'px'; r.style.height = (b.y1 - b.y0) + 'px'; }
+    function up(ev) { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); r.style.display = 'none';
+      var b = box(ev); if (b.x1 - b.x0 + b.y1 - b.y0 < 4) { draw(); return; }
+      var a = toWorld(b.x0, b.y0), c = toWorld(b.x1, b.y1), inR = function (x, y) { return x >= a.x && x <= c.x && y >= a.y && y <= c.y; };
+      msel = keep.d; mselL = keep.l;
+      net.list().forEach(function (d) { if (inR(d.x, d.y)) msel[d.id] = 1; });
+      net.links.forEach(function (l, i) { var A = net.devs[l.a.dev], B = net.devs[l.b.dev]; if (msel[l.a.dev] && msel[l.b.dev] || inR((A.x + B.x) / 2, (A.y + B.y) / 2)) mselL[i] = 1; });
+      draw(); var n = Object.keys(msel).length, m = Object.keys(mselL).length; if (n || m) toast('Выделено: устройств ' + n + ', кабелей ' + m + ' · Delete — удалить'); }
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  }
+  cv.addEventListener('mousedown', function (e) {
+    closeMenu();
+    if (e.button === 1 || (e.button === 0 && spaceDown)) { e.preventDefault(); pan(e); return; }
+    if (e.button !== 0) return;
+    if (cable) { cable = null; $('ghost').style.display = 'none'; draw(); toast('Кабель отменён'); return; }
+    band(e);
   });
+  document.addEventListener('keydown', function (e) { if (e.key !== ' ' || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.closest && e.target.closest('.win')) return;
+    e.preventDefault(); if (!spaceDown) { spaceDown = true; cv.classList.add('grab'); } });
+  document.addEventListener('keyup', function (e) { if (e.key === ' ') { spaceDown = false; cv.classList.remove('grab'); } });
   cv.addEventListener('mousemove', function (e) {
     if (!cable) return; var a = net.devs[cable.a], p = toWorld(e.clientX, e.clientY), g = $('ghost');
     g.setAttribute('x1', a.x); g.setAttribute('y1', a.y); g.setAttribute('x2', p.x); g.setAttribute('y2', p.y); g.style.display = '';
@@ -192,7 +220,7 @@
         if (a === 'off') { net.power(d.id, false); tlog(d.id, '%SYS: питание выключено', 's'); setPr(d.id); draw(); }
         if (a === 'on') boot(d.id, false);
         if (a === 'reload') boot(d.id, true);
-        if (a === 'del') delDev(d.id);
+        if (a === 'del') { msel = {}; mselL = {}; msel[d.id] = 1; selLink = null; delSelected(); }
         return X.run('dev', a, d);
       });
   }
@@ -227,6 +255,25 @@
     q.addEventListener('input', fill); q.addEventListener('keydown', function (ev) { ev.stopPropagation(); }); fill(); setTimeout(function () { q.focus(); }, 0);
   }
   function addDev(model, x, y) { var d = net.add(model, null, x, y); sel = d.id; X.rec({ k: 'add', name: d.name }); draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
+  function plural(n, a, b, c) { var m = n % 10, h = n % 100; return n + ' ' + (m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c); }
+  // подтверждение в окне эмулятора (не window.confirm)
+  function ask(text, yes) {
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<p style="color:var(--ink);font-size:15px">' + esc(text) + '</p><div class="row"><button class="pri" data-q="y">Да, удалить</button><button data-q="n">Отмена</button></div>';
+    makeWin('ask', 'Подтверждение', '', body, { w: 380, h: 170, x: innerWidth / 2 - 190, y: innerHeight / 2 - 110 });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-q]'); if (!b) return; closeWin('ask'); if (b.dataset.q === 'y') yes(); });
+    var y = body.querySelector('[data-q="y"]'); if (y) setTimeout(function () { y.focus(); }, 0);
+  }
+  function delSelected() {
+    var ds = Object.keys(msel).filter(function (k) { return net.devs[k]; }); if (!ds.length && sel && net.devs[sel]) ds = [sel];
+    var ls = Object.keys(mselL).map(Number); if (selLink !== null) ls.push(selLink);
+    ls = ls.filter(function (i, j, a) { var l = net.links[i]; return l && a.indexOf(i) === j && ds.indexOf(l.a.dev) < 0 && ds.indexOf(l.b.dev) < 0; });
+    if (!ds.length && !ls.length) return;
+    var txt = 'Вы точно хотите удалить ' + [ds.length ? plural(ds.length, 'устройство', 'устройства', 'устройств') : '', ls.length ? plural(ls.length, 'кабель', 'кабеля', 'кабелей') : ''].filter(Boolean).join(' и ') + '?';
+    ask(txt, function () {
+      ls.sort(function (a, b) { return b - a; }).forEach(function (i) { X.rec({ k: 'dis', l: X.linkArr(net.links[i]) }); net.disconnect(i); });
+      ds.forEach(function (id) { delDev(id); }); msel = {}; mselL = {}; selLink = null; sel = null; draw(); refresh(); });
+  }
   function delDev(id) { X.rec(X.delOp(id)); closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
   function clearAll() { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); renderSide(); }
 
@@ -385,10 +432,14 @@
     if (d.type === 'mes' && /^\s*rel(o(a(d)?)?)?\s*$/i.test(line) && d.st.mode === 'priv') {   // руководство 6.6.8.8: reload спрашивает подтверждение
       t.ask = { q: 'This command will reset the whole system and disconnect your current session. Do you want to continue (y/n) [n]? ', yes: function () { boot(id, true); } }; setPr(id); return; }
     if (d.type === 'esr' && /^\s*reload\s+system\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
-    var r = realOut(d, line, net.exec(id, line, hooks));
+    var h0 = net.hostOf(id), r = realOut(d, line, net.exec(id, line, hooks)); syncHost(id, h0);
     if (r) outPaged(id, r, /^%|Unrecognized|Bad command|command not found|Permission denied|\bError\b|not reachable|timeout|100% packet loss|Login incorrect|Unable|refused/i.test(r) ? 'e' : '');
     setPr(id); draw(); refresh();
   }
+  // hostname в консоли — сразу подпись на схеме (если имя свободно и допустимо)
+  function syncHost(id, h0) { var d = net.devs[id], h = d && net.hostOf(id); if (!d || !h || h === h0 || h === d.name) return;
+    var err = net.rename(id, h); if (err) { toast('Подпись на схеме не изменена: ' + err); return; }
+    if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } chips(); }
   // постраничный вывод длинных show: пробел — страница, Enter — строка, q — выход (ESR: R — всё остальное)
   function outPaged(id, r, cls) {
     var n = net.pageLen(id), L = String(r).split('\n');
@@ -450,7 +501,7 @@
     makeWin('p' + id, 'Свойства', d.name, body, { w: 460, h: 520 });
     var inp = body.querySelector('#pname'); inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-p]'); if (!b) return; var a = b.dataset.p;
-      if (a === 'name') { var err = net.rename(id, inp.value); if (err) { toast(err); return; } draw(); toast('Имя изменено');
+      if (a === 'name') { var err = net.rename(id, inp.value); if (err) { toast(err); return; } net.setHost(id, d.name); setPr(id); draw(); toast('Имя и hostname изменены');
         if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } chips(); }
       if (a === 'term') openTerm(id);
       if (a === 'off') { net.power(id, false); setPr(id); draw(); openProps(id); }
@@ -636,7 +687,7 @@
   function resetNet() {
     stopTrace(); $('trace').classList.remove('on');
     Object.keys(wins).forEach(function (k) { closeWin(k, true); }); chips();
-    net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; cable = null; draw();
+    net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
     lab = EL.labs.byId(id); labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
@@ -752,18 +803,14 @@
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.key === 'Escape') { closeMenu(); if (cable) { cable = null; $('ghost').style.display = 'none'; draw(); } }
     if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); X.undo(); }
-    if (e.key === 'Delete') { if (selLink !== null) { X.rec({ k: 'dis', l: X.linkArr(net.links[selLink]) }); net.disconnect(selLink); selLink = null; draw(); refresh(); } else if (sel) delDev(sel); }
+    if (e.key === 'Delete') delSelected();
   });
   var tt = null;
   function toast(t) { var x = $('toast'); x.textContent = t; x.classList.add('on'); clearTimeout(tt); tt = setTimeout(function () { x.classList.remove('on'); }, 2600); }
 
   // ================================================================== старт
   renderSide();
-  (function demo() {
-    var s = net.add('MES2428', 'SW1', 500, 330), r = net.add('vESR', 'R1', 500, 130), a = net.add('VPC', 'VPC1', 260, 500), b = net.add('VPC', 'VPC2', 740, 500);
-    net.connect(s.id, 'gi1/0/24', r.id, 'gi1/0/1'); net.connect(a.id, 'eth0', s.id, 'gi1/0/1'); net.connect(b.id, 'eth0', s.id, 'gi1/0/2');
-    draw(); setTimeout(fit, 30);
-  })();
+  draw(); setTimeout(fit, 30);            // при открытии — пустое поле (лаба по ссылке #lab=… строит свою схему)
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,

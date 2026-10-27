@@ -959,6 +959,13 @@
     if (d.type === 'deb') { st.user = st.browser ? 'root' : null; st.login = 'user'; st.ssh = null; st.up = false; st.ip = null; st.gw = null; }
     this.mac[id] = {}; this.arp[id] = {}; d.off = false; this.gen++;
   };
+  // hostname устройства (то, что видно в приглашении) и обратная запись — для подписи на схеме
+  P.hostOf = function (id) { var d = this.devs[id]; if (!d) return null; var st = d.st;
+    return d.type === 'esr' ? st.run.host : d.type === 'vpc' ? st.name : st.host || null; };
+  P.setHost = function (id, name) { var d = this.devs[id]; if (!d) return; var st = d.st;
+    if (d.type === 'esr') { st.run.host = name; if (st.cand) st.cand.host = name;
+      if (st.me) [st.me.run, st.me.cand].forEach(function (t) { t.L = t.L.filter(function (l) { return !/^hostname /.test(l); }).concat(['hostname ' + name]); }); }
+    else if (d.type === 'vpc') st.name = name; else st.host = name; this.gen++; };
   P.rename = function (id, name) {
     name = String(name || '').trim();
     if (!/^[\w.-]{1,24}$/.test(name)) return 'Имя: латиница, цифры, - _ . (до 24 символов)';
