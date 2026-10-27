@@ -788,17 +788,18 @@
       body.addEventListener('click', labClick); }
     else if (open) minWin('lab', false);
     var ts = lab.tasks(labP), ok = 0;
-    if (mode === 'work') {   // как методичка: текст задания, без проверки и подсказок
-      body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' +
-        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol><div class="row">' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + '<button data-a="reset">Сбросить лабу</button></div>';
-      return;
-    }
-    // каждый пункт — с «лампочкой»: серая, пока не сделано; загорается зелёным со вспышкой в момент выполнения
+    // каждый пункт (в «Работе» и «Тесте») — с «лампочкой»: серая, пока не сделано; загорается зелёным со вспышкой в момент выполнения
     var was = lab._done || {}, now = {}, fresh = [];
     var li = ts.map(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); }
       return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && lab._done ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
     if (lab._done && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
     lab._done = now;
+    if (mode === 'work') {   // как методичка: текст задания с лампочками пунктов, без решения и подсказок
+      body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol class="tasks">' + li + '</ol>' +
+        '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
+        '<div class="row">' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + '<button data-a="reset">Сбросить лабу</button></div>';
+      return;
+    }
     var sol = '';
     if (labShow === true) { var s = lab.sol(labP); sol = Object.keys(s).map(function (n) { return '<b>' + esc(n) + '</b><pre>' + esc(s[n].join('\n')) + '</pre>'; }).join('') + (lab.alt ? '<p>' + esc(lab.alt) + '</p>' : ''); }
     body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol class="tasks">' + li + '</ol>' +
