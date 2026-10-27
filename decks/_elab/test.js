@@ -275,5 +275,39 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ межсетевой экран ESR по зонам и object-group');
 })();
 
+// сессии межсетевого экрана по протоколам: состояния и таймауты как в справочнике ESR
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), pc = n.add('Debian', 'PC'), sv = n.add('Debian-server', 'Server');
+  n.connect(pc.id, 'ens3', r.id, 'gi1/0/1'); n.connect(sv.id, 'ens3', r.id, 'gi1/0/2');
+  EL.labs.apply(n, { PC: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.1.2/24 dev ens3', 'ip route add default via 192.168.1.1'],
+    Server: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.2/24 dev ens3', 'ip route add default via 10.0.0.1'],
+    R1: ['configure', 'security zone in', 'exit', 'security zone out', 'exit', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'security-zone in', 'exit',
+         'interface gi1/0/2', 'ip address 10.0.0.1/24', 'security-zone out', 'exit', 'security zone-pair in out',
+         'rule 1', 'action permit', 'match protocol icmp', 'enable', 'exit', 'rule 2', 'action permit', 'match protocol tcp', 'enable', 'exit',
+         'rule 3', 'action permit', 'match protocol udp', 'enable', 'exit', 'exit', 'do commit', 'do confirm', 'end'] });
+  function sess(proto, dport) { return (n.fwSess[r.id] || []).filter(function (x) { return x.proto === proto && (!dport || x.dport === dport); }).pop(); }
+  chk('сессии: ICMP — состояние ICMP, таймаут 30 с', n.ping(pc.id, '10.0.0.2').ok && sess('icmp').state === 'ICMP' && /ICMP\s+30$/m.test(n.exec(r.id, 'show ip firewall sessions')),
+      n.exec(r.id, 'show ip firewall sessions'));
+  var h = n.request(pc.id, '10.0.0.2', 'tcp', 80);
+  chk('сессии: HTTP — SYN_SENT → TIME_WAIT (соединение закрыто), 30 с', h.ok && sess('tcp', 80).state === 'TIME_WAIT' && h.steps.some(function (s) { return /SYN_SENT → TIME_WAIT/.test(s.t); }));
+  chk('сессии: SSH — ESTABLISHED, 120 с', n.request(pc.id, '10.0.0.2', 'tcp', 22).ok && sess('tcp', 22).state === 'ESTABLISHED' && /ESTABLISHED\s+120$/m.test(n.exec(r.id, 'show ip firewall sessions')));
+  var u = n.request(pc.id, '10.0.0.2', 'udp', 123);
+  chk('сессии: UDP — UNREPLIED → ASSURED (180 с)', u.ok && sess('udp', 123).state === 'ASSURED');
+  n.tick(31);
+  chk('сессии: через 31 с ICMP и TIME_WAIT истекли, ESTABLISHED и ASSURED живы', !sess('icmp') && !sess('tcp', 80) && sess('tcp', 22) && sess('udp', 123));
+  EL.labs.apply(n, { R1: ['configure', 'security zone-pair in out', 'no rule 3', 'exit', 'do commit', 'do confirm', 'end'] });
+  var u2 = n.request(pc.id, '10.0.0.2', 'udp', 123);
+  chk('сессии: правило UDP удалили, а поток идёт по живой сессии', u2.ok && u2.steps.some(function (s) { return /уже есть в таблице сессий/.test(s.t); }), u2.why);
+  n.tick(181);
+  var u3 = n.request(pc.id, '10.0.0.2', 'udp', 123);
+  chk('сессии: сессия истекла — UDP упирается в неявный запрет', !u3.ok && u3.steps.some(function (s) { return /неявный запрет/.test(s.t); }));
+  EL.labs.apply(n, { R1: ['configure', 'ip firewall sessions icmp-timeout 5', 'ip firewall sessions tcp-estabilished-timeout 600', 'do commit', 'do confirm', 'end'] });
+  n.ping(pc.id, '10.0.0.2'); n.tick(6);
+  chk('сессии: ip firewall sessions icmp-timeout 5', !sess('icmp') && /icmp-timeout\s+5\s+30/.test(n.exec(r.id, 'show ip firewall sessions timeouts')) &&
+      /ip firewall sessions icmp-timeout 5/.test(n.exec(r.id, 'show running-config')));
+  console.log('✓ сессии межсетевого экрана по протоколам');
+})();
+
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

@@ -307,6 +307,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>match [not] source-address|destination-address address-range A-B | prefix A/L | object-group N | any · match [not] destination-port port-range 80,443 | object-group N</td><td>условия правила</td></tr>
 <tr><td>object-group network LAN → ip prefix 192.168.1.0/24 · ip address-range A-B; object-group service WEB → port-range 80,443</td><td>группы адресов и портов (также в NAT: match source-address object-group LAN)</td></tr>
 <tr><td>show security zone · show security zone-pair [ИЗ В] · show ip firewall sessions · show ip firewall counters · clear ip firewall sessions|counters · show object-group</td><td>просмотр межсетевого экрана</td></tr>
+<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show ip firewall sessions timeouts</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
 <tr><td>show configuration changes · show version · show interfaces description</td><td>что изменится после commit; версия; описания</td></tr>
 <tr><td>lldp enable · lldp receive · lldp transmit (на интерфейсе) · show lldp neighbors</td><td>LLDP</td></tr>
 <tr><td>syslog host NAME → source-address · remote-address · transport udp · port 514 · severity info</td><td>syslog</td></tr>
@@ -3396,7 +3397,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 (function (G) {
   'use strict';
   var EL = G.EL, IP = EL.ip, S = EL.esr, cmd = S.cmd, P = EL.Net.prototype;
-  var SESS_TTL = 60;                         // время жизни записи о сессии в эмуляторе, с модельного времени
+  // таймауты сессий по справочнику ESR (ip firewall sessions …-timeout), секунды
+  var TO = { 'generic': 60, 'icmp': 30, 'tcp-connect': 60, 'tcp-disconnect': 30, 'tcp-estabilished': 120, 'tcp-latecome': 120, 'udp-assured': 180, 'udp-wait': 30 };
+  // состояние сессии → какой таймаут к нему применяется
+  var STATE_TO = { ICMP: 'icmp', SYN_SENT: 'tcp-connect', ESTABLISHED: 'tcp-estabilished', TIME_WAIT: 'tcp-disconnect', UNREPLIED: 'udp-wait', ASSURED: 'udp-assured', GENERIC: 'generic' };
+  var KEEP_OPEN = [22, 23];                    // SSH и Telnet остаются открытыми; остальные TCP-обмены (HTTP) закрываются после ответа
+  function toVal(c, k) { return ((c && c.fwto) || {})[k] || TO[k]; }
+  function sessTtl(net, dev, x) { return toVal(net.devs[dev].st.run, STATE_TO[x.state] || 'generic') - (net.now - x.t); }
+  function firstState(proto) { return proto === 'icmp' ? 'ICMP' : proto === 'tcp' ? 'SYN_SENT' : proto === 'udp' ? 'UNREPLIED' : 'GENERIC'; }
+  function replyState(x) { return x.proto === 'tcp' ? (KEEP_OPEN.indexOf(x.dport) >= 0 ? 'ESTABLISHED' : 'TIME_WAIT') : x.proto === 'udp' ? 'ASSURED' : x.state; }
 
   function touch(st) { st.pending = true; }
   var M = { zone: '(config-zone)#', zpair: '(config-zone-pair)#', zrule: '(config-zone-pair-rule)#',
@@ -3561,8 +3570,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var s = this, d = s.devs[dev], c = d.st.run, nm = d.name, alt = pre || {};
     var est = ct.filter(function (x) { return x.kind === 'fw' && x.dev === dev && x.proto === pk.proto &&
       (x.a.indexOf(pk.dst) >= 0 || x.a.indexOf(alt.dst) >= 0) && (x.b.indexOf(pk.src) >= 0 || x.b.indexOf(alt.src) >= 0); })[0];
-    if (est) return { ok: true, t: est.self ? null : nm + ': ответ в рамках разрешённой сессии — stateful firewall пропускает его без правил' };
+    if (est) {
+      var why = '';
+      if (est.sess) { var old = est.sess.state; est.sess.state = replyState(est.sess); est.sess.t = s.now;
+        why = old !== est.sess.state ? ' Состояние сессии ' + old + ' → ' + est.sess.state + ', таймаут ' + toVal(c, STATE_TO[est.sess.state]) + ' с' : ''; }
+      return { ok: true, t: est.self ? null : nm + ': ответ в рамках разрешённой сессии — stateful firewall пропускает его без правил.' + why };
+    }
     if (!iface.fw) return { ok: true };
+    var live = pk.proto === 'udp' && ((s.fwSess || {})[dev] || []).filter(function (x) { return x.proto === 'udp' && x.dport === pk.dport &&
+      (x.src === (alt.src || pk.src)) && (x.dst === (alt.dst || pk.dst)) && sessTtl(s, dev, x) > 0; })[0];
+    if (live) { live.t = s.now; ct.push({ kind: 'fw', dev: dev, proto: pk.proto, sess: live, a: [pk.src, alt.src].filter(Boolean), b: [pk.dst, alt.dst].filter(Boolean) });
+      return { ok: true, t: nm + ': UDP-поток ' + live.src + ' → ' + live.dst + ':' + live.dport + ' уже есть в таблице сессий (' + live.state + ') — правила не проверяются, таймер продлён' }; }
     var inz = EL.fwZoneOf(c, iface.name);
     if (!inz) return { ok: false, t: nm + ': межсетевой экран на ' + iface.name.split(':')[0] + ' включён, а интерфейс не в зоне — пакет отброшен (security-zone ИМЯ или ip firewall disable)' };
     var outz = 'self', own = s.ifaces(dev).some(function (f) { return f.ip === pk.dst; });
@@ -3579,11 +3597,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var rl = pair.rules[ks[i]]; if (!rl.on || !rl.act || !ruleMatch(c, rl, pk)) continue;
       cnt[key + '|' + ks[i]] = (cnt[key + '|' + ks[i]] || 0) + 1;
       if (rl.act !== 'permit') return { ok: false, t: nm + ': zone-pair ' + inz + ' → ' + outz + ', rule ' + ks[i] + ' — ' + rl.act + ' (' + pkTxt(pk) + ')' };
-      ct.push({ kind: 'fw', dev: dev, proto: pk.proto, a: [pk.src, alt.src].filter(Boolean), b: [pk.dst, alt.dst].filter(Boolean) });
       var L = (s.fwSess = s.fwSess || {})[dev] || (s.fwSess[dev] = []);
-      L.push({ proto: pk.proto, src: alt.src || pk.src, dst: alt.dst || pk.dst, osrc: pk.src, odst: pk.dst, dport: pk.dport, from: inz, to: outz, t: s.now });
-      if (L.length > 50) L.shift();
-      return { ok: true, t: nm + ': zone-pair ' + inz + ' → ' + outz + ', rule ' + ks[i] + ' — permit (' + pkTxt(pk) + '), сессия запомнена' };
+      var rec = { proto: pk.proto, src: alt.src || pk.src, dst: alt.dst || pk.dst, osrc: pk.src, odst: pk.dst, dport: pk.dport, from: inz, to: outz, t: s.now, state: firstState(pk.proto) };
+      L.push(rec); if (L.length > 50) L.shift();
+      ct.push({ kind: 'fw', dev: dev, proto: pk.proto, sess: rec, a: [pk.src, alt.src].filter(Boolean), b: [pk.dst, alt.dst].filter(Boolean) });
+      return { ok: true, t: nm + ': zone-pair ' + inz + ' → ' + outz + ', rule ' + ks[i] + ' — permit (' + pkTxt(pk) + '), новая сессия ' + rec.state +
+        ' (таймаут ' + toVal(c, STATE_TO[rec.state]) + ' с)' };
     }
     cnt[key + '|default'] = (cnt[key + '|default'] || 0) + 1;
     return { ok: false, t: nm + ': zone-pair ' + inz + ' → ' + outz + ' — ни одно правило не подошло, неявный запрет (' + pkTxt(pk) + ')' };
@@ -3591,8 +3610,21 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // старение записей о сессиях
   var tick0 = P.tick;
   P.tick = function (dt) { var g = tick0.call(this, dt), s = this;
-    Object.keys(s.fwSess || {}).forEach(function (id) { s.fwSess[id] = s.fwSess[id].filter(function (x) { return s.now - x.t < SESS_TTL; }); });
+    Object.keys(s.fwSess || {}).forEach(function (id) { s.fwSess[id] = s.fwSess[id].filter(function (x) { return sessTtl(s, id, x) > 0; }); });
     return g; };
+
+  // ================================================================ таймауты сессий
+  Object.keys(TO).forEach(function (k) {
+    var pats = [k]; if (k === 'tcp-estabilished') pats.push('tcp-established');   // в CLI ESR команда написана с опечаткой — принимаем оба
+    pats.forEach(function (w, i) {
+      cmd('config', 'ip firewall sessions ' + w + '-timeout <n>', function (st, a) { if (a[0] < 1 || a[0] > 8553600) return '% Допустимо 1..8553600 с';
+        st.cand.fwto = st.cand.fwto || {}; st.cand.fwto[k] = a[0]; touch(st); }, i ? undefined : 'Таймаут сессий, с (по умолчанию ' + TO[k] + ')');
+      cmd('config', 'no ip firewall sessions ' + w + '-timeout', function (st) { if (st.cand.fwto) delete st.cand.fwto[k]; touch(st); });
+    });
+  });
+  cmd('priv', 'show ip firewall sessions timeouts', function (st) {
+    return ['Timeout                    Value  Default', '-------------------------  -----  -------'].concat(Object.keys(TO).map(function (k) {
+      return (k + '-timeout                          ').slice(0, 27) + (toVal(st.run, k) + '       ').slice(0, 7) + TO[k]; })).join('\n'); }, 'Таймауты сессий по протоколам');
 
   // ================================================================ show
   function zoneText(st) {
@@ -3621,10 +3653,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function sessText(st) {
     var L = ((st.net && st.net.fwSess) || {})[st.dev] || [], now = st.net ? st.net.now : 0;
     if (!L.length) return '% Активных сессий нет';
-    return ['Prot  Inside source     Inside destination  Outside source    Outside destination  Zones                Expire', '----  ----------------  ------------------  ----------------  -------------------  -------------------  ------']
+    return ['Prot  Inside source     Inside destination  Outside source    Outside destination  Zones                State        Expire', '----  ----------------  ------------------  ----------------  -------------------  -------------------  -----------  ------']
       .concat(L.map(function (x) { var pad = function (v, n) { return (v + '                      ').slice(0, n); };
         return pad(x.proto, 6) + pad(x.src, 18) + pad(x.dst + (x.dport ? ':' + x.dport : ''), 20) + pad(x.osrc, 18) + pad(x.odst, 21) +
-          pad(x.from + '→' + x.to, 21) + Math.max(0, Math.ceil(SESS_TTL - (now - x.t))); })).join('\n');
+          pad(x.from + '→' + x.to, 21) + pad(x.state, 13) + Math.max(0, Math.ceil(sessTtl(st.net, st.dev, x))); })).join('\n');
   }
   function cntText(st) {
     var C = ((st.net && st.net.fwCnt) || {})[st.dev] || {}, ks = Object.keys(C).sort();
@@ -3666,6 +3698,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ================================================================ running-config
   S.RUNX.push(function (c, o) {
     var G2 = c.og || { net: {}, svc: {} };
+    Object.keys(c.fwto || {}).forEach(function (k) { o.push('ip firewall sessions ' + k + '-timeout ' + c.fwto[k]); });
     Object.keys(G2.net).forEach(function (n) { o.push('object-group network ' + n); if (G2.net[n].desc) o.push('  description "' + G2.net[n].desc + '"');
       G2.net[n].items.forEach(function (x) { o.push('  ' + x[2]); }); o.push('exit'); });
     Object.keys(G2.svc).forEach(function (n) { o.push('object-group service ' + n); if (G2.svc[n].desc) o.push('  description "' + G2.svc[n].desc + '"');

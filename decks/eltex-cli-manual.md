@@ -145,7 +145,21 @@ security zone-pair trusted self        ← трафик самому маршр�
 - порядок как на ESR: Destination NAT → межсетевой экран → маршрутизация → Source NAT;
 - в NAT можно `match source-address object-group LAN`, `match destination-port object-group WEB`.
 
-Просмотр: `show security zone`, `show security zone-pair [ИЗ В]`, `show ip firewall sessions` (сессии живут 60 с модельного времени — упрощение эмулятора), `show ip firewall counters`, `clear ip firewall sessions|counters`, `show object-group [network|service] [ИМЯ]`, `show configuration changes` — что изменится после commit.
+Просмотр: `show security zone`, `show security zone-pair [ИЗ В]`, `show ip firewall sessions` (с колонками State и Expire), `show ip firewall counters`, `clear ip firewall sessions|counters`, `show object-group [network|service] [ИМЯ]`, `show configuration changes` — что изменится после commit.
+
+**Сессии по протоколам — как conntrack на ESR.** Таймер идёт по модельному времени (часы в шапке, «⏩ 1/5 мин»):
+
+| Протокол | Состояние | Когда | Таймаут по умолчанию | Команда |
+|---|---|---|---|---|
+| ICMP | ICMP | echo-запрос и ответ | 30 с | `ip firewall sessions icmp-timeout` |
+| TCP | SYN_SENT | первый пакет (рукопожатие) | 60 с | `… tcp-connect-timeout` |
+| TCP | ESTABLISHED | пришёл ответ, сессия открыта (SSH, Telnet) | 120 с | `… tcp-estabilished-timeout` (так в CLI ESR; `tcp-established` тоже принимается) |
+| TCP | TIME_WAIT | обмен закончен, соединение закрыто (HTTP) | 30 с | `… tcp-disconnect-timeout` |
+| UDP | UNREPLIED | ответа ещё не было | 30 с | `… udp-wait-timeout` |
+| UDP | ASSURED | ответ был (NTP, DNS) | 180 с | `… udp-assured-timeout` |
+| прочие | GENERIC | GRE, OSPF … | 60 с | `… generic-timeout` |
+
+Живой UDP-поток (тот же адрес и порт) идёт по сессии без проверки правил — поэтому, если удалить правило, поток работает до истечения сессии: `clear ip firewall sessions` или подождать таймаут. Таймауты: `show ip firewall sessions timeouts`.
 
 ### Расширенный CLI MES (по руководствам 10.4.6 и 6.6.8.8)
 Сокращения — как на железе: `en`, `conf t`, `int gi 1/0/1`, `sw mode trunk`, `sh ru`, `sh int st`, `wr`.

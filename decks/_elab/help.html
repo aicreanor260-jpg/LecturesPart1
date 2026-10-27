@@ -87,6 +87,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>match [not] source-address|destination-address address-range A-B | prefix A/L | object-group N | any · match [not] destination-port port-range 80,443 | object-group N</td><td>условия правила</td></tr>
 <tr><td>object-group network LAN → ip prefix 192.168.1.0/24 · ip address-range A-B; object-group service WEB → port-range 80,443</td><td>группы адресов и портов (также в NAT: match source-address object-group LAN)</td></tr>
 <tr><td>show security zone · show security zone-pair [ИЗ В] · show ip firewall sessions · show ip firewall counters · clear ip firewall sessions|counters · show object-group</td><td>просмотр межсетевого экрана</td></tr>
+<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show ip firewall sessions timeouts</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
 <tr><td>show configuration changes · show version · show interfaces description</td><td>что изменится после commit; версия; описания</td></tr>
 <tr><td>lldp enable · lldp receive · lldp transmit (на интерфейсе) · show lldp neighbors</td><td>LLDP</td></tr>
 <tr><td>syslog host NAME → source-address · remote-address · transport udp · port 514 · severity info</td><td>syslog</td></tr>
