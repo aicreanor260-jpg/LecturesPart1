@@ -460,9 +460,12 @@
       Object.keys(rs.rules).sort(function (a, b) { return a - b; }).forEach(function (q) { if (rs.rules[q].on) out.push(rs.rules[q]); }); });
     return out;
   }
-  function ruleHit(r, pk) {
+  function ruleHit(r, pk, c) {
     if (r.src && !inRange(pk.src, r.src)) return false;
     if (r.dst && !inRange(pk.dst, r.dst)) return false;
+    if (r.srcOg && !EL.ogNet(c, r.srcOg, pk.src)) return false;
+    if (r.dstOg && !EL.ogNet(c, r.dstOg, pk.dst)) return false;
+    if (r.dportOg && !EL.ogSvc(c, r.dportOg, pk.dport)) return false;
     if (r.proto && r.proto !== 'any' && r.proto !== pk.proto) return false;
     if (r.dport && !(pk.dport >= r.dport[0] && pk.dport <= r.dport[1])) return false;
     return true;
@@ -476,8 +479,10 @@
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
+      // свой трафик маршрутизатора: ответы на него межсетевой экран пропускает (сессия)
+      if (cd.type === 'esr' && cur === src) ct.push({ kind: 'fw', dev: cur, self: true, proto: pk.proto, a: [pk.src], b: [pk.dst] });
       if (cd.type === 'esr' && cur !== src) {      // Source NAT на выходе
-        var sr = natRules(cd, 'snat', r.iface.name).filter(function (x) { return x.act && ruleHit(x, pk); })[0];
+        var sr = natRules(cd, 'snat', r.iface.name).filter(function (x) { return x.act && ruleHit(x, pk, cd.st.run); })[0];
         if (sr) { ct.push({ dev: cur, kind: 's', orig: pk.src, pub: r.iface.ip, peer: pk.dst, proto: pk.proto });
           steps.push({ k: 'nat', t: cd.name + ': Source NAT на ' + r.iface.name + ' — источник ' + pk.src + ' заменён на ' + r.iface.ip });
           pk.src = r.iface.ip; }
@@ -521,10 +526,7 @@
           (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + (pk.dport ? ':' + pk.dport : '')) + ' от ' + pk.src + (ar.rule ? ' (rule ' + ar.rule + ', deny)' : ' (не подошло ни одно правило — неявный запрет)') });
           return { ok: false, why: 'Request timed out', pk: pk }; }
       }
-      if (nd.type === 'esr' && ep.iface.fw) {
-        steps.push({ k: 'drop', t: nd.name + ': межсетевой экран на ' + ep.iface.name + ' включён — пакет отброшен (нужна ip firewall disable или зона безопасности)' });
-        return { ok: false, why: 'Request timed out', pk: pk };
-      }
+      var pre = { src: pk.src, dst: pk.dst };     // адреса до трансляций на этом маршрутизаторе
       if (nd.type === 'esr') {                     // обратная трансляция для ответов и Destination NAT на входе
         var self = this;
         ct.forEach(function (c) {
@@ -532,13 +534,16 @@
           if (c.kind === 's' && pk.dst === c.pub && pk.src === c.peer) { steps.push({ k: 'nat', t: nd.name + ': ответ на трансляцию — назначение ' + c.pub + ' возвращено в ' + c.orig }); pk.dst = c.orig; }
           if (c.kind === 'd' && pk.src === c.target && pk.dst === c.client) { steps.push({ k: 'nat', t: nd.name + ': ответ сервера — источник ' + c.target + ' заменён обратно на ' + c.pub }); pk.src = c.pub; }
         });
-        var dr = natRules(nd, 'dnat', ep.iface.name).filter(function (x) { return x.to && ruleHit(x, pk); })[0];
+        var dr = natRules(nd, 'dnat', ep.iface.name).filter(function (x) { return x.to && ruleHit(x, pk, nd.st.run); })[0];
         if (dr && !ct.some(function (c) { return c.dev === ep.dev && c.kind === 'd' && c.client === pk.src && c.target === dr.to; }) && pk.dst !== dr.to) {
           ct.push({ dev: ep.dev, kind: 'd', client: pk.src, pub: pk.dst, target: dr.to, proto: pk.proto });
           steps.push({ k: 'nat', t: nd.name + ': Destination NAT на ' + ep.iface.name + ' — ' + pk.dst + (pk.dport ? ':' + pk.dport : '') + ' перенаправлен на ' + dr.to });
           pk.dst = dr.to;
         }
         void self;
+        var fw = this.fwPass(ep.dev, ep.iface, pk, ct, pre);   // межсетевой экран по зонам — после Destination NAT
+        if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
+        if (!fw.ok) return { ok: false, why: 'Request timed out', pk: pk };
       }
       hops.push({ dev: ep.dev, ip: ep.iface.ip });
       cur = ep.dev;
@@ -594,7 +599,8 @@
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
       var c = rd.st.run;
-      if (ep.iface.fw) { steps.push({ k: 'drop', t: rd.name + ': межсетевой экран на ' + ep.iface.name + ' отбрасывает DHCP' }); return false; }
+      var fw = s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', dport: 67 }, []);
+      if (!fw.ok) { steps.push({ k: 'drop', t: fw.t + ' — DHCP не принят' }); return false; }
       var own = c.dhcp && c.dhcp.on && poolFor(c, ep.iface.ip);
       if (own) { lease = alloc(rd, own, cname); if (lease) lease.via = null; lease && (lease.server = rd.name); return !!lease; }
       var x = c.ifs[ep.iface.name];

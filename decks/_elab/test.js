@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -222,6 +222,57 @@ EL.labs.LABS.forEach(runLab);
   var e = x(m, sm, ['en', 'conf', 'mac-address-table static unicast 00:11:22:33:44:55 vlan 1 interface gi 1/0/7 status permanent', 'end', 'show mac address-table']);
   chk('статический MAC (10.x)', /00:11:22:33:44:55\s+Static\s+gi1\/0\/7/.test(e[4]) && isFinite(m.ttl(sm.id, 'm', m.macRows(sm.id)[0])) === false, e[2] + e[4]);
   console.log('✓ расширенный CLI MES');
+})();
+
+// межсетевой экран ESR по зонам: object-group, stateful, неявный запрет, self, NAT с object-group
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), pc = n.add('VPC', 'PC1'), sv = n.add('Debian-server', 'Server');
+  n.connect(pc.id, 'eth0', r.id, 'gi1/0/1'); n.connect(sv.id, 'ens3', r.id, 'gi1/0/2');
+  EL.labs.apply(n, { PC1: ['ip 192.168.1.2/24 192.168.1.1'], Server: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.2/24 dev ens3', 'ip route add default via 10.0.0.1'],
+    R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'exit', 'interface gi1/0/2', 'ip address 10.0.0.1/24', 'exit', 'do commit', 'do confirm'] });
+  var p0 = n.ping(pc.id, '10.0.0.2');
+  chk('зоны: без зоны и без ip firewall disable — отброшено', !p0.ok && p0.steps.some(function (s) { return /не в зоне/.test(s.t); }));
+  EL.labs.apply(n, { R1: ['configure', 'security zone trusted', 'exit', 'security zone untrusted', 'exit',
+    'interface gi1/0/1', 'security-zone trusted', 'exit', 'interface gi1/0/2', 'security-zone untrusted', 'exit',
+    'object-group network LAN', 'ip prefix 192.168.1.0/24', 'exit', 'object-group service WEB', 'port-range 80,443', 'exit',
+    'security zone-pair trusted untrusted', 'rule 10', 'action permit', 'match protocol tcp', 'match source-address object-group LAN',
+    'match destination-port object-group WEB', 'enable', 'exit', 'exit', 'do commit', 'do confirm', 'end'] });
+  var h = n.request(pc.id, '10.0.0.2', 'tcp', 80);
+  chk('зоны: HTTP из trusted в untrusted по object-group — проходит, ответ пропущен как сессия', h.ok && h.steps.some(function (s) { return /stateful/.test(s.t); }), h.why);
+  var p1 = n.ping(pc.id, '10.0.0.2');
+  chk('зоны: ICMP не разрешён — неявный запрет', !p1.ok && p1.steps.some(function (s) { return /неявный запрет/.test(s.t); }));
+  var p2 = n.ping(sv.id, '192.168.1.2');
+  chk('зоны: из untrusted в trusted пары нет — отброшено', !p2.ok && p2.steps.some(function (s) { return /нет security zone-pair untrusted trusted/.test(s.t); }));
+  var p3 = n.ping(pc.id, '192.168.1.1');
+  chk('зоны: на сам маршрутизатор без пары trusted self — отброшено', !p3.ok);
+  EL.labs.apply(n, { R1: ['configure', 'security zone-pair trusted self', 'rule 1', 'action permit', 'match protocol icmp', 'enable', 'exit', 'exit',
+    'security zone-pair trusted untrusted', 'rule 20', 'action permit', 'match protocol icmp', 'enable', 'exit', 'exit', 'do commit', 'do confirm', 'end'] });
+  chk('зоны: trusted → self (icmp) разрешён', n.ping(pc.id, '192.168.1.1').ok);
+  chk('зоны: правило icmp добавлено — ping проходит', n.ping(pc.id, '10.0.0.2').ok);
+  chk('зоны: свой трафик маршрутизатора проходит, ответ — по сессии', /bytes from|!!!|ttl/i.test(n.exec(r.id, 'ping 10.0.0.2')) || n.ping(r.id, '10.0.0.2').ok);
+  EL.labs.apply(n, { R1: ['configure', 'security zone-pair trusted untrusted', 'rule 5', 'action deny', 'match protocol icmp', 'match destination-address address-range 10.0.0.2', 'enable', 'exit', 'exit', 'do commit', 'do confirm', 'end'] });
+  var p4 = n.ping(pc.id, '10.0.0.2');
+  chk('зоны: deny с меньшим номером срабатывает раньше permit', !p4.ok && p4.steps.some(function (s) { return /rule 5 — deny/.test(s.t); }));
+  var o = ['show security zone', 'show security zone-pair', 'show ip firewall sessions', 'show ip firewall counters', 'show object-group', 'show running-config'].map(function (c) { return n.exec(r.id, c); });
+  chk('зоны: show security zone', /trusted\s+gi1\/0\/1/.test(o[0]) && /untrusted\s+gi1\/0\/2/.test(o[0]), o[0]);
+  chk('зоны: show security zone-pair', /rule 10: permit, protocol tcp, source-address object-group LAN, destination-port object-group WEB/.test(o[1]), o[1]);
+  chk('зоны: show ip firewall sessions / counters', /tcp\s+192\.168\.1\.2/.test(o[2]) && /trusted → untrusted\s+5\s+1/.test(o[3]), o[2] + '\n' + o[3]);
+  chk('зоны: show object-group', /object-group network LAN\n  ip prefix 192\.168\.1\.0\/24/.test(o[4]) && /port-range 80,443/.test(o[4]), o[4]);
+  chk('зоны: running-config', /security zone-pair trusted untrusted\n  rule 5\n    action deny/.test(o[5]) && /security-zone trusted/.test(o[5]), '');
+  n.tick(61);
+  chk('зоны: сессии стареют', /Активных сессий нет/.test(n.exec(r.id, 'show ip firewall sessions')));
+  // NAT: match source-address object-group
+  var m = new EL.Net(), r2 = m.add('vESR', 'R'), a = m.add('VPC', 'A'), b = m.add('VPC', 'B');
+  m.connect(a.id, 'eth0', r2.id, 'gi1/0/1'); m.connect(b.id, 'eth0', r2.id, 'gi1/0/2');
+  EL.labs.apply(m, { A: ['ip 192.168.1.2/24 192.168.1.1'], B: ['ip 200.0.0.2/24'],
+    R: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 200.0.0.1/24', 'ip firewall disable', 'exit',
+        'object-group network LAN', 'ip prefix 192.168.1.0/24', 'exit',
+        'nat source', 'ruleset INET', 'to interface gi1/0/2', 'rule 1', 'match source-address object-group LAN', 'action source-nat interface', 'enable', 'exit', 'exit', 'exit',
+        'do commit', 'do confirm', 'end'] });
+  var q = m.ping(a.id, '200.0.0.2');
+  chk('NAT: match source-address object-group', q.ok && q.steps.some(function (s) { return /Source NAT/.test(s.t); }), q.why);
+  console.log('✓ межсетевой экран ESR по зонам и object-group');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

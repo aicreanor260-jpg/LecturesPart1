@@ -112,6 +112,41 @@ show running-config | ip interfaces | ip route | interfaces status | users    pi
 **VPC:** `ip 10.0.0.2/24 10.0.0.1`, `ip dhcp`, `show`, `ping`, `trace`, `arp`, `clear ip`.
 **Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`, `dhclient ens3`, `curl http://IP`, `date`, `timedatectl set-ntp false` / `set-time '2010-09-01 10:12:00'`, `systemctl status|restart chronyd|apache2|rsyslog|tftpd-hpa` (или `service tftpd-hpa status`), `ls /tftp`, `cat`, `telnet IP`, `tcpdump` (анализатор на зеркальном порту). Docker-браузер: `open http://IP`.
 
+### Межсетевой экран ESR по зонам (справочник ESR-Series CLI 1.23)
+```
+security zone trusted
+exit
+security zone untrusted
+exit
+interface gigabitethernet 1/0/1
+  security-zone trusted
+exit
+object-group network LAN
+  ip prefix 192.168.1.0/24
+exit
+object-group service WEB
+  port-range 80,443
+exit
+security zone-pair trusted untrusted
+  rule 10
+    action permit
+    match protocol tcp
+    match source-address object-group LAN
+    match destination-port object-group WEB
+    enable
+  exit
+exit
+security zone-pair trusted self        ← трафик самому маршрутизатору (ping шлюза, SSH, DHCP)
+```
+Как ведёт себя модель:
+- интерфейс с включённым firewall (по умолчанию) без зоны — пакет отбрасывается; `ip firewall disable` — зоны не проверяются;
+- правила пары «зона входа → зона выхода» перебираются по номеру, первое подошедшее решает (permit / deny / reject); не подошло ни одно — неявный запрет;
+- **stateful**: ответ на разрешённую сессию проходит без правил в обратную сторону; свой трафик маршрутизатора тоже;
+- порядок как на ESR: Destination NAT → межсетевой экран → маршрутизация → Source NAT;
+- в NAT можно `match source-address object-group LAN`, `match destination-port object-group WEB`.
+
+Просмотр: `show security zone`, `show security zone-pair [ИЗ В]`, `show ip firewall sessions` (сессии живут 60 с модельного времени — упрощение эмулятора), `show ip firewall counters`, `clear ip firewall sessions|counters`, `show object-group [network|service] [ИМЯ]`, `show configuration changes` — что изменится после commit.
+
 ### Расширенный CLI MES (по руководствам 10.4.6 и 6.6.8.8)
 Сокращения — как на железе: `en`, `conf t`, `int gi 1/0/1`, `sw mode trunk`, `sh ru`, `sh int st`, `wr`.
 
