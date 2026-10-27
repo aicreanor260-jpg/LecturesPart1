@@ -290,7 +290,7 @@
       ds.forEach(function (id) { delDev(id); }); msel = {}; mselL = {}; selLink = null; sel = null; draw(); refresh(); });
   }
   function delDev(id) { X.rec(X.delOp(id)); closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
-  function clearAll() { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); renderSide(); }
+  function clearAll() { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); renderSide(); autoClear(); }
 
   // ================================================================== кабель
   function startCable(id) { if (!net.freePorts(id).length) { toast('Нет свободных портов'); return; } cable = { a: id }; draw(); toast('Щёлкните второе устройство'); }
@@ -768,7 +768,7 @@
   if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
     $('bOut').hidden = false;
     $('bOut').addEventListener('click', function () {
-      lab = null; labP = null; task = null; resetNet();                    // состояние лабы студента не переживает выход
+      autoOff = true; autoClear(); lab = null; labP = null; task = null; resetNet();   // состояние лабы студента не переживает выход
       try { history.replaceState(null, '', location.pathname); } catch (err) { /* без истории */ }
       fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
     });
@@ -779,7 +779,7 @@
     startLab(m[1]); if (location.hostname === 'net-cat.duckdns.org') $('bCourse').hidden = false;
   }
   window.addEventListener('hashchange', labFromHash);
-  setTimeout(labFromHash, 0);
+  setTimeout(function () { var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
   function renderLab(open) {
     if (!lab) return;
     var body = $('labbody');
@@ -914,6 +914,34 @@
   // ================================================================== старт
   renderSide();
   draw(); setTimeout(fit, 30);            // при открытии — пустое поле (лаба по ссылке #lab=… строит свою схему)
+
+  // ================================================================== автосохранение незаконченной работы (в этом браузере)
+  // каждые 4 с, если что-то изменилось, и при закрытии вкладки; при открытии — предложение продолжить. «Выйти» и «Очистить» стирают сохранение
+  var AUTO = 'eltex-cli-autosave', autoGen = -1, autoOff = false;
+  function autoSave() {
+    if (autoOff) return;
+    try {
+      if (!net.list().length && !lab) { localStorage.removeItem(AUTO); return; }
+      var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; j.now = net.now; j.saved = Date.now();
+      localStorage.setItem(AUTO, JSON.stringify(j)); autoGen = net.gen;
+    } catch (err) { /* хранилище недоступно или переполнено — работа идёт без автосохранения */ }
+  }
+  function autoClear() { try { localStorage.removeItem(AUTO); } catch (err) { /* хранилище недоступно */ } }
+  function autoRead() { try { var t = localStorage.getItem(AUTO); return t ? JSON.parse(t) : null; } catch (err) { return null; } }
+  setInterval(function () { if (net.gen !== autoGen) autoSave(); }, 4000);
+  window.addEventListener('pagehide', autoSave);
+  // при открытии: есть сохранение — предложить продолжить (для ссылки #lab=ID — только если это та же лаба)
+  function autoOffer(hashLab, fresh) {
+    var j = autoRead(), sameLab = j && j.builtin && j.builtin.id === hashLab;
+    if (!j || (hashLab && !sameLab)) { fresh(); return; }
+    var when = new Date(j.saved || Date.now()), p = function (v) { return ('0' + v).slice(-2); };
+    var what = (j.builtin ? 'лаба ' + j.builtin.id + ', ' : '') + (j.devs || []).length + ' устр.';
+    autoOff = true;                                             // пока студент не ответил — старое сохранение не затираем
+    ask('Найдена незаконченная работа (' + what + ', сохранено ' + p(when.getDate()) + '.' + p(when.getMonth() + 1) + ' в ' + p(when.getHours()) + ':' + p(when.getMinutes()) +
+      '). Продолжить с того же места?', function () { autoOff = false;
+      try { loadScheme(j); if (j.now) net.now = j.now; toast('Работа восстановлена'); } catch (err) { toast('Не удалось восстановить: ' + err.message); fresh(); } }, 'Продолжить');
+    var w = wins.ask; if (w) w.el.addEventListener('click', function (e) { var b = e.target.closest('[data-q="n"],.x,[data-w="close"]'); if (b) { autoOff = false; autoClear(); fresh(); } }, true);
+  }
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
