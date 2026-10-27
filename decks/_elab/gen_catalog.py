@@ -129,6 +129,12 @@ def main():
                 names = ["front-port %d" % i for i in range(1, fr + 1)] + ["pon-port %d" % i for i in range(1, pn + 1)] + ["port-oob"]
                 models[k] = {"type": "mes", "kind": "olt", "ports": len(names), "portList": names, "group": "OLT GPON / XGS-PON", "host": k, "pon": kind,
                              "sw": "ПО " + sv, "note": "%s + %d × PON + OOB" % (fnote, pn), "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k.startswith("LTP-4X") or k.startswith("LTP-8X"):   # LTP-X, ПО 3.52: порты как в CLI коммутатора, нумерация с нуля; OOB нет
+                fr = 8 if k.startswith("LTP-8X") else 4
+                names = ["front-port %d" % i for i in range(fr)] + ["10G-front-port 0", "10G-front-port 1"] + ["gpon-port %d" % i for i in range(fr)]
+                models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ltp-x", "ports": len(names), "portList": names, "group": "OLT GPON / XGS-PON",
+                             "host": "LTP-8X" if fr == 8 else "LTP-4X", "pon": "gpon", "sw": "ПО " + sv,
+                             "note": "%d × GPON, встроенный коммутатор · ПО 3.52" % fr, "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
             elif k in ("MA5160", "MA5020"):   # шасси MA5000: FC1 + одна LC16G (в слоте 4 у MA5160, в слоте 1 у MA5020) — допущение эмулятора
                 nf, sl = (10, 4) if k == "MA5160" else (4, 1)
                 names = ["front-port 1/%d" % i for i in range(1, nf + 1)] + ["pon-port %d/%d" % (sl, i) for i in range(1, 17)] + ["port-oob"]

@@ -31,7 +31,9 @@
   };
   // PON-кабель: оптика между pon-port и PON ONT
   EL.CABLES.pon = 'Оптика PON (SC/APC)';
-  function ponPort(p) { return /^pon-port \d+(\/\d+)?$/.test(p) || p === 'PON'; }
+  function ponPort(p) { return /^g?pon-port \d+(\/\d+)?$/.test(p) || p === 'PON'; }
+  // LTP-X (ПО 3.52): PON-порт в CLI OLT — gpon-port N, нумерация с нуля
+  function PN(st) { return st.olt.dl === 'ltp-x' ? 'gpon-port ' : 'pon-port '; }
   var defc0 = P.defaultCable;
   P.defaultCable = function (a, ap, b, bp) { return ponPort(ap) || ponPort(bp) ? 'pon' : defc0.apply(this, arguments); };
   var phys0 = P.phys;
@@ -46,8 +48,8 @@
 
   // ---------------------------------------------------------------- L2: порты OLT и ONT по действующей конфигурации
   function onts(net, olt) { var c = olt.st.olt.run, out = [];
-    Object.keys(c.ont).forEach(function (k) { var o = c.ont[k], pp = k.replace(/\/\d+$/, ''), pr = net.peer(olt.id, 'pon-port ' + pp), od = pr && net.devs[pr.dev];
-      var ok = !!(o.serial && isOnt(od) && !od.off && od.st.serial === o.serial && net.phys(olt.id, 'pon-port ' + pp).up && pr.port === 'PON') && slotOk(olt.st, pp);
+    Object.keys(c.ont).forEach(function (k) { var o = c.ont[k], pp = k.replace(/\/\d+$/, ''), pr = net.peer(olt.id, PN(olt.st) + pp), od = pr && net.devs[pr.dev];
+      var ok = !!(o.serial && isOnt(od) && !od.off && od.st.serial === o.serial && net.phys(olt.id, PN(olt.st) + pp).up && pr.port === 'PON') && slotOk(olt.st, pp);
       var vids = Object.keys(o.svc || {}).map(function (s) { var cc = c.cc[(o.svc[s] || {}).cc]; return cc && cc.outer ? { outer: cc.outer, user: cc.user || null, mode: cc.mode || null } : null; }).filter(Boolean);
       out.push({ key: k, pp: pp, id: +k.split('/').pop(), o: o, dev: ok ? od : null, vids: vids }); });
     return out; }
@@ -56,9 +58,11 @@
     this.list().filter(isOlt).forEach(function (d) {
       var st = d.st, c = st.olt.run, V = {};
       Object.keys(st.ports).forEach(function (k) { var p = st.ports[k]; p.mode = 'general'; p.gtag = []; p.guntag = []; p.pvid = 4095; });
+      if (st.olt.dl === 'ltp-x') { var SV = (c.sw || {}).vlans || {}; c.front = {}; Object.keys(SV).forEach(function (v) { SV[v].front.forEach(function (fp) { (c.front[fp] = c.front[fp] || { allow: [] }).allow.push(+v); }); }); }
       Object.keys(c.front).forEach(function (n) { var f = c.front[n], p = st.ports['front-port ' + n]; if (!p) return; p.gtag = (f.allow || []).slice(); p.shut = !!f.shut;
         p.gtag.forEach(function (v) { V[v] = 1; }); });
-      onts(s, d).forEach(function (x) { if (!x.dev) return; var p = st.ports['pon-port ' + x.pp], o = x.dev.st;
+      onts(s, d).forEach(function (x) { if (!x.dev) return; var p = st.ports[PN(st) + x.pp], o = x.dev.st;
+        if (st.olt.dl === 'ltp-x') x.vids = x.vids.filter(function (v) { var sv = ((c.sw || {}).vlans || {})[v.outer]; return sv && sv.pon.indexOf(+x.pp) >= 0; });   // VLAN должна быть tagged pon-port во встроенном коммутаторе
         x.vids.forEach(function (v) { if (p.gtag.indexOf(v.outer) < 0) p.gtag.push(v.outer); V[v.outer] = 1; });
         o.ports.PON.mode = 'general'; o.ports.PON.gtag = x.vids.map(function (v) { return v.outer; }); o.ports.PON.guntag = []; o.ports.PON.pvid = 4095;
         var L = o.ports.LAN; L.mode = 'general'; L.gtag = []; L.guntag = []; L.pvid = 4095;
@@ -78,7 +82,10 @@
   var PRM = { slot: function (c) { return 'slot-' + c; }, front: function (c) { return 'if-front-' + c; }, pon: function (c) { return 'if-pon-' + c; }, ont: function (c) { return 'if-ont-' + c; }, oob: function () { return 'if-port-oob'; },
     cc: function (c) { return 'profile-cross-connect-' + c; }, pp: function (c) { return 'profile-ports-' + c; }, dba: function (c) { return 'profile-dba-' + c; },
     mgp: function (c) { return 'profile-management-' + c; }, vlan: function (c) { return 'vlan-' + c; } };
+  var PRX = { cc: 'config-cross-connect', pp: 'config-ports', dba: 'config-dba', mgp: 'config-management' }, SWP = { sw: '(switch)#', swcfg: '(switch)(config)#', swif: '(switch)(config-if)#', swvlan: '(switch)(config-vlan)#' };
   function prompt(st) { var o = st.olt, h = o.run.host || o.host;
+    if (o.dl === 'ltp-x') { if (o.mode === 'root') return h + '#'; if (o.mode === 'configure') return h + '(config)#'; if (SWP[o.mode]) return h + (o.mode === 'swvlan' && /[,-]/.test(o.ctx) ? '(switch)(config-vlan-range)#' : SWP[o.mode]);
+      if (PRX[o.mode]) return h + '(' + PRX[o.mode] + ')("' + o.ctx + '")#'; return h + '(config)(' + (o.mode === 'pon' ? 'if-gpon-' + o.ctx : PRM[o.mode](o.ctx)) + ')#'; }
     if (o.mode === 'root') return h + '#'; if (o.mode === 'configure') return h + '(configure)#'; return h + '(config)(' + PRM[o.mode](o.ctx) + ')#'; }
   function C(st) { return st.olt.cand; }
   // MA5160/MA5020: линейная карта слота работает, если задан тип (slot N → type lc16g) и сделан commit
@@ -128,7 +135,7 @@
   cmd('configure', 'slot <n>', enter('slot', function (st, a) { if (st.olt.dl !== 'ma5000' || a[0] < 1 || a[0] > (st.olt.slots || 16)) return null; var S = C(st).slots = C(st).slots || {}; S[a[0]] = S[a[0]] || {}; return a[0]; }), 'MA5160/MA5020: слот линейной карты');
   cmd('slot', 'type <w>', function (st, a) { if (['lc16g', 'lc16xg', 'lc16c', 'unknown'].indexOf(a[0]) < 0) return ERR; C(st).slots[st.olt.ctx].type = a[0]; }, 'Тип линейной карты: lc16g | lc16xg | lc16c');
   cmd('configure', 'interface port-oob', enter('oob', function () { return ''; }));
-  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+(?:\/\d+)?)\/(\d+)$/); if (!m || !st.ports['pon-port ' + m[1]] || +m[2] < 1 || +m[2] > maxOnt(st, m[1])) return null;
+  cmd('configure', 'interface ont <w>', enter('ont', function (st, a) { var m = String(a[0]).match(/^(\d+(?:\/\d+)?)\/(\d+)$/); var b0 = st.olt.dl === 'ltp-x' ? 0 : 1; if (!m || !st.ports[PN(st) + m[1]] || +m[2] < b0 || +m[2] > maxOnt(st, m[1]) - 1 + b0) return null;
     C(st).ont[a[0]] = C(st).ont[a[0]] || { svc: {} }; return a[0]; }), 'ONT P/O');
   cmd('configure', 'no interface ont <w>', function (st, a) { delete C(st).ont[a[0]]; });
   cmd('configure', 'vlan <n>', enter('vlan', function (st, a) { if (a[0] < 1 || a[0] > 4094) return null; C(st).vlans[a[0]] = C(st).vlans[a[0]] || {}; return a[0]; }));
@@ -146,12 +153,16 @@
   cmd('front', 'pvid <n>', function (st, a) { fronts(st).forEach(function (f) { f.pvid = a[0]; }); });
   // ONT
   function ont(st) { return C(st).ont[st.olt.ctx]; }
-  cmd('ont', 'serial <w>', function (st, a) { if (!/^[A-Z]{4}[0-9A-F]{8}$/i.test(a[0])) return ERR; ont(st).serial = a[0].toUpperCase(); }, 'Серийный номер ONT (4 буквы + 8 hex)');
+  // серийный номер: ELTX73000140 или 16 hex (LTP-X показывает так: 454C5458… = «ELTX»)
+  function snIn(w) { w = String(w).toUpperCase(); if (/^[A-Z]{4}[0-9A-F]{8}$/.test(w)) return w; if (!/^[0-9A-F]{16}$/.test(w)) return null;
+    var v = ''; for (var i = 0; i < 8; i += 2) v += String.fromCharCode(parseInt(w.substr(i, 2), 16)); return /^[A-Z]{4}$/.test(v) ? v + w.slice(8) : null; }
+  function snHex(sn) { return sn.slice(0, 4).split('').map(function (c) { return c.charCodeAt(0).toString(16).toUpperCase(); }).join('') + sn.slice(4); }
+  cmd('ont', 'serial <w>', function (st, a) { var v = snIn(a[0]); if (!v) return ERR; ont(st).serial = v; }, 'Серийный номер ONT (ELTX… или 16 hex)');
   cmd('ont', 'no serial', function (st) { delete ont(st).serial; });
   cmd('ont', 'profile ports <w>', function (st, a) { ont(st).ports = a[0]; });
   cmd('ont', 'profile management <w>', function (st, a) { ont(st).mgmt = a[0]; });
   cmd('ont', 'description <rest>', function (st, a) { ont(st).desc = a[0]; });
-  cmd('ont', 'service <n> profile cross-connect <w>', function (st, a) { if (a[0] < 1 || a[0] > 32) return ERR; var s = ont(st).svc; s[a[0]] = s[a[0]] || {}; s[a[0]].cc = a[1]; }, 'Сервис: профиль cross-connect');
+  cmd('ont', 'service <n> profile cross-connect <w>', function (st, a) { if (st.olt.dl === 'ltp-x' ? a[0] > 28 : (a[0] < 1 || a[0] > 32)) return ERR; var s = ont(st).svc; s[a[0]] = s[a[0]] || {}; s[a[0]].cc = a[1]; }, 'Сервис: профиль cross-connect');
   cmd('ont', 'service <n> profile dba <w>', function (st, a) { var s = ont(st).svc; s[a[0]] = s[a[0]] || {}; s[a[0]].dba = a[1]; });
   cmd('ont', 'service <n> profile cross-connect <w> dba <w>', function (st, a) { var s = ont(st).svc; s[a[0]] = { cc: a[1], dba: a[2] }; });
   cmd('ont', 'no service <n>', function (st, a) { delete ont(st).svc[a[0]]; });
@@ -197,20 +208,24 @@
     var d = b.filter(function (l) { return a.indexOf(l) < 0; }); return d.length ? ['configure terminal'].concat(d, ['exit', 'commit', 'exit']).join('\n') : ''; }, 'Неприменённые изменения');
   function dash(t) { return '-----------------------------------\n' + t + '\n-----------------------------------'; }
   function list(st, w, kind) {
-    var net = st.net, d = net.devs[st.dev], pp = portIds(st, 'pon-port', w, true); if (!pp) return ERR;
-    var X = onts(net, d), rows = [], H = { unactivated: '## PON-port ONT ID Serial Status RSSI\nEquipmentID Version', configured: '## PON-port ONT ID Serial Status Description',
+    var net = st.net, d = net.devs[st.dev], pp = portIds(st, PN(st).trim(), w, true); if (!pp) return ERR;
+    var HX = { unactivated: '## Serial ONT ID GPON-port Status RSSI[dBm] Version EquipmentID\nDescription', online: '## Serial ONT ID GPON-port Status RSSI[dBm] Version EquipmentID\nDescription',
+      configured: '## Serial ONT ID GPON-port Description', offline: '## Serial ONT ID GPON-port Status\nDescription' };
+    var X = onts(net, d), rows = [], H = st.olt.dl === 'ltp-x' ? HX[kind] : { unactivated: '## PON-port ONT ID Serial Status RSSI\nEquipmentID Version', configured: '## PON-port ONT ID Serial Status Description',
       online: '## PON-port ONT ID Serial Status RSSI\nEquipmentID Version', offline: '## PON-port ONT ID Serial Status\nDescription' }[kind];
     var out = [];
     pp.forEach(function (p) { var R = [];
-      if (kind === 'unactivated') { var pr = net.peer(st.dev, 'pon-port ' + p), od = pr && net.devs[pr.dev];
-        if (isOnt(od) && !od.off && net.phys(st.dev, 'pon-port ' + p).up && !X.some(function (x) { return x.dev === od; })) R.push([String(p).split('/').pop(), 'n/a', od.st.serial, 'UNACTIVATED', 'n/a', 'n/a', 'n/a']); }
+      if (kind === 'unactivated') { var pr = net.peer(st.dev, PN(st) + p), od = pr && net.devs[pr.dev];
+        if (isOnt(od) && !od.off && net.phys(st.dev, PN(st) + p).up && !X.some(function (x) { return x.dev === od; })) R.push([String(p).split('/').pop(), 'n/a', od.st.serial, 'UNACTIVATED', 'n/a', 'n/a', 'n/a']); }
       X.filter(function (x) { return x.pp === p; }).forEach(function (x) {
         if (kind === 'configured') R.push([String(p).split('/').pop(), x.id, x.o.serial || 'n/a', x.dev ? 'OK' : 'OFFLINE', x.o.desc || 'n/a']);
         if (kind === 'online' && x.dev) R.push([String(p).split('/').pop(), x.id, x.o.serial, 'OK', '-18.50', 'n/a', String((EL.MODELS[x.dev.model] || {}).swv || 'n/a')]);
         if (kind === 'offline' && !x.dev) R.push([String(p).split('/').pop(), x.id, x.o.serial || 'n/a', 'OFFLINE', x.o.desc || 'n/a']); });
-      var bySlot = st.olt.dl === 'ma5000' && String(w).indexOf('/') < 0;   // MA5000: «show interface ont 4 …» — порты слота 4, пустые не выводятся
+      var bySlot = (st.olt.dl === 'ma5000' && String(w).indexOf('/') < 0) || st.olt.dl === 'ltp-x';   // MA5000: «show interface ont 4 …» — порты слота 4, пустые не выводятся
       if (!R.length && pp.length > 1) { if (!bySlot) out.push('PON-port ' + p + ' has no ' + kind + ' ONTs'); return; }
-      rows = rows.concat(R); if (pp.length === 1 || bySlot) out.push(dash('pon-port ' + p + ' ONT ' + kind + ' list'), H);
+      rows = rows.concat(R); if (pp.length === 1 || bySlot) out.push(dash((st.olt.dl === 'ltp-x' ? 'GPON-port ' : 'pon-port ') + p + ' ONT ' + kind + ' list'), H);
+      if (st.olt.dl === 'ltp-x') { R.forEach(function (r) { var n = rows.indexOf(r) + 1;   // ПО 3.52: Serial ONT-ID GPON-port Status RSSI Version EquipmentID Description
+        out.push(n + ' ' + [r[2] === 'n/a' ? r[2] : snHex(r[2]), r[1], r[0], r[3]].concat(kind === 'configured' || kind === 'offline' ? [r[4]] : [r[4] || 'n/a', r[6] || 'n/a', r[5] || 'n/a', 'n/a']).join(' ')); }); return; }
       R.forEach(function (r) { var n = rows.indexOf(r) + 1; out.push(n + ' ' + r.slice(0, kind === 'offline' ? 4 : 5).join(' ') + (r.length > 5 ? '\n' + r.slice(5).join(' ') : kind === 'offline' ? '\n' + r[4] : '')); }); });
     out.push('Total ONT count: ' + rows.length); return out.join('\n'); }
   ['unactivated', 'configured', 'online', 'offline'].forEach(function (k) { cmd('root', 'show interface ont <w> ' + k, function (st, a) { return st.net ? list(st, a[0], k) : ''; }, 'Список ONT: ' + k); });
@@ -233,8 +248,8 @@
 
   function exec(st, raw) {
     var line = String(raw).trim(), o = st.olt, m = line.match(/^do\s+(.+)$/i);
-    if (m && o.mode !== 'root') { var md = o.mode, cx = o.ctx; o.mode = 'root'; var r = EL.cli.runTable(T, { mode: 'root', olt: o, net: st.net, dev: st.dev, ports: st.ports }, m[1]); if (o.mode === 'root') { o.mode = md; o.ctx = cx; } return r; }
-    var proxy = { get mode() { return o.mode; }, olt: o, net: st.net, dev: st.dev, ports: st.ports };
+    if (m && o.mode !== 'root') { var md = o.mode, cx = o.ctx; o.mode = 'root'; var r = EL.cli.runTable(T, { mode: 'root', olt: o, net: st.net, dev: st.dev, ports: st.ports, dialect: o.dl }, m[1]); if (o.mode === 'root') { o.mode = md; o.ctx = cx; } return r; }
+    var proxy = { get mode() { return o.mode; }, olt: o, net: st.net, dev: st.dev, ports: st.ports, dialect: o.dl };
     return EL.cli.runTable(T, proxy, line);
   }
   var ex0 = P.exec;
@@ -252,5 +267,42 @@
     if (isOlt(d)) { var o = keep.olt; o.run = EL.clone(o.nv); o.cand = EL.clone(o.nv); o.mode = 'root'; o.ctx = null; d.st.olt = o; d.st.users = keep.users; d.st.stp = { on: false }; d.st.mode = 'priv'; }
     if (isOnt(d)) { d.st.serial = keep.serial; d.st.stp = { on: false }; }
     this.gen++; return r; };
+  // ---------------------------------------------------------------- LTP-4X/8X (ПО 3.52): встроенный коммутатор и синтаксис 3.52
+  // switch → configure → vlan N → tagged front-port 0 / tagged pon-port 0-7 → commit; профили — (config-cross-connect)("ИМЯ")#; bridge вместо ont-mode bridge;
+  // нумерация с нуля (gpon-port 0, ONT 0/0–0/127, service 0–28, port 0); rollback без аргумента. VLAN front-port берутся из коммутатора.
+  var X = ['ltp-x'];
+  function xc(modes, pat, run, d) { cmd(modes, pat, run, d); T[T.length - 1].dl = X; T.unshift(T.pop()); }
+  T.forEach(function (c) { var p = c.pat.join(' '); if (/^interface (pon-port|front-port) |^slot |^confirm|^commit confirm|^rollback candidate-config|^restore running-config|^ont-mode /.test(p)) c.xdl = (c.xdl || []).concat(X); });
+  function SW(st) { var c = C(st); return c.sw || (c.sw = { vlans: {} }); }
+  function nlist(w) { var t = String(w).replace(/[–—]/g, '-').replace(/\s+/g, ''), L = []; t.split(',').forEach(function (x) { var m = x.match(/^(\d+)(?:-(\d+))?$/); if (m) for (var i = +m[1]; i <= +(m[2] || m[1]); i++) L.push(i); }); return L; }
+  xc('root', 'switch', function (st) { st.olt.mode = 'sw'; }, 'Встроенный коммутатор (VLAN uplink)');
+  xc('root', 'rollback', function (st) { st.olt.cand = EL.clone(st.olt.run); }, 'Отменить изменения');
+  xc('root', 'send omci restore interface ont <w>', function () { return ''; });
+  xc('sw', 'configure', function (st) { st.olt.mode = 'swcfg'; }); xc('sw', 'configure terminal', function (st) { st.olt.mode = 'swcfg'; });
+  xc('sw', 'exit', function (st) { st.olt.mode = 'root'; });
+  xc('sw', 'show vlan <n>', function (st, a) { var v = (st.olt.run.sw || { vlans: {} }).vlans[a[0]]; if (!v) return ERR;
+    return 'VLAN ' + a[0] + '\ntagged: ' + v.front.map(function (x) { return 'front-port ' + x; }).concat(v.pon.map(function (x) { return 'pon-port ' + x; })).join(', '); });
+  xc('swcfg', 'vlan <list>', function (st, a) { var V = SW(st).vlans; a[0].forEach(function (v) { V[v] = V[v] || { front: [], pon: [] }; }); st.olt.mode = 'swvlan'; st.olt.ctx = E.fmtList(a[0]); }, 'VLAN коммутатора');
+  xc('swcfg', 'interface front-port <n>', function (st, a) { st.olt.mode = 'swif'; st.olt.ctx = 'front-port ' + a[0]; });
+  xc('swcfg', 'interface port-channel <n>', function (st, a) { st.olt.mode = 'swif'; st.olt.ctx = 'port-channel ' + a[0]; });
+  xc('swcfg', 'commit', function (st) { st.olt.run.sw = EL.clone(SW(st)); if (st.net) st.net.gen++; return ''; }, 'Принять изменения коммутатора');
+  xc('swcfg', 'exit', function (st) { st.olt.mode = 'sw'; st.olt.ctx = null; });
+  function vl(st) { return nlist(st.olt.ctx).map(function (v) { return SW(st).vlans[v]; }); }
+  function tag(kind, add) { return function (st, a) { var L = nlist(a[0]), max = Object.keys(st.ports).filter(function (k) { return k.indexOf(kind === 'front' ? 'front-port ' : 'gpon-port ') === 0; }).length;
+    if (!L.length || L.some(function (x) { return x >= max; })) return ERR;
+    vl(st).forEach(function (v) { L.forEach(function (x) { var A = v[kind], i = A.indexOf(x); if (add && i < 0) A.push(x); if (!add && i >= 0) A.splice(i, 1); }); }); }; }
+  xc('swvlan', 'tagged front-port <rest>', tag('front', true), 'Порт uplink — с тегом');
+  xc('swvlan', 'tagged pon-port <rest>', tag('pon', true), 'PON-порты — с тегом (0 – 7)');
+  xc('swvlan', 'no tagged front-port <rest>', tag('front', false)); xc('swvlan', 'no tagged pon-port <rest>', tag('pon', false));
+  xc('swvlan', 'exit', function (st) { st.olt.mode = 'swcfg'; st.olt.ctx = null; });
+  xc('swif', 'exit', function (st) { st.olt.mode = 'swcfg'; st.olt.ctx = null; });
+  xc('swif', '<rest>', function () { return ''; });
+  xc('configure', 'interface gpon-port <w>', enter('pon', function (st, a) { return portIds(st, 'gpon-port', a[0]) ? a[0] : null; }), 'GPON-порт');
+  xc('configure', 'gpon olt model <n>', function (st, a) { if (a[0] < 0 || a[0] > 2) return ERR; C(st).model = a[0]; }, 'Модель datapath');
+  xc('cc', 'bridge', function (st) { cc(st).mode = 'bridge'; }, 'ONT в режиме моста');
+  xc('cc', 'user vid untagged', function (st) { delete cc(st).user; });
+  xc('cc', 'type <w>', function (st, a) { if (['management', 'multicast'].indexOf(a[0]) < 0) return ERR; cc(st).type = a[0]; });
+  ['veip multicast', 'veip upstream vid <n>', 'veip downstream vid <n>', 'igmp multicast dynamic-entry <n> vid <n>', 'igmp multicast dynamic-entry <n> group <ip> <ip>'].forEach(function (p) {
+    xc('pp', p, function (st, a, line) { var o = C(st).pp[st.olt.ctx]; (o.L = o.L || []).push(line); }); });
   EL.olt = { T: T, exec: exec, prompt: prompt };
 })(typeof window !== 'undefined' ? window : global);

@@ -470,6 +470,13 @@ tunnel l2tpv3 1
 - **Упрощения (в источниках нет или вне учебной модели):** переходы статусов ТД сжаты до Registering → Active; время и сертификаты не проверяются; клиенты Wi-Fi не моделируются (`show wlc clients` пуст); туннели SoftGRE, local-switching, trunk на портах WLC и `ip address dhcp` на мосту только хранятся; радиоблоки в `detailed` не выводятся; номера правил заводского межсетевого экрана условные; смена пароля при первом входе не моделируется; у ТД один порт `LAN` (имя условное).
 
 ### OLT LTP-N / LTX и ONT (справочник CLI и Quick guide LTP 1.12.0, РЭ LTP/LTX)
+**OLT LTP-4X / LTP-8X** (ПО 3.52, Quick guide и справочник CLI LTP-X): нумерация с нуля — `front-port 0`, `gpon-port 0`, ONT `0/0`–`0/127`, `service 0`–`28`, порт ONT `port 0`. Отличия от LTP-N:
+- VLAN uplink — во встроенном коммутаторе: `switch` → `configure` → `vlan 2149,30` → `tagged front-port 0`, `tagged pon-port 0 – 7` → `commit`; VLAN сервиса проходит, только если она tagged и на front-port, и на pon-port;
+- приглашения: `LTP-8X(config)#`, профили — `LTP-8X(config-cross-connect)("INTERNET")#`, `(config-ports)("NTU1")#`; ONT — `(config)(if-ont-0/3)#`;
+- мост — `bridge` (вместо `ont-mode bridge`), `user vid untagged`, `type management | multicast`; `gpon olt model 2`; `rollback` без аргумента; `commit` + `save`;
+- серийный номер в выводах — 16 hex (`454C5458…` = «ELTX…»), команда `serial` принимает оба вида;
+- упрощение (в источниках нет прямого соответствия): `pon-port N` коммутатора = `gpon-port N` OLT.
+
 **OLT-шасси MA5160 / MA5020** (Quick guide и справочник CLI MA5000 1.12–1.13) — та же CLI, что у LTP-N, с номером слота: `front-port 1/1` (FC/порт), `pon-port 4/2` (слот/порт), ONT `4/2/1`. Отличия:
 - линейная карта работает только после `slot 4` → `type lc16g` и `commit`; состав шасси — `show shelf` (в эмуляторе вставлена одна LC16G: в слоте 4 у MA5160, в слоте 1 у MA5020 — допущение);
 - `commit` запускает таймер (`… has to be confirmed within: 5 minutes`), `confirm` подтверждает и сохраняет в NVRAM — отдельного `save` нет; `commit confirm` — сразу оба;

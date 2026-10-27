@@ -1546,5 +1546,28 @@ EL.labs.LABS.forEach(runLab);
   chk('приглашение (config)(slot-4)# и (config)(if-front-1/1)#', (n.exec(o.id, 'configure terminal'), n.exec(o.id, 'slot 4'), /\(config\)\(slot-4\)#$/.test(n.prompt(o.id))) && (n.exec(o.id, 'exit'), n.exec(o.id, 'interface front-port 1/1'), /\(config\)\(if-front-1\/1\)#$/.test(n.prompt(o.id))));
   console.log('✓ OLT-шасси MA5160');
 })();
+
+// OLT LTP-8X (ПО 3.52): встроенный коммутатор, нумерация с нуля, профили ("ИМЯ"), bridge
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('LTP-8X rev.C/rev.D', 'OLT'), sw = n.add('MES2300-24', 'SW1'), t = n.add('NTU-1L', 'ONT1'), pc = n.add('VPC', 'PC1'), sv = n.add('VPC', 'SRV');
+  n.connect(o.id, 'front-port 0', sw.id, 'gi1/0/24'); n.connect(t.id, 'PON', o.id, 'gpon-port 0'); n.connect(pc.id, 'eth0', t.id, 'LAN'); n.connect(sv.id, 'eth0', sw.id, 'gi1/0/1');
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 2149', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 2149', 'exit',
+    'interface gi1/0/1', 'switchport access vlan 2149', 'end'], PC1: ['ip 10.0.0.1/24'], SRV: ['ip 10.0.0.2/24'] });
+  chk('LTP-8X: приглашение LTP-8X#, ONT на gpon-port 0 — в unactivated', n.prompt(o.id) === 'LTP-8X#' && /GPON-port 0 ONT unactivated list[\s\S]*UNACTIVATED/.test(n.exec(o.id, 'show interface ont 0-7 unactivated')), n.exec(o.id, 'show interface ont 0-7 unactivated'));
+  var bad = ['switch', 'configure', 'vlan 2149,30', 'tagged pon-port 0 – 7', 'tagged front-port 0', 'exit', 'commit', 'exit', 'exit'].filter(function (l) { return /%/.test(n.exec(o.id, l)); });
+  chk('X-QG §7: VLAN в коммутаторе (tagged pon-port 0 – 7, front-port 0), commit коммутатора', !bad.length, bad.join('; '));
+  var cfg = ['configure terminal', 'profile cross-connect NTU1', 'bridge', 'bridge group 20', 'outer vid 2149', 'exit', 'profile ports NTU1', 'port 0 bridge group 20', 'exit',
+    'interface ont 0/3', 'serial ' + t.st.serial.slice(0, 4).split('').map(function (c) { return c.charCodeAt(0).toString(16).toUpperCase(); }).join('') + t.st.serial.slice(4), 'profile ports NTU1', 'service 0 profile cross-connect NTU1', 'service 0 profile dba dba-00', 'do commit', 'do save'];
+  var pr = [], bad2 = cfg.filter(function (l) { var r = n.exec(o.id, l); pr.push(n.prompt(o.id)); return /%/.test(r); });
+  chk('X-QG прил. Г: профиль-мост и ONT 0/3 без ошибок', !bad2.length, bad2.join('; '));
+  chk('приглашения: (config-cross-connect)("NTU1")#, (config-ports)("NTU1")#, (config)(if-ont-0/3)#', pr[1] === 'LTP-8X(config-cross-connect)("NTU1")#' && pr[6] === 'LTP-8X(config-ports)("NTU1")#' && pr[9] === 'LTP-8X(config)(if-ont-0/3)#', pr.join(' | '));
+  chk('ПК за ONT пингует сервер за MES', n.ping(pc.id, '10.0.0.2').ok);
+  chk('ont-mode bridge и interface pon-port — синтаксис LTP-N, у LTP-X нет', /%/.test((n.exec(o.id, 'end'), n.exec(o.id, 'configure terminal'), n.exec(o.id, 'interface pon-port 0'))) && (n.exec(o.id, 'exit'), true));
+  EL.labs.apply(n, { OLT: ['switch', 'configure', 'vlan 2149', 'no tagged pon-port 0 – 7', 'exit', 'commit', 'exit', 'exit'] });
+  chk('VLAN убрана с pon-port в коммутаторе — трафика нет', !n.ping(pc.id, '10.0.0.2').ok);
+  chk('ONT ID 128 — вне 0..127', /%/.test((n.exec(o.id, 'configure terminal'), n.exec(o.id, 'interface ont 0/128'))));
+  console.log('✓ OLT LTP-X (ПО 3.52)');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
