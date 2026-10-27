@@ -7,7 +7,7 @@ import sys
 
 D = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(D, "_elab")
-ORDER = ["../_dk_cli.js", "common.js", "esr.js", "esr_svc.js", "esr_more.js", "esr_ops.js", "mesx.js", "mes_l2.js", "mes_dialects.js", "hosts.js", "catalog.js", "net.js", "labs.js", "labs_routing.js", "labs_services.js", "labs_l2.js", "labs_ops.js", "labs_exam.js", "ui.js"]
+ORDER = ["../_dk_cli.js", "common.js", "esr.js", "esr_svc.js", "esr_more.js", "esr_ops.js", "mesx.js", "mes_l2.js", "mes_dialects.js", "hosts.js", "catalog.js", "net.js", "tables.js", "labs.js", "labs_routing.js", "labs_services.js", "labs_l2.js", "labs_ops.js", "labs_exam.js", "ui.js"]
 
 
 def read(p):
@@ -19,9 +19,7 @@ def main():
     js = "\n".join(read(p) for p in ORDER)
     page = read("page.html")
     helpsrc = '<template id="helpSrc">' + read("help.html") + "</template>\n"
-    sys.path.insert(0, SRC)
-    import sprite                    # иконки устройств из деки главы 7, перекрашенные в палитру эмулятора
-    helpsrc = sprite.sprite() + "\n" + helpsrc
+    helpsrc = read("icons.svg") + helpsrc    # иконки устройств: готовый SVG-спрайт (символы #ic-*, перекрашенные объёмные иконки атласа)
     html = page.replace("/*__JS__*/", js.replace("</script", "<\\/script")).replace("<script>\n", helpsrc + "<script>\n", 1)
     tmp = os.path.join(SRC, "_bundle.js")
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:

@@ -481,21 +481,33 @@
           steps.push({ k: 'nat', t: cd.name + ': Source NAT на ' + r.iface.name + ' — источник ' + pk.src + ' заменён на ' + r.iface.ip });
           pk.src = r.iface.ip; }
       }
-      var srcMac = EL.mac(cd.name + (r.iface.port || r.iface.name));
+      var srcMac = this.ifMac(cur, r.iface);
       var fl = this.flood(cur, r.iface, srcMac);
       var ep = fl.eps.filter(function (e) { return e.iface.ip === r.nh; })[0];
       if (fl.storm) { steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ': ARP-запрос «у кого ' + r.nh + '?» — широковещательно', notes: fl.notes });
         steps.push({ k: 'drop', t: 'Широковещательный шторм: в сети петля, а STP выключен — кадры бесконечно размножаются, связи нет', notes: fl.notes });
         return { ok: false, why: 'Request timed out', pk: pk }; }
-      var vl = r.iface.vlan || r.iface.tag;
-      steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
-        (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : ''), notes: fl.notes });
-      if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене', notes: fl.notes });
-        return { ok: false, why: 'Host unreachable', pk: pk }; }
+      var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh], dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
+      if (cached && cached.mac === dmac) {        // адрес уже в ARP-кэше — широковещательный запрос не нужен
+        steps.push({ k: 'route', t: cd.name + ': ' + r.nh + ' уже есть в ARP-таблице (' + cached.mac + ') — ARP-запрос не нужен, кадр сразу на этот MAC' });
+      } else if (cached) {                         // запись устарела: кадр уходит на старый MAC и теряется
+        steps.push({ k: 'drop', t: cd.name + ': в ARP-таблице ' + r.nh + ' → ' + cached.mac + ', но кадр на этот MAC не доходит (запись устарела: сменили VLAN, порт или адрес). ' +
+          'Запись удалена — следующий ping заново спросит ARP', notes: fl.notes });
+        delete this.arp[cur][r.nh];
+        return { ok: false, why: 'Request timed out', pk: pk };
+      } else {
+        steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + ', ' + srcMac + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
+          (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : '') + '. Коммутаторы по пути запомнили ' + srcMac, notes: fl.notes });
+        if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене (другая VLAN, нет шлюза, кабель или порт выключен)', notes: fl.notes });
+          return { ok: false, why: 'Host unreachable', pk: pk }; }
+      }
       var nd = this.devs[ep.dev];
-      this.arp[cur][r.nh] = { mac: EL.mac(nd.name + (ep.iface.port || ep.iface.name)), ifn: r.iface.name };
+      this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name };
+      this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name };   // отвечающий тоже запоминает спросившего
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
-      steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + this.arp[cur][r.nh].mac + '»' });
+      this.learn(back, dmac); this.learn(ep.path, srcMac);
+      if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
+        nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac });
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
@@ -781,6 +793,26 @@
       });
     });
   };
+
+
+  // MAC интерфейса устройства и обучение коммутаторов на пути кадра
+  P.ifMac = function (id, f) {
+    var d = this.devs[id];
+    if (f.vrrp) { var v = (this.vrrp()[id] || {})[f.name.split(':')[0]];      // виртуальный MAC VRRP: 00:00:5e:00:01:ID
+      return '00:00:5e:00:01:' + ('0' + (v ? v.id : 0).toString(16)).slice(-2); }
+    return EL.mac(d.name + (f.port || f.name.split(':')[0]));
+  };
+  P.learn = function (path, mac) {
+    var s = this;
+    path.forEach(function (sg) {
+      var d = s.devs[sg.to]; if (!d || d.type !== 'mes') return;
+      var l = s.links[sg.li]; if (!l) return;
+      var port = l.a.dev === sg.to ? l.a.port : l.b.port, L = s.lportOf(sg.to, port); if (!L) return;
+      var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
+      s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name };
+    });
+  };
+  P.clearTables = function (id) { this.arp[id] = {}; this.mac[id] = {}; };
 
   // ------------------------------------------------------------------ сохранение схемы
   // питание и перезагрузка (как Start/Stop/Reload в pnetlab)

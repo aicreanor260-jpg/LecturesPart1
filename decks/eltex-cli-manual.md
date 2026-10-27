@@ -16,6 +16,7 @@
 | Кабель | ПКМ по устройству → «Подключить кабель» → щёлкните второе устройство → выберите порты в окне |
 | Терминал | двойной щелчок по устройству или кнопка «Терминал» внизу (для выбранного); окна двигаются за заголовок, растягиваются за угол, сворачиваются в нижнюю панель |
 | Кабель/устройство удалить | ПКМ → Удалить, или выделить и Delete |
+| Таблицы | ПКМ по устройству → «Таблицы»: ARP, MAC-таблица коммутатора, VLAN и порты, маршруты — живые, меняются от каждого пакета |
 | Путь пакета | при любом ping внизу экрана — пошаговая трасса: ⏮ ◀ ▶ ⏵ |
 | Сохранить/открыть | левая панель → «Файл» (схема в .json) |
 
@@ -57,6 +58,7 @@ interface port-channel 1 / interface range gi1/0/1-4 / channel-group 1 mode acti
 show spanning-tree | etherchannel summary
 monitor session 1 destination interface gi1/0/12 / monitor session 1 source interface gi1/0/1 both / show monitor session 1
 show running-config | startup-config | vlan | interfaces switchport gi1/0/1
+show arp · clear arp-cache · clear mac address-table dynamic
 show interfaces status | ip interface | ip route | mac address-table
 do show vlan    write    copy running-config startup-config    reload    ping 10.0.0.2
 ```

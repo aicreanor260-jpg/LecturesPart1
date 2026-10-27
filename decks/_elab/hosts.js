@@ -34,6 +34,7 @@
     if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; return st.net ? st.net.pingText(st.dev, t[1], 'vpc') : ''; }
     if (c === 'trace' || c === 'tracert') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
     if (c === 'arp') return st.net ? st.net.arpText(st.dev) : '';
+    if (c === 'clear' && t[1] === 'arp') { if (st.net) st.net.arp[st.dev] = {}; return 'ARP table cleared'; }
     return 'Bad command: "' + raw.trim() + '". Use ? for help.';
   }
   function vpcPrompt(st) { return st.name + '> '; }
@@ -163,6 +164,13 @@
       if (!dst) return 'ping: usage error: Destination address required';
       return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
     if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
+    if ((c === 'ip' && /^n(eigh(bour)?)?$/.test(t[1] || '')) || c === 'arp') {
+      if (!st.net) return ''; if (t[2] === 'flush' || t[1] === '-d') { st.net.arp[st.dev] = {}; return ''; }
+      var R = st.net.arpRows(st.dev);
+      return c === 'arp' ? ['Address                  HWtype  HWaddress           Flags Mask            Iface'].concat(R.map(function (r) {
+          return (r.ip + '                         ').slice(0, 25) + 'ether   ' + r.mac + '   C                     ens3'; })).join('\n')
+        : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' REACHABLE'; }).join('\n');
+    }
     if (c === 'telnet') {
       if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D';
       if (!st.net) return '';

@@ -133,11 +133,12 @@
   function devMenu(d, e) {
     sel = d.id; draw();
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
-      item('term', '▣', 'Консоль') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') + item('ping', '⇢', 'Ping отсюда…') + '<hr>' +
+      item('term', '▣', 'Консоль') + item('tables', '☰', 'Таблицы ARP / MAC / маршруты') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') + item('ping', '⇢', 'Ping отсюда…') + '<hr>' +
       (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
       function (a) {
         if (a === 'term') openTerm(d.id);
         if (a === 'props') openProps(d.id);
+        if (a === 'tables') openTables(d.id);
         if (a === 'cable') startCable(d.id);
         if (a === 'ping') openPing(d.id);
         if (a === 'off') { net.power(d.id, false); tlog(d.id, '%SYS: питание выключено', 's'); setPr(d.id); draw(); }
@@ -329,12 +330,49 @@
       body.querySelector('#pres').innerHTML = '<p style="color:' + (r.ok ? 'var(--ok)' : 'var(--bad)') + '">' + (r.ok ? 'Ответ получен' : 'Нет ответа: ' + esc(r.why || '')) + ' — путь пакета внизу экрана</p>'; });
   }
 
+  // ================================================================== таблицы устройства (живые)
+  function tbl(head, rows, empty) {
+    return '<table><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+      (rows.length ? rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
+                   : '<tr><td colspan="' + head.length + '" style="color:var(--dim)">' + empty + '</td></tr>') + '</table>';
+  }
+  function tablesHtml(id) {
+    var d = net.devs[id]; if (!d) return '';
+    var h = '<div class="k">' + esc(d.model) + (d.off ? ' · выключено' : '') + '</div><h2>' + esc(d.name) + '</h2>';
+    var arp = net.arpRows(id).map(function (r) { return [r.ip, r.mac, r.ifn]; });
+    if (d.type === 'mes') {
+      h += '<h3>MAC-таблица (коммутация)</h3>' + tbl(['VLAN', 'MAC', 'Порт'], net.macRows(id).map(function (r) { return [r.vlan, r.mac, r.port]; }),
+        'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
+      var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
+      net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
+        else (c.mode === 'trunk' ? c.allowed.concat([c.native]) : c.gtag.concat(c.guntag)).forEach(function (v) { (by[v] = by[v] || []).push(L.name + (c.mode === 'trunk' && v !== c.native || c.gtag && c.gtag.indexOf(v) >= 0 ? '(T)' : '')); }); });
+      h += '<h3>VLAN и порты</h3>' + tbl(['VLAN', 'Имя', 'Порты'], Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (v) {
+        var p = by[v].filter(function (x) { return net.linked(id, x.replace('(T)', '')) || x.indexOf('po') === 0; });
+        return [v, d.st.vlans[v] || '—', p.join(', ') || '(подключённых нет)']; }), '');
+      if (Object.keys(d.st.svi).length) h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто');
+    } else {
+      h += '<h3>ARP-таблица</h3>' + tbl(['IP', 'MAC', 'Интерфейс'], arp, 'пусто — заполняется ARP-запросами и ответами (ping)');
+    }
+    if (d.type !== 'mes' || Object.keys(d.st.svi).length) {
+      var by2 = net.best(id), rows = Object.keys(by2).map(function (k) { var r = by2[k]; return [r.p, r.net, r.nh ? 'через ' + r.nh : 'подключена', r.ifn || '—', r.ad + '/' + r.m]; });
+      h += '<h3>Таблица маршрутизации</h3>' + tbl(['Код', 'Сеть', 'Следующий узел', 'Интерфейс', 'AD/метрика'], rows, 'нет маршрутов — не задан адрес или интерфейс без линка');
+    }
+    h += '<p style="margin-top:8px">Таблицы меняются от пакетов: запустите ping и смотрите, кто что запомнил.</p>';
+    return h;
+  }
+  function openTables(id) {
+    var body = document.createElement('div'); body.className = 'pad'; body.dataset.tid = id; body.innerHTML = tablesHtml(id);
+    var d = net.devs[id]; makeWin('tb' + id, 'Таблицы', d.name, body, { w: 520, h: 480 });
+  }
+  function refreshTables() { Object.keys(wins).forEach(function (k) { if (k.indexOf('tb') !== 0) return; var b = wins[k].el.querySelector('[data-tid]');
+    if (b) b.innerHTML = tablesHtml(b.dataset.tid); }); }
+
   // ================================================================== трасса пакета
   net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
   function showTrace(r, id, dst) {
     stopTrace();
     trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };
-    $('trace').classList.add('on'); play();
+    $('trace').classList.add('on'); play(); setTimeout(refreshTables, 0);
   }
   function stopTrace() { if (trace && trace.timer) { clearTimeout(trace.timer); trace.timer = null; } $('pk').innerHTML = ''; }
   function renderStep(anim) {
@@ -466,7 +504,7 @@
         '</div><div class="sum ' + (ok === cs.length ? 'ok' : '') + '">' + (ok === cs.length ? 'ВЫПОЛНЕНО ✓' : ok + ' из ' + cs.length) + '</div>'; }
     if (a === 'send') { var r = task.T.send(task.P, st); task.res = '<div class="send">' + r.map(function (x) { return '<div class="' + (x.ok ? 'ok' : x.exp ? 'exp' : 'no') + '">✉ ' + esc(x.t) + '</div>'; }).join('') + '</div>'; }
     renderTask(); }
-  function refresh() { renderLab(false); }
+  function refresh() { renderLab(false); refreshTables(); }
 
   // ================================================================== справка, файл, клавиши
   function openHelp() {

@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -113,6 +113,32 @@ EL.labs.LABS.forEach(runLab);
   var n6 = new EL.Net(), g = n6.add('MES3348', 'G'); n6.exec(g.id, 'enable'); n6.exec(g.id, 'configure');
   chk('6.x: режим rst не из своей ветки', /Режим/.test(n6.exec(g.id, 'spanning-tree mode rst')));
   console.log('✓ диалекты 6.x и 8.x');
+})();
+
+// таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s = n.add('MES2428', 'SW1'), v = ['VPC1', 'VPC2', 'VPC3'].map(function (x) { return n.add('VPC', x); });
+  v.forEach(function (d, i) { n.connect(d.id, 'eth0', s.id, 'gi1/0/' + (i + 1)); });
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 10,20', 'exit', 'interface range gi1/0/1-2', 'switchport access vlan 10', 'exit',
+                           'interface gi1/0/3', 'switchport access vlan 20', 'end'],
+                     VPC1: ['ip 10.0.0.1/24'], VPC2: ['ip 10.0.0.2/24'], VPC3: ['ip 10.0.0.3/24'] });
+  var m1 = EL.mac('VPC1eth0'), m2 = EL.mac('VPC2eth0'), m3 = EL.mac('VPC3eth0');
+  var r = n.ping(v[0].id, '10.0.0.2');
+  chk('таблицы: ping в одной VLAN', r.ok && r.steps.some(function (x) { return x.k === 'arp'; }));
+  chk('таблицы: ARP у спросившего и у ответившего', (n.arp[v[0].id]['10.0.0.2'] || {}).mac === m2 && (n.arp[v[1].id]['10.0.0.1'] || {}).mac === m1);
+  var mt = n.macRows(s.id);
+  chk('таблицы: коммутатор выучил оба MAC в VLAN 10 на своих портах', mt.some(function (x) { return x.mac === m1 && x.port === 'gi1/0/1' && x.vlan === 10; }) &&
+      mt.some(function (x) { return x.mac === m2 && x.port === 'gi1/0/2' && x.vlan === 10; }), JSON.stringify(mt));
+  var r2 = n.ping(v[0].id, '10.0.0.2');
+  chk('таблицы: повторный ping без ARP-запроса', r2.ok && !r2.steps.some(function (x) { return x.k === 'arp'; }));
+  var r3 = n.ping(v[0].id, '10.0.0.3');
+  chk('таблицы: разные VLAN — не доходит', !r3.ok && r3.why === 'Host unreachable' && !n.macRows(s.id).some(function (x) { return x.mac === m3; }));
+  EL.labs.apply(n, { SW1: ['configure', 'interface gi1/0/2', 'switchport access vlan 20', 'end'] });
+  var r4 = n.ping(v[0].id, '10.0.0.2'), r5 = n.ping(v[0].id, '10.0.0.2');
+  chk('таблицы: устаревшая ARP-запись после смены VLAN', !r4.ok && !n.arp[v[0].id]['10.0.0.2'] && !r5.ok && r5.why === 'Host unreachable');
+  chk('таблицы: show mac address-table / show arp', /Learnt/.test(n.exec(s.id, 'show mac address-table')) && /10\.0\.0\.1/.test(n.exec(v[1].id, 'arp')));
+  console.log('✓ таблицы ARP и MAC');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
