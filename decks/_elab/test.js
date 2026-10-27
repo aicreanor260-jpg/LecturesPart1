@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -953,6 +953,31 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { R3: ['configure', 'router bgp 65003', 'address-family ipv4 unicast', 'neighbor 10.23.0.2', 'remote-as 65009', 'end', 'commit', 'confirm'] });
   chk('неверный remote-as — сессия не поднимается, маршрута нет', !n.ping(pa.id, '192.168.3.10').ok && /remote-as 65009 не совпадает/.test(n.exec(r3.id, 'show bgp neighbors')), n.exec(r3.id, 'show bgp neighbors'));
   console.log('✓ BGP');
+})();
+
+// L2TPv3: два офиса в одной L2-сети 192.168.50.0/24 через провайдера
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), ra = n.add('vESR', 'RA'), isp = n.add('vESR', 'ISP'), rb = n.add('vESR', 'RB'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+  n.connect(ra.id, 'gi1/0/1', isp.id, 'gi1/0/1'); n.connect(isp.id, 'gi1/0/2', rb.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
+  function side(me, peer, ls, rs, gw) { return ['configure', 'interface gi1/0/1', 'ip address ' + me + '/30', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 ' + gw,
+    'bridge 1', 'enable', 'exit', 'interface gi1/0/2', 'bridge-group 1', 'exit',
+    'tunnel l2tpv3 1', 'local address ' + me, 'remote address ' + peer, 'local session-id ' + ls, 'remote session-id ' + rs, 'bridge-group 1', 'enable', 'exit', 'end', 'commit', 'confirm']; }
+  var e = EL.labs.apply(n, { ISP: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.1.1/30', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    RA: side('100.0.0.2', '100.0.1.2', 10, 20, '100.0.0.1'), RB: side('100.0.1.2', '100.0.0.2', 20, 10, '100.0.1.1'),
+    PA: ['ip 192.168.50.1/24'], PB: ['ip 192.168.50.2/24'] });
+  chk('L2TPv3: конфигурация без ошибок', !e.length, e.join('; '));
+  var r = n.ping(pa.id, '192.168.50.2');
+  chk('PA и PB в одной L2-сети через L2TPv3', r.ok, r.steps.map(function (s) { return s.t + ' ' + JSON.stringify(s.notes || []); }).join(' | '));
+  chk('трасса: кадр перенесён через L2TPv3', JSON.stringify(r.steps).indexOf('перенесён через L2TPv3') >= 0);
+  chk('running-config: tunnel l2tpv3, bridge-group', /tunnel l2tpv3 1\n  local address 100\.0\.0\.2\n  remote address 100\.0\.1\.2\n  local session-id 10\n  remote session-id 20\n  bridge-group 1\n  enable\nexit/.test(n.exec(ra.id, 'show running-config')) &&
+      /interface gigabitethernet 1\/0\/2\n  bridge-group 1/.test(n.exec(ra.id, 'show running-config')));
+  EL.labs.apply(n, { RB: ['configure', 'tunnel l2tpv3 1', 'remote session-id 99', 'end', 'commit', 'confirm'] });
+  var r2 = n.ping(pa.id, '192.168.50.2');
+  chk('session-id не совпадают — связи нет, причина в трассе', !r2.ok && JSON.stringify(r2.steps).indexOf('session-id не совпадают') >= 0);
+  chk('bridge-group на интерфейсе с IP — ошибка', /has IP address/.test((n.exec(ra.id, 'configure'), n.exec(ra.id, 'interface gi1/0/1'), n.exec(ra.id, 'bridge-group 1'))));
+  n.exec(ra.id, 'end');
+  console.log('✓ L2TPv3');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
