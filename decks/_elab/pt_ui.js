@@ -11,7 +11,7 @@
   function test() { return U.mode() === 'test'; }
   function net() { return U.net(); }
   function color(p) { return COL[p] || '#d9f7f9'; }
-  function fmt(t) { return t < 1e-3 ? (t * 1e6).toFixed(1) + ' мкс' : (t * 1e3).toFixed(3) + ' мс'; }
+  function fmt(t) { return t < 1e-3 ? (t * 1e6).toFixed(1) + ' мкс' : t < 1 ? (t * 1e3).toFixed(3) + ' мс' : t.toFixed(6) + ' с'; }
 
   var items0 = X.items, run0 = X.run, side0 = X.side, click0 = X.sideClick, mode0 = X.onMode;
   X.items = function (k) { return items0(k) + (k === 'field' && test() ? '<button data-a="pt"><span>✉</span>Симуляция пакетов</button>' : ''); };
@@ -26,6 +26,10 @@
     var base = S.ev.length ? S.ev[S.ev.length - 1].t + S.ev[S.ev.length - 1].dur + 1e-3 : 0, n = net();
     var title = (n.devs[id] ? n.devs[id].name : '?') + ' → ' + dst + (r.ok ? '' : ' · не доставлено');
     EL.ptEvents(n, r.steps, id).forEach(function (e) { e.t += base; e.title = title; S.ev.push(e); });
+    // ping как в настоящей сети: ещё 4 эхо-запроса раз в секунду; MAC уже в ARP-кэше — ARP только перед первым
+    var echo = r.steps.some(function (s) { return s.f && s.f.proto === 'icmp' && !s.f.reply; });
+    if (echo && /^\d+\.\d+\.\d+\.\d+$/.test(dst)) for (var k = 1; k <= 4; k++) { var rk = n.ping(id, dst); if (rk.steps.flush) rk.steps.flush();
+      EL.ptEvents(n, rk.steps, id).forEach(function (e) { e.t += base + k; e.title = (n.devs[id] ? n.devs[id].name : '?') + ' → ' + dst + ' · эхо ' + (k + 1) + (rk.ok ? '' : ' · не доставлено'); S.ev.push(e); }); }
     render(); if (!S.playing) { S.playing = true; tick(); } return true;
   };
 
