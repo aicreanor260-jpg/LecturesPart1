@@ -226,7 +226,7 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
   <div class="clk t-only" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
     <span class="ck">ВРЕМЯ СЕТИ</span><b id="clkT">00:00:00</b>
     <span class="cb"><button data-sp="0" title="Пауза">❚❚</button><button data-sp="1" class="on">×1</button><button data-sp="10">×10</button><button data-sp="60">×60</button></span>
-    <span class="cb ff"><button data-ff="60" title="Промотать 1 минуту">⏩ 1 мин</button><button data-ff="300" title="Промотать 5 минут — MAC-записи с таймером 300 с истекут">⏩ 5 мин</button></span>
+    <span class="cb ff"><button data-ff="60" title="Промотать 1 минуту">⏩ 1 мин</button><button data-ff="300" title="Промотать 5 минут — MAC-записи с таймером 300 с истекут">⏩ 5 мин</button><button data-ff="3600" title="Промотать 1 час">⏩ 1 ч</button><button data-ff="7200" title="Промотать 2 часа">⏩ 2 ч</button><button data-ff="10800" title="Промотать 3 часа">⏩ 3 ч</button><input id="ffv" placeholder="45 мин" title="Своё значение: 90 с, 15 мин, 4 ч" style="width:62px;margin-left:4px;background:transparent;border:1px solid var(--cy2);color:var(--ink);font:inherit;font-size:11px;padding:2px 4px"><button data-ff="own" title="Промотать на своё значение">⏩</button></span>
   </div>
   <div class="mode" id="mode" title="Работа — как на оборудовании; Тест — учебные инструменты: таблицы, путь пакета, часы, автопроверка"><button data-m="work" class="on">Работа</button><button data-m="test">Тест</button></div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
@@ -10135,7 +10135,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
   $('clk').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.ff) { if (!advance(+b.dataset.ff, true)) toast('Промотано ' + (b.dataset.ff / 60) + ' мин модельного времени'); return; }
+    if (b.dataset.ff === 'own') { var v = $('ffv').value.trim(), m = v.match(/^(\d+(?:[.,]\d+)?)\s*(с|сек|s|м|мин|m|ч|h)?$/i);
+      if (!m) { toast('Промотка: число и единица — 90 с, 15 мин, 4 ч'); return; }
+      var k = /^(ч|h)/i.test(m[2] || 'мин') ? 3600 : /^(с|сек|s)$/i.test(m[2] || '') ? 1 : 60, dt = Math.round(parseFloat(m[1].replace(',', '.')) * k);
+      if (dt < 1 || dt > 7 * 86400) { toast('Промотка от 1 с до 7 суток'); return; } advance(dt, true); toast('Промотано ' + v + ' модельного времени'); return; }
+    if (b.dataset.ff) { var sec = +b.dataset.ff; if (!advance(sec, true)) toast('Промотано ' + (sec >= 3600 ? sec / 3600 + ' ч' : sec / 60 + ' мин') + ' модельного времени'); return; }
     speed = +b.dataset.sp; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x === b); }); });
   function stat() {
     $('stat').innerHTML = 'УСТРОЙСТВ <b>' + net.list().length + '</b> · КАБЕЛЕЙ <b>' + net.links.length + '</b><br>' +
@@ -10524,19 +10528,44 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (a === 'on') { boot(id, false); setTimeout(function () { openProps(id); }, 1200); }
     });
   }
+  // «Ping отсюда»: цель — любое устройство схемы (адреса интерфейсов; без адреса — «нет IP») или адрес вручную.
+  // Результат — как скаляры и вектор OMNeT++: отправлено / получено / потеряно, % потерь, RTT min/avg/max и RTT каждого эхо
   function openPing(id) {
-    var d = net.devs[id], ips = [], body = document.createElement('div'); body.className = 'pad';
-    net.list().forEach(function (x) { net.ifaces(x.id).forEach(function (f) { if (x.id !== id) ips.push('<option value="' + f.ip + '">' + esc(x.name + ' · ' + f.name + ' · ' + f.ip) + '</option>'); }); });
-    body.innerHTML = '<div class="k">Ping c ' + esc(d.name) + '</div><label>Кому</label><select id="pdst">' + ips.join('') + '</select>' +
-      '<label>Или адрес</label><input class="q" id="pip" placeholder="A.B.C.D"><div class="row"><button class="pri" data-g="go">Отправить</button></div><div id="pres"></div>';
-    makeWin('ping', 'Ping', d.name, body, { w: 440, h: 330 });
-    body.querySelector('#pip').addEventListener('keydown', function (e) { e.stopPropagation(); });
-    body.addEventListener('click', function (e) { if (!e.target.closest('[data-g]')) return;
-      var ip = body.querySelector('#pip').value.trim() || body.querySelector('#pdst').value;
+    var d = net.devs[id], opts = [], body = document.createElement('div'); body.className = 'pad';
+    net.list().forEach(function (x) { if (x.id === id) return; var fs = net.ifaces(x.id);
+      if (!fs.length) opts.push('<option disabled>' + esc(x.name) + ' — нет IP</option>');
+      fs.forEach(function (f) { opts.push('<option value="' + f.ip + '">' + esc(x.name + ' · ' + f.name + ' · ' + f.ip) + '</option>'); }); });
+    body.innerHTML = '<div class="k">Ping c ' + esc(d.name) + '</div><label>Кому (все устройства схемы)</label><select id="pdst">' + (opts.join('') || '<option disabled>на схеме нет других устройств</option>') + '</select>' +
+      '<label>Или адрес</label><input class="q" id="pip" placeholder="A.B.C.D">' +
+      '<div class="row"><label style="margin:0">Эхо</label><input class="q" id="pcnt" value="5" style="width:60px"><label style="margin:0">Размер, байт</label><input class="q" id="psz" value="56" style="width:70px"></div>' +
+      '<div class="row"><button class="pri" data-g="go">Отправить</button></div><div id="pres"></div>';
+    makeWin('ping', 'Ping', d.name, body, { w: 470, h: 470 });
+    [].forEach.call(body.querySelectorAll('input'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') go(); }); });
+    body.addEventListener('click', function (e) { if (e.target.closest('[data-g]')) go(); });
+    function go() {
+      var ip = body.querySelector('#pip').value.trim() || body.querySelector('#pdst').value, n = Math.max(1, Math.min(100, +body.querySelector('#pcnt').value || 5)),
+        sz = Math.max(0, Math.min(65000, +body.querySelector('#psz').value || 56));
       if (EL.ip.ip2n(ip || '') === null) { toast('Укажите адрес'); return; }
       var r = net.ping(id, ip); showTrace(r, id, ip);
-      body.querySelector('#pres').innerHTML = '<p style="color:' + (r.ok ? 'var(--ok)' : 'var(--bad)') + '">' + (r.ok ? 'Ответ получен' : 'Нет ответа: ' + esc(r.why || '')) + ' — путь пакета внизу экрана</p>'; });
+      var sm = net.simulate ? net.simulate([{ kind: 'ping', src: id, dst: ip, count: n, interval: 1, size: sz }]) : null, f = sm && sm.flows[0];
+      if (!f) { body.querySelector('#pres').innerHTML = '<p>' + (r.ok ? 'Ответ получен' : 'Нет ответа: ' + esc(r.why || '')) + '</p>'; return; }
+      var ms = function (v) { return v === undefined ? '—' : (v * 1000).toFixed(3) + ' мс'; };
+      var drops = Object.keys(f.drops).map(function (k) { return esc(k) + ' × ' + f.drops[k]; }).join('<br>');
+      body.querySelector('#pres').innerHTML = '<h3>Скаляры</h3><table>' +
+        [['Отправлено', f.sent], ['Получено', f.recv], ['Потеряно', f.sent - f.recv], ['Потери', f.loss + ' %'],
+         ['RTT min / avg / max', ms(f.min) + ' / ' + ms(f.avg) + ' / ' + ms(f.max)], ['Джиттер', ms(f.jitter)]].map(function (x) { return '<tr><td>' + x[0] + '</td><td><b>' + x[1] + '</b></td></tr>'; }).join('') +
+        '</table>' + (drops ? '<p style="color:var(--bad)">Потери: ' + drops + '</p>' : '') + (f.rtt.length > 1 ? '<h3>Вектор: RTT по эхо-запросам</h3>' + vecSvg(f.rtt.map(function (v) { return v * 1000; }), 'мс') : '') +
+        '<p style="color:var(--dim)">Путь пакета — внизу экрана; время — дискретно-событийная модель (передача, распространение, очереди).</p>';
+    }
   }
+  // мини-график вектора (значение по номеру/времени) — без внешних библиотек
+  function vecSvg(v, unit, w, h) { w = w || 420; h = h || 110; if (!v.length) return '';
+    var mx = Math.max.apply(null, v) || 1, mn = Math.min(0, Math.min.apply(null, v)), sx = (w - 40) / Math.max(1, v.length - 1), sy = (h - 24) / (mx - mn || 1);
+    var pts = v.map(function (y, i) { return (34 + i * sx).toFixed(1) + ',' + (h - 14 - (y - mn) * sy).toFixed(1); }).join(' ');
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto"><line x1="34" y1="' + (h - 14) + '" x2="' + w + '" y2="' + (h - 14) + '" stroke="var(--dim)"/><line x1="34" y1="4" x2="34" y2="' + (h - 14) + '" stroke="var(--dim)"/>' +
+      '<text x="2" y="12" fill="var(--dim)" font-size="10">' + mx.toFixed(2) + '</text><text x="2" y="' + (h - 14) + '" fill="var(--dim)" font-size="10">' + mn.toFixed(0) + '</text>' +
+      '<text x="' + (w - 30) + '" y="' + (h - 2) + '" fill="var(--dim)" font-size="10">' + esc(unit || '') + '</text>' +
+      '<polyline points="' + pts + '" fill="none" stroke="var(--cy)" stroke-width="2"/>' + v.map(function (y, i) { return '<circle cx="' + (34 + i * sx).toFixed(1) + '" cy="' + (h - 14 - (y - mn) * sy).toFixed(1) + '" r="2.5" fill="var(--cy)"/>'; }).join('') + '</svg>'; }
 
   // ================================================================== таблицы устройства (живые)
   function tbl(head, rows, empty) {
