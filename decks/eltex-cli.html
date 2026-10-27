@@ -186,6 +186,9 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 .cap .cbar button,.cfgw .row button,.trace .osi button{border:1px solid var(--cy2);background:transparent;color:var(--cy);cursor:pointer;font:700 12px var(--m);padding:4px 10px}
 .cap .cbar button:hover,.cfgw .row button:hover,.trace .osi button:hover{background:var(--cy);color:#0e1b1e}.cap .cbar .cnt{font:500 12px var(--m);color:var(--dim)}
 .cap .cbar input{flex:1;min-width:0;background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 13px var(--m);padding:4px 6px}
+.sim .cbar .cnt input{width:60px;background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 12px var(--m);padding:2px 4px}.sim .clk{margin-left:auto;font:700 13px var(--m);color:var(--cy)}
+.sim td input,.sim td select{background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 12px var(--m);padding:2px 4px;width:90px}.sim td input[type=number]{width:64px}.sim td input[type=checkbox]{width:auto}
+.sim td button{border:1px solid var(--cy2);background:transparent;color:var(--cy);cursor:pointer;font:700 12px var(--m)}.sim .det table{margin:4px 0 8px}.sim .det p{margin:6px 0;font:500 12px/1.5 var(--m)}
 .cap .list{flex:1.3;overflow:auto;min-height:0}.cap table{width:100%;border-collapse:collapse;font:500 12px var(--m)}.cap th{position:sticky;top:0;background:#12262a;color:var(--cy);text-align:left;padding:3px 6px;white-space:nowrap}
 .cap td{padding:2px 6px;white-space:nowrap;color:#d8e6e8;border-bottom:1px solid rgba(255,255,255,.04)}.cap tr.p-ARP td{color:#ffd88a}.cap tr.p-STP td{color:#9aa9ad}.cap tr.p-ICMP td{color:#a6f2f6}.cap tr.p-TCP td,.cap tr.p-HTTP td,.cap tr.p-SSH td{color:#b8ffcf}.cap tr.p-UDP td,.cap tr.p-NTP td,.cap tr.p-DHCP td,.cap tr.p-Syslog td,.cap tr.p-TFTP td{color:#d9c2ff}
 .cap tr.on td{background:var(--cy);color:#0e1b1e}.cap tbody tr{cursor:pointer}
@@ -389,6 +392,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ip dhcp snooping · ip dhcp snooping vlan N · порт: port-security-state trusted (6.x: ip dhcp snooping trust)</td><td>чужой DHCP-сервер не раздаёт адреса; show ip dhcp snooping binding</td></tr>
 <tr><td>ip arp inspection enable (6.x: ip arp inspection) · ip arp inspection vlan N</td><td>ARP только от пар IP–MAC из базы snooping</td></tr>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
+</table>
+
+<h2>Симуляция во времени («Тест»)</h2>
+<table>
+<tr><td>Файл → Симуляция трафика · ПКМ по полю</td><td>потоки ping (число, интервал, размер, DF) и UDP (пакетов/с, длительность, размер)</td></tr>
+<tr><td>Время на кабеле</td><td>передача = байты × 8 / скорость линка; распространение 0,5 мкс (100 м); обработка 10 мкс</td></tr>
+<tr><td>Очередь порта</td><td>FIFO 64 кадра (меняется); переполнение — потеря кадра</td></tr>
+<tr><td>Дуплекс не совпадает · MTU 1500</td><td>~20 % кадров теряется · с DF больше MTU не уходит, без DF — фрагменты</td></tr>
+<tr><td>Итог</td><td>потери, RTT min/avg/max, джиттер, загрузка кабелей, максимум очереди; кадры анимируются в замедленном времени</td></tr>
 </table>
 
 <h2>Перезагрузка</h2>
@@ -6446,6 +6458,91 @@ vesr(config)#         do confirm  — подтвердить</pre>
         .concat(L.map(function (l) { return rp((st.stackBoot || {}).unit || 1, 9) + rp(l[1], 21) + rp(l[3].replace('1/0', (s.devs[l[2]].st.stackBoot || {}).unit + '/0'), 21) + '10G'; })).join('\n'); }, 'Стековые линки'); });
 })(typeof window !== 'undefined' ? window : global);
 
+/* Симуляция во времени (как в OMNeT++): дискретные события поверх логики сети.
+   Путь пакета берётся из модели (тот же ping/запрос: ARP, VLAN, маршруты, NAT, межсетевой экран), а время считается по каждому кабелю:
+   — передача (сериализация) = размер кадра × 8 / скорость линка (из согласования speed/duplex, Мбит/с);
+   — распространение = длина кабеля / 2·10⁸ м/с (по умолчанию 100 м); обработка в устройстве — 10 мкс;
+   — у каждого выходного порта очередь FIFO (по умолчанию 64 кадра): переполнилась — кадр теряется (drop-tail);
+   — несовпадение дуплекса — часть кадров теряется в коллизиях (20 %), кадры считаются и в счётчиках ошибок;
+   — MTU 1500 байт на IP-пакет: больше — с флагом DF пакет отбрасывается («Fragmentation needed»), без DF режется на фрагменты.
+   Потоки: ping (интервал, число, размер, DF) и UDP (скорость в пакетах/с, длительность, размер) — RTT, джиттер, потери, загрузка линков.
+   Упрощения: путь считается один раз на поток (маршрут во время потока не меняется), ARP и TCP-окна не моделируются. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype;
+  var DEF = { len: 100, prop: 2e8, proc: 10e-6, qcap: 64, mtu: 1500, collide: 0.2 };
+  EL.SIM = DEF;
+  // путь в одну сторону: отрезки кадров IP (шаги 'ip' трассы) в порядке прохождения
+  function ipSegs(steps, reply) {
+    var out = [], seenOk = false;
+    steps.forEach(function (s) { if (s.k === 'ok' && /получил/.test(s.t) && !seenOk) seenOk = true;
+      if (s.k === 'ip' && s.f && !!s.f.reply === !!reply) (s.segs || []).forEach(function (g) { out.push({ li: g.li, from: g.from, to: g.to, tag: g.tag }); }); });
+    return out;
+  }
+  function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
+  // скорость и дуплекс кабеля сегмента
+  function linkInfo(net, sg) { var l = net.links[sg.li]; if (!l) return null; var ph = net.phys ? net.phys(l.a.dev, l.a.port) : { up: true, speed: 1000, dup: {} };
+    return { l: l, mbps: ph.speed || 1000, mismatch: !!ph.mismatch, len: l.len || DEF.len, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
+  /* flows: [{kind:'ping'|'udp', src, dst, size, count, interval, df, rate, dur, start}]; opt: {len, qcap, until}
+     → {events:[{t, kind:'tx'|'drop'|'rx'|'deliver', flow, pkt, seg, t0, t1}], stats} */
+  P.simulate = function (flows, opt) {
+    opt = opt || {}; var s = this, ev = [], q = [], ports = {}, rand = rng(opt.seed || 7), links = {}, res = [];
+    function push(e) { var i = q.length; q.push(e); while (i > 0) { var p = (i - 1) >> 1; if (q[p].t <= q[i].t) break; var t = q[p]; q[p] = q[i]; q[i] = t; i = p; } }
+    function pop() { var top = q[0], last = q.pop(); if (q.length) { q[0] = last; var i = 0; for (;;) { var a = 2 * i + 1, b = a + 1, m = i;
+      if (a < q.length && q[a].t < q[m].t) m = a; if (b < q.length && q[b].t < q[m].t) m = b; if (m === i) break; var t = q[m]; q[m] = q[i]; q[i] = t; i = m; } } return top; }
+    flows.forEach(function (fl, fi) {
+      var st = { flow: fi, kind: fl.kind, src: fl.src, dst: fl.dst, sent: 0, recv: 0, rtt: [], drops: {}, frag: 1, why: null };
+      res.push(st);
+      var r = fl.kind === 'udp' ? s.request(fl.src, fl.dst, 'udp', fl.port || 5001) : s.ping(fl.src, fl.dst);
+      var fw = ipSegs(r.steps, false), bk = fl.kind === 'ping' ? ipSegs(r.steps, true) : [];
+      // UDP идёт в одну сторону: годится и «Connection refused» — пакет дошёл до получателя, просто его там никто не слушает
+      var reached = fl.kind === 'udp' ? (r.ok || r.dev !== undefined) : r.ok;
+      if (!fw.length || !reached) { st.why = r.why || 'нет пути'; st.blocked = true; }
+      var size = Math.max(28, fl.size || 64), ipLen = size + 28, mtu = opt.mtu || DEF.mtu;
+      if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + ' при DF — «Fragmentation needed», не отправлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
+      st.fw = fw; st.bk = bk;
+      var n = fl.kind === 'udp' ? Math.floor((fl.dur || 1) * (fl.rate || 100)) : (fl.count || 5), gap = fl.kind === 'udp' ? 1 / (fl.rate || 100) : (fl.interval || 1);
+      for (var k = 0; k < n; k++) { st.sent++; if (st.blocked) { st.drops[st.why] = (st.drops[st.why] || 0) + 1; continue; }
+        var t0 = (fl.start || 0) + k * gap, frBytes = Math.min(ipLen, mtu) + 18;
+        for (var f = 0; f < st.frag; f++) push({ t: t0, kind: 'arrive', flow: fi, pkt: k, frag: f, dir: 'fw', i: 0, bytes: f === st.frag - 1 && st.frag > 1 ? (ipLen - (mtu - 20) * (st.frag - 1)) + 20 + 18 : frBytes, born: t0 }); }
+    });
+    var got = {}, MAXEV = 200000, guard = 0;
+    while (q.length && guard++ < MAXEV) {
+      var e = pop(), st = res[e.flow], path = e.dir === 'fw' ? st.fw : st.bk;
+      if (opt.until && e.t > opt.until) break;
+      if (e.i >= path.length) {                                   // дошёл до получателя
+        var key = e.flow + '|' + e.pkt + '|' + e.dir; got[key] = (got[key] || 0) + 1;
+        if (got[key] < st.frag) continue;                         // ждём все фрагменты
+        ev.push({ t: e.t, kind: 'deliver', flow: e.flow, pkt: e.pkt, dir: e.dir });
+        if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born }); }
+        else { st.recv++; st.rtt.push(e.t - e.born); }           // ping — RTT, UDP — задержка в одну сторону
+        continue;
+      }
+      var sg = path[e.i], li = linkInfo(s, sg); if (!li) { st.drops['кабель удалён'] = (st.drops['кабель удалён'] || 0) + 1; continue; }
+      var pk = sg.li + '|' + sg.from, P2 = ports[pk] || (ports[pk] = { busy: 0, wait: [], maxq: 0, name: s.devs[sg.from].name + ' ' + li.port });
+      var t = e.t + (e.i === 0 && e.dir === 'fw' ? 0 : DEF.proc);
+      P2.wait = P2.wait.filter(function (x) { return x > t; });
+      if (P2.wait.length >= (opt.qcap || DEF.qcap)) { var w = 'очередь ' + P2.name + ' переполнена'; st.drops[w] = (st.drops[w] || 0) + 1;
+        ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: w }); continue; }
+      var t1 = Math.max(t, P2.busy), tx = e.bytes * 8 / (li.mbps * 1e6), t2 = t1 + tx, t3 = t2 + (opt.len || li.len) / DEF.prop;
+      P2.busy = t2; P2.wait.push(t1); P2.maxq = Math.max(P2.maxq, P2.wait.length);
+      var L = links[sg.li] || (links[sg.li] = { bits: 0, frames: 0, mbps: li.mbps, name: s.devs[li.l.a.dev].name + ' ' + li.l.a.port + ' ↔ ' + s.devs[li.l.b.dev].name + ' ' + li.l.b.port });
+      L.bits += e.bytes * 8; L.frames++;
+      if (li.mismatch && rand() < DEF.collide) { var wc = 'коллизия на ' + L.name + ' (дуплекс не совпадает)'; st.drops[wc] = (st.drops[wc] || 0) + 1;
+        ev.push({ t: t1, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: wc, t1: t1, t2: t3 }); continue; }
+      ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, dir: e.dir, frag: e.frag });
+      push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born });
+    }
+    var tEnd = ev.reduce(function (m, x) { return Math.max(m, x.t2 || x.t); }, 0) || 1;
+    res.forEach(function (st) { var r = st.rtt.slice(); st.loss = st.sent ? Math.round((st.sent - st.recv) / st.sent * 100) : 0;
+      if (r.length) { st.min = Math.min.apply(null, r); st.max = Math.max.apply(null, r); st.avg = r.reduce(function (a, b) { return a + b; }, 0) / r.length;
+        var d = 0; for (var i = 1; i < r.length; i++) d += Math.abs(r[i] - r[i - 1]); st.jitter = r.length > 1 ? d / (r.length - 1) : 0; } });
+    var lk = Object.keys(links).map(function (k) { var x = links[k]; return { li: +k, name: x.name, frames: x.frames, util: Math.min(100, x.bits / tEnd / (x.mbps * 1e6) * 100), mbps: x.mbps }; });
+    var pq = Object.keys(ports).map(function (k) { return { name: ports[k].name, maxq: ports[k].maxq }; }).filter(function (x) { return x.maxq > 1; });
+    return { events: ev, flows: res, links: lk, queues: pq, tEnd: tEnd, truncated: guard >= MAXEV };
+  };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
    Каждая лаба: gen() — случайный вариант (номера VLAN, адреса), build() — топология, tasks() — проверки, sol() — решение. */
 (function (G) {
@@ -8181,7 +8278,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
+    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();
 
 /* Учебные инструменты режима «Тест» поверх ui.js: захват трафика на кабеле (как Wireshark в pnetlab), разбор шага трассы по уровням OSI,
@@ -8439,6 +8536,117 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (a === 'cfgx') download('configs.txt', EL.exportConfigs(net()), 'text/plain');
     if (a === 'cfgi') fin.click();
   };
+})();
+
+/* Окно «Симуляция» режима «Тест» (поверх sim.js): потоки ping/UDP, прогон во времени, анимация кадров по кабелям
+   в замедленном модельном времени (как в OMNeT++: часы модели, очереди, потери), итоговая статистика. */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  var HOP_MS = 650, GAP_MS = 700, MAX_ANIM = 400;
+  function net() { return U.net(); }
+  function test() { return U.mode() === 'test'; }
+  function hosts() { var n = net(); return n.list().filter(function (d) { return !d.off && n.ifaces(d.id).length; }); }
+  function fmt(s) { if (s === undefined || s === null) return '—'; if (s < 1e-3) return (s * 1e6).toFixed(1) + ' мкс'; if (s < 1) return (s * 1e3).toFixed(3) + ' мс'; return s.toFixed(3) + ' с'; }
+  var flows = [{ kind: 'ping', src: '', dst: '', size: 64, count: 5, interval: 1, df: false, rate: 1000, dur: 0.5 }], qcap = 64, anim = null;
+
+  // ---------------------------------------------------------------- меню и панель
+  var items0 = X.items, run0 = X.run, side0 = X.side, click0 = X.sideClick, mode0 = X.onMode;
+  X.items = function (k) { return items0(k) + (k === 'field' && test() ? '<button data-a="sim"><span>⏱</span>Симуляция трафика</button>' : ''); };
+  X.run = function (k, a, arg) { run0(k, a, arg); if (k === 'field' && a === 'sim') openSim(); };
+  X.side = function (tab) { return side0(tab) + (tab === 'file' && test() ? '<h4>Симуляция во времени</h4><button class="act" data-s="sim">Симуляция трафика</button>' +
+    '<p class="note">Потоки ping и UDP во времени: задержка передачи по скорости линка, распространение, очереди портов, потери, MTU. Как OMNeT++, но на этой схеме.</p>' : ''); };
+  X.sideClick = function (a) { click0(a); if (a === 'sim') openSim(); };
+  X.onMode = function (m) { mode0(m); if (m === 'work') { stopAnim(); U.closeWin('sim', true); } };
+
+  // ---------------------------------------------------------------- окно
+  function row(f, i, H) {
+    var opt = function (v, t, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(t) + '</option>'; };
+    var src = H.map(function (d) { return opt(d.name, d.name, f.src); }).join('');
+    return '<tr data-i="' + i + '"><td><select data-f="kind">' + opt('ping', 'ping', f.kind) + opt('udp', 'UDP', f.kind) + '</select></td>' +
+      '<td><select data-f="src">' + src + '</select></td><td><input data-f="dst" value="' + esc(f.dst) + '" placeholder="10.0.0.2" spellcheck="false"></td>' +
+      '<td><input data-f="size" type="number" min="28" max="9000" value="' + f.size + '"></td>' +
+      (f.kind === 'ping' ? '<td><input data-f="count" type="number" min="1" max="200" value="' + f.count + '"> шт</td><td><input data-f="interval" type="number" min="0.001" step="0.1" value="' + f.interval + '"> с</td>'
+        : '<td><input data-f="rate" type="number" min="1" max="20000" value="' + f.rate + '"> п/с</td><td><input data-f="dur" type="number" min="0.01" max="5" step="0.1" value="' + f.dur + '"> с</td>') +
+      '<td><label><input data-f="df" type="checkbox"' + (f.df ? ' checked' : '') + '> DF</label></td><td><button data-c="del">✕</button></td></tr>';
+  }
+  function openSim() {
+    if (!test()) return;
+    var H = hosts(); if (!H.length) { U.toast('На схеме нет устройств с IP-адресом'); return; }
+    flows.forEach(function (f) { if (!H.some(function (d) { return d.name === f.src; })) f.src = H[0].name; });
+    var body = document.createElement('div'); body.className = 'cap sim';
+    body.innerHTML = '<div class="cbar"><button data-c="run">▶ Запустить</button><button data-c="add">+ Поток</button><button data-c="stop">■ Стоп</button>' +
+      '<span class="cnt">Очередь порта <input data-g="qcap" type="number" min="1" max="1000" value="' + qcap + '"> кадров</span><span class="clk">t = 0</span></div>' +
+      '<div class="list"><table><thead><tr><th>Поток</th><th>Откуда</th><th>Куда (IP)</th><th>Данные, байт</th><th>Сколько</th><th>Интервал</th><th></th><th></th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="det">Задайте потоки и нажмите «Запустить». Кадры летят по кабелям в замедленном модельном времени, часы вверху — время модели.</div>';
+    U.makeWin('sim', 'Симуляция', 'потоки во времени · очереди · потери', body, { w: Math.min(900, innerWidth - 40), h: Math.min(400, innerHeight - 160), x: 20, y: Math.max(70, innerHeight - 470) });
+    var tb = body.querySelector('tbody'), det = body.querySelector('.det');
+    function paint() { tb.innerHTML = flows.map(function (f, i) { return row(f, i, H); }).join(''); }
+    paint();
+    body.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('change', function (e) { var t = e.target, g = t.dataset.g, k = t.dataset.f, tr = t.closest('tr[data-i]');
+      if (g === 'qcap') qcap = Math.max(1, Math.min(1000, +t.value || 64));
+      if (!k || !tr) return; var f = flows[+tr.dataset.i];
+      f[k] = t.type === 'checkbox' ? t.checked : (t.type === 'number' ? +t.value : t.value.trim());
+      if (k === 'kind') paint(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return; var c = b.dataset.c;
+      if (c === 'add') { var l = flows[flows.length - 1]; flows.push(EL.clone(l)); paint(); }
+      if (c === 'del') { if (flows.length > 1) flows.splice(+b.closest('tr').dataset.i, 1); paint(); }
+      if (c === 'stop') stopAnim();
+      if (c === 'run') simulate(body, det); });
+  }
+  function simulate(body, det) {
+    var n = net(), bad = null;
+    var fl = flows.map(function (f) { var d = n.byName(f.src);
+      if (!d) bad = 'нет устройства ' + f.src; else if (EL.ip.ip2n(f.dst) === null) bad = 'адрес назначения ' + (f.dst || '(пусто)') + ' — не IPv4';
+      return { kind: f.kind, src: d && d.id, dst: f.dst, size: Math.max(28, Math.min(9000, f.size | 0)), count: Math.max(1, Math.min(200, f.count | 0)), interval: Math.max(0.001, +f.interval || 1),
+               rate: Math.max(1, Math.min(20000, +f.rate || 100)), dur: Math.max(0.01, Math.min(5, +f.dur || 0.5)), df: !!f.df }; });
+    if (bad) { det.innerHTML = '<span style="color:var(--bad)">' + esc(bad) + '</span>'; return; }
+    stopAnim();
+    var r = n.simulate(fl, { qcap: qcap }); n.gen++;
+    det.innerHTML = report(r);
+    play(r, body.querySelector('.clk'));
+  }
+  function report(r) {
+    var h = '<table><thead><tr><th>Поток</th><th>Отправлено</th><th>Получено</th><th>Потери</th><th>min</th><th>avg</th><th>max</th><th>Джиттер</th></tr></thead><tbody>' +
+      r.flows.map(function (f, i) { var d = net().devs[f.src];
+        return '<tr><td>' + (i + 1) + '. ' + (f.kind === 'ping' ? 'ping (RTT)' : 'UDP (в одну сторону)') + ' ' + esc((d ? d.name : '?') + ' → ' + f.dst) + (f.frag > 1 ? ' · ' + f.frag + ' фрагм.' : '') +
+          '</td><td>' + f.sent + '</td><td>' + f.recv + '</td><td' + (f.loss ? ' style="color:var(--bad)"' : '') + '>' + f.loss + ' %</td><td>' + fmt(f.min) + '</td><td>' + fmt(f.avg) + '</td><td>' + fmt(f.max) + '</td><td>' + fmt(f.jitter) + '</td></tr>'; }).join('') + '</tbody></table>';
+    var why = []; r.flows.forEach(function (f, i) { Object.keys(f.drops).forEach(function (k) { why.push((i + 1) + '. ' + k + ' — ' + f.drops[k]); }); });
+    if (why.length) h += '<p><b>Потери:</b><br>' + why.map(esc).join('<br>') + '</p>';
+    if (r.links.length) h += '<p><b>Загрузка кабелей</b> (за ' + fmt(r.tEnd) + '):<br>' + r.links.map(function (l) { return esc(l.name) + ' — ' + l.mbps + ' Мбит/с, кадров ' + l.frames + ', ' + l.util.toFixed(1) + ' %'; }).join('<br>') + '</p>';
+    if (r.queues.length) h += '<p><b>Очереди</b> (максимум кадров):<br>' + r.queues.map(function (q) { return esc(q.name) + ' — ' + q.maxq; }).join('<br>') + '</p>';
+    if (r.truncated) h += '<p style="color:var(--bad)">Слишком много событий — прогон остановлен на 200 000.</p>';
+    return h;
+  }
+
+  // ---------------------------------------------------------------- анимация в замедленном модельном времени
+  // соседние события идут в своём темпе, длинные паузы между пакетами сжаты до GAP_MS — как «быстрая перемотка» в OMNeT++
+  function stopAnim() { if (anim) { cancelAnimationFrame(anim.raf); anim = null; } var g = document.getElementById('pk'); if (g) g.innerHTML = ''; }
+  function play(r, clk) {
+    var ev = r.events.filter(function (e) { return e.kind === 'tx' || e.kind === 'drop'; }).sort(function (a, b) { return a.t - b.t; }).slice(0, MAX_ANIM);
+    if (!ev.length) { clk.textContent = 't = 0'; return; }
+    var hops = ev.filter(function (e) { return e.kind === 'tx'; }).map(function (e) { return e.t2 - e.t1; }).sort(function (a, b) { return a - b; });
+    var k = HOP_MS / ((hops[hops.length >> 1] || 1e-5) * 1000);           // мс экрана на мс модели
+    var real = 0, prev = ev[0].t;
+    ev.forEach(function (e) { real += Math.min(GAP_MS, (e.t - prev) * 1000 * k); prev = e.t; e.r0 = real; e.r1 = real + (e.kind === 'tx' ? Math.max(120, (e.t2 - e.t1) * 1000 * k) : 500); });
+    var g = document.getElementById('pk'), n = net(), t0 = performance.now(), end = Math.max.apply(null, ev.map(function (e) { return e.r1; })), COL = ['#6fe3ea', '#ffc65c', '#c99bff', '#7dffb0'];
+    g.innerHTML = '';
+    var dots = ev.map(function (e) { var a0 = n.devs[e.seg.from], b0 = n.devs[e.seg.to]; if (!a0 || !b0) return null;
+      var of = n.links[e.seg.li] ? U.linkOff(e.seg.li) : { x: 0, y: 0 }, d = U.el('g', { 'class': 'pkt', opacity: 0 }, g);
+      if (e.kind === 'drop') U.el('text', { x: -6, y: 6, fill: '#ff6b62', 'font-size': 22 }, d).textContent = '✕';
+      else U.el('path', { d: 'M-8 -5h16v10h-16z', fill: COL[e.flow % COL.length], opacity: e.dir === 'bk' ? 0.65 : 1 }, d);
+      return { e: e, d: d, a: { x: a0.x + of.x, y: a0.y + of.y }, b: { x: b0.x + of.x, y: b0.y + of.y } }; }).filter(Boolean);
+    anim = { raf: 0 };
+    (function step(now) { if (!anim) return; var t = now - t0, mt = null;
+      dots.forEach(function (o) { var e = o.e, q = (t - e.r0) / (e.r1 - e.r0);
+        if (q < 0 || q > 1) { o.d.setAttribute('opacity', 0); return; }
+        if (mt === null || e.t > mt) mt = e.kind === 'tx' ? e.t1 + (e.t2 - e.t1) * q : e.t;
+        var p = e.kind === 'tx' ? q : 0.5;
+        o.d.setAttribute('opacity', 1); o.d.setAttribute('transform', 'translate(' + (o.a.x + (o.b.x - o.a.x) * p) + ',' + (o.a.y + (o.b.y - o.a.y) * p) + ')'); });
+      if (mt !== null) clk.textContent = 't = ' + fmt(mt);
+      if (t < end) anim.raf = requestAnimationFrame(step); else { clk.textContent = 't = ' + fmt(r.tEnd) + (r.events.length > MAX_ANIM ? ' · показаны первые ' + MAX_ANIM + ' кадров' : ''); g.innerHTML = ''; anim = null; } })(t0);
+  }
 })();
 
 </script>

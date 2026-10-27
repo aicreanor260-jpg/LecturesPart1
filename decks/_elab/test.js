@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1113,5 +1113,43 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ SLAAC');
 })();
 
+
+// симуляция во времени: задержки, очереди, потери, MTU
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES2428', 'SW1'), pc = n.add('VPC', 'PC1'), sv = n.add('VPC', 'SRV');
+  n.connect(pc.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/24', r.id, 'gi1/0/1'); n.connect(sv.id, 'eth0', r.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, { PC1: ['ip 192.168.1.2/24 192.168.1.1'], SRV: ['ip 10.0.0.2/24 10.0.0.1'],
+    R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.0.0.2/24', 'exit', 'end', 'commit', 'confirm'] });
+  e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/2', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'] });
+  chk('сим: схема настроена', !e.length && n.ping(pc.id, '10.0.0.2').ok, e.join('; '));
+  var s = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.0.0.2', count: 5, interval: 1, size: 64 }]), f = s.flows[0];
+  chk('сим ping: 5 из 5, потерь нет', f.sent === 5 && f.recv === 5 && f.loss === 0, JSON.stringify(f.drops));
+  // 3 кабеля туда и 3 обратно, кадр 64+28+18 = 110 байт на 1 Гбит/с = 0,88 мкс, 100 м = 0,5 мкс, обработка 10 мкс на устройствах
+  chk('сим ping: RTT из передачи, распространения и обработки (десятки мкс)', f.min > 20e-6 && f.max < 200e-6 && f.jitter < 1e-9, f.min + ' ' + f.max);
+  chk('сим ping: события tx по каждому кабелю туда и обратно', s.events.filter(function (x) { return x.kind === 'tx'; }).length === 30);
+  sw.st.mode = 'priv';
+  ['configure', 'interface gi1/0/24', 'no negotiation', 'speed 10', 'duplex full', 'end'].forEach(function (l) { n.exec(sw.id, l); });
+  e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'speed 10M full-duplex', 'exit', 'end', 'commit', 'confirm'] }); chk('сим: speed 10M на ESR', !e.length, e.join('; '));
+  chk('сим: линк SW1–R1 на 10 Мбит/с', n.phys(sw.id, 'gi1/0/24').speed === 10 && !n.phys(sw.id, 'gi1/0/24').mismatch, JSON.stringify(n.phys(sw.id, 'gi1/0/24')));
+  var s2 = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.0.0.2', count: 3, size: 1000 }]);
+  chk('сим: 1000 байт по 10 Мбит/с — RTT больше 1,6 мс (сериализация 2 × 0,8 мс)', s2.flows[0].min > 1.6e-3 && s2.flows[0].recv === 3, s2.flows[0].min);
+  var s3 = n.simulate([{ kind: 'udp', src: pc.id, dst: '10.0.0.2', rate: 5000, dur: 0.2, size: 1400 }]), u = s3.flows[0];
+  chk('сим UDP 5000 п/с × 1400 байт в 10 Мбит/с — очередь переполнена, потери', u.loss > 50 && Object.keys(u.drops).some(function (k) { return /очередь SW1 gi1\/0\/24 переполнена/.test(k); }), JSON.stringify(u.drops));
+  chk('сим: загрузка узкого линка ~100 %, максимум очереди = 64', s3.links.some(function (l) { return l.mbps === 10 && l.util > 90; }) && s3.queues.some(function (q) { return q.maxq === 64; }), JSON.stringify(s3.links) + JSON.stringify(s3.queues));
+  var s4 = n.simulate([{ kind: 'udp', src: pc.id, dst: '10.0.0.2', rate: 100, dur: 1, size: 1000 }]);
+  chk('сим UDP 100 п/с влезает в 10 Мбит/с — без потерь', s4.flows[0].loss === 0 && s4.flows[0].recv === 100);
+  var s5 = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.0.0.2', count: 2, size: 3000, df: true }, { kind: 'ping', src: pc.id, dst: '10.0.0.2', count: 2, size: 3000 }]);
+  chk('сим MTU: 3000 байт с DF — не отправлен', s5.flows[0].recv === 0 && /Fragmentation needed/.test(s5.flows[0].why));
+  chk('сим MTU: 3000 байт без DF — 3 фрагмента, ответы пришли', s5.flows[1].frag === 3 && s5.flows[1].recv === 2);
+  ['configure', 'interface gi1/0/24', 'negotiation', 'end'].forEach(function (l) { n.exec(sw.id, l); });
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'speed 100M full-duplex', 'exit', 'end', 'commit', 'confirm'] });
+  var ph = n.phys(sw.id, 'gi1/0/24');
+  var s6 = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.0.0.2', count: 50, interval: 0.01 }]);
+  chk('сим: дуплекс не совпадает — часть ping теряется в коллизиях', ph.mismatch && s6.flows[0].loss > 0 && s6.flows[0].loss < 100 && Object.keys(s6.flows[0].drops).some(function (k) { return /коллизия/.test(k); }), JSON.stringify(ph) + ' ' + s6.flows[0].loss);
+  var s7 = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.9.9.9', count: 2 }]);
+  chk('сим: нет пути — все потеряны, причина из трассы', s7.flows[0].recv === 0 && s7.flows[0].blocked && !!s7.flows[0].why);
+  console.log('✓ симуляция во времени');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
