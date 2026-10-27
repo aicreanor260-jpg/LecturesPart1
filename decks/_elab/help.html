@@ -155,6 +155,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>Маршрутизаторы ME</h2>
+<table>
+<tr><td>configure · interface te 0/0/2 → ipv4 address A/N · interface te 0/0/1.101 → encapsulation outer-vid 101 · commit</td><td>commit применяет и сохраняет; abort — очистить кандидат</td></tr>
+<tr><td>router static → address-family ipv4 unicast → destination P/L NH</td><td>статический маршрут</td></tr>
+<tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
+<tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
+</table>
+
 <h2>OLT LTP-N и ONT</h2>
 <table>
 <tr><td>configure → interface front-port 1 → vlan allow 1100 · do commit · do save</td><td>uplink к MES; commit — применить, save — в NVRAM</td></tr>

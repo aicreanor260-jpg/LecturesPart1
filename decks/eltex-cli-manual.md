@@ -474,6 +474,15 @@ tunnel l2tpv3 1
 - **Типовые поломки:** нет `commit` — ONT не работает; нет `vlan allow` для outer vid — трафик не уходит в uplink; опечатка в серийном номере — ONT в unactivated, позиция offline; нет `save` — после перезагрузки настройки пропадают.
 - **Упрощения (в источниках нет или вне учебной модели):** к pon-port подключается одна ONT (сплиттер не моделируется); изоляция front ↔ front и pon ↔ pon не моделируется; трансляция outer vid ≠ user vid, bridge group, DBA, IGMP/multicast, профили management/ACS только хранятся; running-config — по образцу примеров справочника; RSSI условный; у ONT своей CLI нет (настраивается с OLT).
 
+### Маршрутизаторы ME (руководство по настройке, справочник команд ME 3.13, руководство пользователя)
+Палитра → «Маршрутизаторы ME» (ME2001, ME5100S, ME5100 rev.X, ME5200S, ME5210S). Порты `te0/0/N`, `twe0/0/N` (ME2001 — допущение), `hu0/0/N`, `mgmt0/fmc0/1`. Вход `admin` / `password`.
+- **CLI:** приглашение `0/ME5100S:EOS#` → `configure` (или `config`) → `(config)#`; приглашение — по последнему узлу: `(config-tengigabitethernet)#`, `(config-tengigabitethernet-sub)#`, `(config-loopback)#`, `(config-ospfv2)#`, `(config-area)#`, `(config-static)#`, `(config-unicast)#`, `(config-destination)#`… `exit` — на уровень выше, `root` — в `(config)#`, `end` — в глобальный режим, `do <команда>`.
+- **Конфигурация:** все правки — в кандидат; `commit` применяет и сразу сохраняет как загрузочную (save нет), новое имя видно в приглашении сразу; `abort` очищает кандидат; `show configuration changes`, `show candidate-config`, `show running-config [блок]`. Команд `rollback` и `confirm` нет.
+- **Интерфейсы:** `interface tengigabitethernet 0/0/2` (или `te 0/0/2`) → `ipv4 address 10.0.0.1/24` (не `ip address`), `vrf NAME`, `description`, `shutdown`; сабинтерфейс `interface te 0/0/1.101` + обязательный `encapsulation outer-vid 101`; `interface loopback 1`; `interface mgmt 0/fmc0/1` (VRF mgmt-intf). Межсетевого экрана нет.
+- **Статика:** `router static` → `address-family ipv4 unicast` → `destination 100.70.0.0/16 4.4.4.4`; в VRF — `router static` → `vrf NAME` → `address-family ipv4 unicast` → … (решение автора).
+- **OSPFv2:** `router ospfv2 NAME` → `router-id`, `area 0.0.0.0` → `interface …` → `passive`, `network point-to-point`, `metric` (по умолчанию 1). Интерфейс включается в OSPF только внутри area. Проверка: `show route`, `show ospfv2 neighbors`, `show ipv4 interfaces brief`, `ping`.
+- **Упрощения:** IS-IS, BGP, MPLS/LDP, L2VPN, prefix-list, route-map, admin-distance и redistribution принимаются (по шаблонам справочника) и хранятся в конфигурации, но трафик не меняют; выводы `show route`, `show ospfv2 neighbors`, `ping` — в формате ESR-модели; диалог при `exit` с неприменёнными правками не моделируется; уровни `>`/`change-privilege` не моделируются.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:

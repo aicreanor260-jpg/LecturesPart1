@@ -132,6 +132,23 @@ def main():
             elif k in ONT:
                 models[k] = {"type": "mes", "kind": "ont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": ONT[k], "swv": sv,
                              "sw": "ПО " + sv, "note": (m.get("summary") or "") + " · мост, настраивается с OLT (OMCI)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    # маршрутизаторы ME (me.json): порты 0/0/N по скорости (10G te, 25G twe — допущение для ME2001, 100G hu), MGMT 0/fmc0/1; шасси без портов — пропуск
+    msrc = os.path.join(os.path.dirname(SRC), "me.json")
+    if os.path.exists(msrc):
+        MP = {"10G": "te", "25G": "twe", "100G": "hu"}
+        for m in json.load(open(msrc, encoding="utf-8")):
+            names, cnt = [], {}
+            for p in m.get("ports") or []:
+                k = MP.get(p.get("speed"))
+                for _ in range(p.get("count") or 0):
+                    if k:
+                        cnt[k] = cnt.get(k, 0) + 1
+                        names.append("%s0/0/%d" % (k, cnt[k]))
+            if not names:
+                continue
+            sv = m.get("sw_version") or "?"
+            models[m["model"]] = {"type": "esr", "kind": "me", "ports": len(names) + 1, "portList": names + ["mgmt0/fmc0/1"], "group": "Маршрутизаторы ME", "host": "EOS",
+                                  "promptModel": m["model"].split(" ")[0], "sw": "ПО ME " + sv, "note": m.get("summary") or "", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))

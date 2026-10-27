@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1375,6 +1375,40 @@ EL.labs.LABS.forEach(runLab);
   var x = new EL.Net(), lx = x.add('LTX-8', 'X'), lc = x.add('LTX-8C', 'C'); lx.st.olt.mode = 'configure'; lc.st.olt.mode = 'configure';
   chk('LTX по умолчанию GPON: ONT 1/129 — ошибка; LTX-8C: на чётном порту до 256', /%/.test(x.exec(lx.id, 'interface ont 1/129')) && !/%/.test(x.exec(lc.id, 'interface ont 2/200')) && /%/.test((x.exec(lc.id, 'exit'), x.exec(lc.id, 'interface ont 1/200'))));
   console.log('✓ OLT LTP-N и ONT');
+})();
+
+// маршрутизаторы ME: приглашение-стек, commit (сразу сохраняет), abort, интерфейсы, статика, OSPFv2
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('ME5100S', 'R1'), b = n.add('ME5200S', 'R2'), pc = n.add('VPC', 'PC');
+  n.connect(a.id, 'te0/0/12', b.id, 'te0/0/12'); n.connect(pc.id, 'eth0', a.id, 'te0/0/1');
+  function run(d, L) { return L.map(function (l) { return n.exec(d.id, l); }).filter(function (r) { return /^%/.test(r); }); }
+  chk('ME: приглашение 0/ME5100S:EOS#, config → (config)#', n.prompt(a.id) === '0/ME5100S:EOS#' && (n.exec(a.id, 'config'), n.prompt(a.id) === '0/ME5100S:EOS(config)#'));
+  n.exec(a.id, 'hostname Router');
+  chk('hostname до commit не действует, show configuration changes', n.prompt(a.id) === '0/ME5100S:EOS(config)#' && /hostname Router/.test(n.exec(a.id, 'do show configuration changes')));
+  chk('commit: Commit successfully completed, приглашение сразу с новым именем', /Commit successfully completed/.test(n.exec(a.id, 'commit')) && n.prompt(a.id) === '0/ME5100S:Router(config)#');
+  n.exec(a.id, 'hostname X'); n.exec(a.id, 'abort');
+  chk('abort: кандидат очищен, выход в глобальный режим', n.prompt(a.id) === '0/ME5100S:Router#' && !/hostname X/.test(n.exec(a.id, 'show candidate-config')));
+  var e = run(a, ['configure', 'interface tengigabitethernet 0/0/12', 'ipv4 address 10.0.0.1/30', 'exit', 'interface te 0/0/1', 'ipv4 address 192.168.1.1/24', 'exit',
+    'interface loopback 1', 'ipv4 address 1.1.1.1/32', 'exit', 'router ospfv2 test', 'router-id 1.1.1.1', 'area 0.0.0.0', 'interface loopback 1', 'passive', 'exit',
+    'interface tengigabitethernet 0/0/12', 'network point-to-point', 'exit', 'interface te 0/0/1', 'passive', 'root', 'commit', 'end']);
+  e = e.concat(run(b, ['configure', 'interface tengigabitethernet 0/0/12', 'ipv4 address 10.0.0.2/30', 'exit', 'interface loopback 1', 'ipv4 address 2.2.2.2/32', 'exit',
+    'router ospfv2 test', 'router-id 2.2.2.2', 'area 0.0.0.0', 'interface loopback 1', 'passive', 'exit', 'interface te 0/0/12', 'network point-to-point', 'root', 'commit', 'end']));
+  chk('РН с. 62, 102: интерфейсы и OSPFv2 без ошибок', !e.length, e.join('; '));
+  chk('приглашения узлов: (config-ospfv2)#, (config-area)#, (config-tengigabitethernet)#', (n.exec(a.id, 'configure'), n.exec(a.id, 'router ospfv2 test'), n.prompt(a.id) === '0/ME5100S:Router(config-ospfv2)#') &&
+    (n.exec(a.id, 'area 0.0.0.0'), n.prompt(a.id) === '0/ME5100S:Router(config-area)#') && (n.exec(a.id, 'interface te 0/0/12'), n.prompt(a.id) === '0/ME5100S:Router(config-tengigabitethernet)#') &&
+    (n.exec(a.id, 'root'), n.prompt(a.id) === '0/ME5100S:Router(config)#') && (n.exec(a.id, 'end'), true));
+  n.exec(pc.id, 'ip 192.168.1.10/24 192.168.1.1'); n.tick(60);
+  chk('OSPFv2 между ME: ПК пингует loopback R2', n.ping(pc.id, '2.2.2.2').ok);
+  chk('running-config в виде РН (отступ 3, exit)', /router ospfv2 test\n   router-id 1\.1\.1\.1\n   area 0\.0\.0\.0\n      interface loopback 1\n         passive\n      exit/.test(n.exec(a.id, 'show running-config')), n.exec(a.id, 'show running-config'));
+  chk('ip address (как у ESR) на ME — ошибка', /%/.test((n.exec(a.id, 'configure'), n.exec(a.id, 'interface te 0/0/2'), n.exec(a.id, 'ip address 1.1.1.1/24'))) && (n.exec(a.id, 'end'), true));
+  // сабинтерфейс с encapsulation и статика (вариант А: router static → address-family / vrf)
+  e = run(a, ['configure', 'interface te 0/0/1.101', 'encapsulation outer-vid 101', 'ipv4 address 172.16.1.1/24', 'exit', 'router static', 'address-family ipv4 unicast',
+    'destination 100.70.0.0/16 10.0.0.2', 'root', 'commit', 'end']);
+  chk('сабинтерфейс te0/0/1.101 (VLAN 101) и статика', !e.length && a.st.run.ifs['te0/0/1.101'].ip === '172.16.1.1/24' && a.st.run.routes.some(function (r) { return r.net === '100.70.0.0/16' && r.nh === '10.0.0.2'; }), e.join('; '));
+  chk('router static vrf X одной строкой — нет (вариант А)', /%/.test((n.exec(a.id, 'configure'), n.exec(a.id, 'router static vrf mgmt-intf'))) && (n.exec(a.id, 'end'), true));
+  chk('privilege p15 / p16', (n.exec(a.id, 'configure'), n.exec(a.id, 'user ivan'), !/%/.test(n.exec(a.id, 'privilege p15'))) && /%/.test(n.exec(a.id, 'privilege p16')) && (n.exec(a.id, 'end'), true));
+  console.log('✓ маршрутизаторы ME');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
