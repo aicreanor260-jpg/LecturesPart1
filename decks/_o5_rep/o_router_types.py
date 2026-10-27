@@ -2,7 +2,8 @@
 """Типы маршрутизаторов OSPF — вёрстка поверх чистого фона."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from _o5_replib import bg, img
+from _o5_replib import bg
+from _o5_g2kit import svg, g2_rtr, g2_icon_html, g2_rays, blob, globe, cloud_icon, line
 
 W, H, TOP = 1672, 941, 132
 K = "#1f1a33"
@@ -54,7 +55,7 @@ def card(i, c):
         pl(x + 14, 208, 100, 100, ab, col, "700 %dpx/1 Oswald" % (46 if len(ab) < 4 else 40), 50),
         tx(x + 132, 218, w - 135, t, "700 20px/1.2", "white-space:nowrap"),
         tx(x + 132, 276, w - 135, en, "400 17px/1.1", "white-space:nowrap"),
-        img("o_router_types_r%d.png" % (i + 1), "left:%dpx;top:298px;width:270px" % (x + 70)),
+        svg(g2_rtr(x + w / 2, 348, 140, "bypg"[i], ah=40)),
         box(x + 14, 418, w - 28, 104, "rgba(255,255,255,.95)", 16),
         tx(x + 30, dy, w - 40, d, "400 17.5px/1.24", "white-space:nowrap"),
         '</div>'])
@@ -64,24 +65,35 @@ def rp(x, y, t, col, w=66):
     return pl(x, y, w, 36, t, col, "600 25px/1 Oswald", 10)
 
 
+NR = {"i1": (146, 668), "i2": (346, 658), "a1": (496, 675), "bt": (698, 585), "bb": (703, 718), "a2": (931, 678),
+      "it": (1139, 608), "ib": (1118, 727), "as": (1291, 680)}
+NT = {"i": "b", "a": "p", "b": "y"}
+NET = svg(blob(250, 690, 235, 115, "b", seed=1, dash=False) + blob(1110, 690, 240, 125, "g", seed=3, dash=False)
+          + blob(700, 685, 210, 150, "y", seed=2, dash=False) + blob(1540, 665, 115, 90, "v", seed=4, dash=False)
+          + globe(1543, 630, 26, "#3a2f7a") + cloud_icon(1590, 790, .6) + cloud_icon(60, 790, .5)
+          + "".join(line(NR[a], NR[b], "#1f2a44", 4) for a, b in [
+              ("i1", "i2"), ("i2", "a1"), ("a1", "bt"), ("a1", "bb"), ("a1", "a2"), ("bt", "a2"), ("bb", "a2"),
+              ("a2", "it"), ("a2", "ib"), ("it", "as"), ("ib", "as")])
+          + line((1330, 690), (1425, 690), "#1f2a44", 4)
+          + "".join(g2_rtr(x, y, 96, "g" if k == "as" else NT[k[0]], ah=40) for k, (x, y) in NR.items()))
+
 HTML = bg("bg7", W, H) + "".join([
     tx(72, 140, 900, "Четыре роли в маршрутизации между областями", "600 31px/1.2", "white-space:nowrap"),
     box(72, 180, 225, 5, "#ff4f9a", 3),
-    img("o_router_types_cat.png", "left:1100px;top:140px;width:565px"),
     "".join(card(i, c) for i, c in enumerate(CARDS)),
     '<div class="step">',
-    img("o_router_types_net.png", "left:0;top:540px;width:1665px"),
+NET,
     rp(113, 727, "IR", "#7cc0f2"), rp(313, 718, "IR", "#7cc0f2"),
-    rp(460, 731, "ABR", "#fea1c8", 72), rp(665, 640, "BR", "#fdd84a"), rp(670, 785, "BR", "#fdd84a"),
+    rp(460, 731, "ABR", "#fea1c8", 72), rp(665, 640, "BR", "#fdd84a"), rp(670, 772, "BR", "#fdd84a"),
     rp(895, 734, "ABR", "#fea1c8", 72), rp(1106, 663, "IR", "#7cc0f2"), rp(1082, 782, "IR", "#7cc0f2"),
     rp(1255, 737, "ASBR", "#6fdc9a", 92),
     tx(150, 778, 200, "AREA 0.0.0.1", "700 32px/1 Oswald"),
-    tx(636, 813, 200, "AREA 0.0.0.0", "700 30px/1 Oswald"),
+    tx(632, 812, 200, "AREA 0.0.0.0", "700 30px/1 Oswald"),
     tx(1150, 801, 200, "AREA 0.0.0.5", "700 32px/1 Oswald"),
     pl(1440, 676, 205, 60, "Внешняя сеть /<br>другой протокол", "transparent", "700 19px/1.25", 12),
     '</div><div class="step">',
     box(22, 862, 1628, 60, "#fde9f2", 18, "border:2px solid #f9cfe0"),
-    img("o_router_types_bulb.png", "left:36px;top:852px;width:88px"),
+    g2_icon_html("bulb", 46, 862, 64, "#ffd23a"),
     tx(146, 876, 1490, "<b>Роли могут сочетаться:</b> внутренний маршрутизатор области 0 одновременно является BR; "
        "ASBR может быть также IR, BR или ABR.", "400 21.5px/1.2", "white-space:nowrap"),
     '</div>',

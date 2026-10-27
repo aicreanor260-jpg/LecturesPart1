@@ -2,7 +2,8 @@
 """Алгоритм Дейкстры — шаг 1 из R1: обновление меток, таблица статусов."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from _o5_replib import bg, img
+from _o5_replib import bg
+from _o5_g2kit import svg, g2_rtr, g2_wc, g2_icon_html, line, laptop, cloud_icon
 
 W, H, TOP = 1672, 941, 150
 
@@ -53,12 +54,27 @@ TABLE = ('<table class="odu-tb"><tr><th style="width:132px">Вершина</th><
                    'display:block;background:%s;font-weight:500;padding:9px 0">%s</span></td></tr>' % (c1, r, m, c2, st)
                    for r, c1, m, st, c2 in ROWS) + '</table>')
 
+R = {"R1": (1050, 290), "R2": (835, 462), "R3": (1359, 462), "R4": (1098, 640)}
+YL, BL = "#ffd84a", "#5aa9ee"
+SCENE = ('<div class="ab" style="left:620px;top:200px;width:1038px;height:608px;border-radius:24px;'
+         'background:linear-gradient(160deg,rgba(255,232,242,.85),rgba(226,240,253,.85));border:2px solid #fff"></div>'
+         + svg(cloud_icon(760, 790, 1.2) + cloud_icon(1560, 300, 1.3) + cloud_icon(1530, 740, 1.1)
+               + laptop(700, 760, 100, "p") + laptop(1520, 640, 110, "b")
+               + "".join('<path d="M%d %d L%d %d" stroke="%s" stroke-width="18" stroke-linecap="round" opacity=".85"/>'
+                         % (R[a] + R[b] + (c,)) for a, b, c in [("R1", "R2", YL), ("R1", "R3", YL)])
+               + "".join(line(R[a], R[b], BL, 7) for a, b in [("R2", "R4"), ("R3", "R4")])
+               + g2_wc(942, 376, "2", 27, "#f2b600") + g2_wc(1204, 376, "5", 27, "#f2b600")
+               + g2_wc(966, 551, "1", 25, BL) + g2_wc(1228, 551, "1", 25, BL)
+               + g2_rtr(R["R1"][0], R["R1"][1], 200, "P", "R1", ah=70, fs=32)
+               + "".join(g2_rtr(R[n][0], R[n][1], 175, "b", n, ah=62, fs=30) for n in ("R2", "R3", "R4"))))
+
 HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="odu-sub">Обновление меток и выбор следующей вершины</div>',
-    img("o_dij_update_scene.png", "left:620px;top:200px;width:1038px;border-radius:24px"),
+    SCENE,
     '<div class="odu-note">Граф без отрицательных весов рёбер <span style="color:#ff4f9a">♥</span></div>',
     '<div class="step"><div class="odu-box" style="left:35px;top:200px;width:565px;height:380px"></div>'
-    + img("o_dij_update_n01.png", "left:40px;top:210px;width:85px")
+    + ('<div class="ab" style="left:44px;top:212px;width:76px;height:76px;border-radius:50%;background:#ffc6dd;'
+       'font:800 32px/76px Oswald,sans-serif;text-align:center;color:#1f1a33">01</div>')
     + '<div class="odu-pill" style="left:128px;top:217px">Шаг 1. Старт из R1</div>'
     + k(1, 280, "Помечаем R1 как корневую вершину.<br>Её метка — <q>0.</q>")
     + k(2, 344, "Рассматриваем всех соседей R1<br>и вычисляем длину пути.") + '</div>',
@@ -72,7 +88,7 @@ HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="step"><div class="odu-box" style="left:35px;top:592px;width:565px;height:320px"></div>'
     '<div class="odu-pill" style="left:46px;top:602px;width:542px;padding:9px 20px;font-size:26px">Таблица меток и статусов</div>'
     + TABLE + '</div>',
-    '<div class="step"><div class="odu-rule"></div>' + img("o_dij_update_gear.png", "left:695px;top:815px;width:105px")
+    '<div class="step"><div class="odu-rule"></div>' + g2_icon_html("gear", 705, 822, 88, "#ffd23a")
     + '<div class="odu-rh">Правило обновления метки</div><div class="odu-rt">Если новая длина меньше текущей метки соседа —<br>'
     'заменяем метку.</div></div>',
 ])

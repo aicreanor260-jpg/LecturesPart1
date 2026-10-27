@@ -2,7 +2,9 @@
 """Алгоритм Дейкстры: второй шаг — соседи R2 (метка 8), R4 получает 24, R2 посещена."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from _o5_replib import bg, img
+from _o5_replib import bg, img  # noqa: F401
+from _o5_ikit import line, svg, puck, cloud_icon, rack
+from _o5_g1kit import g1icon, g1xpuck, g1antpuck, g1ico_svg
 
 W, H, TOP = 1672, 941, 150
 
@@ -47,17 +49,43 @@ def k(y, small, big, c):
     return '<div class="os2-k" style="top:%dpx;background:%s">%s<b>%s</b></div>' % (y, c, small, big)
 
 
+P = {"R1": (150, 318), "R5": (632, 318), "R3": (398, 492), "R2": (156, 676), "R4": (632, 672)}
+
+
+def graph():
+    c = {k: (x, y + 28) for k, (x, y) in P.items()}
+    o = ['<rect x="25" y="205" width="737" height="715" rx="24" style="fill:#eef4fc;opacity:.85"/>',
+         cloud_icon(420, 270, .9), cloud_icon(700, 560, .7), rack(40, 760, 80, 140), rack(470, 780, 80, 130),
+         line(c["R2"], c["R3"], "#fff38a", 22), line(c["R2"], c["R4"], "#fff38a", 22)]
+    for a, b in [("R1", "R5"), ("R1", "R3"), ("R1", "R2"), ("R2", "R3"), ("R3", "R5"), ("R3", "R4"), ("R5", "R4"), ("R2", "R4")]:
+        o.append(line(c[a], c[b], "#1f1a33", 4))
+    for k, (x, y) in P.items():
+        if k == "R1":
+            o.append(g1xpuck(x, y, 140, "b", k))
+        else:
+            o.append(puck(x, y, 175 if k == "R2" else 140, "p" if k == "R2" else "b", k))
+    return svg("".join(o))
+
+
+def mini(name, x, y, w=100):
+    """Маленькая шайба-иконка (левый верх x, y)."""
+    cx, cy = x + w / 2.0, y + w * .2
+    fs = w * .24
+    f = {"R1": g1xpuck(cx, cy, w, "b", "R1", fs), "R2": puck(cx, cy, w, "p", "R2", fs)}.get(name) or puck(cx, cy, w, "b", name, fs)
+    return svg(f)
+
+
 INF = '<span style="font:900 34px/26px Arial">∞</span>'
 ROWS = [("R1", "0", "посещена", "#d8f5dc", 700), ("R2", "8", "посещена", "#d8f5dc", 700), ("R3", "10", "не посещена", "", 500),
         ("R4", "24", "не посещена", "", 500), ("R5", "15", "не посещена", "", 500)]
 TABLE = ('<table class="os2-tb"><tr><th style="width:158px">Маршрутизатор</th><th style="width:82px">Метка</th><th style="width:136px">Статус</th></tr>'
          + "".join('<tr><td class="n">%s</td><td>%s</td><td style="font-size:17px;font-weight:%d;background:%s">%s</td></tr>'
                    % (r, m, fw, c or "transparent", st) for r, m, st, c, fw in ROWS) + '</table>'
-         + "".join(img("o_dij_s2_t%d.png" % (i + 1), "left:1272px;top:%dpx;width:78px" % (278 + 72 * i)) for i in range(5)))
+         + "".join(mini("R%d" % (i + 1), 1272, 284 + 72 * i, 70) for i in range(5)))
 
 HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="os2-sub">Проверяем соседей R2 с меткой 8</div>',
-    '<div class="step">' + img("o_dij_s2_g.png", "left:25px;top:205px;width:737px;border-radius:24px")
+    '<div class="step">' + graph()
     + wt(370, 320, "15") + wt(264, 404, "10") + wt(503, 405, "3") + wt(124, 492, "8") + wt(645, 498, "16")
     + wt(249, 570, "11") + wt(499, 578, "12") + wt(372, 671, "16")
     + lb(95, 242, 130, "0", "посещена", "#ffd6e6") + lb(568, 238, 136, "15", "не посещена", "#d6eafc")
@@ -66,28 +94,28 @@ HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="os2-col" style="left:768px;top:180px;width:470px;height:742px"></div>'
     '<div class="os2-hd" style="left:780px;top:194px;background:#ffe14d">Проверяем каждого соседа R2</div>',
     '<div class="step"><div class="os2-c" style="top:252px;height:126px;background:#ffe6ef"></div>'
-    + img("o_dij_s2_r1.png", "left:790px;top:272px;width:102px") + tg(904, 266, "R1") + tg(983, 266, "8")
+    + mini("R1", 792, 285, 100) + tg(904, 266, "R1") + tg(983, 266, "8")
     + t(905, 312, "R1 уже посещена —<br>пропускаем.") + '</div>',
     '<div class="step"><div class="os2-c" style="top:390px;height:205px;background:#e6f1fc"></div>'
-    + img("o_dij_s2_r3.png", "left:790px;top:410px;width:102px") + tg(904, 404, "R3")
+    + mini("R3", 792, 425, 100) + tg(904, 404, "R3")
     + t(905, 452, "<i>8 + 11 = 19</i>", "font-size:24px") + t(905, 488, "Текущая метка 10<br>меньше 19 —<br>оставляем 10.")
     + k(412, "Кандидат:", "19", "#e6e6ea") + k(474, "Текущая:", "10", "#ffd6e6")
     + '<div class="os2-k" style="top:532px;background:#dcf5df;padding-left:42px;text-align:left">Оставляем<b>10</b></div>'
-    + img("o_dij_s2_ok2.png", "left:1085px;top:537px;width:36px") + '</div>',
+    + svg(g1ico_svg("check", 1103, 555, 34, "#3fc47c", "#fff")) + '</div>',
     '<div class="step"><div class="os2-c" style="top:607px;height:188px;background:#fff7d6"></div>'
-    + img("o_dij_s2_r4.png", "left:790px;top:628px;width:102px") + tg(904, 622, "R4")
+    + mini("R4", 792, 642, 100) + tg(904, 622, "R4")
     + t(905, 670, "<i>8 + 16 = 24</i>", "font-size:24px") + t(905, 706, "24 меньше ∞ —<br>устанавливаем<br>метку 24.")
     + k(626, "Было:", INF, "#e6e6ea") + '<div class="os2-t" style="left:1142px;top:690px">↓</div>'
     + k(712, "Стало:", "24", "#ffe14d") + '</div>',
     '<div class="step"><div class="os2-c" style="top:808px;height:105px;background:#e8f7ea"></div>'
-    + img("o_dij_s2_r2.png", "left:785px;top:820px;width:97px") + img("o_dij_s2_ok.png", "left:885px;top:825px;width:55px")
+    + mini("R2", 788, 830, 92) + svg(g1ico_svg("check", 912, 852, 50, "#3fc47c", "#fff"))
     + t(948, 832, "<b>Помечаем R2 как посещённую.</b>", "font-size:19px")
-    + t(948, 864, "Все соседи R2 проверены.", "font-size:16px") + img("o_dij_s2_arr.png", "left:1172px;top:860px;width:38px") + '</div>',
+    + t(948, 864, "Все соседи R2 проверены.", "font-size:16px") + '</div>',
     '<div class="step"><div class="os2-col" style="left:1250px;top:148px;width:400px;height:488px"></div>'
     '<div class="os2-hd" style="left:1262px;top:158px;width:376px;background:#ff8fbd;font-size:34px;padding:8px 14px">Метки после шага 2</div>'
     + TABLE + '</div>',
-    '<div class="step">' + img("o_dij_s2_art.png", "left:1245px;top:760px;width:417px")
-    + '<div class="os2-bub"></div>' + img("o_dij_s2_bulb.png", "left:1300px;top:648px;width:65px")
+    '<div class="step">' + svg(rack(1260, 790, 70, 140) + g1antpuck(1470, 818, 180, "p", "R2"))
+    + '<div class="os2-bub"></div>' + g1icon("bulb", 1308, 660, 58, "y")
     + t(1373, 660, "На втором шаге мы<br>обновили метку для R4,<br>используя путь через R2,<br>и пометили R2 как посещенную.",
         "font-size:16.5px") + '</div>',
 ])

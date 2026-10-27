@@ -3,6 +3,33 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _o5_replib import bg, img
+from _o5_g3kit import svg, puck, line, cloud, path, head, ic, laptop, globe, T
+
+RI = [("map", "p"), ("swap", "b"), ("ban", "y"), ("diamond", "v"), ("list", "g"), ("gear", "p")]
+LN = "#1f1a33"
+
+
+def net():
+    o = [cloud(1040, 325, 240, 175, "g"), cloud(1510, 300, 270, 175, "v"), cloud(1250, 560, 400, 270, "p"),
+         cloud(1535, 525, 240, 175, "b"), cloud(1085, 785, 310, 170, "v"), cloud(1490, 780, 310, 170, "y"),
+         cloud(1335, 232, 200, 86, "k"),
+         path("M1010 420 C960 520 980 640 1030 700", "#f47fb0", 3, "8 8"), path("M1290 705 Q1340 725 1385 718", "#f47fb0", 3, "8 8"),
+         path("M1175 770 Q1230 735 1300 690", "#9b7bf0", 3, "8 8")]
+    for a, b in [((1060, 315), (1120, 425)), ((1124, 445), (1215, 545)), ((1376, 445), (1290, 545)), ((1376, 425), (1490, 290)),
+                 ((1400, 450), (1505, 520)), ((1210, 580), (1110, 660)), ((1290, 585), (1410, 665)), ((1108, 680), (1070, 760)),
+                 ((1416, 683), (1470, 760))]:
+        o.append(line(a, b, LN, 4))
+    o += [path("M1140 280 V300", LN, 3), '<circle cx="1140" cy="292" r="5" style="fill:#1f1a33"/>',
+          globe(1262, 226, 19, "#2f7fd8"), T(1355, 226, "IS-IS", 21, LN, "middle", 800),
+          T(1355, 250, "внешние маршруты", 14, LN, "middle", 600),
+          path("M1240 258 Q1170 300 1095 270", "#f47fb0", 5), head(1086, 266, 195, "#f47fb0", 8), head(1248, 252, -30, "#f47fb0", 8),
+          path("M1262 382 Q1262 400 1252 412", "#f47fb0", 4), head(1250, 420, 110, "#f47fb0", 7),
+          laptop(1612, 505, 48, "b"), laptop(985, 785, 66, "b"), laptop(1185, 790, 66, "b"), laptop(1390, 815, 66, "b"),
+          laptop(1605, 775, 64, "b"),
+          puck(1032, 262, 110, "g"), puck(1520, 240, 104, "v"), puck(1250, 512, 158, "p"), puck(1532, 480, 116, "b"),
+          puck(1082, 748, 126, "v"), puck(1492, 740, 126, "y"),
+          puck(1124, 418, 96, "b"), puck(1376, 418, 96, "b"), puck(1108, 633, 96, "b"), puck(1416, 636, 96, "b")]
+    return svg("".join(o))
 
 W, H, TOP = 1672, 941, 188
 K = "#1f1a33"
@@ -51,7 +78,7 @@ def table():
     for i, (h, f, a, b, c) in enumerate(ROWS):
         out += ['<div class="step">',
                 box(37, y, 228, h, f, 14, "border:2px solid #fff"),
-                img("o_area_table_i%d.png" % (i + 1), "left:44px;top:%dpx;width:72px" % (y + 4)),
+                svg(ic(RI[i][0], 80, y + h / 2.0, 62, RI[i][1])),
                 tx(128, y, 140, a, "700 19.5px/1.2", "height:%dpx;display:flex;align-items:center;white-space:nowrap" % h),
                 box(272, y, 283, h, "rgba(255,255,255,.95)", 14, "border:2px solid #efeef3"),
                 tx(290, y, 265, b, "400 18px/1.25", "height:%dpx;display:flex;align-items:center;white-space:nowrap" % h),
@@ -78,12 +105,13 @@ HTML = bg("bg4", W, H) + "".join([
     table(),
     '<div class="step">',
     box(37, 847, 868, 66, "rgba(255,255,255,.95)", 16, "border:2px solid #e6eef6"),
-    img("o_area_table_inf.png", "left:40px;top:852px;width:50px"),
+    svg(ic("info", 65, 880, 42, "b")),
     tx(108, 856, 790, "<ul style='margin:0;padding-left:20px'><li>Totally Stubby и Totally NSSA — расширения "
        "производителя, не отдельные базовые типы RFC 2328.</li><li>Маршрут по умолчанию зависит от конфигурации "
        "области.</li></ul>", "400 14.5px/1.5", "white-space:nowrap"),
     '</div><div class="step">',
-    img("o_area_table_net.png", "left:905px;top:190px;width:747px"),
+    net(),
+    pl(910, 196, 190, 50, "Внешние маршруты<br>из других AS", "#fbb9d4", "600 16px/1.15", 12, "transform:rotate(-7deg)"),
     pl(1110, 210, 155, 52, "<span>ASBR<br><small style='font-weight:500;font-size:15px'>(в области NSSA)</small></span>",
        "#fff", "700 19px/1.1", 18, "border:2px solid #9ad6b4"),
     lb(985, 341, 118, "NSSA<br>Area 0.0.0.4"),

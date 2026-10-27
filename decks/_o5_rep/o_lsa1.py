@@ -3,6 +3,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from _o5_replib import bg, img
+from _o5_ikit import puck, line, cross, svg, cloud_icon, g4_arr, g4_area, g4_icon, g4_glyph_at, g4_ico, FADE
 
 W, H, TOP = 1536, 1024, 58
 INK = "#1f1a33"
@@ -28,15 +29,35 @@ CSS = """<style>
 .ol1-hl{background:linear-gradient(transparent 55%,#fff1a0 55%)}
 </style>"""
 
-SCENE = ('<div class="step">' + img("o_lsa1_scene.png", "left:395px;top:60px;width:1141px")
+
+def scene_svg():
+    o = ['<rect x="1132" y="62" width="390" height="382" rx="40" style="fill:#d9dce6;fill-opacity:.85" stroke="#9aa0b2" '
+         'stroke-width="3" stroke-dasharray="12 8"/>',
+         '<rect x="1160" y="76" width="350" height="76" rx="30" style="fill:#3a3f55"/>',
+         g4_area(405, 108, 715, 332, "b", 50),
+         cloud_icon(498, 352, 1.5, "#e8f3fe", "#7fb6ee"),
+         line((570, 330), (640, 330), "#2f8fe8", 6), line((820, 330), (935, 330), "#2f8fe8", 6),
+         line((1088, 320), (1150, 310), "#2b2f3d", 5), line((1290, 320), (1350, 340), "#2b2f3d", 5),
+         g4_arr(790, 368, 1095, 408, "#ff5c9e", 4, dash="12 8", curve=-20), cross(1030, 404, 14, "#e8245e", 6),
+         puck(730, 305, 190, "p", "R1", 30), puck(1012, 315, 160, "b", "R2", 28), puck(1215, 300, 150, "k", "ABR", 26),
+         puck(1420, 345, 140, "b"), cloud_icon(1435, 275, 1.6, "#ffffff", "#c7d0dc"),
+         '<text x="1428" y="262" text-anchor="middle" font-size="26" font-weight="900" style="fill:#2b2f3d">...</text>',
+         '<rect x="672" y="205" width="118" height="58" rx="10" style="fill:#fff" stroke="#ff8fb8" stroke-width="3"/>',
+         '<rect x="954" y="205" width="118" height="58" rx="10" style="fill:#fff" stroke="#8fbff0" stroke-width="3"/>',
+         line((731, 263), (731, 285), "#ff8fb8", 3), line((1013, 263), (1013, 290), "#8fbff0", 3),
+         '<rect x="1105" y="366" width="175" height="84" rx="12" style="fill:#fff" stroke="#ff8fb8" stroke-width="3" transform="rotate(-4 1190 408)"/>']
+    return svg("".join(o), W, H)
+
+
+SCENE = ('<div class="step">' + scene_svg()
          + T(640, 108, 268, 38, "Area 0.0.0.1", 700, c="#fff", ex=C + ";background:#2f7fe0;border-radius:26px;padding:4px 0")
-         + T(676, 213, 110, 15, "Router ID<br><b style='font-size:21px'>1.1.1.1</b>", 500, lh=1.15, ex="text-align:center")
-         + T(958, 213, 110, 15, "Router ID<br><b style='font-size:21px'>2.2.2.2</b>", 500, lh=1.15, ex="text-align:center")
-         + T(566, 353, 82, 18, "cost 10", 700, ex=C + ";background:#ffe36e;border-radius:12px")
-         + T(830, 353, 72, 18, "cost 5", 700, ex=C + ";background:#ffe36e;border-radius:12px")
-         + T(422, 384, 152, 18, "192.168.10.0/24", 700, ex=C)
-         + T(1180, 82, 290, 21, "другая область —<br>LSA-1 сюда не <span style='color:#ff6fa8'>передаётся</span>", 500, c="#fff", lh=1.2)
-         + T(1124, 378, 150, 16, "LSA-1<br>не передаётся<br>в другие области", 600, c="#e8336f", lh=1.15) + '</div>')
+         + T(676, 210, 110, 15, "Router ID<br><b style='font-size:21px'>1.1.1.1</b>", 500, lh=1.15, ex="text-align:center")
+         + T(958, 210, 110, 15, "Router ID<br><b style='font-size:21px'>2.2.2.2</b>", 500, lh=1.15, ex="text-align:center")
+         + T(560, 362, 82, 18, "cost 10", 700, ex=C + ";background:#ffe36e;border-radius:12px")
+         + T(840, 362, 72, 18, "cost 5", 700, ex=C + ";background:#ffe36e;border-radius:12px")
+         + T(424, 388, 152, 18, "192.168.10.0/24", 700, ex=C)
+         + T(1182, 80, 300, 21, "другая область —<br>LSA-1 сюда не <span style='color:#ff6fa8'>передаётся</span>", 500, c="#fff", lh=1.2)
+         + T(1120, 376, 150, 16, "LSA-1<br>не передаётся<br>в другие области", 600, c="#e8336f", lh=1.15) + '</div>')
 
 GIRL = ('<div class="step">' + img("o_lsa1_girl.png", "left:0;top:218px;width:372px")
         + '<div class="ab" style="position:absolute;left:46px;top:596px;width:220px;transform:rotate(-9deg);'
@@ -59,9 +80,9 @@ PANEL = ('<div class="step">' + B(365, 460, 690, 476, "rgba(255,255,255,.95)", 2
          + T(414, 562, 300, 18, "(Router ID автора)", 600, ex=NW)
          + T(734, 490, 312, 15, "Внутри LSA-1 перечислены<br>OSPF-соединения R1 и их параметры<br>(стоимость, тип сети и др.),<br>"
              "а не список IP-сетей.", 400, lh=1.32, ex=NW + ";background:#ffe1ec;border-radius:16px;padding:10px 14px;box-sizing:border-box;height:100px")
-         + img("o_lsa1_doc.png", "left:1000px;top:548px;width:45px")
-         + TBL + img("o_lsa1_cloud.png", "left:386px;top:672px;width:62px") + img("o_lsa1_rt.png", "left:386px;top:756px;width:64px")
-         + B(382, 840, 658, 80, "#ffe1ec", 16) + img("o_lsa1_bulb.png", "left:395px;top:852px;width:50px")
+         + svg(g4_glyph_at("doc", 1022, 572, 40, "#2f8fe8", 2), W, H)
+         + TBL + svg(cloud_icon(412, 708, .58, "#d6eafd", "#3f86d8") + puck(412, 780, 50, "b"), W, H)
+         + B(382, 840, 658, 80, "#ffe1ec", 16) + svg(g4_glyph_at("bulb", 420, 880, 46, "#1f1a33", 2), W, H)
          + T(482, 857, 540, 18, "LSA-1 описывает связи и параметры маршрутизатора,<br>а не просто список IP-сетей", 500, c="#c2185b", lh=1.35, ex=NW)
          + '</div>')
 
@@ -72,18 +93,23 @@ CARDS = ["Содержит OSPF-соединения<br>маршрутизато
          "ABR не пересылает LSA-1<br><span style='color:#1f5fae'>в другие области</span>"]
 
 
+II = ["list", "pin", "users", "radio", "ban"]
+JJ = ["link", "tree", "users", "redo", "ban"]
+JC = ["#ff5c9e", "#2f8fe8", "#2f8fe8", "#2f8fe8", "#ff3d6e"]
+
+
 def cards():
     out = []
     for i, t in enumerate(CARDS):
         cy = [512, 615, 712, 808, 905][i]
         out.append('<div class="step">' + B(1070, cy - 46, 454, 92, "rgba(255,255,255,.93)", 46, "border:2px solid #ece6ef")
-                   + img("o_lsa1_i%d.png" % (i + 1), "left:1078px;top:%dpx;width:88px" % (cy - 45))
+                   + g4_icon(II[i], 1080, cy - 42, 84, ["p", "b", "y", "p", "b"][i])
                    + T(1178, cy - 11 * (t.count("<br>") + 1), 270, 17.5, t, 600, lh=1.2, ex=NW)
-                   + img("o_lsa1_j%d.png" % (i + 1), "left:%dpx;top:%dpx" % (1480 if i == 2 else 1455, cy - 30)) + '</div>')
+                   + svg(g4_glyph_at(JJ[i], 1486, cy, 38, JC[i], 2.2), W, H) + '</div>')
     return "".join(out)
 
 
-FOOT = ('<div class="step">' + B(430, 955, 826, 50, "#e4dcfa", 25) + img("o_lsa1_book.png", "left:450px;top:962px;width:55px")
+FOOT = ('<div class="step">' + B(430, 955, 826, 50, "#e4dcfa", 25) + svg(g4_glyph_at("book", 478, 980, 40, "#2f8fe8", 2), W, H)
         + T(516, 966, 730, 18.5, "В <b style='font-weight:700'>OSPFv3</b> объявления о префиксах IPv6 организованы иначе, чем в OSPFv2.", 500, ex=NW)
         + '</div>')
 

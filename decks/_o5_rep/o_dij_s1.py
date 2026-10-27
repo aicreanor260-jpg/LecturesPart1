@@ -3,7 +3,9 @@
 Левая колонка поднята на 100px: в оригинале там двухстрочный заголовок, который даёт слайд."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from _o5_replib import bg, img
+from _o5_replib import bg, img  # noqa: F401
+from _o5_ikit import line, svg
+from _o5_g1kit import g1icon, g1antpuck
 
 W, H, TOP = 1672, 941, 165
 DY = -100  # сдвиг левой колонки
@@ -27,7 +29,20 @@ CSS = """<style>
 def row(y, name, f, v):
     y += DY
     return ('<div class="os1-row" style="top:%dpx"></div>%s<div class="os1-f" style="top:%dpx">%s:<br>%s = <b>%s</b></div>'
-            % (y, img("o_dij_s1_ar.png", "left:70px;top:%dpx;width:85px" % (y + 4)), y + 8, name, f, v))
+            % (y, g1icon("arrow", 74, y + 8, 72, "y"), y + 8, name, f, v))
+
+
+P = {"R1": (713, 285), "R5": (1400, 295), "R3": (1053, 480), "R2": (760, 650), "R4": (1400, 655)}
+
+
+def graph():
+    c = {k: (x, y + 25) for k, (x, y) in P.items()}
+    o = [line(c["R1"], c["R3"], "#fff38a", 20), line(c["R1"], c["R2"], "#fff38a", 20)]
+    for a, b in [("R1", "R5"), ("R1", "R3"), ("R1", "R2"), ("R2", "R3"), ("R3", "R5"), ("R3", "R4"), ("R5", "R4"), ("R2", "R4")]:
+        o.append(line(c[a], c[b], "#c99a00" if a == "R1" and b in ("R3", "R2") else "#2b4c7e", 4))
+    for k, (x, y) in P.items():
+        o.append(g1antpuck(x, y, 180, "p" if k in ("R1", "R2") else "b", k))
+    return svg("".join(o))
 
 
 def lb(x, y, w, big, small):
@@ -40,7 +55,7 @@ def wt(x, y, t):
 
 HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="os1-sub" style="top:%dpx">Стартуем из R1 и обновляем<br>метки соседей</div>' % (290 + DY),
-    '<div class="step">' + img("o_dij_s1_g.png", "left:560px;top:160px;width:1105px")
+    '<div class="step">' + graph()
     + wt(1012, 270, "15") + wt(880, 360, "10") + wt(1210, 366, "3") + wt(638, 444, "8") + wt(1424, 456, "16")
     + wt(886, 553, "11") + wt(1198, 551, "12") + wt(1042, 644, "16") + '</div>',
     '<div class="step">' + lb(648, 172, 140, "0", "(посещена)") + '</div>',
@@ -51,12 +66,12 @@ HTML = CSS + bg("bg5", W, H) + "".join([
     '<div class="step">' + row(656, "R5", "0 + 15", "15") + lb(1325, 172, 148, "15", "(не посещена)")
     + lb(1365, 528, 150, "<span style=\"font-size:52px\">∞</span>", "(не посещена)") + '</div>',
     '<div class="step"><div class="os1-box" style="left:40px;top:772px;width:695px;height:145px;background:#dcecfb"></div>'
-    + img("o_dij_s1_bulb.png", "left:55px;top:790px;width:120px") + img("o_dij_s1_dec.png", "left:590px;top:775px;width:50px")
+    + g1icon("bulb", 62, 796, 110, "y")
     + '<div class="os1-h" style="left:195px;top:792px">Правило обновления метки</div>'
     '<div class="os1-t" style="left:195px;top:840px;font-size:23px;line-height:1.35">Метка соседа меняется, если<br>новый путь короче текущего.</div>'
-    + img("o_dij_s1_to.png", "left:735px;top:820px;width:60px") + '</div>',
+    + svg(line((742, 845), (782, 845), "#ff5c9e", 7, mk="ap")) + '</div>',
     '<div class="step"><div class="os1-box" style="left:792px;top:772px;width:845px;height:145px;background:#ffe3ee"></div>'
-    + img("o_dij_s1_ok.png", "left:815px;top:790px;width:120px")
+    + g1icon("check", 820, 796, 110, "p")
     + '<div class="os1-h" style="left:955px;top:792px">Итог первого шага</div>'
     '<div class="os1-t" style="left:955px;top:838px">После проверки соседей помечаем <i>R1</i> как посещённую.<br>'
     'Следующая вершина — <i>R2</i> : её метка &nbsp;<em>8</em>&nbsp; минимальна.</div></div>',
