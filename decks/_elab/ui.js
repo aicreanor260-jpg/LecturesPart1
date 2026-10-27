@@ -639,6 +639,13 @@
       fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
     });
   }
+  // ссылка с портала курса: eltex-cli.html#lab=4.1 — сразу открыть лабу (режим текущий); неизвестный id — без реакции
+  function labFromHash() {
+    var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); if (!m || !EL.labs.byId(m[1])) return;
+    startLab(m[1]); if (location.hostname === 'net-cat.duckdns.org') $('bCourse').hidden = false;
+  }
+  window.addEventListener('hashchange', labFromHash);
+  setTimeout(labFromHash, 0);
   function renderLab(open) {
     if (!lab) return;
     var body = $('labbody');
