@@ -180,6 +180,18 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 .trace .t{font:600 15px/1.35 var(--f)}
 .trace .t.arp{color:var(--arp)}.trace .t.drop{color:var(--bad)}.trace .t.ok{color:var(--ok)}.trace .t.ip{color:var(--cy)}.trace .t.nat{color:var(--nat)}
 .trace .notes{font:500 12px var(--m);color:var(--bad);margin-top:3px}
+.trace .osi{margin-top:6px;font:500 12px/1.45 var(--m);color:#b9cfd2}.trace .osi b{color:var(--cy);display:inline-block;min-width:34px}.trace .osi button{margin-top:4px}
+.note-g rect{fill:rgba(255,198,92,.13);stroke:#ffc65c;stroke-dasharray:4 3}.note-g text{fill:#ffe2a8;font:600 13px var(--f)}body.mtest .note-g{cursor:move}
+.cap{display:flex;flex-direction:column;flex:1;min-height:0}.cap .cbar{display:flex;gap:6px;padding:6px 10px;align-items:center;border-bottom:1px solid rgba(111,227,234,.25)}
+.cap .cbar button,.cfgw .row button,.trace .osi button{border:1px solid var(--cy2);background:transparent;color:var(--cy);cursor:pointer;font:700 12px var(--m);padding:4px 10px}
+.cap .cbar button:hover,.cfgw .row button:hover,.trace .osi button:hover{background:var(--cy);color:#0e1b1e}.cap .cbar .cnt{font:500 12px var(--m);color:var(--dim)}
+.cap .cbar input{flex:1;min-width:0;background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 13px var(--m);padding:4px 6px}
+.cap .list{flex:1.3;overflow:auto;min-height:0}.cap table{width:100%;border-collapse:collapse;font:500 12px var(--m)}.cap th{position:sticky;top:0;background:#12262a;color:var(--cy);text-align:left;padding:3px 6px;white-space:nowrap}
+.cap td{padding:2px 6px;white-space:nowrap;color:#d8e6e8;border-bottom:1px solid rgba(255,255,255,.04)}.cap tr.p-ARP td{color:#ffd88a}.cap tr.p-STP td{color:#9aa9ad}.cap tr.p-ICMP td{color:#a6f2f6}.cap tr.p-TCP td,.cap tr.p-HTTP td,.cap tr.p-SSH td{color:#b8ffcf}.cap tr.p-UDP td,.cap tr.p-NTP td,.cap tr.p-DHCP td,.cap tr.p-Syslog td,.cap tr.p-TFTP td{color:#d9c2ff}
+.cap tr.on td{background:var(--cy);color:#0e1b1e}.cap tbody tr{cursor:pointer}
+.cap .det{flex:1;overflow:auto;min-height:0;border-top:1px solid rgba(111,227,234,.25);padding:6px 10px;font:500 12.5px/1.5 var(--m)}
+.det details{margin:0 0 3px}.det summary{cursor:pointer;color:#fff}.det summary i{font-style:normal;color:var(--rd);display:inline-block;min-width:40px}.det div{padding-left:24px;color:#b9cfd2}
+.cfgw{display:flex;flex-direction:column;flex:1;min-height:0;padding:8px 10px;gap:6px}.cfgw textarea{flex:1;min-height:0;background:#0a1416;color:#d8e6e8;border:1px solid var(--cy2);font:500 13px/1.4 var(--m);padding:8px;resize:none}
 .trace .x{border:0;background:none;color:var(--dim);font-size:20px;cursor:pointer}
 .toast{position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--rd);color:#1a0b0d;padding:8px 18px;z-index:9600;font-weight:700;letter-spacing:.06em;
   clip-path:var(--cut-s);opacity:0;transition:opacity .2s;pointer-events:none}
@@ -204,7 +216,7 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
   <div class="mode" id="mode" title="Работа — как на оборудовании; Тест — учебные инструменты: таблицы, путь пакета, часы, автопроверка"><button data-m="work" class="on">Работа</button><button data-m="test">Тест</button></div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
 </header>
-<svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
+<svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gn"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
 <div class="frame"></div><div class="ticks"></div>
 <div class="edge" id="edge"></div>
 <aside class="side" id="side">
@@ -332,6 +344,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show interfaces counters [gi1/0/1] · show interfaces gi1/0/1 · clear counters</td><td>MES: кадры unicast/multicast/broadcast и байты на портах</td></tr>
 <tr><td>show interfaces counters [gi1/0/1] · clear interfaces counters</td><td>ESR: счётчики интерфейсов</td></tr>
 <tr><td>show logging · no logging console</td><td>MES: журнал сообщений (линк, STP); ESR: <code>no syslog console</code></td></tr>
+</table>
+
+<h2>Учебные инструменты («Тест»)</h2>
+<table>
+<tr><td>ПКМ по кабелю → Захват трафика</td><td>кадры на кабеле как в Wireshark: MAC, VLAN, IP, протокол; щелчок — разбор по уровням; фильтр <code>icmp</code>, <code>!stp</code>, <code>vlan 10</code></td></tr>
+<tr><td>панель трассы ping</td><td>уровни кадра на каждом шаге; «Разбор подробно» — все поля</td></tr>
+<tr><td>Лабы → Редактор лабы · Открыть лабу (.json)</td><td>схема + задания; проверка в строке: <code>{ping PC1 10.0.0.1}</code></td></tr>
+<tr><td>ПКМ по полю → Заметка здесь · Ctrl+Z</td><td>подписи на схеме; отмена действий на поле</td></tr>
+<tr><td>ПКМ по устройству → Конфигурация текстом · Файл → Экспорт/Импорт</td><td>running-config MES и ESR текстом, применить как вставку в консоль</td></tr>
 </table>
 
 <h2>VPC и Debian</h2>
@@ -1063,7 +1084,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     st.mode = 'user'; st.ctx = a[0]; touch(st); }, 'Локальный пользователь');
   cmd('config', 'no username <w>', function (st, a) { if (!st.cand.users[a[0]]) return '% Пользователь не найден';
     delete st.cand.users[a[0]]; touch(st); });
-  cmd('user', 'password <w>', function (st, a) { st.cand.users[st.ctx].pw = a[0]; touch(st); }, 'Пароль пользователя');
+  cmd('user', 'password <w>', function (st, a) { st.cand.users[st.ctx].pw = a[0]; delete st.cand.users[st.ctx].pwEnc; touch(st); }, 'Пароль пользователя');
+  // пароль в виде хеша из running-config (перенос конфигурации): вход проверяется по хешу
+  cmd('user', 'password encrypted <w>', function (st, a) { var x = st.cand.users[st.ctx]; if (E().hash(x.pw || '').slice(0, 30) !== a[0]) { x.pw = null; x.pwEnc = a[0]; } touch(st); });
   cmd('user', 'privilege <n>', function (st, a) { if (a[0] < 1 || a[0] > 15) return '% Уровень привилегий 1–15';
     st.cand.users[st.ctx].priv = a[0]; touch(st); }, 'Уровень привилегий');
   cmd('config', 'ip ssh server', function (st) { st.cand.ssh = true; touch(st); }, 'Включить SSH-сервер');
@@ -1143,7 +1166,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
-      o.push('username ' + u, '  password encrypted ' + E().hash(x.pw || '').slice(0, 30), '  privilege ' + x.priv, 'exit'); });
+      o.push('username ' + u, '  password encrypted ' + (x.pwEnc || E().hash(x.pw || '').slice(0, 30)), '  privilege ' + x.priv, 'exit'); });
     o.push('');
     if (c.tz) o.push('clock timezone gmt ' + c.tz, '');
     if (c.banner.login) o.push('banner login "' + c.banner.login + '"');
@@ -2671,7 +2694,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
         return { ok: false, why: 'Request timed out', pk: pk };
       } else {
         steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + ', ' + srcMac + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
-          (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : '') + '. Коммутаторы по пути запомнили ' + srcMac, notes: fl.notes });
+          (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : '') + '. Коммутаторы по пути запомнили ' + srcMac, notes: fl.notes,
+          f: { type: 'arp', op: 1, smac: srcMac, dmac: 'ff:ff:ff:ff:ff:ff', sip: r.iface.ip, tip: r.nh } });
         if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене (другая VLAN, нет шлюза, кабель или порт выключен)', notes: fl.notes });
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
@@ -2683,10 +2707,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
       this.learn(ep.path, srcMac);
       if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
-        nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac });
+        nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac,
+        f: { type: 'arp', op: 2, smac: dmac, dmac: srcMac, sip: r.nh, tip: r.iface.ip } });
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
-        ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+        ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -2730,7 +2756,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     this.ctLast = ct;
     if (IP.ip2n(dst) === null) return { ok: false, why: 'Bad address', steps: steps };
     if (!this.ifaces(src).length) { steps.push({ k: 'drop', t: d.name + ': нет ни одного IP-адреса' }); return { ok: false, why: 'No IP address', steps: steps }; }
-    var f = this.send(src, { src: null, dst: dst, proto: proto || 'icmp', dport: dport || null }, steps, ct);
+    Net.eph = ((Net.eph || 0) + 1) % 16000;     // эфемерный порт клиента (для захвата трафика)
+    var f = this.send(src, { src: null, dst: dst, proto: proto || 'icmp', dport: dport || null, sport: proto && proto !== 'icmp' ? 49152 + Net.eph : null }, steps, ct);
     if (!f.ok) return { ok: false, why: f.why, steps: steps };
     if (f.dev === src && proto === 'icmp') return { ok: true, steps: steps, hops: [] };
     var fd = this.devs[f.dev];
@@ -2739,7 +2766,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       return { ok: false, why: 'Connection refused', steps: steps, dev: f.dev };
     }
     steps.push({ k: 'ok', t: fd.name + ' получил ' + (proto === 'icmp' ? 'ICMP echo request и отвечает echo reply' : 'запрос ' + proto.toUpperCase() + ':' + dport + ' и отвечает') });
-    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null }, steps, ct);
+    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct);
     if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз/NAT в обратную сторону' });
       return { ok: false, why: 'Request timed out', steps: steps }; }
     steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
@@ -2762,7 +2789,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
     var port = d.type === 'vpc' ? 'eth0' : 'ens3', cname = d.name;
     var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
-    steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes });
+    steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
+      f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
     var lease = null;
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
@@ -4081,19 +4109,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return c[id][port] || (c[id][port] = { iu: 0, im: 0, ib: 0, io: 0, ou: 0, om: 0, ob: 0, oo: 0, ie: 0, oe: 0, drop: 0 }); }
   P.ctrOf = function (id, port) { return ctr(this, id, port); };
   // кадр прошёл по сегменту: tx на порту отправителя, rx на порту получателя
-  P.countSeg = function (sg, cast, size) {
+  P.countSeg = function (sg, cast, size, f) {
     var l = this.links[sg.li]; if (!l) return;
     var fp = l.a.dev === sg.from ? l.a.port : l.b.port, tp = l.a.dev === sg.to ? l.a.port : l.b.port, n = size + (sg.tag !== null && sg.tag !== undefined ? 4 : 0);
     var a = ctr(this, sg.from, fp), b = ctr(this, sg.to, tp);
     a['o' + cast]++; a.oo += n; b['i' + cast]++; b.io += n;
-    if (this.onFrame) this.onFrame(sg, cast, n);
+    if (f && this.capFrame) this.capFrame(sg, f, n);
   };
   P.countSteps = function (steps, proto) {
     var s = this;
     (steps || []).forEach(function (st) {
       if (!st.segs || st.counted) return; st.counted = true;
-      var cast = st.k === 'arp' ? 'b' : 'u', size = st.k === 'ip' ? FSZ[st.proto || proto] || FSZ.icmp : FSZ.arp;
-      st.segs.forEach(function (sg) { s.countSeg(sg, cast, size); });
+      var cast = st.k === 'arp' ? 'b' : 'u', size = st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
+      st.segs.forEach(function (sg) { s.countSeg(sg, cast, size, st.f); });
     });
   };
   var req0 = P.request;
@@ -4111,7 +4139,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
           var L = s.lports(id).filter(function (x) { return x.name === ln; })[0]; if (!L || L.cfg.stpOff) return;
           var pr = s.peer(id, L.members[0]); if (!pr) return;
           for (var i = 0; i < Math.min(n, 3600); i++) {
-            var a = ctr(s, id, L.members[0]), b = ctr(s, pr.dev, pr.port); a.om++; a.oo += FSZ.bpdu; b.im++; b.io += FSZ.bpdu; } }); });
+            var a = ctr(s, id, L.members[0]), b = ctr(s, pr.dev, pr.port); a.om++; a.oo += FSZ.bpdu; b.im++; b.io += FSZ.bpdu;
+            if (s.capBpdu) s.capBpdu(id, L.members[0], ln); } }); });
     }
     if (s.onTick) s.onTick();
     return g;
@@ -4256,6 +4285,125 @@ vesr(config)#         do confirm  — подтвердить</pre>
   S.cmd('config', 'no syslog console', function (st) { st.cand.logcon = false; st.pending = true; }, 'Не выводить сообщения на консоль');
   S.cmd('config', 'syslog console', function (st) { st.cand.logcon = true; st.pending = true; }, 'Сообщения syslog на консоль');
   S.RUNX.push(function (c, o) { if (c.logcon === false) o.push('no syslog console'); });
+})(typeof window !== 'undefined' ? window : global);
+
+/* Кадры модели для учебных инструментов («Тест»): захват трафика на кабеле (как Wireshark в pnetlab)
+   и разбор кадра по уровням OSI (Ethernet / 802.1Q → ARP | IPv4 → ICMP | TCP | UDP, BPDU STP).
+   Сведения о кадре кладёт в шаги трассы net.js (поле f): MAC, IP, протокол, порты, TTL. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype;
+  var SVC = { 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
+  var PNUM = { icmp: 1, tcp: 6, udp: 17 };
+  var CAP_MAX = 2000;
+
+  // ---------------------------------------------------------------- захват на кабеле
+  P.capStart = function (li) { var l = this.links[li]; if (!l) return null;
+    var c = (this.caps = this.caps || []).filter(function (x) { return x.link === l; })[0];
+    if (!c) { c = { link: l, frames: [], t0: this.now, n: 0 }; this.caps.push(c); } return c; };
+  P.capStop = function (cap) { this.caps = (this.caps || []).filter(function (x) { return x !== cap; }); };
+  P.capFrame = function (sg, f, size) {
+    if (!this.caps || !this.caps.length || !f) return;
+    var l = this.links[sg.li], s = this;
+    this.caps.forEach(function (c) { if (c.link !== l) return;
+      var fr = row(s, c, sg, f, size); c.frames.push(fr); if (c.frames.length > CAP_MAX) c.frames.shift();
+      if (c.on) c.on(fr); });
+  };
+  function row(s, c, sg, f, size) {
+    var tag = sg.tag !== null && sg.tag !== undefined ? sg.tag : null;
+    return { no: ++c.n, t: Math.max(0, s.now - c.t0), from: s.devs[sg.from] ? s.devs[sg.from].name : '', to: s.devs[sg.to] ? s.devs[sg.to].name : '',
+             vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : 'IPv4',
+             sip: f.type === 'arp' ? f.sip : f.src || '', dip: f.type === 'arp' ? f.tip : f.dst || '', proto: proto(f), info: info(f) };
+  }
+  function proto(f) {
+    if (f.type === 'arp') return 'ARP'; if (f.type === 'stp') return 'STP';
+    if (f.dhcp) return 'DHCP';
+    if (f.proto === 'icmp') return 'ICMP';
+    var p = SVC[f.dport] || SVC[f.sport];
+    return f.proto === 'udp' && p ? p : f.proto.toUpperCase();
+  }
+  function info(f) {
+    if (f.type === 'arp') return f.op === 1 ? 'Who has ' + f.tip + '? Tell ' + f.sip : f.sip + ' is at ' + f.smac;
+    if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
+    if (f.dhcp) return 'DHCP ' + f.dhcp;
+    if (f.proto === 'icmp') return 'Echo (ping) ' + (f.reply ? 'reply' : 'request') + '  ttl=' + f.ttl;
+    var ports = (f.sport || '?') + ' → ' + (f.dport || '?');
+    if (f.proto === 'tcp') return ports + (f.reply ? ' [SYN, ACK]' : ' [SYN]') + ' Seq=0' + (f.reply ? ' Ack=1' : '') + ' Win=64240';
+    return ports + ' Len=' + (f.dport === 123 || f.sport === 123 ? 48 : 0);
+  }
+  EL.frameRow = function (f, tag, size) { return row({ now: 0, devs: {} }, { t0: 0, n: 0 }, { tag: tag }, f, size || 0); };
+
+  // ---------------------------------------------------------------- разбор по уровням
+  function hexType(t) { return t === 'arp' ? 'ARP (0x0806)' : 'IPv4 (0x0800)'; }
+  EL.decode = function (f, tag, size) {
+    var L = [], len = size || 0, tagged = tag !== null && tag !== undefined;
+    L.push({ osi: 'L1', name: 'Frame: ' + len + ' bytes on wire', fields: [['Длина кадра', len + ' байт (с FCS)']] });
+    if (f.type === 'stp') {
+      L.push({ osi: 'L2', name: 'IEEE 802.3 Ethernet, Src: ' + f.smac + ', Dst: 01:80:c2:00:00:00', fields: [['Destination', '01:80:c2:00:00:00 (Spanning-tree-(for-bridges)_00)'], ['Source', f.smac], ['Length', 39]] });
+      L.push({ osi: 'L2', name: 'Logical-Link Control', fields: [['DSAP', 'Spanning Tree BPDU (0x42)'], ['SSAP', 'Spanning Tree BPDU (0x42)'], ['Control field', 'U, func=UI (0x03)']] });
+      L.push({ osi: 'L2', name: 'Spanning Tree Protocol', fields: [['Protocol Identifier', 'Spanning Tree Protocol (0x0000)'],
+        ['Protocol Version Identifier', f.ver === 0 ? 'Spanning Tree (0)' : f.ver === 3 ? 'Multiple Spanning Tree (3)' : 'Rapid Spanning Tree (2)'],
+        ['BPDU Type', f.ver === 0 ? 'Configuration (0x00)' : 'Rapid/Multiple Spanning Tree (0x02)'], ['Root Identifier', f.rprio + ' / 0 / ' + f.rmac], ['Root Path Cost', f.cost],
+        ['Bridge Identifier', f.bprio + ' / 0 / ' + f.smacB], ['Port identifier', '0x' + f.port.toString(16)], ['Message Age', 0], ['Max Age', 20], ['Hello Time', 2], ['Forward Delay', 15]] });
+      return L;
+    }
+    var eth = [['Destination', f.dmac + (f.dmac === 'ff:ff:ff:ff:ff:ff' ? ' (Broadcast)' : '')], ['Source', f.smac]];
+    if (!tagged) eth.push(['Type', hexType(f.type)]); else eth.push(['Type', '802.1Q Virtual LAN (0x8100)']);
+    L.push({ osi: 'L2', name: 'Ethernet II, Src: ' + f.smac + ', Dst: ' + f.dmac, fields: eth });
+    if (tagged) L.push({ osi: 'L2', name: '802.1Q Virtual LAN, PRI: 0, DEI: 0, ID: ' + tag, fields: [['Priority (PCP)', 0], ['DEI', 0], ['VLAN ID', tag], ['Type', hexType(f.type)]] });
+    if (f.type === 'arp') {
+      L.push({ osi: 'L2/3', name: 'Address Resolution Protocol (' + (f.op === 1 ? 'request' : 'reply') + ')', fields: [['Hardware type', 'Ethernet (1)'],
+        ['Protocol type', 'IPv4 (0x0800)'], ['Hardware size', 6], ['Protocol size', 4], ['Opcode', f.op === 1 ? 'request (1)' : 'reply (2)'],
+        ['Sender MAC address', f.smac], ['Sender IP address', f.sip], ['Target MAC address', f.op === 1 ? '00:00:00:00:00:00' : f.dmac], ['Target IP address', f.tip]] });
+      return L;
+    }
+    var ipLen = Math.max(20, len - 18 - (tagged ? 4 : 0));
+    L.push({ osi: 'L3', name: 'Internet Protocol Version 4, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 4], ['Header Length', '20 bytes (5)'],
+      ['Differentiated Services Field', '0x00 (DSCP: CS0, ECN: Not-ECT)'], ['Total Length', ipLen], ['Flags', f.proto === 'udp' && f.dhcp ? '0x0' : '0x2, Don\'t fragment'],
+      ['Fragment Offset', 0], ['Time to Live', f.ttl], ['Protocol', f.proto.toUpperCase() + ' (' + PNUM[f.proto] + ')'], ['Source Address', f.src], ['Destination Address', f.dst]] });
+    if (f.proto === 'icmp') L.push({ osi: 'L3', name: 'Internet Control Message Protocol', fields: [['Type', f.reply ? '0 (Echo (ping) reply)' : '8 (Echo (ping) request)'], ['Code', 0],
+      ['Identifier (BE)', 1], ['Sequence Number (BE)', 1], ['Data', (ipLen - 28) + ' bytes']] });
+    if (f.proto === 'tcp') L.push({ osi: 'L4', name: 'Transmission Control Protocol, Src Port: ' + f.sport + ', Dst Port: ' + f.dport, fields: [['Source Port', f.sport], ['Destination Port', f.dport],
+      ['Sequence Number', '0 (relative)'], ['Acknowledgment Number', f.reply ? '1 (relative)' : 0], ['Flags', f.reply ? '0x012 (SYN, ACK)' : '0x002 (SYN)'], ['Window', 64240]] });
+    if (f.proto === 'udp') { L.push({ osi: 'L4', name: 'User Datagram Protocol, Src Port: ' + f.sport + ', Dst Port: ' + f.dport, fields: [['Source Port', f.sport], ['Destination Port', f.dport], ['Length', ipLen - 20]] });
+      var app = f.dhcp ? 'DHCP' : SVC[f.dport] || SVC[f.sport];
+      if (app && f.dhcp) L.push({ osi: 'L7', name: 'Dynamic Host Configuration Protocol (' + f.dhcp + ')', fields: [['Message type', 'Boot Request (1)'], ['Client MAC address', f.smac], ['Option (53)', 'DHCP Message Type (' + f.dhcp + ')']] });
+      else if (app) L.push({ osi: 'L7', name: app, fields: [['Порт службы', f.dport === 123 || f.dport === 514 || f.dport === 69 || f.dport === 53 ? f.dport : f.sport]] }); }
+    return L;
+  };
+
+  // ---------------------------------------------------------------- BPDU для захвата
+  P.capBpdu = function (id, port, lname) {
+    if (!this.caps || !this.caps.length) return;
+    var pr = this.peer(id, port); if (!pr) return;
+    var d = this.devs[id], st = d.st, root = this._stp && this.devs[this._stp.root[id]], rs = root ? root.st : st;
+    var mode = (st.stp || {}).mode || 'mst', ver = mode === 'stp' ? 0 : mode === 'mst' ? 3 : 2;
+    var num = (lname.match(/(\d+)$/) || [0, 1])[1];
+    this.capFrame({ li: pr.li, from: id, to: pr.dev, tag: null }, { type: 'stp', smac: EL.mac(d.name + port), dmac: '01:80:c2:00:00:00', smacB: st.bmac, ver: ver,
+      rprio: (rs.stp || { prio: 32768 }).prio, rmac: rs.bmac, bprio: (st.stp || { prio: 32768 }).prio, cost: this._stp ? this._stp.dist[id] || 0 : 0, port: 0x8000 + +num }, 64);
+  };
+
+  // ---------------------------------------------------------------- конфигурации текстом (экспорт/импорт)
+  EL.cfgText = function (d) { return d.type === 'mes' ? EL.E.showRun(d.st) : d.type === 'esr' ? EL.esr.showRun(d.st) : null; };
+  var cfgText = EL.cfgText;
+  // применить текст конфигурации, как будто его вставили в консоль: MES — configure … end; ESR — configure … end, commit, confirm
+  EL.applyConfig = function (n, id, text) {
+    var d = n.devs[id], errs = [], st = d.st; if (d.type !== 'mes' && d.type !== 'esr') return ['конфигурация текстом — только MES и ESR'];
+    var lines = String(text).split('\n').map(function (x) { return x.replace(/\s+$/, ''); }).filter(function (x) { return x.trim() && !/^\s*[!#]/.test(x); });
+    st.mode = 'priv'; n.exec(id, 'configure');
+    lines.forEach(function (l) { var r = n.exec(id, l.trim()); if (typeof r === 'string' && /^(%|Syntax error)/.test(r)) errs.push(d.name + ' «' + l.trim() + '» → ' + r.split('\n')[0]); });
+    n.exec(id, 'end'); st.mode = 'priv';
+    if (d.type === 'esr') { n.exec(id, 'commit'); n.exec(id, 'confirm'); }
+    return errs;
+  };
+  EL.exportConfigs = function (n) { return n.list().filter(function (d) { return d.type === 'mes' || d.type === 'esr'; })
+    .map(function (d) { return '! ==== ' + d.name + ' (' + d.model + ') ====\n' + cfgText(d); }).join('\n\n') + '\n'; };
+  EL.importConfigs = function (n, text) {
+    var errs = [], parts = String(text).split(/^! ==== (\S+)[^\n]*====\s*$/m);
+    for (var i = 1; i < parts.length; i += 2) { var d = n.byName(parts[i]); if (!d) { errs.push('нет устройства ' + parts[i]); continue; } errs = errs.concat(EL.applyConfig(n, d.id, parts[i + 1])); }
+    if (parts.length < 3) errs.push('в тексте нет заголовков «! ==== ИМЯ (модель) ====»');
+    return errs;
+  };
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
@@ -5202,6 +5350,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   'use strict';
   var EL = window.EL, $ = function (id) { return document.getElementById(id); };
   var NS = 'http://www.w3.org/2000/svg';
+  // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
+  var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
   var terms = {}, wins = {}, z = 60;
@@ -5279,7 +5430,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       g.addEventListener('dblclick', function (e) { e.stopPropagation(); openTerm(d.id); });
       g.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); devMenu(d, e); });
     });
-    stat();
+    stat(); X.onDraw();
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
   // ================================================================== модельное время: старение MAC/ARP
@@ -5288,6 +5439,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function setMode(m) {
     mode = m; document.body.classList.toggle('mtest', m === 'test');
     [].forEach.call($('mode').querySelectorAll('[data-m]'), function (x) { x.classList.toggle('on', x.dataset.m === m); });
+    X.onMode(m);
     if (m === 'work') { speed = 1; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x.dataset.sp === '1'); });
       stopTrace(); trace = null; Object.keys(wins).forEach(function (k) { if (/^(tb|task|help|ping)/.test(k)) closeWin(k, true); }); chips();
       if (tab === 'task' || tab === 'file') { tab = 'dev'; [].forEach.call($('stabs').querySelectorAll('[data-t]'), function (x) { x.classList.toggle('on', x.dataset.t === 'dev'); }); }
@@ -5319,7 +5471,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var p0 = toWorld(e.clientX, e.clientY), x0 = d.x, y0 = d.y;
     function mv(ev) { var p = toWorld(ev.clientX, ev.clientY); d.x = x0 + p.x - p0.x; d.y = y0 + p.y - p0.y;
       if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) draw(); }
-    function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null; draw(); }
+    function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null;
+      if (d.x !== x0 || d.y !== y0) X.rec({ k: 'move', name: d.name, x: x0, y: y0 }); draw(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
   // панорама пустого поля
@@ -5359,7 +5512,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
       item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
       (mode === 'test' ? item('ping', '⇢', 'Ping отсюда…') : '') + '<hr>' +
-      (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
+      X.items('dev') + (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
       function (a) {
         if (a === 'term') openTerm(d.id);
         if (a === 'props') openProps(d.id);
@@ -5370,12 +5523,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (a === 'on') boot(d.id, false);
         if (a === 'reload') boot(d.id, true);
         if (a === 'del') delDev(d.id);
+        return X.run('dev', a, d);
       });
   }
   function linkMenu(i, e) {
     selLink = i; draw(); var l = net.links[i];
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
-      item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { net.disconnect(i); selLink = null; draw(); refresh(); } });
+      X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
+        return X.run('link', a, i); });
   }
   function catalogGroups() {
     var g = {}, ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы ЦОД', 'Маршрутизаторы ESR', 'Конечные узлы'];
@@ -5385,7 +5540,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function addMenu(e) {
     var p = toWorld(e.clientX, e.clientY);
     var m = showMenu(e.clientX, e.clientY, '<div class="h">Добавить устройство</div><input class="q" placeholder="Поиск: MES2428, ESR, ПК…"><div class="list"></div><hr>' +
-      item('fit', '⤢', 'Показать всю схему') + item('clear', '✕', 'Очистить схему'), function (a, b) {
+      X.items('field') + item('fit', '⤢', 'Показать всю схему') + item('clear', '✕', 'Очистить схему'), function (a, b) {
+        X.run('field', a, p);
         if (a === 'add') addDev(b.dataset.m, p.x, p.y);
         if (a === 'fit') fit();
         if (a === 'clear') clearAll();
@@ -5397,8 +5553,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
           return '<button data-a="add" data-m="' + k + '"><span>+</span>' + k + '</button>'; }).join('') : ''; }).join(''); }
     q.addEventListener('input', fill); q.addEventListener('keydown', function (ev) { ev.stopPropagation(); }); fill(); setTimeout(function () { q.focus(); }, 0);
   }
-  function addDev(model, x, y) { var d = net.add(model, null, x, y); sel = d.id; draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
-  function delDev(id) { closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
+  function addDev(model, x, y) { var d = net.add(model, null, x, y); sel = d.id; X.rec({ k: 'add', name: d.name }); draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
+  function delDev(id) { X.rec(X.delOp(id)); closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
   function clearAll() { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); renderSide(); }
 
   // ================================================================== кабель
@@ -5413,7 +5569,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       '<label>' + esc(d.name) + ' — порт</label><select id="cpb">' + opts(fb) + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
     makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 360, h: 280, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
-      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value); if (err) { toast(err); return; } draw(); refresh(); toast('Кабель проложен'); }
+      if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value); if (err) { toast(err); return; }
+        X.rec({ k: 'con', l: X.linkArr(net.links[net.links.length - 1]) }); draw(); refresh(); toast('Кабель проложен'); }
       closeWin('cable'); });
   }
 
@@ -5460,7 +5617,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function checkLogin(d, u, p) {
     var U = d.type === 'esr' ? d.st.run.users : d.st.users;
     if (d.type === 'mes' && !Object.keys(U || {}).length) return u === 'admin' && p === 'admin';
-    return !!(U && U[u] && U[u].pw === p);
+    return !!(U && U[u] && (U[u].pw === p || (U[u].pwEnc && EL.E.hash(p).slice(0, 30) === U[u].pwEnc)));
   }
   // в режиме «Работа» — только то, что пишет устройство: русские подсказки эмулятора убираются
   var CYR = /[А-Яа-яЁё]/;
@@ -5701,6 +5858,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     $('trN').textContent = trace.title + ' · шаг ' + (trace.i + 1) + '/' + trace.steps.length + (trace.i === trace.steps.length - 1 ? (trace.ok ? ' · ДОСТАВЛЕНО' : ' · НЕ ДОСТАВЛЕНО') : '');
     $('trT').className = 't ' + cls; $('trT').textContent = s.t;
     $('trNotes').textContent = (s.notes || []).length && (s.k === 'drop' || s.k === 'arp') ? 'Отброшено по пути: ' + s.notes.join('; ') : '';
+    X.onStep(s);
     refreshTables();
     return anim && s.segs ? animSegs(s.segs, s.k === 'arp', { arp: '#ffc65c', arpr: '#ffc65c', ip: '#6fe3ea' }[s.k] || '#7dffb0') : 0;
   }
@@ -5762,7 +5920,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (tab === 'file') h = '<h4>Схема</h4><button class="act" data-s="save">Сохранить в файл</button><button class="act" data-s="open">Открыть файл</button>' +
       '<button class="act" data-s="fit">Показать всю схему</button><button class="act red" data-s="clear">Очистить</button>' +
       '<p class="note">Файл .json хранит устройства, кабели и все настройки. В браузере ничего не сохраняется само.</p>';
-    s.innerHTML = h;
+    s.innerHTML = h + X.side(tab);
     var q = $('sq'); if (q) q.addEventListener('input', function () { var v = q.value.trim().toLowerCase();
       [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; }); });
   }
@@ -5774,6 +5932,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var a = b.dataset.s;
     if (a === 'labwin') renderLab(true);
     if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
+    X.sideClick(a);
     if (a === 'save') save(); if (a === 'open') $('fOpen').click(); if (a === 'fit') fit(); if (a === 'clear') clearAll();
   });
 
@@ -5840,17 +5999,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
     makeWin('help', 'Справка', 'команды и управление', body, { x: 60, y: 70, w: Math.min(980, innerWidth - 120), h: innerHeight - 150 });
   }
   function save() {
-    var blob = new Blob([JSON.stringify(net.toJSON(), null, 1)], { type: 'application/json' }), a = document.createElement('a');
+    var j = net.toJSON(); X.saveX(j);
+    var blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'eltex-shema.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
+  function loadScheme(j) { var n = EL.Net.fromJSON(j); lab = null; task = null; resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
+    X.loadX(j); draw(); fit(); renderSide(); }
   $('fOpen').addEventListener('change', function () { var f = this.files[0]; if (!f) return; var rd = new FileReader();
-    rd.onload = function () { try { var n = EL.Net.fromJSON(JSON.parse(rd.result)); lab = null; task = null; resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
-        draw(); fit(); toast('Схема загружена: ' + net.list().length + ' устройств'); } catch (err) { toast('Не удалось открыть: ' + err.message); } };
+    rd.onload = function () { try { loadScheme(JSON.parse(rd.result)); toast('Схема загружена: ' + net.list().length + ' устройств'); } catch (err) { toast('Не удалось открыть: ' + err.message); } };
     rd.readAsText(f); this.value = ''; });
   document.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.key === 'Escape') { closeMenu(); if (cable) { cable = null; $('ghost').style.display = 'none'; draw(); } }
-    if (e.key === 'Delete') { if (selLink !== null) { net.disconnect(selLink); selLink = null; draw(); refresh(); } else if (sel) delDev(sel); }
+    if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); X.undo(); }
+    if (e.key === 'Delete') { if (selLink !== null) { X.rec({ k: 'dis', l: X.linkArr(net.links[selLink]) }); net.disconnect(selLink); selLink = null; draw(); refresh(); } else if (sel) delDev(sel); }
   });
   var tt = null;
   function toast(t) { var x = $('toast'); x.textContent = t; x.classList.add('on'); clearTimeout(tt); tt = setTimeout(function () { x.classList.remove('on'); }, 2600); }
@@ -5863,7 +6025,230 @@ vesr(config)#         do confirm  — подтвердить</pre>
     draw(); setTimeout(fit, 30);
   })();
   window.addEventListener('resize', applyView);
-  window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld };
+  window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
+    mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
+    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme };
+})();
+
+/* Учебные инструменты режима «Тест» поверх ui.js: захват трафика на кабеле (как Wireshark в pnetlab), разбор шага трассы по уровням OSI,
+   редактор лабы без кода (схема + текст задания + проверки {ping …} → .json), заметки на схеме, отмена действий на поле (Ctrl+Z),
+   экспорт/импорт конфигураций текстом. Заметки и лаба из файла видны и в режиме «Работа». */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  function net() { return U.net(); }
+  function test() { return U.mode() === 'test'; }
+  function btn(a, ic, t) { return '<button data-a="' + a + '"><span>' + ic + '</span>' + t + '</button>'; }
+
+  // ================================================================== отмена действий на поле
+  var stack = [];
+  function linkArr(l) { var n = net(); return l ? [n.devs[l.a.dev].name, l.a.port, n.devs[l.b.dev].name, l.b.port] : null; }
+  function findLink(a) { var n = net(), A = n.byName(a[0]), B = n.byName(a[2]); if (!A || !B) return -1;
+    for (var i = 0; i < n.links.length; i++) { var l = n.links[i];
+      if ((l.a.dev === A.id && l.a.port === a[1] && l.b.dev === B.id && l.b.port === a[3]) || (l.b.dev === A.id && l.b.port === a[1] && l.a.dev === B.id && l.a.port === a[3])) return i; }
+    return -1; }
+  X.linkArr = linkArr;
+  X.delOp = function (id) { var n = net(), d = n.devs[id];
+    return { k: 'del', dev: { name: d.name, model: d.model, x: d.x, y: d.y, off: !!d.off, st: EL.clone(d.st) },
+             links: n.links.filter(function (l) { return l.a.dev === id || l.b.dev === id; }).map(linkArr) }; };
+  X.rec = function (op) { if (!op) return; stack.push(op); if (stack.length > 50) stack.shift(); };
+  var OPN = { move: 'перемещение', add: 'добавление устройства', del: 'удаление устройства', con: 'новый кабель', dis: 'удаление кабеля', note: 'заметка' };
+  X.undo = function () {
+    if (!test()) return;
+    var op = stack.pop(), n = net(); if (!op) { U.toast('Отменять нечего'); return; }
+    var d;
+    if (op.k === 'move') { d = n.byName(op.name); if (d) { d.x = op.x; d.y = op.y; } }
+    if (op.k === 'add') { d = n.byName(op.name); if (d) { U.closeWin('t' + d.id); U.closeWin('p' + d.id); n.remove(d.id); } }
+    if (op.k === 'del') { var v = op.dev; d = n.add(v.model, v.name, v.x, v.y); d.st = EL.clone(v.st); EL.attach(d.st, n, d.id); d.off = v.off;
+      op.links.forEach(function (a) { var A = n.byName(a[0]), B = n.byName(a[2]); if (A && B) n.connect(A.id, a[1], B.id, a[3]); }); }
+    if (op.k === 'con') { var i = findLink(op.l); if (i >= 0) n.disconnect(i); }
+    if (op.k === 'dis') { var A = n.byName(op.l[0]), B = n.byName(op.l[2]); if (A && B) n.connect(A.id, op.l[1], B.id, op.l[3]); }
+    if (op.k === 'note') { n.notes = op.before; }
+    n.gen++; U.draw(); U.refresh(); U.toast('Отменено: ' + (OPN[op.k] || op.k));
+  };
+
+  // ================================================================== меню
+  var ITEMS = {
+    dev: function () { return test() ? btn('cfg', '⇅', 'Конфигурация текстом…') : ''; },
+    link: function () { return test() ? btn('cap', '◉', 'Захват трафика') : ''; },
+    field: function () { return test() ? btn('note', '✎', 'Заметка здесь') : ''; }
+  };
+  X.items = function (k) { return ITEMS[k] ? ITEMS[k]() : ''; };
+  X.run = function (k, a, arg) {
+    if (k === 'link' && a === 'cap') openCap(arg);
+    if (k === 'dev' && a === 'cfg') openCfg(arg.id);
+    if (k === 'field' && a === 'note') editNote(null, arg);
+  };
+  X.onMode = function (m) { if (m === 'work') Object.keys(U.wins).forEach(function (k) { if (/^(cap|cfg|osi|nted|led)/.test(k)) U.closeWin(k, true); }); };
+
+  // ================================================================== захват трафика
+  var capSeq = 0;
+  function openCap(li) {
+    var n = net(), l = n.links[li]; if (!l) return;
+    var key = 'cap' + (++capSeq), cap = n.capStart(li), title = n.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + n.devs[l.b.dev].name + ' ' + l.b.port;
+    var body = document.createElement('div'); body.className = 'cap';
+    body.innerHTML = '<div class="cbar"><button data-c="pause">❚❚ Пауза</button><button data-c="clear">Очистить</button>' +
+      '<input placeholder="Фильтр: icmp, arp, !stp, 192.168.1.10, vlan 10…" spellcheck="false"><span class="cnt"></span></div>' +
+      '<div class="list"><table><thead><tr><th>No.</th><th>Time</th><th>Src MAC</th><th>Dst MAC</th><th>VLAN</th><th>Type</th><th>Src IP</th><th>Dst IP</th><th>Protocol</th><th>Len</th><th>Info</th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="det">Выберите кадр — разбор по уровням. Захват идёт, пока окно открыто: отправьте ping через этот кабель.</div>';
+    U.makeWin(key, 'Захват', title, body, { w: Math.min(1040, innerWidth - 40), h: Math.min(560, innerHeight - 120), x: 20, y: 70 });
+    var tb = body.querySelector('tbody'), q = body.querySelector('input'), det = body.querySelector('.det'), cnt = body.querySelector('.cnt'), paused = false, selNo = null, pend = false;
+    function match(r) { var f = q.value.trim().toLowerCase(); if (!f) return true;
+      return f.split(/\s*,\s*|\s+and\s+/).every(function (w) { var neg = w.charAt(0) === '!'; if (neg) w = w.slice(1).trim(); if (!w) return true;
+        var hay = [r.proto, r.type, r.sip, r.dip, r.smac, r.dmac, r.info, r.vlan !== null ? 'vlan ' + r.vlan : ''].join(' ').toLowerCase(), hit = hay.indexOf(w) >= 0;
+        return neg ? !hit : hit; }); }
+    function tr(r) { return '<tr data-no="' + r.no + '" class="p-' + r.proto + (r.no === selNo ? ' on' : '') + '"><td>' + r.no + '</td><td>' + r.t.toFixed(3) + '</td><td>' + r.smac + '</td><td>' + r.dmac + '</td><td>' +
+      (r.vlan !== null ? r.vlan : '') + '</td><td>' + r.type + '</td><td>' + (r.sip || '') + '</td><td>' + (r.dip || '') + '</td><td>' + r.proto + '</td><td>' + r.len + '</td><td>' + esc(r.info) + '</td></tr>'; }
+    function render() { pend = false; if (!U.wins[key]) return;
+      var L = cap.frames.filter(match), lst = body.querySelector('.list'), atEnd = lst.scrollTop + lst.clientHeight >= lst.scrollHeight - 20;
+      tb.innerHTML = L.slice(-600).map(tr).join(''); cnt.textContent = L.length + ' / ' + cap.frames.length; if (atEnd) lst.scrollTop = lst.scrollHeight; }
+    cap.on = function () { if (!U.wins[key]) { net().capStop(cap); return; } if (!paused && !pend) { pend = true; setTimeout(render, 120); } };
+    q.addEventListener('input', render); q.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-c]');
+      if (b && b.dataset.c === 'pause') { paused = !paused; b.textContent = paused ? '▶ Дальше' : '❚❚ Пауза'; if (!paused) render(); }
+      if (b && b.dataset.c === 'clear') { cap.frames = []; selNo = null; det.textContent = ''; render(); }
+      var row = e.target.closest('tr[data-no]'); if (!row) return;
+      selNo = +row.dataset.no; var r = cap.frames.filter(function (x) { return x.no === selNo; })[0]; if (!r) return;
+      [].forEach.call(tb.querySelectorAll('tr.on'), function (x) { x.classList.remove('on'); }); row.classList.add('on');
+      det.innerHTML = '<div style="padding:0;color:var(--dim)">' + esc(r.from + ' → ' + r.to) + '</div>' + layersHtml(EL.decode(r.f, r.vlan, r.len), true);
+    });
+    render();
+    U.toast('Захват на кабеле ' + title + ' — пока окно открыто');
+  }
+  function layersHtml(L, open) {
+    return L.map(function (x, i) { return '<details' + (open && i > 0 ? ' open' : '') + '><summary><i>' + x.osi + '</i>' + esc(x.name) + '</summary>' +
+      x.fields.map(function (f) { return '<div>' + esc(f[0]) + ': ' + esc(String(f[1])) + '</div>'; }).join('') + '</details>'; }).join('');
+  }
+
+  // ================================================================== разбор шага трассы по уровням OSI
+  var lastStep = null;
+  X.onStep = function (s) {
+    var box = document.getElementById('trOsi');
+    if (!box) { box = document.createElement('div'); box.id = 'trOsi'; box.className = 'osi'; document.getElementById('trNotes').parentNode.appendChild(box);
+      box.addEventListener('click', function (e) { if (e.target.closest('[data-o]') && lastStep) openOsi(lastStep); }); }
+    lastStep = s && s.f ? s : null;
+    if (!lastStep) { box.innerHTML = ''; return; }
+    var tags = (s.segs || []).map(function (g) { return g.tag; }).filter(function (t, i, a) { return t !== null && t !== undefined && a.indexOf(t) === i; });
+    var L = EL.decode(s.f, tags.length ? tags[0] : null, 0).slice(1);
+    box.innerHTML = L.map(function (x) { return '<div><b>' + x.osi + '</b>' + esc(x.name) + '</div>'; }).join('') +
+      (tags.length ? '<div><b></b>тег 802.1Q на сегментах: VLAN ' + tags.join(', ') + ' (на access-портах и у ПК кадр без тега)</div>' : '') +
+      '<button data-o="1">Разбор подробно</button>';
+  };
+  function openOsi(s) {
+    var tag = (s.segs || []).map(function (g) { return g.tag; }).filter(function (t) { return t !== null && t !== undefined; })[0];
+    var body = document.createElement('div'); body.className = 'cap';
+    body.innerHTML = '<div class="det" style="border:0">' + '<p style="margin:0 0 6px;color:var(--dim)">' + esc(s.t) + '</p>' + layersHtml(EL.decode(s.f, tag === undefined ? null : tag, 0), true) + '</div>';
+    U.closeWin('osi'); U.makeWin('osi', 'Разбор кадра', 'уровни OSI', body, { w: 560, h: Math.min(520, innerHeight - 160) });
+  }
+
+  // ================================================================== заметки на схеме
+  X.onDraw = function () {
+    var g = document.getElementById('gn'), n = net(); if (!g) return; g.innerHTML = '';
+    (n.notes || []).forEach(function (o) {
+      var lines = String(o.t).split('\n'), w = Math.max.apply(null, lines.map(function (x) { return x.length; })) * 7.6 + 20, h = lines.length * 18 + 12;
+      var ng = U.el('g', { 'class': 'note-g', transform: 'translate(' + o.x + ',' + o.y + ')' }, g);
+      U.el('rect', { x: 0, y: 0, width: w, height: h, rx: 4 }, ng);
+      lines.forEach(function (x, i) { U.el('text', { x: 10, y: 20 + i * 18 }, ng).textContent = x; });
+      ng.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button !== 0 || !test()) return; dragNote(e, o); });
+      ng.addEventListener('dblclick', function (e) { e.stopPropagation(); if (test()) editNote(o); });
+      ng.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); if (test()) editNote(o); });
+    });
+  };
+  function snapNotes() { return EL.clone(net().notes || []); }
+  function dragNote(e, o) {
+    var p0 = U.toWorld(e.clientX, e.clientY), x0 = o.x, y0 = o.y, before = snapNotes();
+    function mv(ev) { var p = U.toWorld(ev.clientX, ev.clientY); o.x = x0 + p.x - p0.x; o.y = y0 + p.y - p0.y; X.onDraw(); }
+    function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); if (o.x !== x0 || o.y !== y0) X.rec({ k: 'note', before: before }); }
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
+  }
+  function editNote(o, p) {
+    var body = document.createElement('div'); body.className = 'cfgw';
+    body.innerHTML = '<textarea spellcheck="false" placeholder="Текст заметки: подпись сети, VLAN, адреса…"></textarea><div class="row"><button class="pri" data-n="ok">Сохранить</button>' +
+      (o ? '<button data-n="del">Удалить</button>' : '') + '<button data-n="no">Отмена</button></div>';
+    U.closeWin('nted'); U.makeWin('nted', 'Заметка', 'подпись на схеме', body, { w: 420, h: 260 });
+    var ta = body.querySelector('textarea'); ta.value = o ? o.t : ''; ta.focus(); ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-n]'); if (!b) return; var n = net(), before = snapNotes(), a = b.dataset.n;
+      if (a === 'ok' && ta.value.trim()) { if (o) o.t = ta.value.trim(); else (n.notes = n.notes || []).push({ x: p.x, y: p.y, t: ta.value.trim() }); X.rec({ k: 'note', before: before }); }
+      if (a === 'del' && o) { n.notes = n.notes.filter(function (x) { return x !== o; }); X.rec({ k: 'note', before: before }); }
+      U.closeWin('nted'); X.onDraw(); });
+  }
+
+  // ================================================================== лаба из файла: схема + текст задания + проверки
+  // задание — по строке; в конце строки можно указать проверку: {ping PC1 192.168.1.1} или {http PC1 10.0.0.5}
+  var ulab = null;
+  X.saveX = function (j) { var n = net(); if (n.notes && n.notes.length) j.notes = n.notes; if (ulab) j.lab = ulab; };
+  X.loadX = function (j) { var n = net(); n.notes = Array.isArray(j.notes) ? j.notes : []; stack = [];
+    ulab = j.lab && typeof j.lab === 'object' ? { title: String(j.lab.title || ''), goal: String(j.lab.goal || ''), tasks: (j.lab.tasks || []).map(String) } : null;
+    if (ulab) showULab(); };
+  function parseTask(t) { var m = String(t).match(/^(.*?)\s*\{\s*(ping|http)\s+(\S+)\s+(\S+)\s*\}\s*$/i); return m ? { t: m[1], chk: { k: m[2].toLowerCase(), from: m[3], to: m[4] } } : { t: t, chk: null }; }
+  function showULab() {
+    if (!ulab) return; var key = 'ulab', body = document.getElementById('ulabbody');
+    if (!U.wins[key]) { body = document.createElement('div'); body.className = 'pad'; body.id = 'ulabbody';
+      U.makeWin(key, 'Задание', ulab.title, body, { x: 30, y: 80, w: 470, h: Math.min(560, innerHeight - 160) });
+      body.addEventListener('click', function (e) { if (e.target.closest('[data-u="chk"]')) showULab(); }); }
+    var ts = ulab.tasks.map(parseTask), ok = 0, hasChk = ts.some(function (x) { return x.chk; });
+    var li = ts.map(function (x) { var y = null;
+      if (test() && x.chk) { y = x.chk.k === 'ping' ? net().reach(x.chk.from, x.chk.to) : net().http(x.chk.from, x.chk.to); if (y) ok++; }
+      return '<li class="' + (y ? 'ok' : '') + '">' + esc(x.t) + '</li>'; }).join('');
+    body.innerHTML = '<div class="k">Лабораторная из файла</div><h2>' + esc(ulab.title) + '</h2><p>' + esc(ulab.goal) + '</p><ol>' + li + '</ol>' +
+      (test() && hasChk ? '<div class="sum ' + (ok === ts.filter(function (x) { return x.chk; }).length ? 'ok' : '') + '">Проверки: ' + ok + ' из ' + ts.filter(function (x) { return x.chk; }).length +
+        '</div><div class="row"><button class="pri" data-u="chk">Проверить</button></div>' : '');
+  }
+  function openLabEditor() {
+    var body = document.createElement('div'), L = ulab || { title: '', goal: '', tasks: [] }; body.className = 'cfgw';
+    body.innerHTML = '<label>Название</label><input id="leT" class="q"><label>Цель работы</label><input id="leG" class="q">' +
+      '<label>Задания — по одному на строку; проверка в конце строки: {ping PC1 192.168.1.1} или {http PC1 10.0.0.5}</label><textarea id="leS" spellcheck="false"></textarea>' +
+      '<div class="row"><button class="pri" data-l="save">Сохранить лабу (.json)</button><button data-l="show">Показать окно задания</button><button data-l="no">Закрыть</button></div>';
+    U.closeWin('led'); U.makeWin('led', 'Редактор лабы', 'схема на поле + текст задания', body, { w: 620, h: 520 });
+    var t = body.querySelector('#leT'), g = body.querySelector('#leG'), s = body.querySelector('#leS');
+    t.value = L.title; g.value = L.goal; s.value = L.tasks.join('\n');
+    [t, g, s].forEach(function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-l]'); if (!b) return;
+      ulab = { title: t.value.trim() || 'Лабораторная', goal: g.value.trim(), tasks: s.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean) };
+      if (b.dataset.l === 'save') { var j = net().toJSON(); X.saveX(j); download((ulab.title.replace(/[^\wА-Яа-яЁё.-]+/g, '_') || 'lab') + '.json', JSON.stringify(j, null, 1), 'application/json'); }
+      if (b.dataset.l === 'show') { U.closeWin('ulab'); showULab(); }
+      if (b.dataset.l === 'no') U.closeWin('led'); });
+  }
+  function download(name, text, type) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: type })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+
+  // ================================================================== конфигурации текстом
+  function cfgText(d) { return EL.cfgText(d); }
+  function openCfg(id) {
+    var n = net(), d = n.devs[id], t = cfgText(d); if (t === null) { U.toast('Конфигурация текстом — для MES и ESR'); return; }
+    var body = document.createElement('div'); body.className = 'cfgw';
+    body.innerHTML = '<textarea spellcheck="false"></textarea><div class="out-e" style="color:var(--bad);font:500 12px var(--m)"></div>' +
+      '<div class="row"><button class="pri" data-g="apply">Применить к ' + esc(d.name) + '</button><button data-g="copy">Копировать</button><button data-g="file">Сохранить .txt</button></div>';
+    var key = 'cfg' + id; U.closeWin(key); U.makeWin(key, 'Конфигурация ' + d.name, d.model + ' · running-config', body, { w: 600, h: Math.min(560, innerHeight - 140) });
+    var ta = body.querySelector('textarea'), er = body.querySelector('.out-e'); ta.value = t; ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-g]'); if (!b) return; var a = b.dataset.g;
+      if (a === 'copy') { ta.select(); try { document.execCommand('copy'); U.toast('Скопировано'); } catch (x) { U.toast('Выделено — Ctrl+C'); } }
+      if (a === 'file') download(d.name + '.txt', ta.value, 'text/plain');
+      if (a === 'apply') { var errs = EL.applyConfig(net(), id, ta.value); er.textContent = errs.join('\n'); ta.value = cfgText(d); U.draw(); U.refresh();
+        U.toast(errs.length ? 'Применено с ошибками: ' + errs.length : 'Конфигурация применена'); } });
+  }
+
+  // ================================================================== левая панель
+  X.side = function (tab) {
+    if (tab === 'lab') return '<h4>Лаба из файла</h4><button class="act" data-s="open">Открыть лабу (.json)</button>' + (ulab ? '<button class="act" data-s="ulab">Окно задания: ' + esc(ulab.title) + '</button>' : '') +
+      (test() ? '<button class="act" data-s="led">Редактор лабы</button><p class="note">Соберите схему на поле, напишите задание — сохраните .json и раздайте студентам. Строка задания может заканчиваться проверкой {ping PC1 10.0.0.1}.</p>' : '');
+    if (tab === 'file') return '<h4>Конфигурации текстом</h4><button class="act" data-s="cfgx">Экспорт всех (.txt)</button><button class="act" data-s="cfgi">Импорт (.txt)</button>' +
+      '<p class="note">Текст running-config всех MES и ESR с заголовками «! ==== ИМЯ ====». Импорт применяет каждый блок к устройству с тем же именем. ПКМ по устройству → «Конфигурация текстом» — для одного. Ctrl+Z — отменить действие на поле.</p>';
+    return '';
+  };
+  var fin = document.createElement('input'); fin.type = 'file'; fin.accept = '.txt,text/plain'; fin.hidden = true; document.body.appendChild(fin);
+  fin.addEventListener('change', function () { var f = this.files[0]; if (!f) return; var rd = new FileReader();
+    rd.onload = function () { var errs = EL.importConfigs(net(), rd.result); U.draw(); U.refresh(); U.toast(errs.length ? 'Импорт: ошибок ' + errs.length + ' — ' + errs[0] : 'Конфигурации применены'); };
+    rd.readAsText(f); this.value = ''; });
+  X.sideClick = function (a) {
+    if (a === 'led') openLabEditor();
+    if (a === 'ulab') showULab();
+    if (a === 'cfgx') download('configs.txt', EL.exportConfigs(net()), 'text/plain');
+    if (a === 'cfgi') fin.click();
+  };
 })();
 
 </script>

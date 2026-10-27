@@ -108,6 +108,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show logging · no logging console</td><td>MES: журнал сообщений (линк, STP); ESR: <code>no syslog console</code></td></tr>
 </table>
 
+<h2>Учебные инструменты («Тест»)</h2>
+<table>
+<tr><td>ПКМ по кабелю → Захват трафика</td><td>кадры на кабеле как в Wireshark: MAC, VLAN, IP, протокол; щелчок — разбор по уровням; фильтр <code>icmp</code>, <code>!stp</code>, <code>vlan 10</code></td></tr>
+<tr><td>панель трассы ping</td><td>уровни кадра на каждом шаге; «Разбор подробно» — все поля</td></tr>
+<tr><td>Лабы → Редактор лабы · Открыть лабу (.json)</td><td>схема + задания; проверка в строке: <code>{ping PC1 10.0.0.1}</code></td></tr>
+<tr><td>ПКМ по полю → Заметка здесь · Ctrl+Z</td><td>подписи на схеме; отмена действий на поле</td></tr>
+<tr><td>ПКМ по устройству → Конфигурация текстом · Файл → Экспорт/Импорт</td><td>running-config MES и ESR текстом, применить как вставку в консоль</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

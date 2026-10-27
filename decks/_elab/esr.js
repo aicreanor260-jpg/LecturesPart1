@@ -102,7 +102,9 @@
     st.mode = 'user'; st.ctx = a[0]; touch(st); }, 'Локальный пользователь');
   cmd('config', 'no username <w>', function (st, a) { if (!st.cand.users[a[0]]) return '% Пользователь не найден';
     delete st.cand.users[a[0]]; touch(st); });
-  cmd('user', 'password <w>', function (st, a) { st.cand.users[st.ctx].pw = a[0]; touch(st); }, 'Пароль пользователя');
+  cmd('user', 'password <w>', function (st, a) { st.cand.users[st.ctx].pw = a[0]; delete st.cand.users[st.ctx].pwEnc; touch(st); }, 'Пароль пользователя');
+  // пароль в виде хеша из running-config (перенос конфигурации): вход проверяется по хешу
+  cmd('user', 'password encrypted <w>', function (st, a) { var x = st.cand.users[st.ctx]; if (E().hash(x.pw || '').slice(0, 30) !== a[0]) { x.pw = null; x.pwEnc = a[0]; } touch(st); });
   cmd('user', 'privilege <n>', function (st, a) { if (a[0] < 1 || a[0] > 15) return '% Уровень привилегий 1–15';
     st.cand.users[st.ctx].priv = a[0]; touch(st); }, 'Уровень привилегий');
   cmd('config', 'ip ssh server', function (st) { st.cand.ssh = true; touch(st); }, 'Включить SSH-сервер');
@@ -182,7 +184,7 @@
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
-      o.push('username ' + u, '  password encrypted ' + E().hash(x.pw || '').slice(0, 30), '  privilege ' + x.priv, 'exit'); });
+      o.push('username ' + u, '  password encrypted ' + (x.pwEnc || E().hash(x.pw || '').slice(0, 30)), '  privilege ' + x.priv, 'exit'); });
     o.push('');
     if (c.tz) o.push('clock timezone gmt ' + c.tz, '');
     if (c.banner.login) o.push('banner login "' + c.banner.login + '"');

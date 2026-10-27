@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -462,6 +462,46 @@ EL.labs.LABS.forEach(runLab);
   n.power(r.id, false); ev = n.events();
   chk('ESR выключен → у соседа link DOWN', ev.some(function (e) { return e.id === sw.id && /gi 1\/0\/1 link status DOWN/.test(e.msg); }) || /gi 1\/0\/1 link status DOWN/.test(n.exec(sw.id, 'show logging')));
   console.log('✓ живая консоль');
+})();
+
+// учебные инструменты: захват трафика на кабеле, разбор кадра по уровням, конфигурации текстом
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), pc = n.add('VPC', 'PC1');
+  n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', pc.id, 'eth0');
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'exit',
+                           'interface gi1/0/2', 'switchport access vlan 10', 'end'],
+                     R1: ['configure', 'interface gi1/0/1.10', 'ip address 192.168.10.1/24', 'ip firewall disable', 'end', 'commit', 'confirm'],
+                     PC1: ['ip 192.168.10.10/24 192.168.10.1'] });
+  var capT = n.capStart(0), capA = n.capStart(1);
+  chk('ping через транк', n.ping(pc.id, '192.168.10.1').ok);
+  var fT = capT.frames, fA = capA.frames;
+  chk('захват: ARP-запрос, ответ, ICMP request/reply на кабеле к ПК', ['Who has 192.168.10.1? Tell 192.168.10.10', '192.168.10.1 is at'].every(function (s) { return fA.some(function (f) { return f.info.indexOf(s) === 0; }); }) &&
+      fA.some(function (f) { return f.proto === 'ICMP' && /request/.test(f.info); }) && fA.some(function (f) { return f.proto === 'ICMP' && /reply/.test(f.info); }), fA.map(function (f) { return f.info; }).join(' | '));
+  chk('захват: на транке кадры с тегом VLAN 10, у ПК без тега', fT.length && fT.every(function (f) { return f.vlan === 10; }) && fA.every(function (f) { return f.vlan === null; }));
+  var req = fA.filter(function (f) { return f.proto === 'ICMP' && /request/.test(f.info); })[0], rep = fT.filter(function (f) { return f.proto === 'ICMP' && /reply/.test(f.info); })[0];
+  chk('ICMP: MAC отправителя/получателя, TTL 64', req && req.smac === EL.mac('PC1eth0') && req.sip === '192.168.10.10' && req.dip === '192.168.10.1' && req.f.ttl === 64 && rep && rep.sip === '192.168.10.1');
+  var L = EL.decode(rep.f, rep.vlan, rep.len);
+  chk('разбор: Ethernet II → 802.1Q → IPv4 → ICMP', L.map(function (x) { return x.osi; }).join(',') === 'L1,L2,L2,L3,L3' && /ID: 10/.test(L[2].name) && /Echo \(ping\) reply/.test(JSON.stringify(L[4])), L.map(function (x) { return x.name; }).join(' / '));
+  var La = EL.decode(fA[0].f, null, 64);
+  chk('разбор ARP: opcode request, Target MAC нули', /request \(1\)/.test(JSON.stringify(La)) && /00:00:00:00:00:00/.test(JSON.stringify(La)));
+  n.tick(4);
+  chk('захват: BPDU STP с коммутатора', fA.some(function (f) { return f.proto === 'STP' && f.dmac === '01:80:c2:00:00:00' && /Root =/.test(f.info); }) && EL.decode(fA.filter(function (f) { return f.proto === 'STP'; })[0].f, null, 64).some(function (x) { return /Spanning Tree Protocol/.test(x.name); }));
+  n.capStop(capA); var k = capA.frames.length; n.ping(pc.id, '192.168.10.1'); chk('остановленный захват не пишет', capA.frames.length === k);
+  // TCP: эфемерный порт клиента и SYN/ACK
+  var d = n.add('Debian-server', 'SRV'); n.connect(sw.id, 'gi1/0/3', d.id, 'ens3');
+  var tcp = n.request(pc.id, '192.168.10.1', 'tcp', 22), tf = tcp.steps.filter(function (s) { return s.f && s.f.proto === 'tcp'; });
+  chk('TCP: запрос на 22 с эфемерного порта, ответ с 22', tf.length >= 2 && tf[0].f.sport >= 49152 && tf[0].f.dport === 22 && tf[tf.length - 1].f.sport === 22 && tf[tf.length - 1].f.dport === tf[0].f.sport || !tcp.ok);
+  // конфигурации текстом: экспорт → чистые устройства → импорт → тот же running-config
+  var txt = EL.exportConfigs(n);
+  chk('экспорт: заголовки и конфиги', /! ==== SW1 \(MES2428\) ====/.test(txt) && /! ==== R1 \(vESR\) ====/.test(txt) && /192\.168\.10\.1\/24/.test(txt));
+  var m = new EL.Net(), sw2 = m.add('MES2428', 'SW1'), r2 = m.add('vESR', 'R1');
+  var errs = EL.importConfigs(m, txt);
+  chk('импорт без ошибок', !errs.length, errs.join('; '));
+  chk('импорт: тот же running-config MES', EL.cfgText(sw2) === EL.cfgText(sw), EL.cfgText(sw2) + '\n---\n' + EL.cfgText(sw));
+  chk('импорт: тот же running-config ESR (применён commit)', EL.cfgText(r2) === EL.cfgText(r), EL.cfgText(r2));
+  chk('импорт: неизвестное устройство', EL.importConfigs(m, '! ==== NOPE (x) ====\nhostname a').some(function (e) { return /нет устройства NOPE/.test(e); }));
+  console.log('✓ учебные инструменты: захват, разбор, конфигурации');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

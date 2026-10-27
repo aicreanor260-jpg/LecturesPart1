@@ -128,19 +128,19 @@
     return c[id][port] || (c[id][port] = { iu: 0, im: 0, ib: 0, io: 0, ou: 0, om: 0, ob: 0, oo: 0, ie: 0, oe: 0, drop: 0 }); }
   P.ctrOf = function (id, port) { return ctr(this, id, port); };
   // кадр прошёл по сегменту: tx на порту отправителя, rx на порту получателя
-  P.countSeg = function (sg, cast, size) {
+  P.countSeg = function (sg, cast, size, f) {
     var l = this.links[sg.li]; if (!l) return;
     var fp = l.a.dev === sg.from ? l.a.port : l.b.port, tp = l.a.dev === sg.to ? l.a.port : l.b.port, n = size + (sg.tag !== null && sg.tag !== undefined ? 4 : 0);
     var a = ctr(this, sg.from, fp), b = ctr(this, sg.to, tp);
     a['o' + cast]++; a.oo += n; b['i' + cast]++; b.io += n;
-    if (this.onFrame) this.onFrame(sg, cast, n);
+    if (f && this.capFrame) this.capFrame(sg, f, n);
   };
   P.countSteps = function (steps, proto) {
     var s = this;
     (steps || []).forEach(function (st) {
       if (!st.segs || st.counted) return; st.counted = true;
-      var cast = st.k === 'arp' ? 'b' : 'u', size = st.k === 'ip' ? FSZ[st.proto || proto] || FSZ.icmp : FSZ.arp;
-      st.segs.forEach(function (sg) { s.countSeg(sg, cast, size); });
+      var cast = st.k === 'arp' ? 'b' : 'u', size = st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
+      st.segs.forEach(function (sg) { s.countSeg(sg, cast, size, st.f); });
     });
   };
   var req0 = P.request;
@@ -158,7 +158,8 @@
           var L = s.lports(id).filter(function (x) { return x.name === ln; })[0]; if (!L || L.cfg.stpOff) return;
           var pr = s.peer(id, L.members[0]); if (!pr) return;
           for (var i = 0; i < Math.min(n, 3600); i++) {
-            var a = ctr(s, id, L.members[0]), b = ctr(s, pr.dev, pr.port); a.om++; a.oo += FSZ.bpdu; b.im++; b.io += FSZ.bpdu; } }); });
+            var a = ctr(s, id, L.members[0]), b = ctr(s, pr.dev, pr.port); a.om++; a.oo += FSZ.bpdu; b.im++; b.io += FSZ.bpdu;
+            if (s.capBpdu) s.capBpdu(id, L.members[0], ln); } }); });
     }
     if (s.onTick) s.onTick();
     return g;

@@ -512,7 +512,8 @@
         return { ok: false, why: 'Request timed out', pk: pk };
       } else {
         steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + ', ' + srcMac + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
-          (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : '') + '. Коммутаторы по пути запомнили ' + srcMac, notes: fl.notes });
+          (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : '') + '. Коммутаторы по пути запомнили ' + srcMac, notes: fl.notes,
+          f: { type: 'arp', op: 1, smac: srcMac, dmac: 'ff:ff:ff:ff:ff:ff', sip: r.iface.ip, tip: r.nh } });
         if (!ep) { steps.push({ k: 'drop', t: 'Нет ответа на ARP: ' + r.nh + ' недоступен в этом широковещательном домене (другая VLAN, нет шлюза, кабель или порт выключен)', notes: fl.notes });
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
@@ -524,10 +525,12 @@
       this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
       this.learn(ep.path, srcMac);
       if (!cached) steps.push({ k: 'arpr', segs: back, t: nd.name + ' (' + ep.iface.name + '): ARP-ответ «' + r.nh + ' — это я, MAC ' + dmac + '» (unicast). ' +
-        nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac });
+        nd.name + ' записал ' + r.iface.ip + ' → ' + srcMac + ' в свою ARP-таблицу, коммутаторы запомнили ' + dmac,
+        f: { type: 'arp', op: 2, smac: dmac, dmac: srcMac, sip: r.nh, tip: r.iface.ip } });
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
-        ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+        ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -571,7 +574,8 @@
     this.ctLast = ct;
     if (IP.ip2n(dst) === null) return { ok: false, why: 'Bad address', steps: steps };
     if (!this.ifaces(src).length) { steps.push({ k: 'drop', t: d.name + ': нет ни одного IP-адреса' }); return { ok: false, why: 'No IP address', steps: steps }; }
-    var f = this.send(src, { src: null, dst: dst, proto: proto || 'icmp', dport: dport || null }, steps, ct);
+    Net.eph = ((Net.eph || 0) + 1) % 16000;     // эфемерный порт клиента (для захвата трафика)
+    var f = this.send(src, { src: null, dst: dst, proto: proto || 'icmp', dport: dport || null, sport: proto && proto !== 'icmp' ? 49152 + Net.eph : null }, steps, ct);
     if (!f.ok) return { ok: false, why: f.why, steps: steps };
     if (f.dev === src && proto === 'icmp') return { ok: true, steps: steps, hops: [] };
     var fd = this.devs[f.dev];
@@ -580,7 +584,7 @@
       return { ok: false, why: 'Connection refused', steps: steps, dev: f.dev };
     }
     steps.push({ k: 'ok', t: fd.name + ' получил ' + (proto === 'icmp' ? 'ICMP echo request и отвечает echo reply' : 'запрос ' + proto.toUpperCase() + ':' + dport + ' и отвечает') });
-    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null }, steps, ct);
+    var b = this.send(f.dev, { src: f.pk.dst, dst: f.pk.src, proto: proto, dport: null, reply: true, sport: dport || null, rport: f.pk.sport }, steps, ct);
     if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте маршрут/шлюз/NAT в обратную сторону' });
       return { ok: false, why: 'Request timed out', steps: steps }; }
     steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
@@ -603,7 +607,8 @@
     var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
     var port = d.type === 'vpc' ? 'eth0' : 'ens3', cname = d.name;
     var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
-    steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes });
+    steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
+      f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
     var lease = null;
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
