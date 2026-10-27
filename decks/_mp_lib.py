@@ -23,8 +23,15 @@ def b64(name):
 def info(n, title, sub="", k="a"):
     """Инфографика автора к слайду pptx n — отдельным слайдом сразу за ним."""
     slide("pptx %d · инфографика%s" % (n, "" if k == "a" else " " + k),
-          sc(head(title, sub), grow("g", col('<div class="pic mppic"><img src="%s" alt="" loading="lazy"></div>'
-                                             % b64("i%02d%s" % (n, k))))))
+          sc(head(title, sub), grow("g", col(_rep_or_pic("i%02d%s" % (n, k))))))
+
+
+def _rep_or_pic(name):
+    import _mp_replib
+    r = _mp_replib.rep_html(name)
+    if r:
+        return r
+    return '<div class="pic mppic"><img src="%s" alt="" loading="lazy"></div>' % b64(name)
 
 
 def ps(label, title, left, right=None, layout="g2", sub=""):

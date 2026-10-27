@@ -27,6 +27,7 @@ def main():
     import _mp_theme as T
     import _mp_final as FIN
     import _mp_lib
+    import _mp_replib
 
     del L.SL[:]
     FIN.head()
@@ -39,8 +40,8 @@ def main():
     if dup:
         raise SystemExit("дубли data-label: %s" % dup)
 
-    css = CSS + _dk_kit.CSS + T.css(_mp_lib.b64("bg_main"), _mp_lib.b64("bg_cover")) + FIN.CSS
-    js = JS + _dk_kit.JS + FIN.JS
+    css = CSS + _dk_kit.CSS + T.css(_mp_lib.b64("bg_main"), _mp_lib.b64("bg_cover")) + FIN.CSS + _mp_replib.CSS
+    js = JS + _dk_kit.JS + FIN.JS + _mp_replib.JS
     html = (
         '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
