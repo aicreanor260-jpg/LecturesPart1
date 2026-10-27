@@ -31,7 +31,8 @@
     if (c === 'clear' && t[1] === 'ip') { st.ip = null; st.gw = null; return 'IPv4 address/mask, gateway, DNS, and DHCP cleared'; }
     if (c === 'show' || c === 'sh') return ['NAME        : ' + st.name, 'IP/MASK     : ' + (st.ip ? st.ip + '/' + st.len : '0.0.0.0/0'),
       'GATEWAY     : ' + (st.gw || '0.0.0.0'), 'MAC         : ' + EL.mac(st.name + 'eth0'), 'LPORT       : 20000'].join('\n');
-    if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; return st.net ? st.net.pingText(st.dev, t[1], 'vpc') : ''; }
+    if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; var pa = EL.pingArgs ? EL.pingArgs(t.slice(1), 'vpc') : { dst: t[1] };
+      if (!st.net) return ''; return pa.opt ? st.net.pingSized(st.dev, pa.dst || t[1], 'vpc', pa.opt) : st.net.pingText(st.dev, t[1], 'vpc'); }
     if (c === 'trace' || c === 'tracert') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
     if (c === 'arp') return st.net ? st.net.arpText(st.dev) : '';
     if (c === 'clear' && t[1] === 'arp') { if (st.net) st.net.arp[st.dev] = {}; return 'ARP table cleared'; }
@@ -162,7 +163,8 @@
     }
     if (c === 'ping') { var dst = t.slice(1).filter(function (x) { return /^\d+\.\d+\.\d+\.\d+$/.test(x); })[0];
       if (!dst) return 'ping: usage error: Destination address required';
-      return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
+      var pl = EL.pingArgs ? EL.pingArgs(t.slice(1), 'linux') : {};
+      if (!st.net) return ''; return pl.opt ? st.net.pingSized(st.dev, dst, 'linux', pl.opt) : st.net.pingText(st.dev, dst, 'linux'); }
     if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
     if ((c === 'ip' && /^n(eigh(bour)?)?$/.test(t[1] || '')) || c === 'arp') {
       if (!st.net) return ''; if (t[2] === 'flush' || t[1] === '-d') { st.net.arp[st.dev] = {}; return ''; }

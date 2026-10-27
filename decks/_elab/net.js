@@ -531,6 +531,7 @@
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
+      if (this.mtuCheck) { var mc = this.mtuCheck(cur, r.iface, inIf, pk, steps, src); if (mc) return mc; }   // MTU выходного интерфейса (mtu.js)
       if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
         var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
         hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;

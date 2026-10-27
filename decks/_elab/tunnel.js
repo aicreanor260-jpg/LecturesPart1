@@ -28,7 +28,7 @@
   S.cmd('priv', 'show tunnels status', function (st) {
     var s = st.net, o = ['Tunnel     Admin state        MTU      Local IP           Remote IP          Uptime', '------      ----------       -----    ------------       -----------        ---------------'];
     Object.keys(st.run.ifs).filter(function (k) { return st.run.ifs[k].tun; }).forEach(function (k) { var x = st.run.ifs[k];
-      o.push(rp(x.tun + ' ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp('1476', 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
+      o.push(rp(x.tun + ' ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp(String(x.mtu || 1476), 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
     return o.join('\n'); }, 'Состояние туннелей');
   function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
   function up(n) { n = Math.floor(n); return Math.floor(n / 60) + ' minute' + (Math.floor(n / 60) === 1 ? '' : 's') + ' and ' + n % 60 + ' seconds'; }

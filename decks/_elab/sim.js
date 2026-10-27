@@ -4,7 +4,8 @@
    — распространение = длина кабеля / 2·10⁸ м/с (по умолчанию 100 м); обработка в устройстве — 10 мкс;
    — у каждого выходного порта очередь FIFO (по умолчанию 64 кадра): переполнилась — кадр теряется (drop-tail);
    — несовпадение дуплекса — часть кадров теряется в коллизиях (20 %), кадры считаются и в счётчиках ошибок;
-   — MTU 1500 байт на IP-пакет: больше — с флагом DF пакет отбрасывается («Fragmentation needed»), без DF режется на фрагменты.
+   — MTU — самый узкий интерфейс на пути (mtu на ESR, туннель GRE 1476, иначе 1500): больше — с флагом DF пакет отбрасывается
+     («Fragmentation needed»), без DF режется на фрагменты.
    Потоки: ping (интервал, число, размер, DF) и UDP (скорость в пакетах/с, длительность, размер) — RTT, джиттер, потери, загрузка линков.
    Упрощения: путь считается один раз на поток (маршрут во время потока не меняется), ARP и TCP-окна не моделируются. */
 (function (G) {
@@ -33,13 +34,16 @@
     flows.forEach(function (fl, fi) {
       var st = { flow: fi, kind: fl.kind, src: fl.src, dst: fl.dst, sent: 0, recv: 0, rtt: [], drops: {}, frag: 1, why: null };
       res.push(st);
-      var r = fl.kind === 'udp' ? s.request(fl.src, fl.dst, 'udp', fl.port || 5001) : s.ping(fl.src, fl.dst);
+      var size = Math.max(28, fl.size || 64), ipLen = size + 28;
+      // путь и его MTU: проба с размером пакета — mtu.js отмечает самый узкий интерфейс (без отбрасывания)
+      var pr = s._mtuPing = { size: ipLen, df: !!fl.df, local: 'err', probe: true }, r;
+      try { r = fl.kind === 'udp' ? s.request(fl.src, fl.dst, 'udp', fl.port || 5001) : s.ping(fl.src, fl.dst); } finally { s._mtuPing = null; }
+      var mtu = Math.min(opt.mtu || DEF.mtu, pr.min || 1e9);
       var fw = ipSegs(r.steps, false), bk = fl.kind === 'ping' ? ipSegs(r.steps, true) : [];
       // UDP идёт в одну сторону: годится и «Connection refused» — пакет дошёл до получателя, просто его там никто не слушает
       var reached = fl.kind === 'udp' ? (r.ok || r.dev !== undefined) : r.ok;
       if (!fw.length || !reached) { st.why = r.why || 'нет пути'; st.blocked = true; }
-      var size = Math.max(28, fl.size || 64), ipLen = size + 28, mtu = opt.mtu || DEF.mtu;
-      if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + ' при DF — «Fragmentation needed», не отправлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
+      if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + (pr.hit && !pr.hit.local ? ' на ' + s.devs[pr.hit.dev].name : '') + ' при DF — «Fragmentation needed», не доставлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
       st.fw = fw; st.bk = bk;
       var n = fl.kind === 'udp' ? Math.floor((fl.dur || 1) * (fl.rate || 100)) : (fl.count || 5), gap = fl.kind === 'udp' ? 1 / (fl.rate || 100) : (fl.interval || 1);
       for (var k = 0; k < n; k++) { st.sent++; if (st.blocked) { st.drops[st.why] = (st.drops[st.why] || 0) + 1; continue; }

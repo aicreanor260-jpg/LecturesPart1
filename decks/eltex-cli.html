@@ -396,12 +396,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>MTU и размер пакета</h2>
+<table>
+<tr><td>ESR: mtu 1400 (интерфейс 552–9018, туннель 552–10000, GRE по умолчанию 1476) · no mtu</td><td>MTU выходного интерфейса</td></tr>
+<tr><td>ESR: ping A.B.C.D size N packets N strategy disallow-fragmentation|discovery-pmtu|allow-fragmentation</td><td>размер данных и DF</td></tr>
+<tr><td>MES 10.x: ping A.B.C.D size 36–2080 df-bit count 1–10 · VPC: ping A.B.C.D -l N -D -c N · Debian: ping -s N -M do|want|dont -c N A.B.C.D</td><td>то же на коммутаторе и хостах</td></tr>
+<tr><td>Frag needed and DF set (mtu = 1400) · local error: message too long</td><td>DF и пакет больше MTU на пути / своего интерфейса; без DF — фрагменты</td></tr>
+</table>
+
 <h2>Симуляция во времени («Тест»)</h2>
 <table>
 <tr><td>Файл → Симуляция трафика · ПКМ по полю</td><td>потоки ping (число, интервал, размер, DF) и UDP (пакетов/с, длительность, размер)</td></tr>
 <tr><td>Время на кабеле</td><td>передача = байты × 8 / скорость линка; распространение 0,5 мкс (100 м); обработка 10 мкс</td></tr>
 <tr><td>Очередь порта</td><td>FIFO 64 кадра (меняется); переполнение — потеря кадра</td></tr>
-<tr><td>Дуплекс не совпадает · MTU 1500</td><td>~20 % кадров теряется · с DF больше MTU не уходит, без DF — фрагменты</td></tr>
+<tr><td>Дуплекс не совпадает · MTU пути</td><td>~20 % кадров теряется · MTU самого узкого интерфейса: с DF больше MTU не доходит, без DF — фрагменты</td></tr>
 <tr><td>Итог</td><td>потери, RTT min/avg/max, джиттер, загрузка кабелей, максимум очереди; кадры анимируются в замедленном времени</td></tr>
 </table>
 
@@ -2043,7 +2051,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (c === 'clear' && t[1] === 'ip') { st.ip = null; st.gw = null; return 'IPv4 address/mask, gateway, DNS, and DHCP cleared'; }
     if (c === 'show' || c === 'sh') return ['NAME        : ' + st.name, 'IP/MASK     : ' + (st.ip ? st.ip + '/' + st.len : '0.0.0.0/0'),
       'GATEWAY     : ' + (st.gw || '0.0.0.0'), 'MAC         : ' + EL.mac(st.name + 'eth0'), 'LPORT       : 20000'].join('\n');
-    if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; return st.net ? st.net.pingText(st.dev, t[1], 'vpc') : ''; }
+    if (c === 'ping') { if (!t[1]) return 'Usage: ping HOST'; var pa = EL.pingArgs ? EL.pingArgs(t.slice(1), 'vpc') : { dst: t[1] };
+      if (!st.net) return ''; return pa.opt ? st.net.pingSized(st.dev, pa.dst || t[1], 'vpc', pa.opt) : st.net.pingText(st.dev, t[1], 'vpc'); }
     if (c === 'trace' || c === 'tracert') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
     if (c === 'arp') return st.net ? st.net.arpText(st.dev) : '';
     if (c === 'clear' && t[1] === 'arp') { if (st.net) st.net.arp[st.dev] = {}; return 'ARP table cleared'; }
@@ -2174,7 +2183,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     }
     if (c === 'ping') { var dst = t.slice(1).filter(function (x) { return /^\d+\.\d+\.\d+\.\d+$/.test(x); })[0];
       if (!dst) return 'ping: usage error: Destination address required';
-      return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
+      var pl = EL.pingArgs ? EL.pingArgs(t.slice(1), 'linux') : {};
+      if (!st.net) return ''; return pl.opt ? st.net.pingSized(st.dev, dst, 'linux', pl.opt) : st.net.pingText(st.dev, dst, 'linux'); }
     if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
     if ((c === 'ip' && /^n(eigh(bour)?)?$/.test(t[1] || '')) || c === 'arp') {
       if (!st.net) return ''; if (t[2] === 'flush' || t[1] === '-d') { st.net.arp[st.dev] = {}; return ''; }
@@ -2791,6 +2801,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
+      if (this.mtuCheck) { var mc = this.mtuCheck(cur, r.iface, inIf, pk, steps, src); if (mc) return mc; }   // MTU выходного интерфейса (mtu.js)
       if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
         var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
         hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;
@@ -5285,7 +5296,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   S.cmd('priv', 'show tunnels status', function (st) {
     var s = st.net, o = ['Tunnel     Admin state        MTU      Local IP           Remote IP          Uptime', '------      ----------       -----    ------------       -----------        ---------------'];
     Object.keys(st.run.ifs).filter(function (k) { return st.run.ifs[k].tun; }).forEach(function (k) { var x = st.run.ifs[k];
-      o.push(rp(x.tun + ' ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp('1476', 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
+      o.push(rp(x.tun + ' ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp(String(x.mtu || 1476), 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
     return o.join('\n'); }, 'Состояние туннелей');
   function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
   function up(n) { n = Math.floor(n); return Math.floor(n / 60) + ' minute' + (Math.floor(n / 60) === 1 ? '' : 's') + ' and ' + n % 60 + ' seconds'; }
@@ -6466,6 +6477,133 @@ vesr(config)#         do confirm  — подтвердить</pre>
         .concat(L.map(function (l) { return rp((st.stackBoot || {}).unit || 1, 9) + rp(l[1], 21) + rp(l[3].replace('1/0', (s.devs[l[2]].st.stackBoot || {}).unit + '/0'), 21) + '10G'; })).join('\n'); }, 'Стековые линки'); });
 })(typeof window !== 'undefined' ? window : global);
 
+/* MTU и размер пакета в консоли (синтаксис — дерево команд прошивки ESR 1.40.4 и шаблоны прошивки MES 10.4.6):
+   ESR: на интерфейсе/саб-интерфейсе mtu 552..9018 (по умолчанию 1500), на туннеле GRE/VTI mtu 552..10000 (GRE по умолчанию 1476);
+        ping A.B.C.D [size 1..65468] [packets N] [strategy disallow-fragmentation | discovery-pmtu | allow-fragmentation].
+   MES 10.x: ping A.B.C.D [size 36..2080] [df-bit] [count 1..10].   VPC: ping A.B.C.D [-l размер] [-D] [-c N].
+   Debian: ping [-s размер] [-M do|want|dont] [-c N] A.B.C.D.
+   Размер — данные ICMP; IP-пакет = размер + 28. Пакет больше MTU выходного интерфейса: без DF режется на фрагменты,
+   с DF отбрасывается, маршрутизатор отвечает ICMP «Fragmentation needed» (тип 3, код 4) со своим MTU.
+   Стратегии как в Linux: do — DF и запрет даже своей фрагментации; want (по умолчанию у ESR и Debian) — DF в сети,
+   после «Fragmentation needed» узел запоминает MTU пути и дальше режет пакет сам; dont — DF не ставится.
+   У VPC и MES по умолчанию DF не ставится (-D / df-bit — ставится).
+   Упрощения: MTU коммутатора MES (mtu, system mtu — размер кадра L2) не моделируется, у хостов MTU 1500;
+   накладные расходы инкапсуляции внутри туннеля учтены только через MTU туннеля. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, E = EL.E, P = EL.Net.prototype, CMDS = E.CMDS;
+  var DEF = 1500, GRE = 1476;
+  function touch(st) { st.pending = true; }
+  function ifs(st) { return (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).map(function (k) { return st.cand.ifs[k]; }).filter(Boolean); }
+  function setMtu(lo, hi) { return function (st, a) { if (a[0] < lo || a[0] > hi) return 'Syntax error: Illegal parameter'; ifs(st).forEach(function (x) { x.mtu = a[0]; }); touch(st); }; }
+  S.cmd('gi sub', 'mtu <n>', setMtu(552, 9018), 'MTU интерфейса (552–9018, по умолчанию 1500)');
+  S.cmd('gre vti', 'mtu <n>', setMtu(552, 10000), 'MTU туннеля (552–10000)');
+  S.cmd('gi sub gre vti', 'no mtu', function (st) { ifs(st).forEach(function (x) { delete x.mtu; }); touch(st); });
+  S.RUNX.push(function (c, o) { Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k]; if (!x.mtu) return;
+    o.push(x.tun ? 'tunnel ' + x.tun + ' ' + k.slice(3) : 'interface ' + S.longIf(k), '  mtu ' + x.mtu, 'exit'); }); });
+
+  // MTU выходного интерфейса
+  P.ifMtu = function (id, iface) {
+    var d = this.devs[id]; if (d.type !== 'esr') return DEF;
+    var x = d.st.run.ifs[iface.name.split(':')[0]] || {};
+    return x.mtu || (x.tun === 'gre' ? GRE : DEF);
+  };
+  // проверка в P.send: контекст _mtuPing = {size, df, local: 'frag'|'err', probe, hit, min}
+  P.mtuCheck = function (cur, iface, inIf, pk, steps, src) {
+    var c = this._mtuPing; if (!c) return null;
+    var m = this.ifMtu(cur, iface), d = this.devs[cur], size = c.size;
+    c.min = Math.min(c.min || 1e9, m);
+    if (size <= m) return null;
+    var local = cur === src, df = c.df && !(local && (c.local === 'frag' || pk.reply));
+    if (!df) {
+      var n = Math.ceil((size - 20) / (Math.floor((m - 20) / 8) * 8));
+      if (!c.probe) steps.push({ k: 'route', t: d.name + ': пакет ' + size + ' байт больше MTU ' + m + ' на ' + iface.name.split(':')[0] + ' — разрезан на ' + n + ' фрагмента(ов), собирает получатель' });
+      return null;
+    }
+    c.hit = c.hit || { dev: cur, ip: inIf ? inIf.ip : null, mtu: m, local: local };
+    if (c.probe) return null;
+    steps.push({ k: 'drop', t: local ? d.name + ': пакет ' + size + ' байт больше MTU ' + m + ' своего интерфейса, а фрагментация запрещена — не отправлен (message too long)'
+      : d.name + ': пакет ' + size + ' байт больше MTU ' + m + ' на ' + iface.name.split(':')[0] + ', стоит флаг DF — отброшен; отправителю ушёл ICMP «Fragmentation needed» (тип 3, код 4, MTU ' + m + ')' });
+    return { ok: false, why: local ? 'Message too long' : 'Frag needed', pk: pk };
+  };
+
+  // ping с размером и флагом DF: o = {size, mode: do|want|dont, count}
+  P.pingSized = function (id, dst, style, o) {
+    var s = this, cnt = o.count, total = o.size + 28;
+    function attempt(df, local) { var c = s._mtuPing = { size: total, df: df, local: local }, r;
+      try { r = s.ping(id, dst); } finally { s._mtuPing = null; } return { r: r, hit: c.hit || null }; }
+    var res = [], a, hit = null, localErr = false;
+    if (EL.ip.ip2n(dst) === null) return this.pingText(id, dst, style);
+    s.pmtu = s.pmtu || {}; var key = id + '|' + dst, known = s.pmtu[key];
+    if (o.mode === 'dont' || (o.mode === 'want' && known)) { a = attempt(false, 'frag'); for (var i = 0; i < cnt; i++) res.push(a.r.ok ? 'ok' : 'lost'); }
+    else {
+      a = attempt(true, o.mode === 'do' ? 'err' : 'frag'); hit = a.hit;
+      if (hit && hit.local) localErr = true;
+      else if (hit && o.mode === 'want') {                  // узнали MTU пути — дальше режем сами
+        s.pmtu[key] = hit.mtu; res.push('frag'); var b = attempt(false, 'frag'); for (var j = 1; j < cnt; j++) res.push(b.r.ok ? 'ok' : 'lost'); a = b;
+      } else for (var k = 0; k < cnt; k++) res.push(a.r.ok ? 'ok' : hit ? 'frag' : 'lost');
+    }
+    if (this.onTrace) this.onTrace(a.r, id, dst);
+    var ok = res.filter(function (x) { return x === 'ok'; }).length, err = res.filter(function (x) { return x === 'frag'; }).length, hops = (a.r.hops || []).length;
+    var mtu = hit ? hit.mtu : DEF, from = hit && hit.ip ? hit.ip : dst, loss = Math.round((cnt - ok) / cnt * 100);
+    if (style === 'linux' || style === 'esr') {
+      if (localErr) return (style === 'esr' ? 'PING ' + dst + ' (' + dst + ') ' + o.size + '(' + total + ') bytes of data.\n' : '') + 'ping: local error: message too long, mtu=' + mtu;
+      var L = ['PING ' + dst + ' (' + dst + ') ' + o.size + '(' + total + ') bytes of data.'];
+      res.forEach(function (x, i) { if (x === 'ok') L.push((o.size + 8) + ' bytes from ' + dst + ': icmp_seq=' + (i + 1) + ' ttl=' + (64 - hops + 1) + ' time=0.' + (600 + i * 37) + ' ms');
+        if (x === 'frag') L.push('From ' + from + ' icmp_seq=' + (i + 1) + ' Frag needed and DF set (mtu = ' + mtu + ')'); });
+      L.push('', '--- ' + dst + ' ping statistics ---', cnt + ' packets transmitted, ' + ok + ' received, ' + (err ? '+' + err + ' errors, ' : '') + loss + '% packet loss, time ' + (cnt - 1) * 1001 + 'ms');
+      return L.join('\n');
+    }
+    if (style === 'vpc') return res.map(function (x, i) { return x === 'ok' ? total + ' bytes from ' + dst + ' icmp_seq=' + (i + 1) + ' ttl=' + (64 - hops + 1) + ' time=' + (0.5 + (i + 1) * 0.13).toFixed(3) + ' ms'
+      : dst + ' icmp_seq=' + (i + 1) + ' timeout'; }).join('\n');
+    var M = res.map(function (x) { return x === 'ok' ? 'Reply Received From :' + dst + ', TimeTaken : 1 msecs' : 'Reply Not Received From : ' + dst + ', Timeout : 5 secs'; });
+    return M.concat(['', '--- ' + dst + ' Ping Statistics ---', cnt + ' Packets Transmitted, ' + ok + ' Packets Received, ' + loss + '% Packets Loss']).join('\n');
+  };
+
+  // ---------------------------------------------------------------- ESR: ping A.B.C.D size … strategy … packets …
+  var STR = { 'disallow-fragmentation': 'do', 'discovery-pmtu': 'want', 'allow-fragmentation': 'dont' };
+  var SKIP = { ttl: 1, timeout: 1, interval: 1, source: 1, data: 1, dscp: 1 };
+  S.cmd('priv', 'ping <ip> <rest>', function (st, a) {
+    var w = String(a[1]).trim().split(/\s+/), o = { size: 56, mode: 'want', count: 5 };
+    for (var i = 0; i < w.length; i++) { var k = w[i].toLowerCase(), v = w[i + 1];
+      if (k === 'size') { if (!/^\d+$/.test(v || '') || +v < 1 || +v > 65468) return 'Syntax error: Illegal parameter'; o.size = +v; i++; }
+      else if (k === 'packets') { if (!/^\d+$/.test(v || '') || +v < 1) return 'Syntax error: Illegal parameter'; o.count = Math.min(+v, 100); i++; }
+      else if (k === 'strategy') { if (!STR[v]) return 'Syntax error: Illegal parameter'; o.mode = STR[v]; i++; }
+      else if (k === 'detailed') continue;
+      else if (SKIP[k] && v) i++;
+      else return 'Syntax error: Unknown command'; }
+    return st.net ? st.net.pingSized(st.dev, a[0], 'esr', o) : ''; }, 'Ping с размером (size), числом (packets) и стратегией DF (strategy)');
+
+  // ---------------------------------------------------------------- MES 10.x: ping A.B.C.D [size N] [df-bit] [count N]
+  function mcmd(modes, pat, fn, d) { var n = CMDS.length; E.cmd(modes, pat, fn); var c = CMDS.splice(n, 1)[0]; c.dl = ['10']; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function mesPing(st, a) {
+    var w = String(a[1]).trim().split(/\s+/), o = { size: 56, mode: 'dont', count: 5 };
+    for (var i = 0; i < w.length; i++) { var k = w[i].toLowerCase(), v = w[i + 1];
+      if (k === 'size') { if (!/^\d+$/.test(v || '') || +v < 36 || +v > 2080) return '% Invalid input detected'; o.size = +v; i++; }
+      else if (k === 'count' || k === 'repeat') { if (!/^\d+$/.test(v || '') || +v < 1 || +v > 10) return '% Invalid input detected'; o.count = +v; i++; }
+      else if (k === 'df-bit') o.mode = 'do';
+      else if ((k === 'timeout' || k === 'source' || k === 'data') && v) i++;
+      else if (k === 'validate') continue;
+      else return '% Invalid input detected'; }
+    return st.net ? st.net.pingSized(st.dev, a[0], 'mes', o) : '% Нет сети';
+  }
+  mcmd('user priv', 'ping <ip> <rest>', mesPing, 'Ping: size 36–2080, df-bit, count 1–10');
+  mcmd(E.CFG, 'do ping <ip> <rest>', mesPing);
+
+  // ---------------------------------------------------------------- VPC и Debian: разбор ключей (hosts.js вызывает EL.pingArgs)
+  EL.pingArgs = function (t, style) {
+    var o = { size: 56, mode: style === 'vpc' ? 'dont' : 'want', count: style === 'vpc' ? 5 : 4 }, dst = null, sized = false;
+    for (var i = 0; i < t.length; i++) { var x = t[i], v = t[i + 1];
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(x)) dst = x;
+      else if (style === 'vpc' && x === '-l' && /^\d+$/.test(v || '')) { o.size = +v; sized = true; i++; }
+      else if (style === 'vpc' && x === '-D') { o.mode = 'do'; sized = true; }
+      else if (style === 'linux' && x === '-s' && /^\d+$/.test(v || '')) { o.size = +v; sized = true; i++; }
+      else if (style === 'linux' && x === '-M' && /^(do|want|dont)$/.test(v || '')) { o.mode = v; sized = true; i++; }
+      else if (x === '-c' && /^\d+$/.test(v || '')) { o.count = Math.max(1, Math.min(+v, 100)); sized = true; i++; } }
+    return { dst: dst, opt: sized ? o : null };
+  };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Ветка 10.x (MES14xx/24xx/3400/37xx, ПО 10.4.6): сверка с прошивкой и руководством 10.4.6.
    Общий движок коммутатора (_dk_cli.js) пишет часть команд синтаксисом ветки 6.x — в диалекте 10 их нет, вместо них:
    write memory → write startup-config;  ip default-gateway → ip route 0.0.0.0 0.0.0.0 <next-hop>;  clock timezone → clock utc-offset;
@@ -6554,7 +6692,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
    — распространение = длина кабеля / 2·10⁸ м/с (по умолчанию 100 м); обработка в устройстве — 10 мкс;
    — у каждого выходного порта очередь FIFO (по умолчанию 64 кадра): переполнилась — кадр теряется (drop-tail);
    — несовпадение дуплекса — часть кадров теряется в коллизиях (20 %), кадры считаются и в счётчиках ошибок;
-   — MTU 1500 байт на IP-пакет: больше — с флагом DF пакет отбрасывается («Fragmentation needed»), без DF режется на фрагменты.
+   — MTU — самый узкий интерфейс на пути (mtu на ESR, туннель GRE 1476, иначе 1500): больше — с флагом DF пакет отбрасывается
+     («Fragmentation needed»), без DF режется на фрагменты.
    Потоки: ping (интервал, число, размер, DF) и UDP (скорость в пакетах/с, длительность, размер) — RTT, джиттер, потери, загрузка линков.
    Упрощения: путь считается один раз на поток (маршрут во время потока не меняется), ARP и TCP-окна не моделируются. */
 (function (G) {
@@ -6583,13 +6722,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
     flows.forEach(function (fl, fi) {
       var st = { flow: fi, kind: fl.kind, src: fl.src, dst: fl.dst, sent: 0, recv: 0, rtt: [], drops: {}, frag: 1, why: null };
       res.push(st);
-      var r = fl.kind === 'udp' ? s.request(fl.src, fl.dst, 'udp', fl.port || 5001) : s.ping(fl.src, fl.dst);
+      var size = Math.max(28, fl.size || 64), ipLen = size + 28;
+      // путь и его MTU: проба с размером пакета — mtu.js отмечает самый узкий интерфейс (без отбрасывания)
+      var pr = s._mtuPing = { size: ipLen, df: !!fl.df, local: 'err', probe: true }, r;
+      try { r = fl.kind === 'udp' ? s.request(fl.src, fl.dst, 'udp', fl.port || 5001) : s.ping(fl.src, fl.dst); } finally { s._mtuPing = null; }
+      var mtu = Math.min(opt.mtu || DEF.mtu, pr.min || 1e9);
       var fw = ipSegs(r.steps, false), bk = fl.kind === 'ping' ? ipSegs(r.steps, true) : [];
       // UDP идёт в одну сторону: годится и «Connection refused» — пакет дошёл до получателя, просто его там никто не слушает
       var reached = fl.kind === 'udp' ? (r.ok || r.dev !== undefined) : r.ok;
       if (!fw.length || !reached) { st.why = r.why || 'нет пути'; st.blocked = true; }
-      var size = Math.max(28, fl.size || 64), ipLen = size + 28, mtu = opt.mtu || DEF.mtu;
-      if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + ' при DF — «Fragmentation needed», не отправлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
+      if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + (pr.hit && !pr.hit.local ? ' на ' + s.devs[pr.hit.dev].name : '') + ' при DF — «Fragmentation needed», не доставлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
       st.fw = fw; st.bk = bk;
       var n = fl.kind === 'udp' ? Math.floor((fl.dur || 1) * (fl.rate || 100)) : (fl.count || 5), gap = fl.kind === 'udp' ? 1 / (fl.rate || 100) : (fl.interval || 1);
       for (var k = 0; k < n; k++) { st.sent++; if (st.blocked) { st.drops[st.why] = (st.drops[st.why] || 0) + 1; continue; }

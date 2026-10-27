@@ -154,12 +154,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>MTU и размер пакета</h2>
+<table>
+<tr><td>ESR: mtu 1400 (интерфейс 552–9018, туннель 552–10000, GRE по умолчанию 1476) · no mtu</td><td>MTU выходного интерфейса</td></tr>
+<tr><td>ESR: ping A.B.C.D size N packets N strategy disallow-fragmentation|discovery-pmtu|allow-fragmentation</td><td>размер данных и DF</td></tr>
+<tr><td>MES 10.x: ping A.B.C.D size 36–2080 df-bit count 1–10 · VPC: ping A.B.C.D -l N -D -c N · Debian: ping -s N -M do|want|dont -c N A.B.C.D</td><td>то же на коммутаторе и хостах</td></tr>
+<tr><td>Frag needed and DF set (mtu = 1400) · local error: message too long</td><td>DF и пакет больше MTU на пути / своего интерфейса; без DF — фрагменты</td></tr>
+</table>
+
 <h2>Симуляция во времени («Тест»)</h2>
 <table>
 <tr><td>Файл → Симуляция трафика · ПКМ по полю</td><td>потоки ping (число, интервал, размер, DF) и UDP (пакетов/с, длительность, размер)</td></tr>
 <tr><td>Время на кабеле</td><td>передача = байты × 8 / скорость линка; распространение 0,5 мкс (100 м); обработка 10 мкс</td></tr>
 <tr><td>Очередь порта</td><td>FIFO 64 кадра (меняется); переполнение — потеря кадра</td></tr>
-<tr><td>Дуплекс не совпадает · MTU 1500</td><td>~20 % кадров теряется · с DF больше MTU не уходит, без DF — фрагменты</td></tr>
+<tr><td>Дуплекс не совпадает · MTU пути</td><td>~20 % кадров теряется · MTU самого узкого интерфейса: с DF больше MTU не доходит, без DF — фрагменты</td></tr>
 <tr><td>Итог</td><td>потери, RTT min/avg/max, джиттер, загрузка кабелей, максимум очереди; кадры анимируются в замедленном времени</td></tr>
 </table>
 

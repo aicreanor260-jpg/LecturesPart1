@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1196,6 +1196,45 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(t, { C: ['configure', 'interface gi1/0/24', 'switchport trunk allowed vlan add 10', 'end'], D: ['configure', 'interface gi1/0/24', 'switchport trunk allowed vlan add 10', 'end'] });
   chk('6.x: после switchport trunk allowed vlan add 10 — проходит', t.ping(pc2.id, '10.0.0.4').ok);
   console.log('✓ MES 10.x по ПО 10.4.6');
+})();
+
+// MTU: mtu на ESR, ping с размером и DF, «Fragmentation needed», фрагментация, MTU пути в симуляции
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), pc = n.add('VPC', 'PC1'), d = n.add('Debian', 'D1'), sw = n.add('MES2428', 'SW1');
+  n.connect(pc.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(d.id, 'ens3', sw.id, 'gi1/0/2'); n.connect(sw.id, 'gi1/0/24', r1.id, 'gi1/0/1'); n.connect(r1.id, 'gi1/0/2', r2.id, 'gi1/0/1');
+  var e = EL.labs.apply(n, { PC1: ['ip 192.168.1.10/24 192.168.1.1'], D1: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.1.20/24 dev ens3', 'ip route add default via 192.168.1.1'],
+    R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.0.0.1/30', 'ip firewall disable', 'mtu 1400', 'exit',
+         'ip route 10.9.9.0/24 10.0.0.2', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.2/30', 'ip firewall disable', 'mtu 1400', 'exit', 'interface loopback 1', 'ip address 10.9.9.9/24', 'exit', 'ip route 192.168.1.0/24 10.0.0.1', 'end', 'commit', 'confirm'] });
+  chk('MTU: схема и mtu 1400 без ошибок', !e.length, e.join('; '));
+  chk('mtu в running-config ESR', /interface gigabitethernet 1\/0\/2\n  mtu 1400/.test(n.exec(r1.id, 'show running-config')), n.exec(r1.id, 'show running-config'));
+  chk('mtu вне 552–9018 — ошибка', /Illegal/.test(n.exec(r1.id, 'configure') || n.exec(r1.id, 'interface gi1/0/2') || n.exec(r1.id, 'mtu 100')) && (n.exec(r1.id, 'end'), true));
+  chk('обычный ping проходит', /64 bytes from 10\.9\.9\.9/.test(n.exec(d.id, 'ping 10.9.9.9')));
+  var o1 = n.exec(d.id, 'ping -s 1472 -M do -c 3 10.9.9.9');
+  chk('Debian -M do: Frag needed от R1 с mtu 1400, 0 получено', /PING 10\.9\.9\.9 \(10\.9\.9\.9\) 1472\(1500\) bytes of data/.test(o1) && /From 192\.168\.1\.1 icmp_seq=1 Frag needed and DF set \(mtu = 1400\)/.test(o1) && /3 packets transmitted, 0 received, \+3 errors/.test(o1), o1);
+  var o2 = n.exec(d.id, 'ping -s 1472 -c 3 10.9.9.9');
+  chk('Debian по умолчанию (want): первый — Frag needed, дальше фрагменты доходят', /icmp_seq=1 Frag needed/.test(o2) && /1480 bytes from 10\.9\.9\.9: icmp_seq=2/.test(o2) && /3 packets transmitted, 2 received, \+1 errors/.test(o2), o2);
+  chk('Debian -M dont: фрагменты доходят все', /3 received/.test(n.exec(d.id, 'ping -s 1472 -M dont -c 3 10.9.9.9')));
+  chk('Debian -M do больше своего MTU — local error', /local error: message too long, mtu=1500/.test(n.exec(d.id, 'ping -s 2000 -M do 10.9.9.9')));
+  chk('VPC -l 1472 -D — timeout, без -D — 1500 bytes', /timeout/.test(n.exec(pc.id, 'ping 10.9.9.9 -l 1472 -D -c 2')) && /1500 bytes from 10\.9\.9\.9 icmp_seq=1/.test(n.exec(pc.id, 'ping 10.9.9.9 -l 1472 -c 2')));
+  var tr = n.ping(pc.id, '10.9.9.9');
+  n._mtuPing = { size: 1500, df: false, local: 'frag' }; var tr2 = n.ping(pc.id, '10.9.9.9'); n._mtuPing = null;
+  chk('трасса: R1 режет пакет на фрагменты', tr.ok && tr2.ok && tr2.steps.some(function (x) { return /разрезан на 2 фрагмента/.test(x.t); }));
+  r1.st.mode = 'priv'; var o3 = n.exec(r1.id, 'ping 10.9.9.9 size 1472 strategy disallow-fragmentation packets 2');
+  chk('ESR ping size … strategy disallow-fragmentation — local error (свой MTU 1400)', /local error: message too long, mtu=1400/.test(o3), o3);
+  chk('ESR ping size 1000 — проходит', /2 received/.test(n.exec(r1.id, 'ping 10.9.9.9 size 1000 packets 2')));
+  chk('ESR ping неизвестный ключ — ошибка', /Unknown command/.test(n.exec(r1.id, 'ping 10.9.9.9 foo')));
+  sw.st.mode = 'priv';
+  EL.labs.apply(n, { SW1: ['configure', 'interface vlan 1', 'ip address 192.168.1.2 255.255.255.0', 'exit', 'ip route 0.0.0.0 0.0.0.0 192.168.1.1', 'end'] });
+  var o4 = n.exec(sw.id, 'ping 10.9.9.9 size 2000 df-bit count 2');
+  chk('MES 10.x ping size 2000 df-bit — не получено; без df-bit — получено', /0 Packets Received/.test(o4) && /2 Packets Received/.test(n.exec(sw.id, 'ping 10.9.9.9 size 2000 count 2')), o4);
+  chk('MES 10.x ping size вне 36–2080 — ошибка', /Invalid input/.test(n.exec(sw.id, 'ping 10.9.9.9 size 3000')));
+  var s = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.9.9.9', count: 2, size: 1472, df: true }, { kind: 'ping', src: pc.id, dst: '10.9.9.9', count: 2, size: 1472 }]);
+  chk('симуляция: MTU пути 1400 — с DF не доставлен, без DF 2 фрагмента', s.flows[0].recv === 0 && /MTU 1400 на R1/.test(s.flows[0].why) && s.flows[1].frag === 2 && s.flows[1].recv === 2, JSON.stringify([s.flows[0].why, s.flows[1].frag]));
+  EL.labs.apply(n, { R1: ['configure', 'tunnel gre 1', 'mtu 1400', 'end', 'commit', 'confirm'] });
+  chk('show tunnels status — MTU туннеля из конфигурации', /1400/.test(n.exec(r1.id, 'show tunnels status')));
+  console.log('✓ MTU и размер пакета');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
