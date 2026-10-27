@@ -14,6 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import _sw_lib as L  # noqa: E402
+import _er_intro  # noqa: E402
 
 OUT = "marshrutizatory-esr.html"
 FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
@@ -156,7 +157,7 @@ def build():
     _er_deck.build()
     _er_final.tail()
     slides = list(L.SL)
-    css = CSS + _dk_kit.CSS + _dk_cli.CSS + THEME % (b64("bg_main"), b64("bg_cover"))
+    css = CSS + _dk_kit.CSS + _dk_cli.CSS + THEME % (b64("bg_main"), b64("bg_cover")) + _er_intro.CSS
     with io.open(os.path.join(HERE, "_er_cli.js"), encoding="utf-8") as fh:
         cli_js = fh.read()
     js = JS + _dk_kit.JS + cli_js
