@@ -9278,11 +9278,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ================================================================== терминалы
   function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
   // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
-  function needLogin(d) { return d.type === 'mes' || d.type === 'esr'; }
+  function needLogin(d) { return (d.type === 'mes' && d.sub !== 'ont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
     var U = d.type === 'esr' ? d.st.run.users : d.st.users;
-    if (d.type === 'mes' && !Object.keys(U || {}).length) return u === 'admin' && p === 'admin';
+    if (d.type === 'mes' && !Object.keys(U || {}).length) return u === 'admin' && p === (d.st.dialect === '8' ? '' : 'admin');   // MES 8.x — admin с пустым паролем, остальные — admin/admin (CREDENTIALS.md)
     return !!(U && U[u] && (U[u].pw === p || (U[u].pwEnc && EL.E.hash(p).slice(0, 30) === U[u].pwEnc)));
   }
   // в режиме «Работа» — только то, что пишет устройство: русские подсказки эмулятора убираются
@@ -9341,6 +9341,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
     if (t.more && !d.off) p = net.moreText(id);
     if (t.ask && !d.off) p = t.ask.q;
+    if (t.cep && !d.off) p = net.prompt(id).replace(/#$/, '') + '(change-expired-password)# ';
     w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
@@ -9351,10 +9352,21 @@ vesr(config)#         do confirm  — подтвердить</pre>
       tlog(id, loginPrompt(d, t) + (t.user === null ? line : ''), 'c');
       if (t.user === null) { t.user = line.trim(); if (!t.user) t.user = null; }
       else { var okL = checkLogin(d, t.user, line); t.user = null;
-        if (okL) { t.auth = true; var bn = d.type === 'esr' ? d.st.run.banner : d.st.banner; if (bn && bn.exec) tlog(id, bn.exec, ''); }
+        if (okL) { t.auth = true; var bn = d.type === 'esr' ? d.st.run.banner : d.st.banner; if (bn && bn.exec) tlog(id, bn.exec, '');
+          // ESR, ESR ФСТЭК, WLC, SCS-32: заводской пароль admin нужно сменить при первом входе (в «Тесте» — пропускается)
+          if (mode === 'work' && d.type === 'esr' && d.sub !== 'me' && !d.st.pwChanged && line === 'password' && (d.st.run.users.admin || {}).pw === 'password') t.cep = {}; }
         else tlog(id, d.type === 'esr' ? 'Login incorrect' : '% Authentication failed', 'e'); }
       setPr(id); return;
     }
+    if (t.cep) { tlog(id, net.prompt(id).replace(/#$/, '') + '(change-expired-password)# ' + line, 'c');   // режим смены истёкшего пароля
+      var w = line.trim().split(/\s+/), U2 = d.st.run.users.admin, r2 = '';
+      if (w[0] === 'password' && w[1]) { if (EL.pwCheck && !EL.pwCheck(d.st, w[1])) r2 = 'Syntax error: Illegal parameter'; else t.cep.pw = w[1]; }
+      else if (w[0] === 'commit' && t.cep.pw) { U2.pw = t.cep.pw; d.st.cand.users.admin.pw = t.cep.pw; t.cep.done = true;
+        r2 = 'Configuration has been successfully applied and saved to flash. Commit timer started, changes will be reverted in 600 seconds.'; }
+      else if (w[0] === 'confirm' && t.cep.done) { d.st.pwChanged = true; t.cep = null; r2 = 'Configuration has been confirmed. Commit timer canceled.'; }
+      else if (w[0] === 'logout') { t.cep = null; t.auth = false; t.user = null; }
+      else if (line.trim()) r2 = 'Syntax error: Unknown command';
+      if (r2) tlog(id, r2, /^Syntax/.test(r2) ? 'e' : ''); setPr(id); return; }
     if (t.ask) { var q = t.ask; t.ask = null; tlog(id, q.q + line, 'c'); if (/^\s*y/i.test(line)) q.yes(); setPr(id); return; }   // подтверждение (y/n)
     var p = net.prompt(id);
     tlog(id, p + (pw ? '' : line), 'c'); if (line.trim()) t.hist.push(line); t.hi = t.hist.length;

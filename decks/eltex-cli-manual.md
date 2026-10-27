@@ -9,7 +9,7 @@
 ## Два режима: «Работа» и «Тест» (переключатель в шапке)
 **Работа** (по умолчанию) — как на настоящем оборудовании, ничего лишнего:
 - левая панель: «Устройства» и «Лабы»; лаба открывает готовую схему и окно с текстом задания — без автопроверки, подсказок и решения;
-- вход в консоль как на железе: MES — `User Name:` / `Password:` (заводской admin / admin или `username` из конфигурации), ESR — `login:` / `Password:` (admin / password), Debian — root / toor; после перезагрузки — снова вход;
+- вход в консоль как на железе (заводские учётки — по руководствам Eltex): MES 10.x / 6.x / 4.x — `admin` / `admin` (пока не создан другой пользователь), MES 8.x (MES5448/7048) — `admin` с пустым паролем; ESR, vESR, ESR ФСТЭК, WLC, SCS-32, ME, OLT — `admin` / `password`; точки доступа — `admin` / `password`; Debian — root / toor; после перезагрузки — снова вход. У ESR, ESR ФСТЭК, WLC и SCS-32 при первом входе с заводским паролем — режим `esr(change-expired-password)#`: `password <новый>` → `commit` → `confirm`, до этого настройка недоступна (`logout` — выйти); в «Тесте» этот шаг пропускается;
 - только сообщения устройства: `% Unrecognized command`, `% Incomplete command`, `% Invalid input detected at '^' marker.` (MES), `Syntax error: Unknown command | Incomplete command | Illegal parameter` (ESR) — подсказок эмулятора на русском нет;
 - клавиши консоли: ↑ ↓ — история, ← → / Home / End — по строке, Backspace / Delete, Tab — дописать, `?` — подсказка, **Ctrl+Z** — выход в `#`;
 - таблицы смотрят только командами (10.x: `show mac-address-table`, `show ip arp`; 6.x: `show mac address-table`, `show arp`; `show ip route` …); время идёт как на железе (MAC стареют, OSPF ждёт выбора DR), часов и пути пакета нет.
