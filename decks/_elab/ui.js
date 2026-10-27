@@ -608,6 +608,18 @@
   }
   function startLab(id) {
     lab = EL.labs.byId(id); labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    report({ type: 'lab', lab: id, title: lab.title, mode: mode });
+  }
+  // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
+  function report(ev) {
+    if (location.protocol === 'file:' || !window.fetch) return;
+    try { fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(ev) }).catch(function () {}); } catch (err) { /* без сайта курса */ }
+  }
+  if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
+    $('bOut').hidden = false;
+    $('bOut').addEventListener('click', function () {
+      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
+    });
   }
   function renderLab(open) {
     if (!lab) return;
