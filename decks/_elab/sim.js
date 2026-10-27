@@ -57,7 +57,7 @@
       if (e.i >= path.length) {                                   // дошёл до получателя
         var key = e.flow + '|' + e.pkt + '|' + e.dir; got[key] = (got[key] || 0) + 1;
         if (got[key] < st.frag) continue;                         // ждём все фрагменты
-        ev.push({ t: e.t, kind: 'deliver', flow: e.flow, pkt: e.pkt, dir: e.dir });
+        ev.push({ t: e.t, kind: 'deliver', flow: e.flow, pkt: e.pkt, dir: e.dir, delay: e.t - e.born, node: (path.length ? s.devs[path[path.length - 1].to] : s.devs[st.src] || {}).name });
         if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born }); }
         else { st.recv++; st.rtt.push(e.t - e.born); }           // ping — RTT, UDP — задержка в одну сторону
         continue;
@@ -74,7 +74,7 @@
       L.bits += e.bytes * 8; L.frames++;
       if (li.mismatch && rand() < DEF.collide) { var wc = 'коллизия на ' + L.name + ' (дуплекс не совпадает)'; st.drops[wc] = (st.drops[wc] || 0) + 1;
         ev.push({ t: t1, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: wc, t1: t1, t2: t3 }); continue; }
-      ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, dir: e.dir, frag: e.frag });
+      ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, tx: tx, dir: e.dir, frag: e.frag, bytes: e.bytes, q: P2.wait.length, port: P2.name });
       push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born });
     }
     var tEnd = ev.reduce(function (m, x) { return Math.max(m, x.t2 || x.t); }, 0) || 1;

@@ -8,6 +8,7 @@
   function test() { return U.mode() === 'test'; }
   function hosts() { var n = net(); return n.list().filter(function (d) { return !d.off && n.ifaces(d.id).length; }); }
   function fmt(s) { if (s === undefined || s === null) return '—'; if (s < 1e-3) return (s * 1e6).toFixed(1) + ' мкс'; if (s < 1) return (s * 1e3).toFixed(3) + ' мс'; return s.toFixed(3) + ' с'; }
+  var last = null;
   var flows = [{ kind: 'ping', src: '', dst: '', size: 64, count: 5, interval: 1, df: false, rate: 1000, dur: 0.5 }], qcap = 64, anim = null;
 
   // ---------------------------------------------------------------- меню и панель
@@ -53,7 +54,8 @@
       if (c === 'add') { var l = flows[flows.length - 1]; flows.push(EL.clone(l)); paint(); }
       if (c === 'del') { if (flows.length > 1) flows.splice(+b.closest('tr').dataset.i, 1); paint(); }
       if (c === 'stop') stopAnim();
-      if (c === 'run') simulate(body, det); });
+      if (c === 'run') simulate(body, det);
+      if (c === 'res' && last && EL.simRes) EL.simRes.open(last); });
   }
   function simulate(body, det) {
     var n = net(), bad = null;
@@ -64,7 +66,7 @@
     if (bad) { det.innerHTML = '<span style="color:var(--bad)">' + esc(bad) + '</span>'; return; }
     stopAnim();
     var r = n.simulate(fl, { qcap: qcap }); n.gen++;
-    det.innerHTML = report(r);
+    det.innerHTML = '<div class="row"><button class="pri" data-c="res">Результаты: журнал, векторы, гистограммы, скаляры</button></div>' + report(r); last = r;
     play(r, body.querySelector('.clk'));
   }
   function report(r) {

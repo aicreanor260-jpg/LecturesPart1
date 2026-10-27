@@ -291,6 +291,7 @@
         rid: nb ? ((nb.st.run.ospf && nb.st.run.ospf.rid) || (s.ifaces(q[3])[0] || {}).ip || q[3]) : q[3] }; }
       if (!ev) return;
       var msg = fmt(d, ev); if (!msg) return;
+      (s._evlog = s._evlog || []).push({ t: s.now, dev: d.name, k: ev.k, msg: msg }); if (s._evlog.length > 2000) s._evlog.shift();   // лента событий для «Результатов»
       logLine(s, d, msg);
       if ((d.type === 'esr' ? d.st.run.logcon : d.st.logcon) !== false) out.push({ id: id, msg: msg });
     });
