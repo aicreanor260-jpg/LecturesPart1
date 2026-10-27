@@ -54,7 +54,8 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 /* ---------- поле */
 #cv{position:fixed;left:0;top:54px;width:100%;height:calc(100% - 100px);display:block;cursor:default;
   background-image:linear-gradient(rgba(111,227,234,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(111,227,234,.05) 1px,transparent 1px);background-size:32px 32px}
-#cv.pan{cursor:grabbing}#cv.grab{cursor:grab}
+#cv.pan{cursor:grabbing}
+details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.25))}details.more>summary{cursor:pointer;padding:8px 2px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cy);font-size:12px}#cv.grab{cursor:grab}
 #rband{position:fixed;display:none;border:1px dashed var(--cy);background:rgba(111,227,234,.08);pointer-events:none;z-index:40}
 .frame{position:fixed;inset:66px 12px 58px 12px;pointer-events:none;z-index:1;border:1px solid rgba(212,87,79,.35);
   clip-path:polygon(0 0,40% 0,41% 8px,59% 8px,60% 0,100% 0,100% 100%,0 100%)}

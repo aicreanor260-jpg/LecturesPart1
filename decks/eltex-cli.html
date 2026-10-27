@@ -54,7 +54,8 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 /* ---------- поле */
 #cv{position:fixed;left:0;top:54px;width:100%;height:calc(100% - 100px);display:block;cursor:default;
   background-image:linear-gradient(rgba(111,227,234,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(111,227,234,.05) 1px,transparent 1px);background-size:32px 32px}
-#cv.pan{cursor:grabbing}#cv.grab{cursor:grab}
+#cv.pan{cursor:grabbing}
+details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.25))}details.more>summary{cursor:pointer;padding:8px 2px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cy);font-size:12px}#cv.grab{cursor:grab}
 #rband{position:fixed;display:none;border:1px dashed var(--cy);background:rgba(111,227,234,.08);pointer-events:none;z-index:40}
 .frame{position:fixed;inset:66px 12px 58px 12px;pointer-events:none;z-index:1;border:1px solid rgba(212,87,79,.35);
   clip-path:polygon(0 0,40% 0,41% 8px,59% 8px,60% 0,100% 0,100% 100%,0 100%)}
@@ -10237,10 +10238,21 @@ vesr(config)#         do confirm  — подтвердить</pre>
       X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
         return X.run('link', a, i); });
   }
+  // панель устройств: сверху — что нужно в лабах (доступ, маршрутизаторы, серверы и ПК), остальное — «Ещё оборудование» (more: true)
+  var TOP = [{ name: 'Коммутаторы доступа', first: ['MES1428', 'MES2308P'], from: ['Коммутаторы доступа'] },
+    { name: 'Маршрутизаторы', first: ['ESR-200', 'vESR'], from: ['Маршрутизаторы ESR'] },
+    { name: 'Серверы и ПК', first: ['Debian-server', 'Docker', 'VPC', 'Debian'], from: [] }];
+  var MORE = ['Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы для ЦОД', 'Маршрутизаторы ME', 'Межсетевые экраны ESR ФСТЭК',
+    'Контроллеры Wi-Fi', 'Точки доступа Wi-Fi', 'OLT GPON / XGS-PON', 'ONT (абонентские терминалы)', 'Консольные серверы SCS'];
   function catalogGroups() {
-    var g = {}, ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы ЦОД', 'Маршрутизаторы ESR', 'Конечные узлы'];
+    var g = {}, used = {}, out = [];
     Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
-    return Object.keys(g).sort(function (a, b) { return (ORD.indexOf(a) + 99) % 99 - (ORD.indexOf(b) + 99) % 99; }).map(function (k) { return { name: k, items: g[k].sort() }; });
+    TOP.forEach(function (t) { var its = t.first.filter(function (k) { return EL.MODELS[k]; });
+      t.from.forEach(function (gr) { (g[gr] || []).slice().sort().forEach(function (k) { if (its.indexOf(k) < 0) its.push(k); }); });
+      its.forEach(function (k) { used[k] = 1; }); out.push({ name: t.name, items: its }); });
+    Object.keys(g).sort(function (a, b) { return (MORE.indexOf(a) + 99) % 99 - (MORE.indexOf(b) + 99) % 99; }).forEach(function (gr) {
+      var its = g[gr].filter(function (k) { return !used[k]; }).sort(); if (its.length) out.push({ name: gr, items: its, more: true }); });
+    return out;
   }
   function addMenu(e) {
     var p = toWorld(e.clientX, e.clientY);
@@ -10261,9 +10273,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function addDev(model, x, y) { var d = net.add(model, null, x, y); sel = d.id; X.rec({ k: 'add', name: d.name }); draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
   function plural(n, a, b, c) { var m = n % 10, h = n % 100; return n + ' ' + (m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c); }
   // подтверждение в окне эмулятора (не window.confirm)
-  function ask(text, yes) {
+  function ask(text, yes, yesLabel) {
     var body = document.createElement('div'); body.className = 'pad';
-    body.innerHTML = '<p style="color:var(--ink);font-size:15px">' + esc(text) + '</p><div class="row"><button class="pri" data-q="y">Да, удалить</button><button data-q="n">Отмена</button></div>';
+    body.innerHTML = '<p style="color:var(--ink);font-size:15px">' + esc(text) + '</p><div class="row"><button class="pri" data-q="y">' + esc(yesLabel || 'Да, удалить') + '</button><button data-q="n">Отмена</button></div>';
     makeWin('ask', 'Подтверждение', '', body, { w: 380, h: 170, x: innerWidth / 2 - 190, y: innerHeight / 2 - 110 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-q]'); if (!b) return; closeWin('ask'); if (b.dataset.q === 'y') yes(); });
     var y = body.querySelector('[data-q="y"]'); if (y) setTimeout(function () { y.focus(); }, 0);
@@ -10654,11 +10666,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var s = $('sbody'), h = '';
     if (tab === 'dev') {
       h = '<input class="q" id="sq" placeholder="Поиск модели…">';
+      var more = false;
       catalogGroups().forEach(function (g) {
+        if (g.more && !more) { more = true; h += '<details class="more" id="smore"><summary>Ещё оборудование</summary>'; }
         h += '<h4>' + esc(g.name) + '</h4>' + g.items.map(function (k) { var m = EL.MODELS[k];
           return '<button class="pi" draggable="true" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + iconSvg(m.type, k) +
             '<span><b>' + k + (m.sw ? '<span class="sw">' + m.sw.replace('ПО ', '') + '</span>' : '') + '</b><small>' + esc(m.note) + '</small></span></button>'; }).join('');
       });
+      if (more) h += '</details>';
       h += '<p class="note">Перетащите модель на поле или щёлкните — появится в центре. ПКМ по пустому полю — то же с поиском. ' +
            'Коммутаторы: CLI по ветке ПО (10.x · 6.x/4.x · 8.x FASTPATH), порты как на устройстве. Это модель по документации Eltex, не прошивка.</p>';
     }
@@ -10673,7 +10688,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
       '<p class="note">Файл .json хранит устройства, кабели и все настройки. В браузере ничего не сохраняется само.</p>';
     s.innerHTML = h + X.side(tab);
     var q = $('sq'); if (q) q.addEventListener('input', function () { var v = q.value.trim().toLowerCase();
-      [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; }); });
+      [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; });
+      [].forEach.call(s.querySelectorAll('h4'), function (h4) { var n = h4.nextElementSibling, any = !v; while (n && n.classList.contains('pi')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; }
+        h4.style.display = any ? '' : 'none'; });
+      if ($('smore')) $('smore').open = !!v; });
   }
   $('sbody').addEventListener('dragstart', function (e) { var b = e.target.closest('[data-model]'); if (b) e.dataTransfer.setData('text/model', b.dataset.model); });
   $('sbody').addEventListener('click', function (e) {
@@ -10705,6 +10723,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
     $('bOut').hidden = false;
     $('bOut').addEventListener('click', function () {
+      lab = null; labP = null; task = null; resetNet();                    // состояние лабы студента не переживает выход
+      try { history.replaceState(null, '', location.pathname); } catch (err) { /* без истории */ }
       fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
     });
   }
@@ -10725,7 +10745,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var ts = lab.tasks(labP), ok = 0;
     if (mode === 'work') {   // как методичка: текст задания, без проверки и подсказок
       body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' +
-        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>' + (hasDoc(lab) ? '<div class="row"><button data-a="doc">Методичка</button></div>' : '');
+        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol><div class="row">' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + '<button data-a="reset">Сбросить лабу</button></div>';
       return;
     }
     var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
@@ -10735,7 +10755,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
       (lab.hint && labShow === 'hint' ? '<div class="hint">' + esc(lab.hint(labP)) + '</div>' : '') +
       '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
-      '<button data-a="sol">' + (labShow === true ? 'Скрыть решение' : 'Решение') + '</button></div>' + sol;
+      '<button data-a="sol">' + (labShow === true ? 'Скрыть решение' : 'Решение') + '</button><button data-a="reset">Сбросить лабу</button></div>' + sol;
   }
   // методичка лабы — PDF курса рядом с эмулятором (labs/<id>.pdf на сайте курса); в репозиторий и в HTML не входит
   function hasDoc(L) { return /^(\d+\.\d+|E\.\d+)$/.test(L.id); }
@@ -10757,7 +10777,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
   function openManual(id) { var d = net.devs[id], m = d && net.manualFor(id); if (!m) return;
     openPdf('man' + id, m.url, m.title, d.name + ' · ' + d.model, 'Руководство доступно', m.extra); }
-  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
+  // исходная схема лабы того же варианта: все настройки студента пропадают
+  function resetLab() { if (!lab) return; var L = lab, P = labP;
+    ask('Сбросить лабу ' + L.id + '? Все настройки устройств и изменения схемы пропадут — вернётся исходная схема задания.', function () {
+      resetNet(); lab = L; labP = P; labShow = false; lab.build(net, labP); draw(); fit(); renderLab(true); renderSide(); toast('Лаба ' + L.id + ' сброшена'); }, 'Да, сбросить'); }
+  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; } if (a === 'reset') { resetLab(); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
     // тренажёры дек написаны синтаксисом ветки 6.x — коммутатор той же ветки
