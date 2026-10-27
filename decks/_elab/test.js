@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -869,6 +869,34 @@ EL.labs.LABS.forEach(runLab);
   chk('reload system in 1 — перезагрузка через минуту модельного времени', booted && n.exec(r.id, 'show system reload') === '');
   chk('reload system at в прошлом — ошибка', /Illegal/.test(n.exec(r.id, 'reload system at 10:00:00 1 january 2001')));
   console.log('✓ перезагрузка и таймер commit');
+})();
+
+// PBR: R1 с двумя провайдерами; трафик VPC2 по политике уходит через ISP2
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), i1 = n.add('vESR', 'ISP1'), i2 = n.add('vESR', 'ISP2'), sw = n.add('MES2428', 'SW1'), v1 = n.add('VPC', 'VPC1'), v2 = n.add('VPC', 'VPC2'), srv = n.add('vESR', 'SRV');
+  n.connect(r1.id, 'gi1/0/1', i1.id, 'gi1/0/1'); n.connect(r1.id, 'gi1/0/2', i2.id, 'gi1/0/1'); n.connect(r1.id, 'gi1/0/3', sw.id, 'gi1/0/24');
+  n.connect(v1.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(v2.id, 'eth0', sw.id, 'gi1/0/2'); n.connect(i1.id, 'gi1/0/2', srv.id, 'gi1/0/1'); n.connect(i2.id, 'gi1/0/2', srv.id, 'gi1/0/2');
+  var base = { R1: ['configure', 'interface gi1/0/1', 'ip address 100.1.0.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.2.0.2/30', 'ip firewall disable', 'exit',
+      'interface gi1/0/3', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.1.0.1', 'end', 'commit', 'confirm'],
+    ISP1: ['configure', 'interface gi1/0/1', 'ip address 100.1.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 8.8.1.1/24', 'ip firewall disable', 'exit', 'ip route 192.168.1.0/24 100.1.0.2', 'end', 'commit', 'confirm'],
+    ISP2: ['configure', 'interface gi1/0/1', 'ip address 100.2.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 8.8.2.1/24', 'ip firewall disable', 'exit', 'ip route 192.168.1.0/24 100.2.0.2', 'end', 'commit', 'confirm'],
+    SRV: ['configure', 'interface gi1/0/1', 'ip address 8.8.1.8/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 8.8.2.8/24', 'ip firewall disable', 'exit', 'ip route 192.168.1.20/32 8.8.2.1', 'ip route 192.168.1.0/24 8.8.1.1', 'end', 'commit', 'confirm'],
+    VPC1: ['ip 192.168.1.10/24 192.168.1.1'], VPC2: ['ip 192.168.1.20/24 192.168.1.1'] };
+  chk('PBR: схема', !EL.labs.apply(n, base).length);
+  function via(r, dev) { return r.steps.some(function (s) { return s.k === 'ip' && (s.segs || []).some(function (g) { return g.to === dev.id || g.from === dev.id; }); }); }
+  var a = n.ping(v2.id, '8.8.1.8');
+  chk('без политики VPC2 идёт через ISP1 (маршрут по умолчанию)', a.ok && via(a, i1));
+  var e = EL.labs.apply(n, { R1: ['configure', 'ip access-list extended FROM-VPC2', 'rule 10', 'action permit', 'match source-address address-range 192.168.1.20-192.168.1.20', 'enable', 'exit', 'exit',
+    'route-map VIA-ISP2', 'rule 10', 'match ip access-group FROM-VPC2', 'action set ip next-hop 100.2.0.1', 'enable', 'exit', 'exit',
+    'interface gi1/0/3', 'ip policy route-map VIA-ISP2', 'exit', 'end', 'commit', 'confirm'] });
+  chk('PBR: команды без ошибок', !e.length, e.join('; '));
+  var b = n.ping(v2.id, '8.8.2.8'), c = n.ping(v1.id, '8.8.1.8');
+  chk('по политике VPC2 уходит через ISP2', b.ok && via(b, i2) && b.steps.some(function (s) { return /политика VIA-ISP2 \(rule 10, ACL FROM-VPC2\)/.test(s.t); }), b.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('VPC1 (не попал под ACL) — по-прежнему через ISP1', c.ok && via(c, i1) && !b.steps.some(function () { return false; }) && !c.steps.some(function (s) { return /политика/.test(s.t); }));
+  chk('running-config: route-map и ip policy', /route-map VIA-ISP2\n  rule 10\n    match ip access-group FROM-VPC2\n    action set ip next-hop 100\.2\.0\.1\n    enable\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')) &&
+      /ip policy route-map VIA-ISP2/.test(n.exec(r1.id, 'show running-config')));
+  console.log('✓ PBR');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

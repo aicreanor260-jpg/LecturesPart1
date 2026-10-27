@@ -504,7 +504,9 @@
       var vf = cd.type === 'esr' && this.ipsecForward ? this.ipsecForward(cur, pk, steps, ct) : null;   // IPsec policy-based: трафик политики уходит в ESP
       if (vf) { if (!vf.ok) return { ok: false, why: 'Request timed out', pk: pk }; hops.push({ dev: vf.dev, ip: vf.ip }); cur = vf.dev; continue; }
       this._vrfCtx = inIf ? inIf.vrf || null : (this._vrfSrc && this._vrfSrc.dev === cur ? this._vrfSrc.vrf : null);
-      var r; try { r = this.lookup(cur, pk.dst); } finally { this._vrfCtx = null; }
+      this._pkCtx = { pk: pk, inIf: inIf, dev: cur };            // для PBR: пакет и интерфейс, на который он пришёл
+      var r; try { r = this.lookup(cur, pk.dst); } finally { this._vrfCtx = null; this._pkCtx = null; }
+      if (r && r.pbr) steps.push({ k: 'route', t: cd.name + ': ' + r.pbr });
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
