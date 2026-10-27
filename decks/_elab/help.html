@@ -65,6 +65,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show ip nat translations · ip firewall sessions icmp-timeout N</td><td>NAT-трансляции стареют по таймаутам сессий (ICMP 30 с, UDP 30/180, TCP 60/120/30)</td></tr>
 <tr><td>lacp timeout short|long (8.x: [no] lacp actor admin state longtimeout)</td><td>партнёр вышел из LACP — порт ещё 3 / 90 с в агрегате</td></tr>
 <tr><td>lldp timer · lldp hold-multiplier (MES 10.x: lldp transmit-interval · lldp holdtime-multiplier)</td><td>TTL соседа в show lldp neighbors отсчитывается и обновляется каждые timer секунд</td></tr>
+<tr><td>(router bgp / neighbor) timers keepalive N · timers holdtime N · show bgp neighbors</td><td>BGP по таймерам: сосед пропал без разрыва линка — сессия и маршруты живут hold time (180 с); NOTIFICATION или свой линк — сразу</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>

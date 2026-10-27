@@ -1106,9 +1106,44 @@ EL.labs.LABS.forEach(runLab);
   chk('show ip route — B [20/0]', /^B\s+\* 192\.168\.3\.0\/24\s+\[20\/0\]/m.test(n.exec(r1.id, 'show ip route')), n.exec(r1.id, 'show ip route'));
   chk('PA → PB через три AS', n.ping(pa.id, '192.168.3.10').ok);
   chk('running-config: router bgp по иерархии ESR', /router bgp 65001\n  neighbor 10\.12\.0\.2\n    remote-as 65002\n    address-family ipv4 unicast\n      enable\n    exit\n    enable\n  exit\n  address-family ipv4 unicast\n    network 192\.168\.1\.0\/24\n  exit\n  enable\nexit/.test(n.exec(r1.id, 'show running-config')), n.exec(r1.id, 'show running-config'));
+  chk('BGP: show bgp neighbors — Hold time 180, keepalive 60', /Hold time is 180, keepalive interval is 60 seconds/.test(n.exec(r2.id, 'show bgp neighbors')));
+  n.power(r3.id, false);
+  chk('BGP: R3 выключен — линк R2 gi1/0/2 упал, сессия рвётся сразу', !/192\.168\.3\.0\/24/.test(n.exec(r1.id, 'show bgp ipv4 unicast')));
+  n.power(r3.id, true);
+  chk('BGP: R3 включился — сессия сразу, связь вернулась', n.ping(pa.id, '192.168.3.10').ok);
   EL.labs.apply(n, { R3: ['configure', 'router bgp 65003', 'neighbor 10.23.0.2', 'remote-as 65009', 'end', 'commit', 'confirm'] });
   chk('неверный remote-as — сессия не поднимается, маршрута нет', !n.ping(pa.id, '192.168.3.10').ok && /remote-as 65009 не совпадает/.test(n.exec(r3.id, 'show bgp neighbors')), n.exec(r3.id, 'show bgp neighbors'));
   console.log('✓ BGP');
+})();
+
+// BGP по таймерам: сосед за коммутатором выключился — сессия и маршруты живут hold time
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ BGP-таймеры: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), ra = n.add('vESR', 'RA'), rb = n.add('vESR', 'RB'), sw = n.add('MES2428', 'SW'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+  n.connect(ra.id, 'gi1/0/1', sw.id, 'gi1/0/1'); n.connect(rb.id, 'gi1/0/1', sw.id, 'gi1/0/2'); n.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
+  function side(as, me, peer, pas, lan) { return ['configure', 'interface gi1/0/1', 'ip address ' + me + '/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address ' + lan + '.1/24', 'ip firewall disable', 'exit',
+    'router bgp ' + as, 'neighbor ' + peer, 'remote-as ' + pas, 'address-family ipv4 unicast', 'enable', 'exit', 'enable', 'exit', 'address-family ipv4 unicast', 'network ' + lan + '.0/24', 'exit', 'enable', 'exit', 'end', 'commit', 'confirm']; }
+  EL.labs.apply(n, { RA: side(65001, '10.0.0.1', '10.0.0.2', 65002, '192.168.1'), RB: side(65002, '10.0.0.2', '10.0.0.1', 65001, '192.168.2'),
+    PA: ['ip 192.168.1.10/24 192.168.1.1'], PB: ['ip 192.168.2.10/24 192.168.2.1'] });
+  chk('сессия и связь', n.ping(pa.id, '192.168.2.10').ok);
+  n.power(rb.id, false); n.tick(179);
+  chk('RB выключен, 179 с — сессия ещё Established, маршрут есть, трафик в «чёрную дыру»', /keepalive от соседа не приходят 179 с/.test(n.exec(ra.id, 'show bgp neighbors')) &&
+      /192\.168\.2\.0\/24/.test(n.exec(ra.id, 'show bgp ipv4 unicast')) && !n.ping(pa.id, '192.168.2.10').ok, n.exec(ra.id, 'show bgp neighbors'));
+  n.tick(1);
+  chk('180 с — Hold timer expired, маршрут пропал', /Hold timer expired/.test(n.exec(ra.id, 'show bgp neighbors')) && !/192\.168\.2\.0\/24/.test(n.exec(ra.id, 'show bgp ipv4 unicast')), n.exec(ra.id, 'show bgp neighbors'));
+  n.power(rb.id, true); n.tick(60);   // порт коммутатора к RB 3 с в discarding (auto-edge) — соединение не вышло, повтор через error-wait 60 с
+  var q9 = n.ping(pa.id, '192.168.2.10'); chk('RB включился — сессия через error-wait (60 с)', q9.ok, q9.why);
+  EL.labs.apply(n, { RA: ['configure', 'router bgp 65001', 'neighbor 10.0.0.2', 'timers holdtime 30', 'end', 'commit', 'confirm'] });
+  chk('holdtime 30 у RA — согласовано 30 / keepalive 10 у обоих', /Hold time is 30, keepalive interval is 10/.test(n.exec(rb.id, 'show bgp neighbors')) &&
+      /timers holdtime 30/.test(n.exec(ra.id, 'show running-config')), n.exec(rb.id, 'show bgp neighbors'));
+  n.power(rb.id, false); n.tick(30);
+  chk('holdtime 30: через 30 с сессия упала', !/192\.168\.2\.0\/24/.test(n.exec(ra.id, 'show bgp ipv4 unicast')));
+  n.power(rb.id, true);
+  EL.labs.apply(n, { RB: ['configure', 'router bgp 65002', 'no enable', 'end', 'commit', 'confirm'] });
+  chk('no enable у соседа (NOTIFICATION) — разрыв сразу', !/192\.168\.2\.0\/24/.test(n.exec(ra.id, 'show bgp ipv4 unicast')));
+  EL.labs.apply(n, { RB: ['configure', 'router bgp 65002', 'enable', 'end', 'commit', 'confirm'] });
+  chk('enable — сессия сразу (настройку изменили)', n.ping(pa.id, '192.168.2.10').ok);
+  console.log('✓ BGP по таймерам');
 })();
 
 // L2TPv3: два офиса в одной L2-сети 192.168.50.0/24 через провайдера
