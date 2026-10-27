@@ -260,7 +260,7 @@ security zone-pair trusted self        ← трафик самому маршр�
 
 Как работает: у каждого IPv6-интерфейса есть link-local fe80::/64 из MAC (EUI-64). Перед отправкой — Neighbor Solicitation на solicited-node адрес `ff02::1:ffXX:XXXX` (MAC `33:33:ff:XX:XX:XX`, кадр multicast), ответ — Neighbor Advertisement; запись появляется в `show ipv6 neighbors`. В трассе и захвате — шаги NS/NA/ICMPv6 Echo с Hop Limit, разбор IPv6 (Next Header 58) и ICMPv6 (типы 128/129/135/136). RIPng и OSPFv3: соседи — ESR в одном сегменте с адресами из одной IPv6-сети, next-hop — link-local соседа.
 
-Упрощения: DHCPv6 нет; записи ND не стареют; OSPFv3 — одна область, стоимость интерфейса 10; IPv6 на SVI MES не поддерживается (межсетевой экран, SLAAC и таймеры — см. ниже).
+Упрощения: DHCPv6 нет; записи ND не стареют; OSPFv3 — одна область, стоимость интерфейса по умолчанию 10 (auto-cost не считается), типы сети non-broadcast/point-to-multipoint не моделируются; IPv6 на SVI MES не поддерживается (межсетевой экран, SLAAC и таймеры — см. ниже).
 
 ### DNS
 
@@ -455,7 +455,7 @@ tunnel l2tpv3 1
 ### IPv6: межсетевой экран, SLAAC, таймеры RIPng/OSPFv3
 - **Межсетевой экран ESR для IPv6.** Зоны работают и для IPv6: интерфейс без `ip firewall disable` и без `security-zone` отбрасывает IPv6 так же, как IPv4. Между зонами нужен `security zone-pair` с правилом (`match protocol icmp6` или `any`); ответ проходит в рамках сессии. Правила с адресами (object-group IPv4) к IPv6 не подходят.
 - **SLAAC.** На интерфейсе ESR: `ipv6 nd prefix 2001:db8:1::/64 86400 3600` (`no-autoconfig` — без автоадреса), `ipv6 nd ra lifetime`. Узлы: VPC — `ip auto`; Debian — адрес появляется при `ip link set ens3 up`, повторный запрос — `rdisc6 ens3`. Адрес — префикс /64 + EUI-64 из MAC, шлюз — link-local маршрутизатора. В трассе — Router Solicitation (ff02::2) и Router Advertisement с префиксом (ICMPv6 133/134).
-- **Таймеры.** OSPFv3: `ipv6 ospf hello-interval` (по умолчанию 10), `ipv6 ospf dead-interval` (40); у соседей они должны совпадать. Соседство проходит init → 2way → Full через wait timer (= dead) — до этого маршрутов нет. Если сосед замолчал, маршруты через него держатся dead-interval. RIPng: `timers update | invalid | flush` в `(config-ripng)#`; новый маршрут приходит триггерным обновлением через 1–5 с на переход; если сосед замолчал, маршрут живёт до invalid (180 с). Если упал свой интерфейс, маршруты через него уходят сразу.
+- **Таймеры (как у RIP/OSPF IPv4).** OSPFv3 на интерфейсе: `ipv6 ospf hello-interval 1..255` (10), `ipv6 ospf dead-interval` (40), `ipv6 ospf wait-interval` (40), `ipv6 ospf priority 0..255` (120 — по справочнику), `ipv6 ospf network broadcast | point-to-point`, `ipv6 ospf cost 1..65535` (по умолчанию 10), у всех — `no …`; hello/dead у соседей должны совпадать. Соседство init → 2way → (broadcast-сегмент без DR — ожидание wait-interval) → exstart → full; point-to-point — full за 2 с; DR/BDR — наибольший priority, затем router-id (0 — никогда не DR); `show ipv6 ospf neighbors` — Pri, `full/dr | bdr | drother | ptp`, DTime, сколько осталось до выбора DR или до удаления. Сосед замолчал — маршруты через него держатся dead-interval. Метрика маршрута — сумма cost (`show ipv6 route`: `[110/30]`). RIPng: `timers update | invalid | flush 12..65535` (30/180/240) и `no timers …` в `(config-ripng)#`; новый маршрут — триггерным обновлением 1–5 с на переход; сосед замолчал — маршрут живёт до invalid (в `show ipv6 rip` — «обновлений нет N с»), затем «possibly down» (120/16) до flush. Свой интерфейс упал — маршруты через него уходят сразу.
 - Упрощения: устаревший маршрут держит только сосед пропавшего маршрутизатора (дальше по сети он не передаётся); DHCPv6 и отсчёт времени жизни префикса RA не моделируются.
 
 ### Симуляция во времени (как в OMNeT++) — режим «Тест»
@@ -554,7 +554,7 @@ tunnel l2tpv3 1
 
 - **Консоль и трасса считают обмен целиком.** Ping, curl, DNS-запрос, IKE в консоли — одна пара «запрос + ответ», рассчитанная мгновенно; пять строк ping — один и тот же результат, «первый ping теряется на ARP» не воспроизводится (ARP показывается отдельным шагом). Время, очереди, потери и MTU — в окне «Симуляция во времени» (см. выше).
 - **MTU коммутатора MES** (`mtu`, `system mtu` — размер кадра L2) не моделируется; у VPC и Debian MTU 1500. Накладные расходы туннеля учтены только через MTU туннеля.
-- **Протоколы маршрутизации** RIP, OSPF, RIPng, OSPFv3 идут по таймерам; BGP сходится сразу; через туннели GRE/VTI соседства не строятся.
+- **Протоколы маршрутизации** RIP, OSPF, RIPng, OSPFv3 и BGP (keepalive/holdtime, error-wait) идут по таймерам; IS-IS и LDP на ME — сразу; через туннели GRE/VTI соседства не строятся.
 - **IPsec:** NAT-T, DPD, rekey нет.
 - **Не моделируются:** L2TP для удалённого доступа (PPP); на MES — Selective Q-in-Q, MSTP-регионы, полноценный стек (единая консоль, порты gi2/0/N); IPv6 на SVI MES; DHCPv6.
 

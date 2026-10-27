@@ -731,10 +731,27 @@ EL.labs.LABS.forEach(runLab);
   o.n.tick(40);
   chk('OSPFv3: PA → PB', o.n.ping6(o.pa.id, '2001:b::10').ok);
   chk('OSPFv3: соседи R2 — R1 и R3', (o.n.exec(o.r2.id, 'show ipv6 ospf neighbors').match(/full/g) || []).length === 2, o.n.exec(o.r2.id, 'show ipv6 ospf neighbors'));
-  chk('OSPFv3: маршрут O', /^O\s+\* 2001:b::\/64\s+\[110\/0\]/m.test(o.n.exec(o.r1.id, 'show ipv6 route')), o.n.exec(o.r1.id, 'show ipv6 route'));
+  chk('OSPFv3: маршрут O со стоимостью 30 (3 интерфейса по 10)', /^O\s+\* 2001:b::\/64\s+\[110\/30\]/m.test(o.n.exec(o.r1.id, 'show ipv6 route')), o.n.exec(o.r1.id, 'show ipv6 route'));
   EL.labs.apply(o.n, { R1: ['configure', 'ipv6 router ospf 1', 'area 0.0.0.0', 'no enable', 'end', 'commit', 'confirm'] });
   o.n.tick(41); chk('OSPFv3: область выключена — после dead-interval связи нет', !o.n.ping6(o.pa.id, '2001:b::10').ok);
 
+  // OSPFv3: роли DR/BDR по priority (по умолчанию 120), point-to-point — без ожидания DR
+  var q = chain('O'); q.n.dyn6(); q.n.tick(45);
+  var nb2 = q.n.exec(q.r2.id, 'show ipv6 ospf neighbors');
+  chk('OSPFv3: у R2 соседи full/dr или full/bdr, приоритет 120', /full\/(dr|bdr)/.test(nb2) && /\s120\s+full/.test(nb2), nb2);
+  var w = chain('O'); ['R1', 'R2'].forEach(function (r) { EL.labs.apply(w.n, (function () { var o = {}; o[r] = ['configure', 'interface gi1/0/1', 'ipv6 ospf network point-to-point', 'end', 'commit', 'confirm']; return o; })()); });
+  w.n.dyn6(); w.n.tick(3);
+  chk('OSPFv3 point-to-point: full/ptp за 2 с, без wait-interval', /full\/ptp/.test(w.n.exec(w.r1.id, 'show ipv6 ospf neighbors')) && /ipv6 ospf network point-to-point/.test(w.n.exec(w.r1.id, 'show running-config')), w.n.exec(w.r1.id, 'show ipv6 ospf neighbors'));
+  chk('OSPFv3: priority 300 — ошибка, cost 5 принят', /Illegal/.test(w.n.exec(w.r1.id, 'configure') + w.n.exec(w.r1.id, 'interface gi1/0/1') + w.n.exec(w.r1.id, 'ipv6 ospf priority 300')) &&
+      !/Illegal|%/.test(w.n.exec(w.r1.id, 'ipv6 ospf cost 5')));
+  // RIPng: после invalid маршрут «possibly down» (метрика 16) до flush
+  var u = chain('R'); u.n.tick(12);
+  EL.labs.apply(u.n, { R3: ['configure', 'ipv6 router rip', 'no enable', 'exit', 'end', 'commit', 'confirm'] }); u.n.tick(190);
+  var rr = u.n.exec(u.r2.id, 'show ipv6 rip');
+  chk('RIPng: 190 с без обновлений — possibly down (120/16), удаление по flush', /2001:b::\/64\s+via \S+ on gi1\/0\/2 \[rip \d\d:\d\d:\d\d\]\s+\(120\/16\) possibly down — удаление через 50 с/.test(rr) &&
+      !/2001:b::\/64/.test(u.n.exec(u.r2.id, 'show ipv6 route')), rr);
+  u.n.tick(50); chk('RIPng: после flush (240 с) маршрута нет и в show ipv6 rip', !/2001:b::\/64/.test(u.n.exec(u.r2.id, 'show ipv6 rip')), u.n.exec(u.r2.id, 'show ipv6 rip'));
+  chk('RIPng: timers invalid 5 — ошибка (12..65535)', /Illegal/.test(u.n.exec(u.r1.id, 'configure') + u.n.exec(u.r1.id, 'ipv6 router rip') + u.n.exec(u.r1.id, 'timers invalid 5')));
   console.log('✓ RIPng и OSPFv3');
 })();
 

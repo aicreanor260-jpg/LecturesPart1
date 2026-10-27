@@ -210,7 +210,8 @@
     var o = [' Codes: C – connected, S – static, R – RIP derived,', '        O – OSPF derived, IA – OSPF inter area route,', '        E1 – OSPF external type 1 route, E2 – OSPF external type 2 route',
       '        B – BGP derived, D – DHCP derived, K – kernel route,', '        * – FIB route', ''];
     s.routes6(st.dev).filter(function (r) { return !r.dead; }).sort(function (a, b) { return a.net < b.net ? -1 : 1; }).forEach(function (r) {
-      o.push(rp(r.p, 6) + '* ' + rp(r.net, 18) + rp('[' + (r.p === 'C' ? '0/0' : r.ad + '/0') + ']', 8) + rp(r.nh ? 'via ' + r.nh + ' on ' + r.ifn : 'dev ' + r.ifn, 34) + (r.p === 'C' ? '[direct 00:00:00]' : '[static 00:00:00]')); });
+      o.push(rp(r.p, 6) + '* ' + rp(r.net, 18) + rp('[' + (r.p === 'C' ? '0/0' : r.ad + '/' + (r.m || 0)) + ']', 9) + rp(r.nh ? 'via ' + r.nh + ' on ' + r.ifn : 'dev ' + r.ifn, 34) + ' ' +
+        '[' + ({ C: 'direct', R: 'rip', O: 'ospf', B: 'bgp' }[r.p] || 'static') + ' 00:00:00]'); });
     return o.join('\n'); }
   function nd6Text(st) { var s = st.net; if (!s) return ''; var t = nd(s, st.dev);
     var o = ['Interface         IPv6 address                MAC address         State             Age(min)', '---------------   -------------------------   -----------------   ---------------   ----------'];
