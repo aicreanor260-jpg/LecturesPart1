@@ -47,7 +47,7 @@
   // ---------------------------------------------------------------- commit / confirm
   function commit(st) {
     if (!st.pending) return 'Nothing to commit';
-    st.run = EL.clone(st.cand); st.pending = false; st.unconfirmed = true;
+    st.run = EL.clone(st.cand); st.pending = false; st.unconfirmed = true; st.commits = (st.commits || 0) + 1;
     return 'Configuration has been successfully applied and saved to flash. Commit timer started, changes will be reverted in 600 seconds.';
   }
   function confirm(st) {

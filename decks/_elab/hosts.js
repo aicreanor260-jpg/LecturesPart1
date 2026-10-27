@@ -46,7 +46,7 @@
     o = o || {};
     return { kind: 'deb', name: name, host: o.host || 'debian', user: o.auto ? 'root' : null, login: 'user', up: false, ip: null, len: 24, gw: null,
              files: { '/etc/network/interfaces': IFDEF }, accounts: { root: 'toor', user: 'user' }, ssh: null,
-             tz: o.tz === undefined ? 7 : o.tz, clk: 0, ntp: true, browser: !!o.browser, svc: { chronyd: true, apache2: !!o.web, ssh: true } };
+             tz: o.tz === undefined ? 7 : o.tz, clk: 0, ntp: true, browser: !!o.browser, svc: { chronyd: true, apache2: !!o.web, ssh: true, rsyslog: !!o.web, 'tftpd-hpa': !!o.web }, cap: [] };
   }
   function dhcpUp(st) {
     if (!st.net) return '';
@@ -194,6 +194,19 @@
         st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - Date.now(); return '';
       }
       return 'Unknown command verb ' + t[1] + '.';
+    }
+    if (c === 'service' && t[1] && t[2]) return debExec(st, 'systemctl ' + t[2] + ' ' + t[1], ui);
+    if (c === 'ls') {
+      var dir = (t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0] || '/root').replace(/\/$/, '');
+      var names = {}; Object.keys(st.files).forEach(function (k) { if (k.indexOf(dir + '/') === 0) names[k.slice(dir.length + 1).split('/')[0]] = 1; });
+      var L = Object.keys(names).sort();
+      if (!L.length && !/^\/(tftp|var\/log\/rsyslog)/.test(dir)) return 'ls: cannot access \'' + dir + '\': No such file or directory';
+      return L.join('  ');
+    }
+    if (c === 'tcpdump') {
+      if (!st.cap.length) return 'tcpdump: verbose output suppressed\nlistening on ens3, link-type EN10MB (Ethernet)\n0 packets captured (отправьте трафик через зеркалируемый порт)';
+      var out = st.cap.slice(-20).join('\n'); st.cap = [];
+      return 'listening on ens3, link-type EN10MB (Ethernet)\n' + out;
     }
     if (c === 'systemctl') {
       var svc = (t[2] || '').replace(/\.service$/, '').replace(/^chrony$/, 'chronyd');

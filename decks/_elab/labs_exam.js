@@ -156,4 +156,8 @@
   }
   var all = EL.labs.LABS, at = all.map(function (l) { return l.id; }).indexOf('T.1');
   Array.prototype.splice.apply(all, [at < 0 ? all.length : at, 0].concat([makeExam(1), makeExam(2), makeExam(3)]));
+  // итоговый порядок: лабы по номеру, затем экзамены, затем поиск неисправности
+  function key(id) { var g = /^\d/.test(id) ? 0 : id.charAt(0) === 'E' ? 1 : 2, n = id.replace(/^[A-Z]\./, '').split('.');
+    return [g, +n[0], +(n[1] || 0)]; }
+  all.sort(function (a, b) { var x = key(a.id), y = key(b.id); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
 })(typeof window !== 'undefined' ? window : global);

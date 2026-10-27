@@ -44,6 +44,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
 <tr><td>spanning-tree · spanning-tree mode rst · spanning-tree priority 16384 · show spanning-tree</td><td>RSTP</td></tr>
 <tr><td>interface port-channel 1 · channel-group 1 mode active|passive|on · show etherchannel summary</td><td>LACP</td></tr>
+<tr><td>monitor session 1 destination interface gi1/0/12 · monitor session 1 source interface gi1/0/1 both · show monitor session 1</td><td>SPAN</td></tr>
 <tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
 <tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
 <tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
@@ -66,6 +67,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
 <tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
 <tr><td>vrrp id N · vrrp ip A.B.C.D/len · vrrp priority N · vrrp · show vrrp · ip telnet server</td><td>VRRP, Telnet</td></tr>
+<tr><td>lldp enable · lldp receive · lldp transmit (на интерфейсе) · show lldp neighbors</td><td>LLDP</td></tr>
+<tr><td>syslog host NAME → source-address · remote-address · transport udp · port 514 · severity info</td><td>syslog</td></tr>
+<tr><td>copy system:running-config tftp://IP:/файл · archive → type remote · path tftp://IP:/файл · by-commit</td><td>резервные копии на TFTP</td></tr>
 <tr><td>vlan 100 · interface gi1/0/3 → mode switchport · switchport access vlan 100 · bridge 100 → vlan 100 · ip address · enable</td><td>коммутация на ESR, Bridge</td></tr>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
 <tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
@@ -74,7 +78,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
 <tr><td>Debian: вход root / toor · ip a · ip link set ens3 up · ip addr add A/N dev ens3 · ip route add default via GW</td><td>сеть командами</td></tr>
-<tr><td>nano /etc/network/interfaces · ifdown/ifup ens3 · dhclient · ping · ssh user@IP · telnet IP · curl · date · timedatectl · systemctl; Docker: open http://IP</td><td>как в лабе 3.1</td></tr>
+<tr><td>nano /etc/network/interfaces · ifdown/ifup ens3 · dhclient · ping · ssh user@IP · telnet IP · curl · ls · service tftpd-hpa status · tcpdump · date · timedatectl · systemctl; Docker: open http://IP</td><td>как в лабе 3.1</td></tr>
 </table>
 <h2>Типовые ошибки</h2>
 <table>

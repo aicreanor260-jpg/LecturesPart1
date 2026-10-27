@@ -15,7 +15,7 @@
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
 | **ping** в панели | отправить ping и посмотреть путь пакета |
 | Полоса внизу схемы | пошаговое объяснение: ARP-рассылка, ARP-ответ, IP-пакет, теги VLAN, где и почему кадр отброшен |
-| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP), 7.1 (ACL), 8.1 (RSTP), 8.2 (LACP), 8.3 (VRRP), E.1–E.3 (экзамен NTF-2 «Вариант 1» на трёх топологиях из пакета Eltex) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
+| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP), 7.1 (ACL), 8.1 (RSTP), 8.2 (LACP), 8.3 (VRRP), 10.1 (LLDP), 10.2 (syslog), 10.3 (SPAN), 10.4 (TFTP), E.1–E.3 (экзамен NTF-2 «Вариант 1» на трёх топологиях из пакета Eltex) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
 | **Задания** | случайные задачи «Базовая настройка» и «VLAN» на один коммутатор (как в тренажёрах дек) |
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
@@ -46,6 +46,7 @@ ip ssh server / crypto key generate rsa
 spanning-tree / spanning-tree mode rst / spanning-tree priority 16384 / (на порту) spanning-tree cost 20000
 interface port-channel 1 / interface range gi1/0/1-4 / channel-group 1 mode active|passive|on
 show spanning-tree | etherchannel summary
+monitor session 1 destination interface gi1/0/12 / monitor session 1 source interface gi1/0/1 both / show monitor session 1
 show running-config | startup-config | vlan | interfaces switchport gi1/0/1
 show interfaces status | ip interface | ip route | mac address-table
 do show vlan    write    copy running-config startup-config    reload    ping 10.0.0.2
@@ -72,6 +73,10 @@ ntp enable / ntp server 192.168.1.10 / minpoll 1 / maxpoll 4
 ip telnet server / ip access-list extended Test1 / rule 10 / action deny / match protocol tcp / match destination-port port-range 23 / enable
 interface gi1/0/1 / service-acl input Test1          show ip access-list Test1
 interface gi1/0/1 / vrrp id 100 / vrrp ip 192.168.10.1/24 / vrrp priority 200 / vrrp          show vrrp
+lldp enable / interface gi1/0/1 / lldp receive / lldp transmit          show lldp neighbors | system
+syslog host SERVER / source-address 192.168.1.1 / remote-address 192.168.1.10 / transport udp / port 514 / severity info
+copy system:running-config tftp://192.168.1.10:/run.cfg
+archive / type remote / path tftp://192.168.1.10:/Backup_run.cfg / by-commit
 vlan 100 / interface gi1/0/3 / mode switchport / switchport mode access / switchport access vlan 100
 bridge 100 / vlan 100 / ip address 192.168.220.1/24 / ip firewall disable / enable
 show ip dhcp binding | ip nat translations | ntp peers
@@ -79,7 +84,7 @@ do commit    do confirm    rollback    show candidate-config
 show running-config | ip interfaces | ip route | interfaces status | users    ping    traceroute
 ```
 **VPC:** `ip 10.0.0.2/24 10.0.0.1`, `ip dhcp`, `show`, `ping`, `trace`, `arp`, `clear ip`.
-**Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`, `dhclient ens3`, `curl http://IP`, `date`, `timedatectl set-ntp false` / `set-time '2010-09-01 10:12:00'`, `systemctl status|restart chronyd|apache2`. Docker-браузер: `open http://IP`.
+**Debian** (вход `root`/`toor`): `ip a`, `ip link set ens3 up`, `ip addr add 192.168.100.2/24 dev ens3`, `ip route add default via 192.168.100.1`, `nano /etc/network/interfaces` + `ifdown ens3`/`ifup ens3`, `cat`, `ping`, `traceroute`, `ssh master@192.168.100.1`, `dhclient ens3`, `curl http://IP`, `date`, `timedatectl set-ntp false` / `set-time '2010-09-01 10:12:00'`, `systemctl status|restart chronyd|apache2|rsyslog|tftpd-hpa` (или `service tftpd-hpa status`), `ls /tftp`, `cat`, `telnet IP`, `tcpdump` (анализатор на зеркальном порту). Docker-браузер: `open http://IP`.
 
 ## Типовые ошибки
 | Сообщение | Что делать |

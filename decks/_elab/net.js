@@ -495,6 +495,7 @@
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+      this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
         if (!ar.ok) { steps.push({ k: 'drop', t: nd.name + ': список доступа ' + ax.acl + ' на ' + ep.iface.name.split(':')[0] + ' отбросил ' +
@@ -555,6 +556,7 @@
   function listens(d, proto, port) {
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
+                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) ||
                                  (proto === 'tcp' && port === 22);
     if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
     return false;
@@ -704,6 +706,7 @@
         var u = users[user];
         if (!u || u.pw !== line.trim()) { hst.ssh = null; return 'Permission denied, please try again.\n' + user + '@' + ip + ': Permission denied (publickey,password).'; }
         sess.stage = 'cli'; var o = [];
+        if (d.type === 'esr') s.syslog(own, 'login.log', 'sshd: %AAA-I-LOGIN: user ' + user + ' logged in via ssh from ' + (s.ifaces(hst.dev)[0] || { ip: '?' }).ip);
         if (banner.login) o.push(banner.login);
         if (banner.exec) o.push(banner.exec);
         return o.join('\n');
@@ -714,6 +717,65 @@
     hst.ssh = sess;
     return 'The authenticity of host \'' + ip + ' (' + ip + ')\' can\'t be established.\nECDSA key fingerprint is SHA256:' +
       EL.E.hash(ip).slice(0, 32) + '.\nWarning: Permanently added \'' + ip + '\' (ECDSA) to the list of known hosts.';
+  };
+
+
+  // ------------------------------------------------------------------ LLDP, syslog, TFTP, зеркалирование
+  P.lldpText = function (id) {
+    var s = this, d = this.devs[id], c = d.st.run, o = [];
+    if (!c.lldp) return '% LLDP выключен — lldp enable';
+    Object.keys(c.ifs).forEach(function (k) {
+      var x = c.ifs[k]; if (k.indexOf('.') > 0 || k.charAt(0) === 'l' || !x.lldpRx) return;
+      var pr = s.peer(id, k); if (!pr || !s.linkUp(id, k)) return;
+      var nd = s.devs[pr.dev];
+      if (nd.type !== 'esr' || !nd.st.run.lldp || !(nd.st.run.ifs[pr.port] || {}).lldpTx) return;
+      o.push((k + '          ').slice(0, 10) + (EL.mac(nd.st.run.host + 'sys') + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) +
+             (nd.st.run.host + '              ').slice(0, 15) + 'R             120');
+    });
+    return ['Port      Device ID           Port ID     System name    Capabilities  TTL', '--------  ------------------  ----------  -------------  ------------  ---']
+      .concat(o.length ? o : ['% Соседей нет: LLDPDU не приходят (lldp enable, lldp receive у нас, lldp transmit у соседа, commit)']).join('\n');
+  };
+  P.tftpPut = function (id, ip, file, content) {
+    var r = this.request(id, ip, 'udp', 69);
+    if (!r.ok) return { ok: false, why: r.why === 'Connection refused' ? 'на ' + ip + ' не запущен TFTP-сервер' : 'сервер ' + ip + ' недоступен' };
+    this.devs[r.dev].st.files['/tftp/' + file] = content;
+    return { ok: true, size: content.length };
+  };
+  function nowStr() { var d = new Date(); return d.toISOString().slice(0, 19).replace('T', ' '); }
+  P.syslog = function (id, file, msg) {
+    var s = this, c = this.devs[id].st.run;
+    Object.keys(c.syslog || {}).forEach(function (n) { var h = c.syslog[n]; if (!h.ip) return;
+      var r = s.request(id, h.ip, h.proto === 'tcp' ? 'tcp' : 'udp', h.port);
+      if (!r.ok) return;
+      var f = s.devs[r.dev].st.files, k = '/var/log/rsyslog/' + c.host + '/' + file;
+      f[k] = (f[k] ? f[k] + '\n' : '') + nowStr() + ' ' + c.host + ' ' + msg; });
+  };
+  P.afterEsr = function (id, line, out, c0) {
+    var st = this.devs[id].st, c = st.run, cmdl = String(line).trim();
+    if (cmdl && !/^%/.test(out || '')) this.syslog(id, 'klish.log', 'klish: %CLI-I-CMD: user admin: ' + cmdl);
+    if ((st.commits || 0) > c0) {
+      this.syslog(id, 'klish.log', 'klish: %CONFIG-I-COMMIT: configuration committed');
+      var a = c.archive, u = a && a.byCommit && a.type === 'remote' && a.path && EL.tftpUrl(a.path);
+      if (u) this.tftpPut(id, u.ip, u.file, EL.esr.showRun(st));
+    }
+  };
+  P.mirror = function (path, pk) {
+    var s = this;
+    path.forEach(function (sg) {
+      var l = s.links[sg.li]; if (!l) return;
+      var fromP = l.a.dev === sg.from ? l.a.port : l.b.port, toP = l.a.dev === sg.to ? l.a.port : l.b.port;
+      [[sg.from, fromP, 'tx'], [sg.to, toP, 'rx']].forEach(function (x) {
+        var d = s.devs[x[0]]; if (!d || d.type !== 'mes' || !d.st.mon) return;
+        Object.keys(d.st.mon).forEach(function (n) { var m = d.st.mon[n], dir = m.src[x[1]];
+          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2])) return;
+          var pr = s.peer(x[0], m.dst); if (!pr) return; var cap = s.devs[pr.dev];
+          if (cap.type !== 'deb') return;
+          cap.st.capN = (cap.st.capN || 0) + 1;
+          cap.st.cap.push(new Date().toTimeString().slice(0, 8) + ' IP ' + pk.src + ' > ' + pk.dst + ': ' +
+            (pk.proto === 'icmp' ? 'ICMP echo' : pk.proto.toUpperCase() + (pk.dport ? ' port ' + pk.dport : '')) + '   (копия с ' + d.name + ' ' + x[1] + ', ' + x[2] + ')');
+        });
+      });
+    });
   };
 
   // ------------------------------------------------------------------ сохранение схемы
@@ -738,7 +800,7 @@
     if (st.askPw) { var a = st.askPw; st.askPw = null; if (line === a.pw) { a.ok(); return ''; } return '% Access denied'; }
     if (/\?\s*$/.test(line) && (d.type === 'mes' || d.type === 'esr')) return this.help(id, line.replace(/\?\s*$/, ''));
     if (d.type === 'mes') return EL.mes.exec(st, line);
-    if (d.type === 'esr') return EL.esr.exec(st, line);
+    if (d.type === 'esr') { var c0 = st.commits || 0, out = EL.esr.exec(st, line); this.afterEsr(id, line, out, c0); return out; }
     if (d.type === 'vpc') return H.vpcExec(st, line);
     return H.debExec(st, line, ui);
   };

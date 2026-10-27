@@ -12,7 +12,7 @@
   function apply(net, script) {                 // выполнить команды на устройствах; вернуть ошибки (для автотеста)
     var errs = [];
     Object.keys(script).forEach(function (n) {
-      var d = net.byName(n); if (!d) { errs.push('нет устройства ' + n); return; }
+      var d = net.byName(n.replace(/\s*#\d+$/, '')); if (!d) { errs.push('нет устройства ' + n); return; }
       script[n].forEach(function (l) { var r = net.exec(d.id, l);
         if (typeof r === 'string' && /^%|Invalid|Bad command|command not found|Error/.test(r)) errs.push(n + ' «' + l + '» → ' + r.split('\n')[0]); });
     });

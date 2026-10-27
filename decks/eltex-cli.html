@@ -223,6 +223,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
 <tr><td>spanning-tree · spanning-tree mode rst · spanning-tree priority 16384 · show spanning-tree</td><td>RSTP</td></tr>
 <tr><td>interface port-channel 1 · channel-group 1 mode active|passive|on · show etherchannel summary</td><td>LACP</td></tr>
+<tr><td>monitor session 1 destination interface gi1/0/12 · monitor session 1 source interface gi1/0/1 both · show monitor session 1</td><td>SPAN</td></tr>
 <tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
 <tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
 <tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
@@ -245,6 +246,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
 <tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
 <tr><td>vrrp id N · vrrp ip A.B.C.D/len · vrrp priority N · vrrp · show vrrp · ip telnet server</td><td>VRRP, Telnet</td></tr>
+<tr><td>lldp enable · lldp receive · lldp transmit (на интерфейсе) · show lldp neighbors</td><td>LLDP</td></tr>
+<tr><td>syslog host NAME → source-address · remote-address · transport udp · port 514 · severity info</td><td>syslog</td></tr>
+<tr><td>copy system:running-config tftp://IP:/файл · archive → type remote · path tftp://IP:/файл · by-commit</td><td>резервные копии на TFTP</td></tr>
 <tr><td>vlan 100 · interface gi1/0/3 → mode switchport · switchport access vlan 100 · bridge 100 → vlan 100 · ip address · enable</td><td>коммутация на ESR, Bridge</td></tr>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
 <tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
@@ -253,7 +257,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
 <tr><td>Debian: вход root / toor · ip a · ip link set ens3 up · ip addr add A/N dev ens3 · ip route add default via GW</td><td>сеть командами</td></tr>
-<tr><td>nano /etc/network/interfaces · ifdown/ifup ens3 · dhclient · ping · ssh user@IP · telnet IP · curl · date · timedatectl · systemctl; Docker: open http://IP</td><td>как в лабе 3.1</td></tr>
+<tr><td>nano /etc/network/interfaces · ifdown/ifup ens3 · dhclient · ping · ssh user@IP · telnet IP · curl · ls · service tftpd-hpa status · tcpdump · date · timedatectl · systemctl; Docker: open http://IP</td><td>как в лабе 3.1</td></tr>
 </table>
 <h2>Типовые ошибки</h2>
 <table>
@@ -906,7 +910,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ---------------------------------------------------------------- commit / confirm
   function commit(st) {
     if (!st.pending) return 'Nothing to commit';
-    st.run = EL.clone(st.cand); st.pending = false; st.unconfirmed = true;
+    st.run = EL.clone(st.cand); st.pending = false; st.unconfirmed = true; st.commits = (st.commits || 0) + 1;
     return 'Configuration has been successfully applied and saved to flash. Commit timer started, changes will be reverted in 600 seconds.';
   }
   function confirm(st) {
@@ -1392,6 +1396,90 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 })(typeof window !== 'undefined' ? window : global);
 
+/* ESR для лаб 10.1, 10.2, 10.4: LLDP, отправка syslog на сервер, копирование конфигурации на TFTP и архив по commit.
+   MES для лабы 10.3: зеркалирование портов (monitor session). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip, S = EL.esr, cmd = S.cmd, E = EL.E;
+  function touch(st) { st.pending = true; }
+  S.PROMPT.slog = '(config-syslog-host)#'; S.PROMPT.arch = '(config-archive)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('slog', 'arch'); });
+  cmd('slog arch', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+
+  // ---------------------------------------------------------------- LLDP
+  cmd('config', 'lldp enable', function (st) { st.cand.lldp = true; touch(st); }, 'Включить LLDP');
+  cmd('config', 'no lldp enable', function (st) { st.cand.lldp = false; touch(st); });
+  function each(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
+  cmd('gi', 'lldp receive', function (st) { each(st, function (x) { x.lldpRx = true; }); }, 'Принимать LLDPDU');
+  cmd('gi', 'no lldp receive', function (st) { each(st, function (x) { x.lldpRx = false; }); });
+  cmd('gi', 'lldp transmit', function (st) { each(st, function (x) { x.lldpTx = true; }); }, 'Рассылать LLDPDU');
+  cmd('gi', 'no lldp transmit', function (st) { each(st, function (x) { x.lldpTx = false; }); });
+  cmd('priv', 'show lldp neighbors', function (st) { return st.net ? st.net.lldpText(st.dev) : ''; }, 'Соседи LLDP');
+  cmd('priv', 'show system', function (st) { return 'System type:           Eltex vESR Virtual Service Router\nSystem name:           ' + st.run.host +
+    '\nSoftware version:      1.24.2\nSystem MAC address:    ' + EL.mac(st.run.host + 'sys') + '\nSerial number:         VESRA' + EL.E.hash(st.dev || 'x').slice(0, 6).toUpperCase(); }, 'Сведения о системе');
+
+  // ---------------------------------------------------------------- syslog
+  function hosts(st) { return st.cand.syslog || (st.cand.syslog = {}); }
+  cmd('config', 'syslog host <w>', function (st, a) { var H = hosts(st); if (!H[a[0]]) H[a[0]] = { src: null, ip: null, proto: 'udp', port: 514, sev: 'info' };
+    touch(st); st.mode = 'slog'; st.ctx = a[0]; }, 'Удалённый syslog-сервер');
+  cmd('config', 'no syslog host <w>', function (st, a) { delete hosts(st)[a[0]]; touch(st); });
+  function h(st) { return st.cand.syslog[st.ctx]; }
+  cmd('slog', 'source-address <ip>', function (st, a) { h(st).src = a[0]; touch(st); }, 'Адрес источника');
+  cmd('slog', 'remote-address <ip>', function (st, a) { h(st).ip = a[0]; touch(st); }, 'Адрес сервера');
+  cmd('slog', 'transport <w>', function (st, a) { var t = a[0].toLowerCase(); if (t !== 'udp' && t !== 'tcp') return '% udp | tcp'; h(st).proto = t; touch(st); }, 'Транспорт');
+  cmd('slog', 'port <n>', function (st, a) { h(st).port = a[0]; touch(st); }, 'Порт');
+  cmd('slog', 'severity <w>', function (st, a) { var L = ['emerg', 'alert', 'crit', 'error', 'warning', 'notice', 'info', 'debug'];
+    if (L.indexOf(a[0].toLowerCase()) < 0) return '% Уровень: ' + L.join(' | '); h(st).sev = a[0].toLowerCase(); touch(st); }, 'Минимальная важность');
+
+  // ---------------------------------------------------------------- TFTP: copy и archive
+  function tftp(url) { var m = String(url).match(/^tftp:\/\/(\d+\.\d+\.\d+\.\d+):?\/(.+)$/); return m ? { ip: m[1], file: m[2] } : null; }
+  cmd('priv', 'copy <w> <w>', function (st, a) {
+    var src = a[0].toLowerCase(), dst = tftp(a[1]);
+    if (src !== 'system:running-config' && src !== 'running-config') return '% Источник: system:running-config';
+    if (!dst) return '% Назначение: tftp://A.B.C.D:/имя_файла';
+    if (!st.net) return '';
+    var r = st.net.tftpPut(st.dev, dst.ip, dst.file, S.showRun(st));
+    return r.ok ? '|******************************************| 100% (' + r.size + 'B)\nSuccess!' : '% Ошибка передачи по TFTP: ' + r.why; }, 'Копировать конфигурацию');
+  cmd('config', 'archive', function (st) { st.cand.archive = st.cand.archive || { type: 'local', path: null, byCommit: false }; touch(st); st.mode = 'arch'; }, 'Архив конфигураций');
+  cmd('arch', 'type <w>', function (st, a) { var t = a[0].toLowerCase(); if (t !== 'remote' && t !== 'local') return '% local | remote'; st.cand.archive.type = t; touch(st); }, 'Где хранить');
+  cmd('arch', 'path <w>', function (st, a) { if (!tftp(a[0])) return '% Формат: tftp://A.B.C.D:/имя_файла'; st.cand.archive.path = a[0]; touch(st); }, 'Путь на сервере');
+  cmd('arch', 'by-commit', function (st) { st.cand.archive.byCommit = true; touch(st); }, 'Сохранять при каждом commit');
+  cmd('arch', 'no by-commit', function (st) { st.cand.archive.byCommit = false; touch(st); });
+  EL.tftpUrl = tftp;
+
+  S.RUNX.push(function (c, o) {
+    if (c.lldp) o.push('lldp enable');
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k], d = [];
+      if (x.lldpRx) d.push('  lldp receive'); if (x.lldpTx) d.push('  lldp transmit');
+      if (d.length) o.push('interface ' + S.longIf(k), d.join('\n'), 'exit'); });
+    Object.keys(c.syslog || {}).forEach(function (n) { var x = c.syslog[n]; o.push('syslog host ' + n);
+      if (x.src) o.push('  source-address ' + x.src); if (x.ip) o.push('  remote-address ' + x.ip);
+      o.push('  transport ' + x.proto, '  port ' + x.port, '  severity ' + x.sev, 'exit'); });
+    if (c.archive) { o.push('archive', '  type ' + c.archive.type); if (c.archive.path) o.push('  path ' + c.archive.path); if (c.archive.byCommit) o.push('  by-commit'); o.push('exit'); }
+  });
+
+  // ---------------------------------------------------------------- MES: зеркалирование портов
+  function ms(st) { return st.mon || (st.mon = {}); }
+  E.cmd('config', 'monitor session <n> destination interface <if>', function (st, a) {
+    if (a[0] < 1 || a[0] > 4) return '% Номер сессии 1–4'; if (!st.ports[a[1][0]]) return '% Такого порта нет на устройстве';
+    var m = ms(st); m[a[0]] = m[a[0]] || { src: {} }; m[a[0]].dst = a[1][0]; });
+  E.cmd('config', 'monitor session <n> source interface <if>', function (st, a) { return addSrc(st, a[0], a[1], 'both'); });
+  E.cmd('config', 'monitor session <n> source interface <if> <w>', function (st, a) {
+    var d = a[2].toLowerCase(); if (['rx', 'tx', 'both'].indexOf(d) < 0) return '% Направление: rx | tx | both'; return addSrc(st, a[0], a[1], d); });
+  function addSrc(st, n, ports, dir) {
+    if (n < 1 || n > 4) return '% Номер сессии 1–4';
+    if (ports.some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
+    var m = ms(st); m[n] = m[n] || { src: {} }; ports.forEach(function (k) { m[n].src[k] = dir; });
+  }
+  E.cmd('config', 'no monitor session <n>', function (st, a) { delete ms(st)[a[0]]; });
+  function showMon(st, n) { var m = (st.mon || {})[n];
+    if (!m) return '% Сессия ' + n + ' не настроена';
+    return 'Session ' + n + '\n  Destination port: ' + (m.dst || '-') + '\n  Source ports:\n' +
+      Object.keys(m.src).map(function (k) { return '    ' + k + '  ' + m.src[k]; }).join('\n'); }
+  E.cmd('priv', 'show monitor session <n>', function (st, a) { return showMon(st, a[0]); });
+  E.cmd(E.CFG, 'do show monitor session <n>', function (st, a) { return showMon(st, a[0]); });
+})(typeof window !== 'undefined' ? window : global);
+
 /* Расширение движка MES (_dk_cli.js) для эмулятора: пользовательский режим switch>, enable/disable,
    vlan database, списки VLAN, shutdown, L3 на SVI (ip route), ping, show ip interface/route, write/reload. */
 (function (G) {
@@ -1621,7 +1709,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     o = o || {};
     return { kind: 'deb', name: name, host: o.host || 'debian', user: o.auto ? 'root' : null, login: 'user', up: false, ip: null, len: 24, gw: null,
              files: { '/etc/network/interfaces': IFDEF }, accounts: { root: 'toor', user: 'user' }, ssh: null,
-             tz: o.tz === undefined ? 7 : o.tz, clk: 0, ntp: true, browser: !!o.browser, svc: { chronyd: true, apache2: !!o.web, ssh: true } };
+             tz: o.tz === undefined ? 7 : o.tz, clk: 0, ntp: true, browser: !!o.browser, svc: { chronyd: true, apache2: !!o.web, ssh: true, rsyslog: !!o.web, 'tftpd-hpa': !!o.web }, cap: [] };
   }
   function dhcpUp(st) {
     if (!st.net) return '';
@@ -1769,6 +1857,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
         st.clk = Date.UTC(+q[1], +q[2] - 1, +q[3], +q[4], +q[5], +q[6]) - st.tz * 3600e3 - Date.now(); return '';
       }
       return 'Unknown command verb ' + t[1] + '.';
+    }
+    if (c === 'service' && t[1] && t[2]) return debExec(st, 'systemctl ' + t[2] + ' ' + t[1], ui);
+    if (c === 'ls') {
+      var dir = (t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0] || '/root').replace(/\/$/, '');
+      var names = {}; Object.keys(st.files).forEach(function (k) { if (k.indexOf(dir + '/') === 0) names[k.slice(dir.length + 1).split('/')[0]] = 1; });
+      var L = Object.keys(names).sort();
+      if (!L.length && !/^\/(tftp|var\/log\/rsyslog)/.test(dir)) return 'ls: cannot access \'' + dir + '\': No such file or directory';
+      return L.join('  ');
+    }
+    if (c === 'tcpdump') {
+      if (!st.cap.length) return 'tcpdump: verbose output suppressed\nlistening on ens3, link-type EN10MB (Ethernet)\n0 packets captured (отправьте трафик через зеркалируемый порт)';
+      var out = st.cap.slice(-20).join('\n'); st.cap = [];
+      return 'listening on ens3, link-type EN10MB (Ethernet)\n' + out;
     }
     if (c === 'systemctl') {
       var svc = (t[2] || '').replace(/\.service$/, '').replace(/^chrony$/, 'chronyd');
@@ -2530,6 +2631,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+      this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
         if (!ar.ok) { steps.push({ k: 'drop', t: nd.name + ': список доступа ' + ax.acl + ' на ' + ep.iface.name.split(':')[0] + ' отбросил ' +
@@ -2590,6 +2692,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function listens(d, proto, port) {
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
+                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) ||
                                  (proto === 'tcp' && port === 22);
     if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
     return false;
@@ -2739,6 +2842,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var u = users[user];
         if (!u || u.pw !== line.trim()) { hst.ssh = null; return 'Permission denied, please try again.\n' + user + '@' + ip + ': Permission denied (publickey,password).'; }
         sess.stage = 'cli'; var o = [];
+        if (d.type === 'esr') s.syslog(own, 'login.log', 'sshd: %AAA-I-LOGIN: user ' + user + ' logged in via ssh from ' + (s.ifaces(hst.dev)[0] || { ip: '?' }).ip);
         if (banner.login) o.push(banner.login);
         if (banner.exec) o.push(banner.exec);
         return o.join('\n');
@@ -2749,6 +2853,65 @@ vesr(config)#         do confirm  — подтвердить</pre>
     hst.ssh = sess;
     return 'The authenticity of host \'' + ip + ' (' + ip + ')\' can\'t be established.\nECDSA key fingerprint is SHA256:' +
       EL.E.hash(ip).slice(0, 32) + '.\nWarning: Permanently added \'' + ip + '\' (ECDSA) to the list of known hosts.';
+  };
+
+
+  // ------------------------------------------------------------------ LLDP, syslog, TFTP, зеркалирование
+  P.lldpText = function (id) {
+    var s = this, d = this.devs[id], c = d.st.run, o = [];
+    if (!c.lldp) return '% LLDP выключен — lldp enable';
+    Object.keys(c.ifs).forEach(function (k) {
+      var x = c.ifs[k]; if (k.indexOf('.') > 0 || k.charAt(0) === 'l' || !x.lldpRx) return;
+      var pr = s.peer(id, k); if (!pr || !s.linkUp(id, k)) return;
+      var nd = s.devs[pr.dev];
+      if (nd.type !== 'esr' || !nd.st.run.lldp || !(nd.st.run.ifs[pr.port] || {}).lldpTx) return;
+      o.push((k + '          ').slice(0, 10) + (EL.mac(nd.st.run.host + 'sys') + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) +
+             (nd.st.run.host + '              ').slice(0, 15) + 'R             120');
+    });
+    return ['Port      Device ID           Port ID     System name    Capabilities  TTL', '--------  ------------------  ----------  -------------  ------------  ---']
+      .concat(o.length ? o : ['% Соседей нет: LLDPDU не приходят (lldp enable, lldp receive у нас, lldp transmit у соседа, commit)']).join('\n');
+  };
+  P.tftpPut = function (id, ip, file, content) {
+    var r = this.request(id, ip, 'udp', 69);
+    if (!r.ok) return { ok: false, why: r.why === 'Connection refused' ? 'на ' + ip + ' не запущен TFTP-сервер' : 'сервер ' + ip + ' недоступен' };
+    this.devs[r.dev].st.files['/tftp/' + file] = content;
+    return { ok: true, size: content.length };
+  };
+  function nowStr() { var d = new Date(); return d.toISOString().slice(0, 19).replace('T', ' '); }
+  P.syslog = function (id, file, msg) {
+    var s = this, c = this.devs[id].st.run;
+    Object.keys(c.syslog || {}).forEach(function (n) { var h = c.syslog[n]; if (!h.ip) return;
+      var r = s.request(id, h.ip, h.proto === 'tcp' ? 'tcp' : 'udp', h.port);
+      if (!r.ok) return;
+      var f = s.devs[r.dev].st.files, k = '/var/log/rsyslog/' + c.host + '/' + file;
+      f[k] = (f[k] ? f[k] + '\n' : '') + nowStr() + ' ' + c.host + ' ' + msg; });
+  };
+  P.afterEsr = function (id, line, out, c0) {
+    var st = this.devs[id].st, c = st.run, cmdl = String(line).trim();
+    if (cmdl && !/^%/.test(out || '')) this.syslog(id, 'klish.log', 'klish: %CLI-I-CMD: user admin: ' + cmdl);
+    if ((st.commits || 0) > c0) {
+      this.syslog(id, 'klish.log', 'klish: %CONFIG-I-COMMIT: configuration committed');
+      var a = c.archive, u = a && a.byCommit && a.type === 'remote' && a.path && EL.tftpUrl(a.path);
+      if (u) this.tftpPut(id, u.ip, u.file, EL.esr.showRun(st));
+    }
+  };
+  P.mirror = function (path, pk) {
+    var s = this;
+    path.forEach(function (sg) {
+      var l = s.links[sg.li]; if (!l) return;
+      var fromP = l.a.dev === sg.from ? l.a.port : l.b.port, toP = l.a.dev === sg.to ? l.a.port : l.b.port;
+      [[sg.from, fromP, 'tx'], [sg.to, toP, 'rx']].forEach(function (x) {
+        var d = s.devs[x[0]]; if (!d || d.type !== 'mes' || !d.st.mon) return;
+        Object.keys(d.st.mon).forEach(function (n) { var m = d.st.mon[n], dir = m.src[x[1]];
+          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2])) return;
+          var pr = s.peer(x[0], m.dst); if (!pr) return; var cap = s.devs[pr.dev];
+          if (cap.type !== 'deb') return;
+          cap.st.capN = (cap.st.capN || 0) + 1;
+          cap.st.cap.push(new Date().toTimeString().slice(0, 8) + ' IP ' + pk.src + ' > ' + pk.dst + ': ' +
+            (pk.proto === 'icmp' ? 'ICMP echo' : pk.proto.toUpperCase() + (pk.dport ? ' port ' + pk.dport : '')) + '   (копия с ' + d.name + ' ' + x[1] + ', ' + x[2] + ')');
+        });
+      });
+    });
   };
 
   // ------------------------------------------------------------------ сохранение схемы
@@ -2773,7 +2936,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (st.askPw) { var a = st.askPw; st.askPw = null; if (line === a.pw) { a.ok(); return ''; } return '% Access denied'; }
     if (/\?\s*$/.test(line) && (d.type === 'mes' || d.type === 'esr')) return this.help(id, line.replace(/\?\s*$/, ''));
     if (d.type === 'mes') return EL.mes.exec(st, line);
-    if (d.type === 'esr') return EL.esr.exec(st, line);
+    if (d.type === 'esr') { var c0 = st.commits || 0, out = EL.esr.exec(st, line); this.afterEsr(id, line, out, c0); return out; }
     if (d.type === 'vpc') return H.vpcExec(st, line);
     return H.debExec(st, line, ui);
   };
@@ -2812,7 +2975,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function apply(net, script) {                 // выполнить команды на устройствах; вернуть ошибки (для автотеста)
     var errs = [];
     Object.keys(script).forEach(function (n) {
-      var d = net.byName(n); if (!d) { errs.push('нет устройства ' + n); return; }
+      var d = net.byName(n.replace(/\s*#\d+$/, '')); if (!d) { errs.push('нет устройства ' + n); return; }
       script[n].forEach(function (l) { var r = net.exec(d.id, l);
         if (typeof r === 'string' && /^%|Invalid|Bad command|command not found|Error/.test(r)) errs.push(n + ' «' + l + '» → ' + r.split('\n')[0]); });
     });
@@ -3468,6 +3631,110 @@ vesr(config)#         do confirm  — подтвердить</pre>
   Array.prototype.splice.apply(all, [at < 0 ? all.length : at, 0].concat(LABS));
 })(typeof window !== 'undefined' ? window : global);
 
+/* Лабораторные 10.1 (LLDP), 10.2 (syslog), 10.3 (SPAN — зеркалирование на MES), 10.4 (резервные копии конфигурации на TFTP). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, R = EL.rnd, PK = EL.pick;
+
+  function dev(n, name) { var d = n.byName(name); return d ? d.st : null; }
+  function run(n, name) { return dev(n, name).run; }
+  function ifs(list) { return list.reduce(function (o, x) { return o.concat(['interface gigabitethernet 1/0/' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit']); }, []); }
+  function ipsOk(n, name, list) { var f = run(n, name).ifs; return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
+  function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
+  function debOk(n, name, ip, gw) { var s = dev(n, name); return s.up && s.ip + '/' + s.len === ip && s.gw === gw; }
+  function debIp(ip, gw) { return ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + ip + ' dev ens3', 'ip route add default via ' + gw]; }
+  function srvLab(net) { var o = place(net, [['vESR', 'vESR', 330, 320], ['Server', 'Debian-server', 700, 320]]); wire(net, o, [['vESR', 'gi1/0/1', 'Server', 'ens3']]); }
+  function file(n, path) { return dev(n, 'Server').files[path]; }
+
+  var LABS = [
+    // ------------------------------------------------------------ 10.1
+    { id: '10.1', title: 'Протокол LLDP на маршрутизаторах',
+      goal: 'Маршрутизаторы рассказывают соседям о себе: имя, порт, MAC. Включите LLDP, посмотрите соседей, смените имя — сосед увидит новое. Затем отключите рассылку на одном — и он пропадёт у соседа, но сам продолжит видеть его.',
+      gen: function () { return { a: R(1, 2) }; },
+      build: function (net) { var o = place(net, [['vESR1', 'vESR', 300, 320], ['vESR2', 'vESR', 700, 320]]); wire(net, o, [['vESR1', 'gi1/0/1', 'vESR2', 'gi1/0/1']]); },
+      tasks: function (p) { var A = 'vESR' + p.a, B = 'vESR' + (3 - p.a), RA = 'R' + p.a; return [
+        { t: 'На обоих: lldp enable; на gi1/0/1 — lldp receive' + ' и lldp transmit (на ' + A + ' рассылку потом выключите)', ok: function (n) {
+            return [A, B].every(function (r) { var c = run(n, r); return c.lldp && c.ifs['gi1/0/1'].lldpRx; }) && run(n, B).ifs['gi1/0/1'].lldpTx; } },
+        { t: 'Смените имя ' + A + ' на ' + RA + ' — в show lldp neighbors на ' + B + ' появится новое имя', ok: function (n) { return run(n, A).host === RA; } },
+        { t: 'На ' + RA + ' (gi1/0/1): no lldp transmit', ok: function (n) { return !run(n, A).ifs['gi1/0/1'].lldpTx; } },
+        { t: 'Итог: ' + RA + ' видит соседа ' + B + ', а ' + B + ' соседей не видит', ok: function (n) {
+            return n.lldpText(n.byName(A).id).indexOf(run(n, B).host) >= 0 && /Соседей нет/.test(n.lldpText(n.byName(B).id)); } },
+        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, [A, B]); } }]; },
+      sol: function (p) { var A = 'vESR' + p.a, B = 'vESR' + (3 - p.a), o = {};
+        [A, B].forEach(function (r) { o[r] = ['configure', 'hostname ' + r, 'lldp enable', 'interface gigabitethernet 1/0/1', 'lldp receive', 'lldp transmit', 'exit',
+          'do commit', 'do confirm', 'end', 'show lldp neighbors']; });
+        o[A] = o[A].concat(['configure', 'hostname R' + p.a, 'interface gigabitethernet 1/0/1', 'no lldp transmit', 'exit', 'do commit', 'do confirm', 'end', 'show lldp neighbors']);
+        return o; } },
+
+    // ------------------------------------------------------------ 10.2
+    { id: '10.2', title: 'Отправка syslog-сообщений на удалённый сервер',
+      goal: 'vESR пишет журнал событий на сервер Debian (rsyslog, UDP 514). Сначала синхронизируйте время по NTP — иначе метки времени в журнале не совпадут. Каждая введённая команда и вход по SSH попадают в /var/log/rsyslog/<имя>/.',
+      gen: function () { return { h: PK(['SERVER', 'LOGSRV', 'SYSLOG']), sev: PK(['info', 'notice', 'debug']) }; },
+      build: srvLab,
+      tasks: function (p) { return [
+        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
+            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        { t: 'NTP: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4), clock timezone gmt +7', ok: function (n) { var c = run(n, 'vESR'), s = c.ntp && c.ntp.servers['192.168.1.10'];
+            return c.ntp && c.ntp.on && s && s.minpoll === 1 && s.maxpoll === 4 && c.tz === '+7'; } },
+        { t: 'syslog host ' + p.h + ': source-address 192.168.1.1, remote-address 192.168.1.10, transport udp, port 514, severity ' + p.sev, ok: function (n) {
+            var x = (run(n, 'vESR').syslog || {})[p.h]; return x && x.src === '192.168.1.1' && x.ip === '192.168.1.10' && x.proto === 'udp' && x.port === 514 && x.sev === p.sev; } },
+        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } },
+        { t: 'На сервере есть /var/log/rsyslog/vESR/klish.log с командами (ls, cat)', ok: function (n) { var f = file(n, '/var/log/rsyslog/vESR/klish.log');
+            return !!f && /CLI-I-CMD/.test(f); } },
+        { t: 'Войдите на vESR по SSH с сервера (ip ssh server, ssh admin@192.168.1.1) — появится login.log', ok: function (n) { return !!file(n, '/var/log/rsyslog/vESR/login.log'); } }]; },
+      sol: function (p) { return {
+        Server: debIp('192.168.1.10/24', '192.168.1.1').concat(['systemctl status chronyd']),
+        vESR: ['configure', 'hostname vESR'].concat(ifs([[1, '192.168.1.1/24']]), ['ip ssh server', 'ntp enable', 'ntp server 192.168.1.10', 'minpoll 1', 'maxpoll 4', 'exit',
+          'clock timezone gmt +7', 'syslog host ' + p.h, 'source-address 192.168.1.1', 'remote-address 192.168.1.10', 'transport udp', 'port 514', 'severity ' + p.sev, 'exit',
+          'do commit', 'do confirm', 'end', 'show ntp peers']),
+        'Server #2': ['ls /var/log/rsyslog/', 'ssh admin@192.168.1.1', 'password', 'show date', 'exit', 'ls /var/log/rsyslog/vESR', 'cat /var/log/rsyslog/vESR/login.log'] }; } },
+
+    // ------------------------------------------------------------ 10.3
+    { id: '10.3', title: 'Локальное зеркалирование портов (SPAN)',
+      goal: 'Копия всего трафика порта, к которому подключён ПК, уходит на порт gi1/0/12 — туда подключён анализатор (Debian, tcpdump). Синтаксис — настоящий MES: monitor session.',
+      gen: function () { return { src: R(1, 2) }; },
+      build: function (net) {
+        var o = place(net, [['vMES1', 'MES2428', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
+        wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/1'], ['VPC2', 'eth0', 'vMES1', 'gi1/0/2'], ['Sniffer', 'ens3', 'vMES1', 'gi1/0/12']]); },
+      tasks: function (p) { var S = 'gi1/0/' + p.src; return [
+        { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
+        { t: 'monitor session 1 destination interface gi1/0/12', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1]; return m && m.dst === 'gi1/0/12'; } },
+        { t: 'monitor session 1 source interface ' + S + ' both (зеркалим порт VPC' + p.src + ')', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1];
+            return m && m.src[S] === 'both'; } },
+        { t: 'Ping между VPC1 и VPC2 — анализатор получил копии запросов и ответов (на Sniffer: tcpdump)', ok: function (n) { return (dev(n, 'Sniffer').capN || 0) >= 2; } }]; },
+      sol: function (p) { return {
+        vMES1: ['enable', 'configure', 'hostname vMES1', 'monitor session 1 destination interface gigabitethernet 1/0/12',
+                'monitor session 1 source interface gigabitethernet 1/0/' + p.src + ' both', 'end', 'show monitor session 1'],
+        VPC1: ['ip 192.168.10.10/24'], VPC2: ['ip 192.168.10.20/24', 'ping 192.168.10.10'], Sniffer: ['root', 'toor', 'tcpdump'] }; } },
+
+    // ------------------------------------------------------------ 10.4
+    { id: '10.4', title: 'Резервные копии конфигурации на TFTP-сервер',
+      goal: 'Скопируйте конфигурацию vESR на TFTP-сервер вручную, затем настройте archive: после каждого commit копия уходит на сервер сама.',
+      gen: function () { return { f: 'run' + R(1, 99) + '.cfg', b: 'Backup_' + PK(['run', 'cfg', 'R1']) + '.cfg', ban: PK(['Router R1', 'Eltex vESR', 'Lab router']) }; },
+      build: srvLab,
+      tasks: function (p) { return [
+        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1; служба tftpd-hpa запущена', ok: function (n) {
+            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1') && dev(n, 'Server').svc['tftpd-hpa']; } },
+        { t: 'copy system:running-config tftp://192.168.1.10:/' + p.f + ' — файл появился в /tftp', ok: function (n) { return !!file(n, '/tftp/' + p.f); } },
+        { t: 'archive: type remote, path tftp://192.168.1.10:/' + p.b + ', by-commit', ok: function (n) { var a = run(n, 'vESR').archive;
+            return a && a.type === 'remote' && a.path === 'tftp://192.168.1.10:/' + p.b && a.byCommit; } },
+        { t: 'banner login "' + p.ban + '" + commit — свежая копия ' + p.b + ' на сервере содержит баннер', ok: function (n) { var f = file(n, '/tftp/' + p.b);
+            return !!f && f.indexOf('banner login "' + p.ban + '"') >= 0; } },
+        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } }]; },
+      sol: function (p) { return {
+        Server: debIp('192.168.1.10/24', '192.168.1.1').concat(['service tftpd-hpa status', 'service tftpd-hpa restart', 'ls /tftp']),
+        vESR: ['configure', 'hostname vESR'].concat(ifs([[1, '192.168.1.1/24']]), ['do commit', 'do confirm', 'end', 'copy system:running-config tftp://192.168.1.10:/' + p.f,
+          'configure', 'archive', 'type remote', 'path tftp://192.168.1.10:/' + p.b, 'by-commit', 'do commit', 'do confirm', 'exit',
+          'banner login "' + p.ban + '"', 'do commit', 'do confirm', 'end']),
+        'Server #2': ['ls /tftp', 'cat /tftp/' + p.b] }; } }
+  ];
+
+  var all = EL.labs.LABS, at = all.map(function (l) { return l.id; }).indexOf('E.1');
+  Array.prototype.splice.apply(all, [at < 0 ? all.length : at, 0].concat(LABS));
+})(typeof window !== 'undefined' ? window : global);
+
 /* Итоговый практический экзамен NTF-2, задание «Вариант 1» на трёх топологиях из пакета Eltex (Final Exam 1–3.unl).
    E.1 — точно по таблице адресов задания. E.2 и E.3 — те же 16 пунктов на других схемах: роли и адреса выводятся
    из связей по правилам задания (R1 + VPC1 слева, R7 + VPC2 справа, перед R7 — граничный маршрутизатор с DHCP и NAT,
@@ -3626,6 +3893,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
   var all = EL.labs.LABS, at = all.map(function (l) { return l.id; }).indexOf('T.1');
   Array.prototype.splice.apply(all, [at < 0 ? all.length : at, 0].concat([makeExam(1), makeExam(2), makeExam(3)]));
+  // итоговый порядок: лабы по номеру, затем экзамены, затем поиск неисправности
+  function key(id) { var g = /^\d/.test(id) ? 0 : id.charAt(0) === 'E' ? 1 : 2, n = id.replace(/^[A-Z]\./, '').split('.');
+    return [g, +n[0], +(n[1] || 0)]; }
+  all.sort(function (a, b) { var x = key(a.id), y = key(b.id); return x[0] - y[0] || x[1] - y[1] || x[2] - y[2]; });
 })(typeof window !== 'undefined' ? window : global);
 
 /* Интерфейс эмулятора: палитра, схема (SVG), кабели, консоли устройств, пошаговая анимация пакетов, лабы и задания. */
