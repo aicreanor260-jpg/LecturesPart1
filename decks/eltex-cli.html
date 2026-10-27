@@ -364,6 +364,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>resolv.conf nameserver · VPC ip dns · ESR domain lookup enable / domain name-server · MES ip name-server</td><td>клиенты DNS, ping по имени</td></tr>
 </table>
 
+<h2>GRE-туннель ESR</h2>
+<table>
+<tr><td>tunnel gre 1 → local address A · remote address B · ip address 10.10.10.1/30 · ip firewall disable · enable</td><td>туннель (config-gre)#; маршрут в туннель — ip route СЕТЬ 10.10.10.2</td></tr>
+<tr><td>show tunnels status</td><td>состояние туннелей; в захвате у провайдера виден внешний заголовок и внутренний пакет</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
@@ -1169,9 +1175,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (n === st.cand.routes.length) return '% Маршрут не найден'; touch(st); });
 
   // ---------------------------------------------------------------- show
-  function ifSort(a, b) { var f = function (k) { return k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
+  function ifSort(a, b) { var f = function (k) { return k.indexOf('gre') === 0 ? 2e6 + +k.slice(3) : k.charAt(0) === 'l' ? 1e6 + +k.slice(2) : +k.split('/')[2].split('.')[0] * 1e4 + (+k.split('.')[1] || 0); };
     return f(a) - f(b); }
-  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
+  function longIf(k) { if (k.charAt(0) === 'l') return 'loopback ' + k.slice(2); if (k.indexOf('gre') === 0) return 'gre ' + k.slice(3); var t = k.match(/^[a-z]+/)[0]; return (IFT[t] || 'gigabitethernet') + ' ' + k.slice(t.length); }
   function showRun(st) {
     var c = st.run, o = ['#!/usr/bin/clish', '#18', 'hostname ' + c.host, ''];
     Object.keys(c.users).forEach(function (u) { var x = c.users[u];
@@ -1189,6 +1195,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (x.ospf.passive) d.push('  ip ospf passive-interface'); if (x.ospf.on) d.push('  ip ospf'); }
       if (x.ip) d.push('  ip address ' + x.ip);
       if (x.helper) d.push('  ip helper-address ' + x.helper);
+      if (x.tun) { if (x.local) d.push('  local address ' + x.local); if (x.remote) d.push('  remote address ' + x.remote); if (x.on) d.push('  enable');
+        o.push('tunnel gre ' + k.slice(3), d.join('\n'), 'exit'); return; }
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });
@@ -2270,9 +2278,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
       o.push({ name: 'vlan' + v, ip: p[0], len: +p[1], vlan: +v }); });
     if (d.type === 'esr') Object.keys(st.run.ifs).forEach(function (k) {
       var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
-      var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
+      if (x.tun && !(x.on && x.local && x.remote)) return;              // GRE-туннель поднят, когда задан и включён (enable)
+      var ph = k.split('.')[0], virt = k.charAt(0) === 'l' || !!x.tun; if (!virt && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
-      o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+      o.push({ name: k, ip: p[0], len: +p[1], tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
     if (d.type === 'esr') { var vt = this.vrrp()[id] || {}; Object.keys(vt).forEach(function (k) { var v = vt[k]; if (!v.master) return;
       var base = o.filter(function (f) { return f.name === k; })[0]; if (!base) return; var vp = v.vip.split('/');
       o.push({ name: k + ':vrrp', ip: vp[0], len: +vp[1], port: base.port, tag: base.tag, fw: base.fw, vrrp: true }); }); }
@@ -2289,7 +2298,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
-      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && IP.sameNet(r.nh, f.ip, f.len); })[0];
       o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
@@ -2680,6 +2689,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
+      if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
+        var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
+        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;
+        if (!owns(this, cur, pk.dst)) steps.push({ k: 'route', t: this.devs[cur].name + ': адрес ' + pk.dst + ' не мой — ищу маршрут дальше' });
+        continue;
+      }
       // свой трафик маршрутизатора: ответы на него межсетевой экран пропускает (сессия)
       if (cd.type === 'esr' && cur === src) ct.push({ kind: 'fw', dev: cur, self: true, proto: pk.proto, a: [pk.src], b: [pk.dst] });
       if (cd.type === 'esr' && cur !== src) {      // Source NAT на выходе
@@ -2722,7 +2737,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -4304,7 +4319,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   'use strict';
   var EL = G.EL, P = EL.Net.prototype;
   var SVC = { 53: 'DNS', 67: 'DHCP', 68: 'DHCP', 69: 'TFTP', 123: 'NTP', 514: 'Syslog', 22: 'SSH', 23: 'TELNET', 80: 'HTTP' };
-  var PNUM = { icmp: 1, tcp: 6, udp: 17 };
+  var PNUM = { icmp: 1, tcp: 6, udp: 17, gre: 47 };
   var CAP_MAX = 2000;
 
   // ---------------------------------------------------------------- захват на кабеле
@@ -4325,7 +4340,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
              vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
              sip: f.type === 'arp' ? f.sip : f.src || '', dip: f.type === 'arp' ? f.tip : f.dst || '', proto: proto(f), info: info(f) };
   }
+  function gin(f) { var i = f.inner; return { type: 'ip', src: i.src, dst: i.dst, proto: i.proto, reply: i.reply, dport: i.dport, sport: i.sport, ttl: (f.ttl || 64) }; }
   function proto(f) {
+    if (f.proto === 'gre' && f.inner) return proto(gin(f));
     if (f.type === 'arp') return 'ARP'; if (f.type === 'stp') return 'STP';
     if (f.dhcp) return 'DHCP';
     if (f.proto === 'icmp') return 'ICMP';
@@ -4334,6 +4351,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return f.proto === 'udp' && p ? p : f.proto.toUpperCase();
   }
   function info(f) {
+    if (f.proto === 'gre' && f.inner) return 'GRE · ' + f.inner.src + ' → ' + f.inner.dst + ' · ' + info(gin(f));
     if (f.type === 'arp') return f.op === 1 ? 'Who has ' + f.tip + '? Tell ' + f.sip : f.sip + ' is at ' + f.smac;
     if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
     if (f.dhcp) return 'DHCP ' + f.dhcp;
@@ -4387,6 +4405,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     L.push({ osi: 'L3', name: 'Internet Protocol Version 4, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 4], ['Header Length', '20 bytes (5)'],
       ['Differentiated Services Field', '0x00 (DSCP: CS0, ECN: Not-ECT)'], ['Total Length', ipLen], ['Flags', f.proto === 'udp' && f.dhcp ? '0x0' : '0x2, Don\'t fragment'],
       ['Fragment Offset', 0], ['Time to Live', f.ttl], ['Protocol', f.proto.toUpperCase() + ' (' + PNUM[f.proto] + ')'], ['Source Address', f.src], ['Destination Address', f.dst]] });
+    if (f.proto === 'gre' && f.inner) { L.push({ osi: 'L3', name: 'Generic Routing Encapsulation (IP)', fields: [['Flags and Version', '0x0000'], ['Protocol Type', 'IP (0x0800)']] });
+      return L.concat(EL.decode(gin(f), null, len - 24).slice(2).map(function (x) { return { osi: x.osi, name: '↳ ' + x.name, fields: x.fields }; })); }
     if (f.proto === 'icmp') L.push({ osi: 'L3', name: 'Internet Control Message Protocol', fields: [['Type', f.reply ? '0 (Echo (ping) reply)' : '8 (Echo (ping) request)'], ['Code', 0],
       ['Identifier (BE)', 1], ['Sequence Number (BE)', 1], ['Data', (ipLen - 28) + ' bytes']] });
     if (f.proto === 'tcp') L.push({ osi: 'L4', name: 'Transmission Control Protocol, Src Port: ' + f.sport + ', Dst Port: ' + f.dport, fields: [['Source Port', f.sport], ['Destination Port', f.dport],
@@ -4985,6 +5005,63 @@ vesr(config)#         do confirm  — подтвердить</pre>
     mcmd(['10', '6'], pre ? CFG : m[0], pre + 'ping <w>', function (st, a) { if (!st.net) return '';
       var r = st.net.resolve(st.dev, a[0]); if (!r.ip) return '% Unknown host ' + a[0];
       return st.net.pingText(st.dev, r.ip, 'mes'); }); }); });
+})(typeof window !== 'undefined' ? window : global);
+
+/* GRE-туннели ESR (справочник ESR-Series CLI 1.23): tunnel gre <N> → (config-gre)#: local address, remote address, ip address,
+   ip firewall disable | security-zone, description, enable; show tunnels status. Обозначение туннеля — gre N.
+   Пакет, ушедший в туннель, инкапсулируется: внешний IPv4 local → remote, протокол 47 (GRE), и идёт по сети как обычный пакет
+   (ARP, маршруты, NAT, межсетевой экран на пути); на удалённом ESR с зеркальным туннелем GRE снимается.
+   Упрощения: keepalive нет (туннель Up, если включён и задан), RIP/OSPF через туннель не строят соседство — маршруты в туннель статические. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype, IP = EL.ip;
+  S.PROMPT.gre = '(config-gre)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('gre'); });
+  // команды IP-интерфейса, которые есть и у туннеля
+  var OK = /^(no )?(ip address|ip firewall disable|security-zone|description|ip ospf|ip rip)\b/;
+  S.T.forEach(function (c) { if (c.modes.indexOf('sub') >= 0 && OK.test(c.pat.join(' ')) && c.modes.indexOf('gre') < 0) c.modes.push('gre'); });
+  function touch(st) { st.pending = true; }
+  function cur(st) { return st.cand.ifs[st.ctx]; }
+  S.cmd('config', 'tunnel gre <n>', function (st, a) {
+    if (a[0] < 1 || a[0] > 1000) return 'Syntax error: Illegal parameter';
+    var k = 'gre' + a[0]; if (!st.cand.ifs[k]) { st.cand.ifs[k] = { ip: null, fw: true, shut: false, tun: 'gre', on: false, local: null, remote: null }; touch(st); }
+    st.mode = 'gre'; st.ctx = k; }, 'GRE-туннель');
+  S.cmd('config', 'no tunnel gre <n>', function (st, a) { delete st.cand.ifs['gre' + a[0]]; touch(st); });
+  S.cmd('gre', 'local address <ip>', function (st, a) { cur(st).local = a[0]; touch(st); }, 'IP-адрес локального шлюза');
+  S.cmd('gre', 'no local address', function (st) { cur(st).local = null; touch(st); });
+  S.cmd('gre', 'remote address <ip>', function (st, a) { cur(st).remote = a[0]; touch(st); }, 'IP-адрес удалённого шлюза');
+  S.cmd('gre', 'no remote address', function (st) { cur(st).remote = null; touch(st); });
+  S.cmd('gre', 'enable', function (st) { cur(st).on = true; touch(st); }, 'Включить туннель');
+  S.cmd('gre', 'no enable', function (st) { cur(st).on = false; touch(st); });
+  S.cmd('gre', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  S.cmd('priv', 'show tunnels status', function (st) {
+    var s = st.net, o = ['Tunnel     Admin state        MTU      Local IP           Remote IP          Uptime', '------      ----------       -----    ------------       -----------        ---------------'];
+    Object.keys(st.run.ifs).filter(function (k) { return st.run.ifs[k].tun; }).forEach(function (k) { var x = st.run.ifs[k];
+      o.push(rp('gre ' + k.slice(3), 11) + rp(x.on ? 'Up' : 'Down', 18) + rp('1476', 9) + rp(x.local || '--', 19) + rp(x.remote || '--', 19) + (x.on && s ? up(s.now) : '--')); });
+    return o.join('\n'); }, 'Состояние туннелей');
+  function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
+  function up(n) { n = Math.floor(n); return Math.floor(n / 60) + ' minute' + (Math.floor(n / 60) === 1 ? '' : 's') + ' and ' + n % 60 + ' seconds'; }
+
+  // ---------------------------------------------------------------- инкапсуляция при пересылке
+  P.tunnel = function (cur, r, pk, steps, ct) {
+    var s = this, d = this.devs[cur], k = r.iface.name, x = d.st.run.ifs[k];
+    if ((this._tunDepth || 0) > 2) { steps.push({ k: 'drop', t: d.name + ': рекурсивная маршрутизация — адрес удалённого конца туннеля доступен только через сам туннель' }); return { ok: false }; }
+    if (!this.ifaces(cur).some(function (f) { return f.ip === x.local && !f.tun; })) { steps.push({ k: 'drop', t: d.name + ': local address ' + x.local + ' туннеля gre ' + k.slice(3) + ' не принадлежит ни одному интерфейсу' }); return { ok: false }; }
+    steps.push({ k: 'route', t: d.name + ': маршрут через туннель gre ' + k.slice(3) + ' — пакет ' + pk.src + ' → ' + pk.dst + ' инкапсулирован в GRE: внешний заголовок ' + x.local + ' → ' + x.remote + ' (протокол 47)' });
+    var outer = { src: x.local, dst: x.remote, proto: 'gre', dport: null, inner: { src: pk.src, dst: pk.dst, proto: pk.proto, reply: !!pk.reply, dport: pk.dport, sport: pk.sport } };
+    this._tunDepth = (this._tunDepth || 0) + 1;
+    var o; try { o = this.send(cur, outer, steps, ct); } finally { this._tunDepth--; }
+    if (!o.ok) { steps.push({ k: 'drop', t: 'GRE-пакет не дошёл до удалённого конца ' + x.remote }); return { ok: false }; }
+    var pd = this.devs[o.dev], pk2 = pd.type === 'esr' ? Object.keys(pd.st.run.ifs).filter(function (q) { var y = pd.st.run.ifs[q];
+      return y.tun === 'gre' && y.on && y.local === x.remote && y.remote === x.local && y.ip; })[0] : null;
+    if (!pk2) { steps.push({ k: 'drop', t: pd.name + ': нет включённого GRE-туннеля с local ' + x.remote + ' и remote ' + x.local + ' — GRE-пакет отброшен' }); return { ok: false }; }
+    var y = pd.st.run.ifs[pk2], tf = { name: pk2, ip: y.ip.split('/')[0], fw: y.fw };
+    var fw = this.fwPass(o.dev, tf, pk, ct, { src: pk.src, dst: pk.dst });
+    if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
+    if (!fw.ok) return { ok: false };
+    steps.push({ k: 'route', t: pd.name + ': GRE снят на gre ' + pk2.slice(3) + ' — внутри ' + pk.src + ' → ' + pk.dst });
+    void s; return { ok: true, dev: o.dev, ip: tf.ip };
+  };
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).

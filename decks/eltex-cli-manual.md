@@ -271,6 +271,21 @@ security zone-pair trusted self        ← трафик самому маршр�
 
 Запрос — UDP 53 по сети к серверу (виден в трассе: ARP, запрос, ответ; в захвате — `Standard query A …` / `Standard query response …`). Ответы — `NXDOMAIN`, если имени нет в зоне, и «no servers could be reached», если сервер недоступен или bind9 остановлен. Поддерживаются записи A и CNAME; AAAA, PTR и рекурсия во внешний интернет не моделируются.
 
+### GRE-туннели ESR (справочник ESR-Series CLI 1.23)
+```
+tunnel gre 1
+  local address 100.0.0.2
+  remote address 100.0.1.2
+  ip address 10.10.10.1/30
+  ip firewall disable          (или security-zone …)
+  enable
+exit
+ip route 192.168.2.0/24 10.10.10.2
+```
+`show tunnels status` — Admin state, MTU 1476, Local/Remote IP. В режиме `(config-gre)#` есть `ip address`, `ip firewall disable`, `security-zone`, `description`, `local address`, `remote address`, `enable`.
+Пакет, ушедший в туннель, инкапсулируется: внешний IPv4 local → remote, протокол 47 — и идёт через сеть провайдера как обычный (ARP, маршруты, межсетевой экран на пути). На удалённом ESR нужен зеркальный включённый туннель (local/remote наоборот), иначе GRE отбрасывается; межсетевой экран туннельного интерфейса проверяется как у обычного. В трассе — шаги «инкапсулирован в GRE» и «GRE снят», в захвате у провайдера — внешний заголовок 100.0.0.2 → 100.0.1.2 и внутри ICMP (разбор: IPv4 proto 47 → GRE → ↳ внутренний IPv4 → ICMP).
+Упрощения: keepalive нет (туннель Up, когда включён и задан); RIP/OSPF через туннель соседство не строят — маршруты в туннель статические; MTU/фрагментация не моделируются. IPsec, L2TP, BGP, VRF, PBR, BFD — пока нет.
+
 ## Типовые ошибки
 | Сообщение | Что делать |
 |---|---|

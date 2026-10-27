@@ -126,6 +126,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>resolv.conf nameserver · VPC ip dns · ESR domain lookup enable / domain name-server · MES ip name-server</td><td>клиенты DNS, ping по имени</td></tr>
 </table>
 
+<h2>GRE-туннель ESR</h2>
+<table>
+<tr><td>tunnel gre 1 → local address A · remote address B · ip address 10.10.10.1/30 · ip firewall disable · enable</td><td>туннель (config-gre)#; маршрут в туннель — ip route СЕТЬ 10.10.10.2</td></tr>
+<tr><td>show tunnels status</td><td>состояние туннелей; в захвате у провайдера виден внешний заголовок и внутренний пакет</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

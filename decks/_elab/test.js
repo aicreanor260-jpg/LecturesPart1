@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -622,6 +622,39 @@ EL.labs.LABS.forEach(runLab);
   chk('захват: DNS-запрос и ответ', cap.frames.some(function (f) { return f.proto === 'DNS' && /Standard query A www\.lab\.local/.test(f.info); }) &&
       cap.frames.some(function (f) { return /Standard query response A www\.lab\.local A 10\.0\.0\.53/.test(f.info); }), cap.frames.map(function (f) { return f.info; }).join(' | '));
   console.log('✓ DNS');
+})();
+
+// GRE: офис A — провайдер — офис B, частные сети связаны туннелем
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), ra = n.add('vESR', 'RA'), isp = n.add('vESR', 'ISP'), rb = n.add('vESR', 'RB'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+  n.connect(ra.id, 'gi1/0/1', isp.id, 'gi1/0/1'); n.connect(isp.id, 'gi1/0/2', rb.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
+  var base = { ISP: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.1.1/30', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    RA: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.0.1', 'end', 'commit', 'confirm'],
+    RB: ['configure', 'interface gi1/0/1', 'ip address 100.0.1.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 192.168.2.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.1.1', 'end', 'commit', 'confirm'],
+    PA: ['ip 192.168.1.10/24 192.168.1.1'], PB: ['ip 192.168.2.10/24 192.168.2.1'] };
+  chk('GRE: базовая схема без ошибок', !EL.labs.apply(n, base).length);
+  chk('без туннеля частные сети не связаны (у провайдера нет маршрута)', !n.ping(pa.id, '192.168.2.10').ok);
+  var e = EL.labs.apply(n, {
+    RA: ['configure', 'tunnel gre 1', 'local address 100.0.0.2', 'remote address 100.0.1.2', 'ip address 10.10.10.1/30', 'ip firewall disable', 'enable', 'exit', 'ip route 192.168.2.0/24 10.10.10.2', 'end', 'commit', 'confirm'],
+    RB: ['configure', 'tunnel gre 1', 'local address 100.0.1.2', 'remote address 100.0.0.2', 'ip address 10.10.10.2/30', 'ip firewall disable', 'enable', 'exit', 'ip route 192.168.1.0/24 10.10.10.1', 'end', 'commit', 'confirm'] });
+  chk('GRE: команды туннеля без ошибок', !e.length, e.join('; '));
+  chk('приглашение (config-gre)#', (n.exec(ra.id, 'configure'), n.exec(ra.id, 'tunnel gre 1'), /\(config-gre\)#$/.test(n.prompt(ra.id))), n.prompt(ra.id)); n.exec(ra.id, 'end');
+  var cap = n.capStart(0), r = n.ping(pa.id, '192.168.2.10');
+  chk('PA → PB через GRE', r.ok, r.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('трасса: инкапсуляция и снятие GRE', r.steps.some(function (s) { return /инкапсулирован в GRE/.test(s.t); }) && r.steps.some(function (s) { return /GRE снят/.test(s.t); }));
+  var g = cap.frames.filter(function (f) { return f.f.proto === 'gre'; });
+  chk('захват у провайдера: внешний 100.0.0.2 → 100.0.1.2, внутри ICMP', g.length >= 2 && g[0].sip === '100.0.0.2' && g[0].dip === '100.0.1.2' && g[0].proto === 'ICMP' && /^GRE · 192\.168\.1\.10 → 192\.168\.2\.10/.test(g[0].info), g.map(function (f) { return f.info; }).join(' | '));
+  var L = EL.decode(g[0].f, null, g[0].len);
+  chk('разбор: IPv4 (GRE 47) → GRE → внутренний IPv4 → ICMP', /GRE \(47\)/.test(JSON.stringify(L)) && L.some(function (x) { return /Generic Routing Encapsulation/.test(x.name); }) && L.some(function (x) { return /↳ Internet Protocol Version 4, Src: 192\.168\.1\.10/.test(x.name); }), L.map(function (x) { return x.name; }).join(' / '));
+  chk('show tunnels status', /gre 1\s+Up\s+1476\s+100\.0\.0\.2\s+100\.0\.1\.2/.test(n.exec(ra.id, 'show tunnels status')), n.exec(ra.id, 'show tunnels status'));
+  chk('running-config: tunnel gre 1', /tunnel gre 1\n  ip firewall disable\n  ip address 10\.10\.10\.1\/30\n  local address 100\.0\.0\.2\n  remote address 100\.0\.1\.2\n  enable\nexit/.test(n.exec(ra.id, 'show running-config')), n.exec(ra.id, 'show running-config'));
+  EL.labs.apply(n, { RB: ['configure', 'tunnel gre 1', 'no enable', 'end', 'commit', 'confirm'] });
+  var r2 = n.ping(pa.id, '192.168.2.10');
+  chk('туннель выключен на RB — GRE отброшен', !r2.ok && r2.steps.some(function (s) { return /нет включённого GRE-туннеля/.test(s.t); }));
+  EL.labs.apply(n, { RB: ['configure', 'tunnel gre 1', 'enable', 'no ip firewall disable', 'end', 'commit', 'confirm'] });
+  chk('туннель без зоны и с межсетевым экраном — отброшено', !n.ping(pa.id, '192.168.2.10').ok);
+  console.log('✓ GRE');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

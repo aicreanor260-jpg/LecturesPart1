@@ -79,9 +79,10 @@
       o.push({ name: 'vlan' + v, ip: p[0], len: +p[1], vlan: +v }); });
     if (d.type === 'esr') Object.keys(st.run.ifs).forEach(function (k) {
       var x = st.run.ifs[k]; if (!x.ip || x.shut) return;
-      var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
+      if (x.tun && !(x.on && x.local && x.remote)) return;              // GRE-туннель поднят, когда задан и включён (enable)
+      var ph = k.split('.')[0], virt = k.charAt(0) === 'l' || !!x.tun; if (!virt && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
-      o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+      o.push({ name: k, ip: p[0], len: +p[1], tun: x.tun || undefined, port: virt ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
     if (d.type === 'esr') { var vt = this.vrrp()[id] || {}; Object.keys(vt).forEach(function (k) { var v = vt[k]; if (!v.master) return;
       var base = o.filter(function (f) { return f.name === k; })[0]; if (!base) return; var vp = v.vip.split('/');
       o.push({ name: k + ':vrrp', ip: vp[0], len: +vp[1], port: base.port, tag: base.tag, fw: base.fw, vrrp: true }); }); }
@@ -98,7 +99,7 @@
     if (d.type === 'mes' && st.gw) stat = stat.concat([{ net: '0.0.0.0/0', nh: st.gw }]);
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
-      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br) && IP.sameNet(r.nh, f.ip, f.len); })[0];
+      var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && IP.sameNet(r.nh, f.ip, f.len); })[0];
       o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
@@ -489,6 +490,12 @@
       if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет маршрута до ' + pk.dst + (cd.type === 'vpc' || cd.type === 'deb' ? ' (не задан шлюз или адрес)' : '') });
         return { ok: false, why: 'Destination net unreachable', pk: pk }; }
       if (!pk.src) pk.src = r.iface.ip;
+      if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
+        var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
+        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;
+        if (!owns(this, cur, pk.dst)) steps.push({ k: 'route', t: this.devs[cur].name + ': адрес ' + pk.dst + ' не мой — ищу маршрут дальше' });
+        continue;
+      }
       // свой трафик маршрутизатора: ответы на него межсетевой экран пропускает (сессия)
       if (cd.type === 'esr' && cur === src) ct.push({ kind: 'fw', dev: cur, self: true, proto: pk.proto, a: [pk.src], b: [pk.dst] });
       if (cd.type === 'esr' && cur !== src) {      // Source NAT на выходе
@@ -531,7 +538,7 @@
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, inner: pk.inner, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
