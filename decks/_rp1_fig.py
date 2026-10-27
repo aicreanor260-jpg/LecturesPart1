@@ -32,8 +32,8 @@ def t(x, y, s, size=16, col=INK, w=700, anchor="middle", mono=False, extra=""):
 def defs():
     k = uid("rp")
     return k, ("""<defs>
-<linearGradient id="%(k)sr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb8a6"/><stop offset="1" stop-color="#23786b"/></linearGradient>
-<linearGradient id="%(k)st" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a9e6d8"/><stop offset="1" stop-color="#5fc1ad"/></linearGradient>
+<linearGradient id="%(k)sr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2fae9b"/><stop offset="1" stop-color="#16756d"/></linearGradient>
+<linearGradient id="%(k)st" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ee6d2"/><stop offset="1" stop-color="#36b8a4"/></linearGradient>
 <marker id="%(k)sag" markerUnits="userSpaceOnUse" markerWidth="18" markerHeight="18" refX="15" refY="9" orient="auto-start-reverse"><path d="M0 0L18 9L0 18z" fill="%(g)s"/></marker>
 <marker id="%(k)sab" markerUnits="userSpaceOnUse" markerWidth="18" markerHeight="18" refX="15" refY="9" orient="auto-start-reverse"><path d="M0 0L18 9L0 18z" fill="%(b)s"/></marker>
 <marker id="%(k)sar" markerUnits="userSpaceOnUse" markerWidth="18" markerHeight="18" refX="15" refY="9" orient="auto-start-reverse"><path d="M0 0L18 9L0 18z" fill="%(r)s"/></marker>
@@ -60,10 +60,10 @@ class Fig(object):
         top = "url(#%st)" % self.k
         body = col or "url(#%sr)" % self.k
         g = ['<g%s>' % ph(p)]
-        g.append('<ellipse cx="%g" cy="%g" rx="%g" ry="%g" fill="rgba(23,70,58,.18)"/>' % (x, y + bh + 6 * s, rw + 4, rh))
-        g.append('<path d="M%g %g v%g a%g %g 0 0 0 %g 0 v%g z" fill="%s" stroke="#1d5e53" stroke-width="2"/>'
+        g.append('<ellipse cx="%g" cy="%g" rx="%g" ry="%g" fill="rgba(15,92,71,.16)"/>' % (x, y + bh + 6 * s, rw + 4, rh))
+        g.append('<path d="M%g %g v%g a%g %g 0 0 0 %g 0 v%g z" fill="%s"/>'
                  % (x - rw, y, bh, rw, rh, 2 * rw, -bh, body))
-        g.append('<ellipse cx="%g" cy="%g" rx="%g" ry="%g" fill="%s" stroke="#1d5e53" stroke-width="2"/>' % (x, y, rw, rh, top))
+        g.append('<ellipse cx="%g" cy="%g" rx="%g" ry="%g" fill="%s" stroke="#a6f0e2" stroke-width="1.2"/>' % (x, y, rw, rh, top))
         a = 13 * s  # четыре белые стрелки на крышке
         for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
             x1, y1 = x + dx * 5 * s, y + dy * 3 * s
@@ -93,13 +93,12 @@ class Fig(object):
         self.front.append("".join(g))
 
     def cloud(self, x, y, w, h, lines, tone="mint", p=None, size=17):
+        """Сеть — мягкая капсула с адресом (непрозрачная: провод уходит под неё)."""
         f, s = CLOUD[tone]
-        r = h / 2.0
-        d = ("M{a} {b} q{c} -{e} {f} -{g} q{h} -{i} {j} {k} q{l} -{m} {n} {o} q{p2} {q} -{r2} {s2} z"
-             .format(a=x - w / 2 + r * .4, b=y + r * .55, c=-r * .9, e=r * .1, f=r * .1, g=r * .95, h=r * .2,
-                     i=r * 1.25, j=w * .38, k=r * .1, l=w * .12, m=r * .9, n=w * .4, o=r * .75, p2=r * .95,
-                     q=r * .3, r2=r * .55, s2=r * 1.0))
-        g = ['<g%s>' % ph(p), '<path d="%s" fill="%s" stroke="%s" stroke-width="2.4"/>' % (d, f, s)]
+        hh = min(h, len(lines) * size * 1.3 + size * 1.1)
+        g = ['<g%s>' % ph(p),
+             '<rect x="%g" y="%g" width="%g" height="%g" rx="%g" fill="%s" stroke="%s" stroke-width="2.4"/>'
+             % (x - w / 2, y - hh / 2, w, hh, min(hh / 2, 22), f, s)]
         y0 = y - (len(lines) - 1) * size * .62 + size * .35
         for i, ln in enumerate(lines):
             g.append(t(x, y0 + i * size * 1.22, ln, size, INK, 800 if i == 0 else 700))

@@ -91,7 +91,7 @@ def slide(label, plate_name, items):
 CSS = r"""
 .slide.rpfs{padding:0}
 .rpcv{position:absolute;left:0;right:0;top:0;bottom:56px;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.rpci{position:relative;flex:none;width:1672px;height:941px;background:center/100% 100% no-repeat;transform-origin:center center}
+.rpci{position:relative;flex:none;width:1600px;height:900px;transform-origin:center center}
 .cv-at{position:absolute}
 .cv-h1{font-family:"Unbounded","Golos Text",sans-serif;font-weight:900;line-height:.98;color:#1f6b4a;text-transform:uppercase;letter-spacing:-.015em}
 .cv-sub{font:500 22px/1.35 "Golos Text",sans-serif;color:#2c7357}
@@ -118,9 +118,16 @@ CSS = r"""
 
 JS = r"""
 (function(){
-  function fit(){var s=Math.min(window.innerWidth/1672,(window.innerHeight-56)/941);
+  function fit(){var s=Math.min(window.innerWidth/1600,(window.innerHeight-56)/900);
     document.querySelectorAll('.rpci').forEach(function(c){c.style.transform='scale('+s+')';});}
   window.addEventListener('resize',fit);fit();
+  /* текст pptx не режется: если слайд не помещается, он плавно уменьшается целиком (не меньше 72 %) */
+  function shrink(){document.querySelectorAll('.slide.on>.sc').forEach(function(sc){
+    sc.style.zoom=1;var z=1;
+    while(z>0.72&&sc.scrollHeight>sc.clientHeight+2){z-=0.02;sc.style.zoom=z;}});}
+  new MutationObserver(function(ms){ms.forEach(function(m){if(m.target.classList.contains('on'))shrink();});})
+    .observe(document.getElementById('stage'),{subtree:true,attributes:true,attributeFilter:['class']});
+  window.addEventListener('resize',shrink);setTimeout(shrink,300);
 })();
 """
 
@@ -138,12 +145,7 @@ def card(title, body, tone="", icon_name=None):
 
 
 def section_bg_css():
-    """Фон обычных слайдов раздела — подложка ближайшей инфографики под светлой вуалью."""
-    out = []
-    for n in ("general1", "general2", "split", "bf", "loops", "setup"):
-        out.append('.slide.bgp-%s{background:radial-gradient(ellipse 72%% 70%% at 50%% 52%%,rgba(247,252,249,.97) 62%%,rgba(247,252,249,.62) 100%%),url(%s) center/cover no-repeat}'
-                   % (n, plate(n)))
-    return "\n".join(out) + """
+    return """
 .rpc .ch .cv-ic{width:46px;border-radius:12px}
 .rpc-row{display:flex;gap:14px;align-items:flex-start}
 .rpc-row>.cv-ic{width:52px;border-radius:14px;margin-top:2px}

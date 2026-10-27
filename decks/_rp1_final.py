@@ -21,18 +21,9 @@ def sim(pool):
 
 
 def head_slides():
-    """pptx 1–2: титул и цель главы — на подложке инфографики со схемой R1–R4."""
-    from _rp1_canvas import slide as cslide, h1, at, panel, pill
-    cslide("Титул", "general2", [
-        h1(95, 50, 420, "Протокол<br>RIP", 86),
-        pill(632, 198, 148, 54, "Обновления RIP", "g", 15), pill(714, 305, 148, 54, "Обновления RIP", "v", 15),
-        pill(1135, 200, 145, 54, "Обновления RIP", "p", 15), pill(1180, 312, 145, 54, "Обновления RIP", "v", 15),
-        at(345, 880, 1280, "← → шаги · ↑ ↓ слайды · Esc — содержание · в сценах кнопки «Назад / Вперёд»", "cv-txt",
-           style="font-size:16px;color:#2c7357;text-align:center"),
-        panel(25, 478, 1622, 382, "Цель главы",
-              '<div class="cv-txt" style="font-size:44px;line-height:1.3;font-weight:600">изучить принцип работы '
-              '<b>«Дистанционно-векторных»</b> протоколов;</div>', step=True, tsize=40),
-    ])
+    """pptx 1–2: титул с целью главы."""
+    import _rp1_cv
+    _rp1_cv.title()
 
 
 def _qs(title, qs):
@@ -126,15 +117,6 @@ def tail_slides():
                                             "суммирование", "балансировка"], 0, "Отравление — метрика 16 и триггерные обновления по событию."),
         quiz("В каком диапазоне настраиваются таймеры на ESR?", ["1–255", "12–65 535", "0–32 767", "30–240"], 1,
              "Значения всех таймеров — от 12 до 65 535 секунд.")])
-    slide("Что запомнить", sc(head("Что <em>запомнить</em>"), grow("g3",
-        col(step(card("RIP", li(["Дистанционно-векторный, алгоритм Беллмана–Форда.", "Метрика — hop: 15 предел, <b>16</b> — недоступна.",
-                                 "UDP <b>520</b>, обновления каждые 30 с; RIPv2 → <b>224.0.0.9</b>."]), "cy"))),
-        col(step(card("Сходимость и петли", li(["Этапы: запуск, обнаружение, обмен, сходимость.",
-                                                "Split horizon, triggered update, holddown, route poisoning.",
-                                                "Таймеры update 30 / invalid 180 / flush 240."], "mg"), "mg"))),
-        col(step(card("ESR", li(["<b>router rip</b> → network / redistribute → passive-interface → timers → <b>enable</b>.",
-                                 "Применение: <b>commit</b> и <b>confirm</b>.",
-                                 "Проверка: show running-config routing rip, show ip route rip."], "lm"), "lm"))))))
-    slide("Финал", sc(head("<em>Спасибо</em> за внимание", "Раздел 2.5.1 · Протокол RIP"), grow("g2",
-        col(step(card("Контакты", tags(tag("VKontakte", "v"), tag("Telegram")) +
-                      p("Вопросы по лекции и лабораторным — пишите."), "mg"))))))
+    import _rp1_cv
+    _rp1_cv.summary()
+    _rp1_cv.finale()
