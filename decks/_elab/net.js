@@ -655,6 +655,15 @@
     return false;
   }
   P.ping = function (src, dst) { return this.request(src, dst, 'icmp'); };
+  // официальное руководство Eltex по модели: MES — по ветке ПО (4.x — по каталогу, как в show version), ESR и vESR — справочник CLI
+  var MAN = { '10': ['mes-10.pdf', 'MES, ПО 10.4.6'], '6': ['mes-6.pdf', 'MES, ПО 6.6.8.8'], '4': ['mes-4.pdf', 'MES, ПО 4.0.23'], '8': ['mes-8.pdf', 'MES5448/7048, ПО 8.4.0.7 (англ.)'] };
+  P.manualFor = function (id) {
+    var d = this.devs[id]; if (!d) return null;
+    if (d.type === 'esr') return { url: 'docs/esr-cli.pdf', title: 'Справочник CLI ESR 1.23', extra: d.model === 'vESR' ? [{ url: 'docs/vesr-install.pdf', title: 'Установка vESR 1.40' }] : [] };
+    if (d.type !== 'mes') return null;
+    var m = MODELS[d.model] || {}, b = /4\.x/.test(m.fw || m.sw || '') ? '4' : (d.st.dialect || '10'), x = MAN[b];
+    return x ? { url: 'docs/' + x[0], title: 'Руководство ' + x[1], extra: [] } : null;
+  };
   P.reach = function (srcName, dst) { var d = this.byName(srcName); return !!d && this.ping(d.id, dst).ok; };
   P.http = function (srcName, dst, port) { var d = this.byName(srcName); return !!d && this.request(d.id, dst, 'tcp', port || 80).ok; };
 

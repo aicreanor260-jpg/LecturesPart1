@@ -1236,5 +1236,19 @@ EL.labs.LABS.forEach(runLab);
   chk('show tunnels status — MTU туннеля из конфигурации', /1400/.test(n.exec(r1.id, 'show tunnels status')));
   console.log('✓ MTU и размер пакета');
 })();
+
+// официальные руководства Eltex: выбор PDF по модели и ветке ПО
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), u = function (m) { var d = n.add(m, m.replace(/\W/g, '')); var x = n.manualFor(d.id); return x ? x.url + (x.extra.length ? '+' + x.extra[0].url : '') : null; };
+  chk('MES2428 (10.x) — mes-10.pdf', u('MES2428') === 'docs/mes-10.pdf');
+  chk('MES2300-24 (6.x) — mes-6.pdf', u('MES2300-24') === 'docs/mes-6.pdf');
+  chk('MES2324P (ПО 4.x) — mes-4.pdf', u('MES2324P') === 'docs/mes-4.pdf');
+  chk('MES5448 (8.x) — mes-8.pdf', u('MES5448') === 'docs/mes-8.pdf');
+  chk('ESR-1000 — esr-cli.pdf', u('ESR-1000') === 'docs/esr-cli.pdf');
+  chk('vESR — esr-cli.pdf + vesr-install.pdf', u('vESR') === 'docs/esr-cli.pdf+docs/vesr-install.pdf');
+  chk('VPC и Debian — руководства нет', u('VPC') === null && u('Debian') === null);
+  console.log('✓ руководства Eltex по моделям');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

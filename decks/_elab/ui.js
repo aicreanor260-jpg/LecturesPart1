@@ -167,10 +167,11 @@
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
       item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
       (mode === 'test' ? item('ping', '⇢', 'Ping отсюда…') : '') + '<hr>' +
-      X.items('dev') + (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
+      (net.manualFor(d.id) ? item('man', '❐', 'Руководство') : '') + X.items('dev') + (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
       function (a) {
         if (a === 'term') openTerm(d.id);
         if (a === 'props') openProps(d.id);
+        if (a === 'man') openManual(d.id);
         if (a === 'tables') openTables(d.id);
         if (a === 'cable') startCable(d.id);
         if (a === 'ping') openPing(d.id);
@@ -307,7 +308,9 @@
     var t = term(id); if (!t.html) t.html = '<div class="s">' + esc(banner(d)) + '</div>';
     var body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
     body.innerHTML = '<div class="out"></div><label class="inp"><span></span><input spellcheck="false" autocomplete="off"></label>';
-    makeWin(key, d.name, d.model, body, { w: Math.min(720, innerWidth - 60), h: Math.min(460, innerHeight - 160) });
+    var tw = makeWin(key, d.name, d.model, body, { w: Math.min(720, innerWidth - 60), h: Math.min(460, innerHeight - 160) });
+    if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство Eltex'; mb.textContent = 'Руководство';
+      tw.querySelector('.wt').insertBefore(mb, tw.querySelector('.wt [data-w="min"]')); mb.addEventListener('click', function () { openManual(id); }); }
     var out = body.querySelector('.out'), inp = body.querySelector('input');
     out.innerHTML = t.html; out.scrollTop = out.scrollHeight; setPr(id);
     out.addEventListener('mouseup', function () { if (!getSelection().toString()) inp.focus(); });
@@ -645,21 +648,29 @@
   }
   // методичка лабы — PDF курса рядом с эмулятором (labs/<id>.pdf на сайте курса); в репозиторий и в HTML не входит
   function hasDoc(L) { return /^(\d+\.\d+|E\.\d+)$/.test(L.id); }
-  function openDoc(id) {
-    var url = 'labs/' + id + '.pdf', key = 'doc', body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
-    body.innerHTML = '<div class="row" style="padding:6px 10px;margin:0"><a class="act" target="_blank" rel="noopener" href="' + url + '">Открыть в новой вкладке</a></div><div class="pad" data-doc>Загрузка…</div>';
-    closeWin(key, true); makeWin(key, 'Методичка ' + id, 'PDF лабораторной', body, { x: Math.max(20, innerWidth - 720), y: 70, w: Math.min(700, innerWidth - 40), h: innerHeight - 140 });
-    var box = body.querySelector('[data-doc]'), miss = function () { box.innerHTML = 'Методичка доступна на сайте курса <b>net-cat.duckdns.org</b>'; body.querySelector('a').style.display = 'none'; };
+  function openDoc(id) { openPdf('doc', 'labs/' + id + '.pdf', 'Методичка ' + id, 'PDF лабораторной', 'Методичка доступна', []); }
+  // окно PDF с сайта курса: встроенный просмотр + «Открыть в новой вкладке»; без файла (офлайн, GitHub Pages) — строка про сайт курса
+  function openPdf(key, url, title, sub, missText, extra) {
+    var body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
+    var links = [{ url: url, title: 'Открыть в новой вкладке' }].concat(extra || []);
+    body.innerHTML = '<div class="row" style="padding:6px 10px;margin:0">' + links.map(function (l) { return '<a class="act" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.title) + '</a>'; }).join(' ') +
+      '</div><div class="pad" data-doc>Загрузка…</div>';
+    closeWin(key, true); makeWin(key, title, sub, body, { x: Math.max(20, innerWidth - 720), y: 70, w: Math.min(700, innerWidth - 40), h: innerHeight - 140 });
+    var box = body.querySelector('[data-doc]'), miss = function () { box.innerHTML = esc(missText) + ' на сайте курса <b>net-cat.duckdns.org</b>';
+      [].forEach.call(body.querySelectorAll('a'), function (a) { a.style.display = 'none'; }); };
     if (location.protocol === 'file:' || !window.fetch) { miss(); return; }
     fetch(url, { method: 'HEAD', credentials: 'same-origin' }).then(function (r) {
       if (!r.ok || !/pdf/i.test(r.headers.get('content-type') || 'pdf')) { miss(); return; }
-      box.className = ''; box.style.cssText = 'flex:1;min-height:0;display:flex'; box.innerHTML = '<iframe src="' + url + '" title="Методичка ' + id + '" style="flex:1;border:0;background:#fff"></iframe>';
+      box.className = ''; box.style.cssText = 'flex:1;min-height:0;display:flex'; box.innerHTML = '<iframe src="' + esc(url) + '" title="' + esc(title) + '" style="flex:1;border:0;background:#fff"></iframe>';
     }).catch(miss);
   }
+  function openManual(id) { var d = net.devs[id], m = d && net.manualFor(id); if (!m) return;
+    openPdf('man' + id, m.url, m.title, d.name + ' · ' + d.model, 'Руководство доступно', m.extra); }
   function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
-    lab = null; resetNet(); var d = net.add('MES3300-24', 'SW1', 500, 300);   // тренажёры дек написаны синтаксисом ветки 6.x d.st.mode = 'priv'; d.st.host = 'switch';
+    // тренажёры дек написаны синтаксисом ветки 6.x — коммутатор той же ветки
+    lab = null; resetNet(); var d = net.add('MES3300-24', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';
     task = EL.labs.randomTask(kind); task.kind = kind; task.dev = d.id; if (task.T.setup) task.T.setup(task.P, d.st);
     task.html = task.T.text(task.P); task.res = ''; task.sol = false; term(d.id).auth = true; draw(); fit(); renderTask(true); openTerm(d.id);
   }
