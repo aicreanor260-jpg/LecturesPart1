@@ -757,7 +757,7 @@
     net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
-    lab = EL.labs.byId(id); labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    lab = EL.labs.byId(id); lab._done = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
     report({ type: 'lab', lab: id, title: lab.title, mode: mode });
   }
   // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
@@ -793,10 +793,15 @@
         ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol><div class="row">' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + '<button data-a="reset">Сбросить лабу</button></div>';
       return;
     }
-    var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
+    // каждый пункт — с «лампочкой»: серая, пока не сделано; загорается зелёным со вспышкой в момент выполнения
+    var was = lab._done || {}, now = {}, fresh = [];
+    var li = ts.map(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); }
+      return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && lab._done ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
+    if (lab._done && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
+    lab._done = now;
     var sol = '';
     if (labShow === true) { var s = lab.sol(labP); sol = Object.keys(s).map(function (n) { return '<b>' + esc(n) + '</b><pre>' + esc(s[n].join('\n')) + '</pre>'; }).join('') + (lab.alt ? '<p>' + esc(lab.alt) + '</p>' : ''); }
-    body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' + li + '</ol>' +
+    body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol class="tasks">' + li + '</ol>' +
       '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
       (lab.hint && labShow === 'hint' ? '<div class="hint">' + esc(lab.hint(labP)) + '</div>' : '') +
       '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
@@ -825,7 +830,7 @@
   // исходная схема лабы того же варианта: все настройки студента пропадают
   function resetLab() { if (!lab) return; var L = lab, P = labP;
     ask('Сбросить лабу ' + L.id + '? Все настройки устройств и изменения схемы пропадут — вернётся исходная схема задания.', function () {
-      resetNet(); lab = L; labP = P; labShow = false; lab.build(net, labP); draw(); fit(); renderLab(true); renderSide(); toast('Лаба ' + L.id + ' сброшена'); }, 'Да, сбросить'); }
+      resetNet(); lab = L; lab._done = null; labP = P; labShow = false; lab.build(net, labP); draw(); fit(); renderLab(true); renderSide(); toast('Лаба ' + L.id + ' сброшена'); }, 'Да, сбросить'); }
   function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; } if (a === 'reset') { resetLab(); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
@@ -891,7 +896,7 @@
     var n = EL.Net.fromJSON(j); lab = null; task = null; resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
     X.loadX(j); draw(); fit();
     var bl = j.builtin && EL.labs.byId(j.builtin.id);           // схема встроенной лабы — с тем же вариантом и проверками
-    if (bl) { lab = bl; labP = j.builtin.p; labShow = false; renderLab(true); }
+    if (bl) { lab = bl; lab._done = null; labP = j.builtin.p; labShow = false; renderLab(true); }
     renderSide(); }
   $('fOpen').addEventListener('change', function () { var f = this.files[0]; if (!f) return; var rd = new FileReader();
     rd.onload = function () { try { loadScheme(JSON.parse(rd.result)); toast('Схема загружена: ' + net.list().length + ' устройств'); } catch (err) { toast('Не удалось открыть: ' + err.message); } };
