@@ -179,6 +179,22 @@ def main():
                 continue
             models[m["model"]] = {"type": "esr", "kind": "fstec", "ports": len(names), "portList": names, "group": "Межсетевые экраны ESR ФСТЭК", "host": "esr",
                                   "sw": "ПО 1.5.10 (FSTEC)", "note": (m.get("summary") or "") + " · ПО 1.5.10 ФСТЭК", "full": (m.get("summary") or "") + " · ПО 1.5.10", "url": m.get("url")}
+    # заводские учётные записи (поле login каталога) и типы портов по группам (pt: [[кол-во, тип], …]) — для «Свойств» в «Тесте»
+    import glob
+    for f in glob.glob(os.path.join(os.path.dirname(SRC), "*.json")):
+        try:
+            items = json.load(open(f, encoding="utf-8"))
+        except Exception:
+            continue
+        for m in items if isinstance(items, list) else []:
+            if not isinstance(m, dict) or m.get("model") not in models:
+                continue
+            x = models[m["model"]]
+            if m.get("login"):
+                x["login"] = [{"u": l.get("user", ""), "p": l.get("password", ""), "a": l.get("access", "")} for l in m["login"] if isinstance(l, dict)]
+            pt = [[p["count"], p.get("type") or ""] for p in (m.get("ports") or []) if isinstance(p, dict) and p.get("count") and not any(k in (p.get("type") or "") for k in SKIP)]
+            if pt and sum(c for c, _ in pt) == x.get("ports"):
+                x["pt"] = pt
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))

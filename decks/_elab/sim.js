@@ -83,6 +83,8 @@
         var d = 0; for (var i = 1; i < r.length; i++) d += Math.abs(r[i] - r[i - 1]); st.jitter = r.length > 1 ? d / (r.length - 1) : 0; } });
     var lk = Object.keys(links).map(function (k) { var x = links[k]; return { li: +k, name: x.name, frames: x.frames, util: Math.min(100, x.bits / tEnd / (x.mbps * 1e6) * 100), mbps: x.mbps }; });
     var pq = Object.keys(ports).map(function (k) { return { name: ports[k].name, maxq: ports[k].maxq }; }).filter(function (x) { return x.maxq > 1; });
-    return { events: ev, flows: res, links: lk, queues: pq, tEnd: tEnd, truncated: guard >= MAXEV };
+    var out = { events: ev, flows: res, links: lk, queues: pq, tEnd: tEnd, truncated: guard >= MAXEV };
+    if (!opt.probe) this._simLast = out;      // «Свойства»: загрузка портов по последней симуляции
+    return out;
   };
 })(typeof window !== 'undefined' ? window : global);

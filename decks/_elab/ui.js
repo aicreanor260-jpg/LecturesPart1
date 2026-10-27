@@ -503,17 +503,38 @@
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-n]'); if (b) done(b.dataset.n === 's'); });
     ta.addEventListener('keydown', function (e) { if (e.ctrlKey && /^[sSы]$/.test(e.key)) { e.preventDefault(); done(true); } if (e.ctrlKey && /^[xXч]$/.test(e.key)) { e.preventDefault(); done(false); } e.stopPropagation(); });
   }
+  // «Свойства»: карточка модели — описание, ветка ПО, порты с типами и скоростью, загрузка из последней симуляции, ссылка на eltex.ru;
+  // заводские логин и пароль (поле login каталога) — только в «Тесте»
+  var PSPEED = { fa: ['Fast Ethernet', 100], gi: ['Gigabit Ethernet', 1000], tw: ['2.5G Ethernet', 2500], te: ['10G Ethernet', 10000], twe: ['25G Ethernet', 25000],
+    fo: ['40G Ethernet', 40000], hu: ['100G Ethernet', 100000], eth: ['Ethernet', 1000], ens: ['Ethernet', 1000], console: ['Консоль RS-232', 0], aux: ['Консоль RS-232', 0] };
+  function portKind(m, list, p) {
+    var i = list.indexOf(p), pre = (p.match(/^[a-z]+/) || ['gi'])[0], sp = PSPEED[pre] || (/^\d/.test(p) ? ['10G Ethernet', 10000] : ['Ethernet', 1000]), t = '';
+    if (m.pt && i >= 0) { var c = 0; m.pt.some(function (g) { c += g[0]; if (i < c) { t = g[1]; return true; } return false; }); }
+    return { name: sp[0], max: sp[1], type: t };
+  }
   function openProps(id) {
     var d = net.devs[id], m = EL.MODELS[d.model] || {}, body = document.createElement('div'); body.className = 'pad';
-    var rows = net.portsOf(d).map(function (p) { var pr = net.peer(id, p);
-      return '<tr><td>' + p + '</td><td>' + (pr ? esc(net.devs[pr.dev].name + ' ' + pr.port) : '—') + '</td><td>' + (pr ? (net.linkUp(id, p) ? '<span style="color:var(--ok)">up</span>' : '<span style="color:var(--bad)">down</span>') : '') + '</td></tr>'; }).join('');
-    body.innerHTML = '<div class="k">Характеристики</div><h2>' + esc(d.model) + '</h2><p>' + esc(m.full || m.note || '') + '</p>' +
-      '<label>Имя на схеме</label><input class="q" id="pname" value="' + esc(d.name) + '">' +
+    var list = net.portsOf(d), util = {};
+    ((net._simLast || {}).links || []).forEach(function (x) { var l = net.links[x.li]; if (!l) return; util[l.a.dev + '|' + l.a.port] = util[l.b.dev + '|' + l.b.port] = x.util; });
+    var rows = list.map(function (p) { var pr = net.peer(id, p), k = portKind(m, list, p), ph = pr && net.phys ? net.phys(id, p) : null, u = util[id + '|' + p];
+      return '<tr><td>' + p + '</td><td>' + esc(k.name) + (k.type ? '<br><small style="color:var(--dim)">' + esc(k.type) + '</small>' : '') + '</td><td>' +
+        (ph && ph.up ? (ph.speed >= 1000 ? ph.speed / 1000 + ' Гбит/с' : ph.speed + ' Мбит/с') + (ph.dup[id] === 'half' ? ', half' : '') : '—') + '</td><td>' +
+        (pr ? esc(net.devs[pr.dev].name + ' ' + pr.port) : '—') + '</td><td>' + (pr ? (net.linkUp(id, p) ? '<span style="color:var(--ok)">up</span>' : '<span style="color:var(--bad)">down</span>') : '') +
+        '</td>' + (mode === 'test' ? '<td>' + (u === undefined ? '—' : u.toFixed(u < 1 ? 3 : 1) + ' %') + '</td>' : '') + '</tr>'; }).join('');
+    var sum = {}; list.forEach(function (p) { var k = portKind(m, list, p).name; sum[k] = (sum[k] || 0) + 1; });
+    var login = mode === 'test' && m.login && m.login.length ? '<h3>Заводская учётная запись</h3><table>' + m.login.map(function (l) {
+      return '<tr><td>' + esc(l.u) + '</td><td>' + (l.p ? '<code>' + esc(l.p) + '</code>' : '<i>пустой пароль</i>') + '</td><td>' + esc(l.a || '') + '</td></tr>'; }).join('') + '</table>' : '';
+    body.innerHTML = '<div class="k">Карточка модели</div><h2>' + esc(d.model) + '</h2>' +
+      '<p>' + esc(m.full || m.note || '') + '</p>' +
+      '<table><tr><td>Группа</td><td>' + esc(m.group || '—') + '</td></tr><tr><td>Ветка ПО</td><td>' + esc(m.sw || '—') + (m.dialect ? ' (CLI ' + esc(m.dialect) + '.x)' : '') + '</td></tr>' +
+      '<tr><td>Портов</td><td>' + list.length + ': ' + Object.keys(sum).map(function (k) { return sum[k] + ' × ' + k; }).join(', ') + '</td></tr>' +
+      (m.url ? '<tr><td>Сайт</td><td><a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + esc(m.url.replace(/^https?:\/\//, '')) + '</a></td></tr>' : '') + '</table>' +
+      '<label>Имя на схеме (= hostname)</label><input class="q" id="pname" value="' + esc(d.name) + '">' +
       '<div class="row"><button class="pri" data-p="name">Сохранить имя</button><button data-p="term">Консоль</button>' + (d.off ? '<button data-p="on">Включить</button>' : '<button data-p="off">Выключить</button>') + '</div>' +
       '<p>Состояние: ' + (d.off ? '<b style="color:var(--bad)">выключено</b>' : '<b style="color:var(--ok)">работает</b>') + (d.type === 'mes' ? ' · MAC моста ' + esc(d.st.bmac || '') : '') + '</p>' +
-      '<table><tr><th>Порт</th><th>Соединён с</th><th>Линк</th></tr>' + rows + '</table>' +
-      (m.url ? '<p style="margin-top:10px">Карточка модели: ' + esc(m.url) + '</p>' : '');
-    makeWin('p' + id, 'Свойства', d.name, body, { w: 460, h: 520 });
+      '<h3>Порты</h3><table><tr><th>Порт</th><th>Тип</th><th>Скорость</th><th>Соединён с</th><th>Линк</th>' + (mode === 'test' ? '<th>Загрузка*</th>' : '') + '</tr>' + rows + '</table>' +
+      (mode === 'test' ? '<p style="color:var(--dim)">* по последней «Симуляции трафика» (доля времени, когда порт передавал, от его скорости).</p>' : '') + login;
+    makeWin('p' + id, 'Свойства', d.name, body, { w: 600, h: 600 });
     var inp = body.querySelector('#pname'); inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-p]'); if (!b) return; var a = b.dataset.p;
       if (a === 'name') { var err = net.rename(id, inp.value); if (err) { toast(err); return; } net.setHost(id, d.name); setPr(id); draw(); toast('Имя и hostname изменены');
