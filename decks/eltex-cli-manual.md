@@ -494,6 +494,17 @@ tunnel l2tpv3 1
 - **Карточка PDU** (щелчок по строке): L1 — линейный код кабеля и сигнал первых байт кадра (MAC назначения, младший бит первым): 10BASE-T — манчестерский код, 100BASE-TX — 4B5B + MLT-3, 1000BASE-T — 4D-PAM5 (рисунок условный), 1000BASE-X — 8b/10b, 10GBASE-R — 64b/66b, GPON — NRZ, RS-232 — старт/стоп-биты; затем уровни OSI с полями (Ethernet II, 802.1Q, IPv4, ICMP/TCP/UDP …).
 - Упрощения: у 8b/10b и 64b/66b показаны исходные биты без кодовых таблиц и скремблера; у 1000BASE-T — 2 бита → уровень PAM-5 без треллис-кода.
 
+### Безопасная настройка ESR и межсетевые экраны ESR ФСТЭК (РЭ ESR 1.5.10 гл. 6, справочник CLI 1.5.10, деревья прошивок 1.30/1.40/1.5.10)
+Палитра → «Межсетевые экраны ESR ФСТЭК» (13 моделей, ПО 1.5.10). Это те же ESR без веб-интерфейса, WLC и встроенного RADIUS; `show version` — `1.5.10(FSTEC) build …`. Команды безопасной настройки есть на всех ESR:
+- **Парольная политика:** `security passwords default-expired | lifetime N | history N | min-length N | max-length N` (1–32) `| upper-case | lower-case | numeric-count | special-case | symbol-types` — новый пароль пользователя (`username … → password …`) проверяется: длина и классы символов; не прошёл — ошибка.
+- **AAA:** `aaa authentication login ИМЯ методы`, `aaa authentication enable default …`, `aaa authentication mode break`, `aaa authentication attempts max-fail N T`, `aaa accounting …`; `line console | ssh | telnet` → `login authentication ИМЯ`, `enable authentication`, `exec-timeout`.
+- **Журналы:** `logging userinfo`, `logging aaa configuration`, `syslog cli-commands`, `syslog file tmpsys:syslog/default` → `(config-syslog-file)# severity info`, `syslog max-files | file-size | sequence-numbers`.
+- **Удалённый доступ:** `no ip telnet server` (telnet к ESR больше не подключается), `ip ssh authentication | encryption | key-exchange | host-key algorithm X disable`, `update ssh-host-key rsa [2048]`.
+- **Защита от атак:** `ip firewall screen spy-blocking spoofing | syn-fin | fin-no-ack | tcp-no-flag | tcp-all-flags`, `suspicious-packets icmp-fragment | large-icmp | unknown-protocols`, `dos-defense land | icmp-threshold N`, `logging firewall screen …`.
+- **Целостность:** `verify filesystem` → `Filesystem Successfully Verified`. Просмотр: `show users accounts`, `show aaa authentication`, `show syslog configuration`.
+- **Только ФСТЭК:** в правиле зоны `match [not] http command get|post|head|put`, `match [not] ftp command get|put|rmdir|mkdir|delete`; `ip|ipv6 firewall screen flow-spec`, `logging firewall screen flow-spec`.
+- **Упрощения (в источниках нет):** текст ошибки при нарушении парольной политики — общий; методы radius/tacacs/ldap хранятся, вход локальный; смена пароля при первом входе, блокировка подбора, ротация журналов не моделируются; экраны и `match http/ftp command` хранятся — что именно проверяется в трафике, в источниках нет.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:

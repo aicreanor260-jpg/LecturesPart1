@@ -149,6 +149,24 @@ def main():
             sv = m.get("sw_version") or "?"
             models[m["model"]] = {"type": "esr", "kind": "me", "ports": len(names) + 1, "portList": names + ["mgmt0/fmc0/1"], "group": "Маршрутизаторы ME", "host": "EOS",
                                   "promptModel": m["model"].split(" ")[0], "sw": "ПО ME " + sv, "note": m.get("summary") or "", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    # межсетевые экраны ESR ФСТЭК (esr-fstec.json, ПО 1.5.10): порты как у ESR; у ESR-30 по РЭ 1.5.10 §5.1 ещё te1/0/1–2 (в каталоге их нет)
+    fsrc = os.path.join(os.path.dirname(SRC), "esr-fstec.json")
+    if os.path.exists(fsrc):
+        RP = {"1G": "gi", "10G": "te", "25G": "twe", "40G": "fo", "100G": "hu"}
+        for m in json.load(open(fsrc, encoding="utf-8")):
+            names, cnt = [], {}
+            for p in m.get("ports") or []:
+                k = RP.get(p.get("speed"))
+                for _ in range(p.get("count") or 0):
+                    if k:
+                        cnt[k] = cnt.get(k, 0) + 1
+                        names.append("%s1/0/%d" % (k, cnt[k]))
+            if m["model"] == "ESR-30 FSTEC" and "te1/0/1" not in names:
+                names += ["te1/0/1", "te1/0/2"]
+            if not names:
+                continue
+            models[m["model"]] = {"type": "esr", "kind": "fstec", "ports": len(names), "portList": names, "group": "Межсетевые экраны ESR ФСТЭК", "host": "esr",
+                                  "sw": "ПО 1.5.10 (FSTEC)", "note": (m.get("summary") or "") + " · ПО 1.5.10 ФСТЭК", "full": (m.get("summary") or "") + " · ПО 1.5.10", "url": m.get("url")}
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))

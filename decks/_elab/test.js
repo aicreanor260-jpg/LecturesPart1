@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1488,6 +1488,39 @@ EL.labs.LABS.forEach(runLab);
   chk('RS-232: старт-бит 0 (положительный уровень), стоп-бит 1', EL.waveform('uart', [0xff]).levels[0] === 1 && EL.waveform('uart', [0xff]).levels[9] === -1);
   chk('протоколы по портам: DHCP, DNS, HTTP, BGP', EL.ptProto({ proto: 'udp', dport: 67 }) === 'DHCP' && EL.ptProto({ proto: 'udp', dport: 53 }) === 'DNS' && EL.ptProto({ proto: 'tcp', dport: 80 }) === 'HTTP' && EL.ptProto({ proto: 'tcp', dport: 179 }) === 'BGP');
   console.log('✓ симуляция пакетов (Packet Tracer)');
+})();
+
+// безопасная настройка ESR и ESR ФСТЭК (РЭ ESR 1.5.10 гл. 6)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), f = n.add('ESR-15R FSTEC', 'FW'), r = n.add('vESR', 'R1'), pc = n.add('Debian', 'PC');
+  n.connect(pc.id, 'ens3', f.id, 'gi1/0/2');
+  chk('ESR ФСТЭК в каталоге: 13 моделей, ESR-30 — с te1/0/1–2', Object.keys(EL.MODELS).filter(function (k) { return EL.MODELS[k].kind === 'fstec'; }).length === 13 && EL.MODELS['ESR-30 FSTEC'].portList.indexOf('te1/0/2') >= 0);
+  chk('show version ФСТЭК: 1.5.10(FSTEC) build 9; у vESR — обычная', /1\.5\.10\(FSTEC\) build 9/.test(n.exec(f.id, 'show version')) && !/FSTEC/.test(n.exec(r.id, 'show version')));
+  chk('в ФСТЭК нет WLC и встроенного RADIUS', /Unknown|Unrecognized|Illegal/i.test((n.exec(f.id, 'configure'), n.exec(f.id, 'wlc'))) && /Unknown|Unrecognized|Illegal/i.test(n.exec(f.id, 'radius-server local')) && (n.exec(f.id, 'end'), true));
+  var e = EL.labs.apply(n, { FW: ['configure', 'security passwords default-expired', 'security passwords lifetime 30', 'security passwords history 12', 'security passwords min-length 16',
+    'security passwords max-length 24', 'security passwords upper-case 3', 'security passwords lower-case 5', 'security passwords special-case 2', 'security passwords numeric-count 4',
+    'security passwords symbol-types 4', 'end', 'commit', 'confirm'] });
+  chk('РЭ 6.3.2: парольная политика без ошибок', !e.length, e.join('; '));
+  chk('max-length 64 — вне 1..32, ошибка', /Illegal/.test((n.exec(f.id, 'configure'), n.exec(f.id, 'security passwords max-length 64'))) && (n.exec(f.id, 'end'), true));
+  var w = (n.exec(f.id, 'configure'), n.exec(f.id, 'username fedor'), n.exec(f.id, 'password 12345678'));
+  var ok = n.exec(f.id, 'password ABCdefgh1234!@kl');
+  chk('пароль 12345678 не проходит политику, ABCdefgh1234!@kl — проходит', /Illegal/.test(w) && !/Illegal|error/i.test(ok), w + ' | ' + ok); n.exec(f.id, 'end');
+  e = EL.labs.apply(n, { FW: ['configure', 'aaa authentication login CONSOLE radius local', 'aaa authentication login SSH radius', 'aaa authentication enable default radius enable', 'aaa authentication mode break',
+    'line console', 'login authentication CONSOLE', 'exit', 'line ssh', 'login authentication SSH', 'exit', 'logging userinfo', 'logging aaa configuration', 'syslog cli-commands',
+    'syslog file tmpsys:syslog/default', 'severity info', 'exit', 'ip firewall screen spy-blocking spoofing', 'logging firewall screen spy-blocking spoofing',
+    'ip firewall screen suspicious-packets large-icmp', 'no ip telnet server', 'ip ssh server', 'ip ssh authentication algorithm md5 disable', 'ip ssh host-key algorithm ed25519 disable', 'end', 'commit', 'confirm'] });
+  chk('РЭ 6.4.3, 6.6.2, 6.5.2: AAA, журналы, экраны, SSH — без ошибок', !e.length, e.join('; '));
+  var run = n.exec(f.id, 'show running-config');
+  chk('running-config: aaa, line console, syslog file, screen, ssh algorithm', /aaa authentication login CONSOLE radius local/.test(run) && /line console\n  login authentication CONSOLE\nexit/.test(run) &&
+    /syslog file tmpsys:syslog\/default\n  severity info/.test(run) && /ip firewall screen spy-blocking spoofing/.test(run) && /ip ssh authentication algorithm md5 disable/.test(run), run.slice(-900));
+  chk('приглашения (config-line-console)#, (config-syslog-file)#', (n.exec(f.id, 'configure'), n.exec(f.id, 'line console'), /\(config-line-console\)#$/.test(n.prompt(f.id))) && (n.exec(f.id, 'exit'), n.exec(f.id, 'syslog file x'), /\(config-syslog-file\)#$/.test(n.prompt(f.id))) && (n.exec(f.id, 'end'), true));
+  chk('verify filesystem', n.exec(f.id, 'verify filesystem') === 'Filesystem Successfully Verified');
+  e = EL.labs.apply(n, { FW: ['configure', 'security zone LAN', 'exit', 'security zone WAN', 'exit', 'security zone-pair LAN WAN', 'rule 10', 'action deny', 'match protocol tcp', 'match http command post', 'enable', 'exit', 'exit', 'end', 'commit', 'confirm'] });
+  chk('ФСТЭК: match http command post в правиле зоны — в running-config внутри правила', !e.length && /  rule 10\n[\s\S]*?    match http command post\n    enable/.test(n.exec(f.id, 'show running-config')), e.join('; '));
+  chk('в обычном ESR match http command нет', /Unknown|Unrecognized|Illegal/i.test((n.exec(r.id, 'configure'), n.exec(r.id, 'security zone-pair A B'), n.exec(r.id, 'rule 1'), n.exec(r.id, 'match http command post'))) && (n.exec(r.id, 'end'), true));
+  chk('в обычном ESR парольная политика тоже есть', !/Unknown|Illegal/.test((n.exec(r.id, 'configure'), n.exec(r.id, 'security passwords min-length 8'))) && (n.exec(r.id, 'end'), true));
+  console.log('✓ безопасная настройка ESR и ESR ФСТЭК');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

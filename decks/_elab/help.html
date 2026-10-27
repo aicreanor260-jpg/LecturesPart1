@@ -155,6 +155,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>Безопасная настройка ESR, ESR ФСТЭК</h2>
+<table>
+<tr><td>security passwords min-length 16 · upper-case 3 · lower-case 5 · numeric-count 4 · special-case 2 · symbol-types 4</td><td>парольная политика: новые пароли проверяются</td></tr>
+<tr><td>aaa authentication login CONSOLE local · line console → login authentication CONSOLE · logging userinfo · syslog cli-commands</td><td>AAA и журналы</td></tr>
+<tr><td>no ip telnet server · ip ssh … algorithm md5 disable · ip firewall screen spy-blocking spoofing · verify filesystem</td><td>SSH, защита от атак, целостность</td></tr>
+<tr><td>ФСТЭК: match http command post · match ftp command put · show version → 1.5.10(FSTEC)</td><td>только в ПО 1.5.10 ФСТЭК</td></tr>
+</table>
+
 <h2>Маршрутизаторы ME</h2>
 <table>
 <tr><td>configure · interface te 0/0/2 → ipv4 address A/N · interface te 0/0/1.101 → encapsulation outer-vid 101 · commit</td><td>commit применяет и сохраняет; abort — очистить кандидат</td></tr>
