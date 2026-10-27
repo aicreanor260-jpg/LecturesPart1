@@ -1410,5 +1410,31 @@ EL.labs.LABS.forEach(runLab);
   chk('privilege p15 / p16', (n.exec(a.id, 'configure'), n.exec(a.id, 'user ivan'), !/%/.test(n.exec(a.id, 'privilege p15'))) && /%/.test(n.exec(a.id, 'privilege p16')) && (n.exec(a.id, 'end'), true));
   console.log('✓ маршрутизаторы ME');
 })();
+
+// ME: BGP — iBGP по loopback через OSPF и eBGP с ESR
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('ME5100S', 'PE1'), b = n.add('ME5100S', 'PE2'), r = n.add('vESR', 'CE'), pc = n.add('VPC', 'PC');
+  n.connect(a.id, 'te0/0/12', b.id, 'te0/0/12'); n.connect(r.id, 'gi1/0/1', b.id, 'te0/0/1'); n.connect(pc.id, 'eth0', r.id, 'gi1/0/2');
+  function run(d, L) { return L.map(function (l) { var x = n.exec(d.id, l); return /^%/.test(x) ? l + ' → ' + x : null; }).filter(Boolean); }
+  var core = function (me, lo, p2p) { return ['configure', 'interface te 0/0/12', 'ipv4 address ' + p2p, 'exit', 'interface loopback 1', 'ipv4 address ' + lo + '/32', 'exit',
+    'router ospfv2 core', 'router-id ' + lo, 'area 0.0.0.0', 'interface loopback 1', 'passive', 'exit', 'interface te 0/0/12', 'network point-to-point', 'root']; };
+  var e = run(a, core(a, '1.1.1.1', '10.0.0.1/30').concat(['interface loopback 2', 'ipv4 address 100.64.1.1/24', 'exit',
+    'router bgp 65535', 'bgp router-id 1.1.1.1', 'address-family ipv4 unicast', 'network 100.64.1.0/24', 'exit',
+    'neighbor 2.2.2.2', 'remote-as 65535', 'update-source 1.1.1.1', 'address-family ipv4 unicast', 'exit', 'exit', 'root', 'commit', 'end']));
+  e = e.concat(run(b, core(b, '2.2.2.2', '10.0.0.2/30').concat(['interface te 0/0/1', 'ipv4 address 172.16.0.1/30', 'exit',
+    'router bgp 65535', 'bgp router-id 2.2.2.2', 'neighbor 1.1.1.1', 'remote-as 65535', 'update-source 2.2.2.2', 'address-family ipv4 unicast', 'next-hop-self', 'exit', 'exit',
+    'neighbor 172.16.0.2', 'remote-as 65001', 'address-family ipv4 unicast', 'exit', 'exit', 'root', 'commit', 'end'])));
+  e = e.concat(EL.labs.apply(n, { CE: ['configure', 'interface gi1/0/1', 'ip address 172.16.0.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 192.168.5.1/24', 'ip firewall disable', 'exit',
+    'router bgp 65001', 'router-id 3.3.3.3', 'neighbor 172.16.0.1', 'remote-as 65535', 'address-family ipv4 unicast', 'enable', 'exit', 'enable', 'exit',
+    'address-family ipv4 unicast', 'network 192.168.5.0/24', 'exit', 'enable', 'end', 'commit', 'confirm'], PC: ['ip 192.168.5.10/24 192.168.5.1'] }));
+  chk('BGP на ME: конфигурация по РН без ошибок (enable не нужен)', !e.length, e.join('; '));
+  n.tick(60);
+  chk('show bgp summary на PE2: соседи 1.1.1.1 (iBGP) и 172.16.0.2 (eBGP) установлены', (function () { var o = n.exec(b.id, 'show bgp summary'); return /1\.1\.1\.1\s+65535\s+\d+/.test(o) && /172\.16\.0\.2\s+65001\s+\d+/.test(o); })(), n.exec(b.id, 'show bgp summary'));
+  chk('ПК за CE (AS 65001) пингует сеть 100.64.1.1 за PE1 (AS 65535): маршруты по BGP', n.ping(pc.id, '100.64.1.1').ok);
+  chk('show bgp на PE1: сеть 192.168.5.0/24 с AS_PATH 65001', /192\.168\.5\.0\/24[\s\S]*65001/.test(n.exec(a.id, 'show bgp')), n.exec(a.id, 'show bgp'));
+  chk('running-config ME: router bgp 65535 / neighbor / address-family', /router bgp 65535\n   bgp router-id 1\.1\.1\.1[\s\S]*neighbor 2\.2\.2\.2\n      remote-as 65535/.test(n.exec(a.id, 'show running-config')));
+  console.log('✓ ME: BGP');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

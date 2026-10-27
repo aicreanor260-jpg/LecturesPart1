@@ -160,6 +160,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>configure · interface te 0/0/2 → ipv4 address A/N · interface te 0/0/1.101 → encapsulation outer-vid 101 · commit</td><td>commit применяет и сохраняет; abort — очистить кандидат</td></tr>
 <tr><td>router static → address-family ipv4 unicast → destination P/L NH</td><td>статический маршрут</td></tr>
 <tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
+<tr><td>router bgp 65535 → bgp router-id · neighbor A → remote-as · update-source · address-family ipv4 unicast · address-family ipv4 unicast → network P/L</td><td>BGP (enable не нужен); show bgp summary</td></tr>
 <tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
 </table>
 

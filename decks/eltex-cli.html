@@ -403,6 +403,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>configure · interface te 0/0/2 → ipv4 address A/N · interface te 0/0/1.101 → encapsulation outer-vid 101 · commit</td><td>commit применяет и сохраняет; abort — очистить кандидат</td></tr>
 <tr><td>router static → address-family ipv4 unicast → destination P/L NH</td><td>статический маршрут</td></tr>
 <tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
+<tr><td>router bgp 65535 → bgp router-id · neighbor A → remote-as · update-source · address-family ipv4 unicast · address-family ipv4 unicast → network P/L</td><td>BGP (enable не нужен); show bgp summary</td></tr>
 <tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
 </table>
 
@@ -7388,7 +7389,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
    encapsulation outer-vid, loopback, mgmt 0/fmc0/1 (VRF mgmt-intf), ipv4 address, vrf, shutdown; vrf NAME; router static →
    address-family ipv4 unicast → destination P/L NH и router static → vrf NAME → … (решение автора, вариант А);
    router ospfv2 NAME → router-id, area → interface (passive, metric — по умолчанию 1, вариант А). Межсетевого экрана нет.
-   Хранятся в конфигурации и показываются в running-config, но трафик не меняют (упрощение): IS-IS, BGP, MPLS/LDP, L2VPN,
+   router bgp ASN → bgp router-id, neighbor (remote-as, update-source, ebgp-multihop, address-family ipv4 unicast, next-hop-self), network,
+   redistribution — компилируется в BGP-модель ESR. Хранятся, но трафик не меняют (упрощение): IS-IS, VPNv4, MPLS/LDP, L2VPN,
    prefix-list, route-map, admin-distance, redistribution. Выводы show route / ospfv2 / ping — в формате ESR-модели (упрощение);
    диалог при exit с неприменёнными правками не моделируется; ввод проверяется по шаблонам справочника. */
 (function (G) {
@@ -7502,6 +7504,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
             var nn = n.K[h2].K[h3], x3 = k3 && (c.ifs[k3] || Object.keys(c.ifs).filter(function (k) { return k.split('.')[0] === k3.split('.')[0] && k3.indexOf('.') > 0; }).map(function (k) { return c.ifs[k]; })[0]);
             if (x3) x3.ospf = { inst: 1, area: am[1], on: true, passive: nn.L.indexOf('passive') >= 0, cost: +(val(nn, 'metric') || 1) }; }); }); }
     });
+    // BGP (РН гл. BGP, СК 13.x): router bgp ASN → bgp router-id, neighbor → remote-as, update-source, ebgp-multihop, address-family ipv4 unicast (обязательна у соседа),
+    // address-family ipv4 unicast → network, redistribution connected|static; enable нет — процесс работает сразу
+    c.bgp = null;
+    Object.keys(t.K).forEach(function (h) { var m = h.match(/^router bgp (\d+)$/); if (!m || c.bgp) return; var n = t.K[h], b = c.bgp = { as: +m[1], on: true, rid: val(n, 'bgp router-id'), nets: [], redist: [], nbr: {} };
+      var af = n.K['address-family ipv4 unicast'];
+      if (af) { af.L.forEach(function (l) { var nm = l.match(/^network (\S+)$/), cc = nm && IP.parseCidr(nm[1]); if (cc) b.nets.push(IP.netOf(cc.ip, cc.len)); });
+        Object.keys(af.K).forEach(function (h2) { var r = h2.match(/^redistribution (connected|static) /); if (r && b.redist.indexOf(r[1]) < 0) b.redist.push(r[1]); }); }
+      Object.keys(n.K).forEach(function (h2) { var nm = h2.match(/^neighbor (\S+)$/); if (!nm) return; var x = n.K[h2], naf = x.K['address-family ipv4 unicast'];
+        b.nbr[nm[1]] = { as: +(val(x, 'remote-as') || 0) || null, src: val(x, 'update-source'), on: true, af: !!naf, multihop: x.L.some(function (l) { return /^ebgp-multihop/.test(l); }),
+          nhs: !!(naf && naf.L.indexOf('next-hop-self') >= 0), desc: val(x, 'description') }; }); });
     st.cand = EL.clone(c);
   }
   function commit(st) { var me = M(st); me.run = EL.clone(me.cand); compile(st); me.dirty = false; if (st.net) st.net.gen++;
@@ -7520,6 +7532,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (line === 'show version') { var m = EL.MODELS[net && net.devs[st.dev].model] || {}; return 'Eltex ' + me.model + ' · ' + (m.sw || ''); }
     if (/^show route( vrf \S+)?$/.test(line) || line === 'show route ospf' || line === 'show route static') return net ? net.routeText(st.dev, false) : '';
     if (line === 'show ospfv2 neighbors') return net ? net.ospfNbrText(st.dev) : '';
+    // BGP — выводы ESR-модели (упрощение: формат ME в выводах другой)
+    var bq = { 'show bgp': 'show bgp ipv4 unicast', 'show bgp summary': 'show bgp summary', 'show bgp all summary': 'show bgp summary', 'show bgp neighbors': 'show bgp neighbors' }[line] ||
+      (/^show bgp neighbors \S+$/.test(line) ? 'show bgp neighbors' : null);
+    if (bq) { var md = st.mode; st.mode = 'priv'; try { return st.run.bgp ? EL.esr.exec(st, bq) : ''; } finally { st.mode = md; } }
     if (line === 'show ipv4 interfaces brief') return net ? net.ifaces(st.dev).map(function (f) { return (f.name + '                    ').slice(0, 22) + f.ip + '/' + f.len; }).join('\n') : '';
     if (/^ping \S+( vrf \S+)?$/.test(line)) { var pm = line.match(/^ping (\S+)(?: vrf (\S+))?$/); if (!net) return ''; if (pm[2]) net._vrfSrc = { dev: st.dev, vrf: pm[2] };
       try { return net.pingText(st.dev, pm[1], 'esr'); } finally { net._vrfSrc = null; } }
