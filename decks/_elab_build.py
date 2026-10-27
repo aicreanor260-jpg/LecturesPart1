@@ -7,7 +7,7 @@ import sys
 
 D = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(D, "_elab")
-ORDER = ["../_dk_cli.js", "common.js", "esr.js", "esr_svc.js", "mesx.js", "hosts.js", "catalog.js", "net.js", "labs.js", "labs_routing.js", "labs_services.js", "labs_exam.js", "ui.js"]
+ORDER = ["../_dk_cli.js", "common.js", "esr.js", "esr_svc.js", "esr_more.js", "mesx.js", "mes_l2.js", "hosts.js", "catalog.js", "net.js", "labs.js", "labs_routing.js", "labs_services.js", "labs_l2.js", "labs_exam.js", "ui.js"]
 
 
 def read(p):

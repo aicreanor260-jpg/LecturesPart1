@@ -51,7 +51,8 @@
     var gl = el('g', {}, cv), gp = el('g', {}, cv), gd = el('g', {}, cv);
     el('g', { id: 'pk' }, cv);
     net.links.forEach(function (l, i) {
-      var a = net.devs[l.a.dev], b = net.devs[l.b.dev], A = center(a), B = center(b);
+      var a = net.devs[l.a.dev], b = net.devs[l.b.dev], A = center(a), B = center(b), off = linkOff(i);
+      A = { x: A.x + off.x, y: A.y + off.y }; B = { x: B.x + off.x, y: B.y + off.y };
       var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (selLink === i ? ' sel' : ''), 'data-li': i }, gl);
       ln.addEventListener('click', function (e) { e.stopPropagation(); selLink = i; sel = null; draw(); });
       [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (z) {
@@ -74,6 +75,15 @@
       el('text', { y: 61, 'class': 'mdl' }, g).textContent = d.model + ipLabel(d);
       g.addEventListener('pointerdown', function (e) { startDrag(e, d); });
     });
+  }
+  function linkOff(i) {                    // параллельные кабели между одной парой устройств — веером
+    var l = net.links[i], same = net.links.map(function (x, j) { return j; }).filter(function (j) { var x = net.links[j];
+      return (x.a.dev === l.a.dev && x.b.dev === l.b.dev) || (x.a.dev === l.b.dev && x.b.dev === l.a.dev); });
+    if (same.length < 2) return { x: 0, y: 0 };
+    var a = net.devs[l.a.dev], b = net.devs[l.b.dev], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+    if (l.a.dev > l.b.dev) { dx = -dx; dy = -dy; }
+    var k = (same.indexOf(i) - (same.length - 1) / 2) * 16;
+    return { x: -dy / L * k, y: dx / L * k };
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
   function svgPt(e) { var p = cv.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(cv.getScreenCTM().inverse()); }
@@ -213,7 +223,8 @@
     var g = $('pk'); if (!g) return 0; g.innerHTML = '';
     var dur = 650, gap = flood ? 160 : dur, total = 0;
     segs.forEach(function (sg, i) {
-      var a = net.devs[sg.from], b = net.devs[sg.to]; if (!a || !b) return;
+      var a0 = net.devs[sg.from], b0 = net.devs[sg.to]; if (!a0 || !b0) return;
+      var of = sg.li !== undefined && net.links[sg.li] ? linkOff(sg.li) : { x: 0, y: 0 }, a = { x: a0.x + of.x, y: a0.y + of.y }, b = { x: b0.x + of.x, y: b0.y + of.y };
       var t0 = (flood ? depth(segs, i) : i) * gap; total = Math.max(total, t0 + dur);
       var dot = el('g', { 'class': 'pkt' }, g); el('circle', { r: 9, fill: color }, dot);
       if (sg.tag !== null) el('text', { x: 12, y: -10 }, dot).textContent = 'VLAN ' + sg.tag;

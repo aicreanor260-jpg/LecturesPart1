@@ -30,7 +30,7 @@
     if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
     var id = 'd' + (++Net.seq);
     var d = { id: id, name: name, model: model, type: m.type, x: x || 0, y: y || 0 };
-    if (m.type === 'mes') d.st = EL.mes.fresh(m.ports, 'switch');
+    if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, 'switch'); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
     if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
     if (m.type === 'vpc') d.st = H.vpc(name);
     if (m.type === 'deb') d.st = H.deb(name, m.opts);
@@ -81,6 +81,9 @@
       var ph = k.split('.')[0]; if (k.charAt(0) !== 'l' && (st.run.ifs[ph].shut || !self.linkUp(id, ph))) return;
       var p = x.ip.split('/');
       o.push({ name: k, ip: p[0], len: +p[1], port: k.charAt(0) === 'l' ? null : ph, tag: k.indexOf('.') > 0 ? +k.split('.')[1] : null, fw: x.fw && k.charAt(0) !== 'l' }); });
+    if (d.type === 'esr') { var vt = this.vrrp()[id] || {}; Object.keys(vt).forEach(function (k) { var v = vt[k]; if (!v.master) return;
+      var base = o.filter(function (f) { return f.name === k; })[0]; if (!base) return; var vp = v.vip.split('/');
+      o.push({ name: k + ':vrrp', ip: vp[0], len: +vp[1], port: base.port, tag: base.tag, fw: base.fw, vrrp: true }); }); }
     if (d.type === 'esr') Object.keys(st.run.bridges || {}).forEach(function (k) {   // Bridge N — L3-интерфейс VLAN портов в switchport
       var b = st.run.bridges[k]; if (!b.on || !b.ip || !b.vlan) return; var p = b.ip.split('/');
       o.push({ name: 'bridge' + k, ip: p[0], len: +p[1], port: null, br: b.vlan, fw: b.fw }); });
@@ -218,6 +221,141 @@
   };
   function owns(net, id, ip) { return net.ifaces(id).some(function (f) { return f.ip === ip; }); }
 
+  // ------------------------------------------------------------------ LACP: логические порты коммутатора (порт или собранный port-channel)
+  P.lports = function (id) {
+    var d = this.devs[id], st = d.st, s = this, out = [], po = {};
+    this.portsOf(d).forEach(function (p) {
+      var x = st.ports[p];
+      if (!x.cg) { out.push({ name: p, cfg: x, members: [p] }); return; }
+      var k = 'po' + x.cg.id; po[k] = po[k] || { name: k, cfg: (st.pos || {})[k], members: [], down: [] };
+      var pr = s.peer(id, p), ok = false;
+      if (pr && s.linkUp(id, p)) {
+        var pd = s.devs[pr.dev], px = pd.type === 'mes' && pd.st.ports[pr.port];
+        if (px && px.cg) { var a = x.cg.mode, b = px.cg.mode;
+          ok = (a === 'on' && b === 'on') || (a === 'active' && b !== 'on') || (a === 'passive' && b === 'active'); }
+      }
+      (ok ? po[k].members : po[k].down).push(p);
+    });
+    Object.keys(po).forEach(function (k) { if (po[k].members.length && po[k].cfg) out.push(po[k]); });
+    return out;
+  };
+  P.lportOf = function (id, port) {
+    var L = this.lports(id); for (var i = 0; i < L.length; i++) if (L[i].members.indexOf(port) >= 0) return L[i];
+    return null;
+  };
+  P.lagText = function (id) {
+    var st = this.devs[id].st, s = this, ks = Object.keys(st.pos || {});
+    if (!ks.length) return '% Port-channel не настроены';
+    var L = this.lports(id);
+    return ['Group  Port-channel  Protocol  Ports', '-----  ------------  --------  ---------------------------------------']
+      .concat(ks.map(function (k) {
+        var mem = s.portsOf(s.devs[id]).filter(function (p) { var c = st.ports[p].cg; return c && 'po' + c.id === k; });
+        var up = (L.filter(function (l) { return l.name === k; })[0] || { members: [] }).members;
+        var proto = mem.length && st.ports[mem[0]].cg.mode === 'on' ? 'Static' : 'LACP';
+        return (k.slice(2) + '      ').slice(0, 7) + (k + (up.length ? '(U)' : '(D)') + '            ').slice(0, 14) + (proto + '          ').slice(0, 10) +
+               mem.map(function (p) { return p + (up.indexOf(p) >= 0 ? '(P)' : '(D)'); }).join(' '); })).join('\n') + '\n(P) — в агрегате, (D) — не в агрегате';
+  };
+
+  // ------------------------------------------------------------------ RSTP: роли и состояния портов
+  function bid(st) { var s = st.stp || { prio: 32768 }; return { prio: s.prio, mac: st.bmac }; }
+  function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
+  function pnum(n) { return n.indexOf('po') === 0 ? 1000 + +n.slice(2) : +n.split('/')[2]; }
+  P.stp = function () {
+    if (this._stp && this._stp.gen === this.gen) return this._stp.t;
+    var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
+    var on = {}; br.forEach(function (id) { on[id] = true; });
+    var edges = [];
+    br.forEach(function (id) {
+      t[id] = {};
+      s.lports(id).forEach(function (L) {
+        var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
+        if (L.cfg.stpOff || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
+        var R = s.lportOf(pr.dev, pr.port); if (!R) return;
+        edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000) });
+      });
+    });
+    var dist = {}, root = {}, done = {};
+    br.forEach(function (id) { dist[id] = Infinity; });
+    // корень компоненты — минимальный Bridge ID; расстояние — Дейкстра по стоимости принимающего порта
+    br.slice().sort(function (a, b) { return bidLess(bid(s.devs[a].st), bid(s.devs[b].st)) ? -1 : 1; }).forEach(function (r) {
+      if (dist[r] !== Infinity) return;
+      dist[r] = 0; root[r] = r; var q = [r];
+      while (q.length) {
+        q.sort(function (a, b) { return dist[a] - dist[b]; }); var u = q.shift(); if (done[u]) continue; done[u] = true;
+        edges.forEach(function (e) { if (e.u !== u) return; var back = edges.filter(function (x) { return x.u === e.v && x.a === e.b; })[0];
+          var c = dist[u] + (back ? back.cu : 20000);
+          if (c < dist[e.v]) { dist[e.v] = c; root[e.v] = r; q.push(e.v); } });
+      }
+    });
+    function key(id, port) { var b = bid(s.devs[id].st); return [dist[id], b.prio, b.mac, pnum(port)]; }
+    function less(a, b) { for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; }
+    var rootPort = {};
+    br.forEach(function (id) {
+      if (root[id] === id) return;
+      var best = null;
+      edges.forEach(function (e) { if (e.u !== id) return;
+        var cand = [dist[e.v] + e.cu, bid(s.devs[e.v].st).prio, bid(s.devs[e.v].st).mac, pnum(e.b), pnum(e.a)];
+        if (!best || less(cand, best.k)) best = { k: cand, port: e.a }; });
+      if (best) rootPort[id] = best.port;
+    });
+    edges.forEach(function (e) {
+      if (t[e.u][e.a]) return;
+      if (rootPort[e.u] === e.a) { t[e.u][e.a] = { role: 'Root', fwd: true }; return; }
+      var mine = key(e.u, e.a), his = key(e.v, e.b);
+      if (less(mine, his)) t[e.u][e.a] = { role: 'Desg', fwd: true };
+      else t[e.u][e.a] = { role: e.v === e.u ? 'Back' : 'Altn', fwd: false };
+    });
+    this._stp = { gen: this.gen, t: t, root: root, dist: dist };
+    return t;
+  };
+  P.stpFwd = function (id, lname) {
+    var d = this.devs[id]; if (d.st.stp && d.st.stp.on === false) return true;
+    var r = (this.stp()[id] || {})[lname]; return !r || r.fwd;
+  };
+  P.stpText = function (id) {
+    var d = this.devs[id], st = d.st, s = this;
+    if (st.stp && st.stp.on === false) return 'Spanning tree disabled';
+    var t = this.stp()[id] || {}, R = this._stp.root[id], rb = bid(this.devs[R].st), me = bid(st);
+    var mode = { rst: 'RSTP', mst: 'MSTP', 'rapid-pvst': 'Rapid-PVST' }[(st.stp || {}).mode || 'mst'];
+    var o = ['Spanning tree enabled mode ' + mode, 'Default port cost method:  long', '',
+      '  Root ID    Priority    ' + rb.prio, '             Address     ' + rb.mac];
+    if (R === id) o.push('             This switch is the root'); else o.push('             Cost        ' + this._stp.dist[id]);
+    o.push('             Hello Time 2 sec  Max Age 20 sec  Forward Delay 15 sec', '',
+      '  Bridge ID  Priority    ' + me.prio, '             Address     ' + me.mac, '',
+      'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
+    this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
+      o.push(' ' + (L.name + '          ').slice(0, 11) + 'enabled 128.' + (pnum(L.name) + '    ').slice(0, 5) + ' ' +
+             ((L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000)) + '          ').slice(0, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + (r.role + '      ').slice(0, 7) + 'P2p'); });
+    return o.join('\n');
+  };
+
+  // ------------------------------------------------------------------ VRRP: мастер — наибольший приоритет (при равенстве — больший адрес)
+  P.vrrp = function () {
+    if (this._vrrp && this._vrrp.gen === this.gen) return this._vrrp.t;
+    var s = this, g = {}, t = {};
+    this.order.forEach(function (id) { var d = s.devs[id]; if (d.type !== 'esr') return;
+      Object.keys(d.st.run.ifs).forEach(function (k) { var x = d.st.run.ifs[k], v = x.vrrp;
+        if (!v || !v.on || !v.id || !v.ip || x.shut) return;
+        var ph = k.split('.')[0], up = !d.st.run.ifs[ph].shut && s.linkUp(id, ph);
+        var key = v.id + '|' + v.ip; (g[key] = g[key] || []).push({ dev: id, ifn: k, prio: v.prio, ip: x.ip ? x.ip.split('/')[0] : '0.0.0.0', up: up, vip: v.ip }); }); });
+    Object.keys(g).forEach(function (k) {
+      var live = g[k].filter(function (m) { return m.up; });
+      live.sort(function (a, b) { return b.prio - a.prio || EL.ip.ip2n(b.ip) - EL.ip.ip2n(a.ip); });
+      g[k].forEach(function (m) { (t[m.dev] = t[m.dev] || {})[m.ifn] = { master: live[0] === m, vip: m.vip, id: +k.split('|')[0], prio: m.prio, up: m.up,
+        peers: g[k].length, masterDev: live[0] ? live[0].dev : null }; });
+    });
+    this._vrrp = { gen: this.gen, t: t };
+    return t;
+  };
+  P.vrrpText = function (id) {
+    var t = this.vrrp()[id], s = this;
+    if (!t) return '% VRRP не настроен (vrrp id, vrrp ip, vrrp на интерфейсе и commit)';
+    return [' Virtual router   Virtual IP          Priority  Preemption  State', ' --------------   -----------------   --------  ----------  ------']
+      .concat(Object.keys(t).map(function (k) { var v = t[k];
+        return ' ' + (v.id + '                 ').slice(0, 17) + (v.vip + '                    ').slice(0, 20) + (v.prio + '          ').slice(0, 10) +
+               'Enabled     ' + (!v.up ? 'Init' : v.master ? 'Master' : 'Backup'); })).join('\n');
+  };
+
   // ------------------------------------------------------------------ L2: куда дойдёт кадр
   // egress: как порт коммутатора отправит кадр VLAN v — 'u' без тега, 't' с тегом, null — не отправит
   function egress(p, v) {
@@ -228,8 +366,8 @@
     return p.gtag.indexOf(v) >= 0 ? 't' : null;
   }
   // ingress: в какую VLAN попадёт входящий кадр (tag=null — без тега); {v} или {drop: причина}
-  function ingress(st, port, tag) {
-    var p = st.ports[port];
+  function ingress(st, port, tag, p) {
+    p = p || st.ports[port];
     if (p.shut) return { drop: 'порт ' + port + ' выключен (shutdown)' };
     var v;
     if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
@@ -244,7 +382,7 @@
   }
   // рассылка кадра из L3-интерфейса: список достигнутых интерфейсов + все пройденные отрезки + причины отбрасывания
   P.flood = function (id, f, srcMac) {
-    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [];
+    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false;
     function send(dev, port, tag, path) {
       var pr = s.peer(dev, port); if (!pr) return;
       var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag };
@@ -253,11 +391,13 @@
     function inMes(dev, inPort, v, path) {
       var st = s.devs[dev].st;
       if (inPort && srcMac) s.mac[dev][v + '|' + srcMac] = { vlan: v, mac: srcMac, port: inPort };
+      var gk = dev + '|' + v; got[gk] = (got[gk] || 0) + 1;
+      if (got[gk] > 1) { if (!storm) notes.push(s.devs[dev].name + ': тот же широковещательный кадр пришёл второй раз — петля без STP, широковещательный шторм'); storm = true; return; }
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
         var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
-      s.portsOf(s.devs[dev]).forEach(function (q2) {
-        if (q2 === inPort || !s.linked(dev, q2)) return;
-        var e = egress(st.ports[q2], v); if (e) send(dev, q2, e === 't' ? v : null, path);
+      s.lports(dev).forEach(function (L) {           // логические порты: обычный порт или собранный port-channel
+        if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name)) return;
+        var e = egress(L.cfg, v); if (e) send(dev, L.members[0], e === 't' ? v : null, path);
       });
     }
     function inEsrSw(dev, inPort, v, path) {      // коммутация на ESR: порты switchport одной VLAN + Bridge этой VLAN
@@ -276,9 +416,12 @@
       if (seen[key]) continue; seen[key] = 1;
       var d = this.devs[it.dev], nm = d.name;
       if (d.type === 'mes') {
-        var r = ingress(d.st, it.port, it.tag);
+        var LP = this.lportOf(it.dev, it.port);
+        if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
+        if (!this.stpFwd(it.dev, LP.name)) { notes.push(nm + ': ' + LP.name + ' заблокирован STP (роль ' + this.stp()[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
+        var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
-        inMes(it.dev, it.port, r.v, it.path);
+        inMes(it.dev, LP.name, r.v, it.path);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
         if (phys.shut) { notes.push(nm + ': интерфейс ' + it.port + ' выключен'); continue; }
@@ -289,6 +432,9 @@
         if (!x.ip || x.shut) { notes.push(nm + ': на ' + k + ' нет IP-адреса или он выключен'); continue; }
         var pp = x.ip.split('/');
         eps.push({ dev: it.dev, iface: { name: k, ip: pp[0], len: +pp[1], port: it.port, tag: it.tag, fw: x.fw }, path: it.path });
+        var vv = (this.vrrp()[it.dev] || {})[k];
+        if (vv && vv.master) { var vp = vv.vip.split('/');
+          eps.push({ dev: it.dev, iface: { name: k + ':vrrp', ip: vp[0], len: +vp[1], port: it.port, tag: it.tag, fw: x.fw, vrrp: true }, path: it.path }); }
       } else {
         if (it.tag !== null) { notes.push(nm + ': пришёл кадр с тегом ' + it.tag + ' — ПК тегов не понимает, отброшен'); continue; }
         var hf = this.ifaces(it.dev)[0];
@@ -296,7 +442,7 @@
         eps.push({ dev: it.dev, iface: hf, path: it.path });
       }
     }
-    return { eps: eps, segs: segs, notes: notes };
+    return { eps: eps, segs: segs, notes: notes, storm: storm };
   };
 
   // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону) с NAT
@@ -334,6 +480,9 @@
       var srcMac = EL.mac(cd.name + (r.iface.port || r.iface.name));
       var fl = this.flood(cur, r.iface, srcMac);
       var ep = fl.eps.filter(function (e) { return e.iface.ip === r.nh; })[0];
+      if (fl.storm) { steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ': ARP-запрос «у кого ' + r.nh + '?» — широковещательно', notes: fl.notes });
+        steps.push({ k: 'drop', t: 'Широковещательный шторм: в сети петля, а STP выключен — кадры бесконечно размножаются, связи нет', notes: fl.notes });
+        return { ok: false, why: 'Request timed out', pk: pk }; }
       var vl = r.iface.vlan || r.iface.tag;
       steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ' (' + r.iface.name + ', ' + r.iface.ip + '): ARP-запрос «у кого ' + r.nh + '?» — широковещательно' +
         (vl ? ' в VLAN ' + vl : '') + (r.nh !== pk.dst ? ' (это шлюз к ' + pk.dst + ')' : ''), notes: fl.notes });
@@ -346,6 +495,12 @@
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join('') });
+      if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
+        var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
+        if (!ar.ok) { steps.push({ k: 'drop', t: nd.name + ': список доступа ' + ax.acl + ' на ' + ep.iface.name.split(':')[0] + ' отбросил ' +
+          (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + (pk.dport ? ':' + pk.dport : '')) + ' от ' + pk.src + (ar.rule ? ' (rule ' + ar.rule + ', deny)' : ' (не подошло ни одно правило — неявный запрет)') });
+          return { ok: false, why: 'Request timed out', pk: pk }; }
+      }
       if (nd.type === 'esr' && ep.iface.fw) {
         steps.push({ k: 'drop', t: nd.name + ': межсетевой экран на ' + ep.iface.name + ' включён — пакет отброшен (нужна ip firewall disable или зона безопасности)' });
         return { ok: false, why: 'Request timed out', pk: pk };
@@ -401,7 +556,7 @@
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
                                  (proto === 'tcp' && port === 22);
-    if (d.type === 'esr') return proto === 'tcp' && port === 22 && s.run.ssh;
+    if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
     return false;
   }
   P.ping = function (src, dst) { return this.request(src, dst, 'icmp'); };
@@ -531,7 +686,8 @@
   // ------------------------------------------------------------------ SSH с компьютера Debian
   P.sshOpen = function (hst, user, ip) {
     var s = this, own = this.owner(ip);
-    var r = this.ping(hst.dev, ip);
+    var r = this.request(hst.dev, ip, 'tcp', 22);
+    if (!r.ok && r.why === 'Connection refused') return 'ssh: connect to host ' + ip + ' port 22: Connection refused';
     if (!r.ok) return 'ssh: connect to host ' + ip + ' port 22: No route to host';
     var d = this.devs[own], st = d.st;
     var on = d.type === 'esr' ? st.run.ssh : d.type === 'mes' ? st.ssh && st.rsa : false;

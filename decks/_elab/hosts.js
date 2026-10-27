@@ -163,6 +163,13 @@
       if (!dst) return 'ping: usage error: Destination address required';
       return st.net ? st.net.pingText(st.dev, dst, 'linux') : ''; }
     if (c === 'traceroute') return st.net ? st.net.traceText(st.dev, t[1] || '') : '';
+    if (c === 'telnet') {
+      if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D';
+      if (!st.net) return '';
+      var tr = st.net.request(st.dev, t[1], 'tcp', 23); if (st.net.onTrace) st.net.onTrace(tr, st.dev, t[1] + ':23');
+      if (tr.ok) return 'Trying ' + t[1] + '...\nConnected to ' + t[1] + '.\nEscape character is \'^]\'.\nlogin: \nConnection closed by foreign host. (эмулятор: соединение установлено — Telnet доступен)';
+      return 'Trying ' + t[1] + '...\ntelnet: Unable to connect to remote host: ' + (tr.why === 'Connection refused' ? 'Connection refused' : 'Connection timed out');
+    }
     if (c === 'dhclient') { var e6 = needRoot(); if (e6) return e6; return dhcpUp(st); }
     if (c === 'curl' || c === 'wget') return st.net ? web(st, t.filter(function (x, i) { return i > 0 && !/^-/.test(x); })[0], false) : '';
     if (c === 'open' || c === 'firefox' || c === 'chromium') return st.net ? web(st, t[1], true) : '';

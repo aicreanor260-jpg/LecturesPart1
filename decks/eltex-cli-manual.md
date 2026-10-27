@@ -15,7 +15,7 @@
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
 | **ping** в панели | отправить ping и посмотреть путь пакета |
 | Полоса внизу схемы | пошаговое объяснение: ARP-рассылка, ARP-ответ, IP-пакет, теги VLAN, где и почему кадр отброшен |
-| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP), E.1–E.3 (экзамен NTF-2 «Вариант 1» на трёх топологиях из пакета Eltex) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
+| **Лабораторные** | 2.1, 3.1, 4.1, 4.2, 4.3, 5.1, 5.2 (RIP), 5.3 (OSPF), 6.1 (DHCP), 6.2 (DHCP relay), 6.3 (NAT), 6.4 (NTP), 7.1 (ACL), 8.1 (RSTP), 8.2 (LACP), 8.3 (VRRP), E.1–E.3 (экзамен NTF-2 «Вариант 1» на трёх топологиях из пакета Eltex) и T.1 (поиск неисправности): случайный вариант, проверка после каждой команды, решение, подсказка |
 | **Задания** | случайные задачи «Базовая настройка» и «VLAN» на один коммутатор (как в тренажёрах дек) |
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
@@ -43,6 +43,9 @@ shutdown / no shutdown
 interface vlan 10 / ip address 10.0.0.1 255.255.255.0   (или /24)
 ip default-gateway 10.0.0.254      ip route 10.2.0.0 255.255.0.0 10.0.0.2
 ip ssh server / crypto key generate rsa
+spanning-tree / spanning-tree mode rst / spanning-tree priority 16384 / (на порту) spanning-tree cost 20000
+interface port-channel 1 / interface range gi1/0/1-4 / channel-group 1 mode active|passive|on
+show spanning-tree | etherchannel summary
 show running-config | startup-config | vlan | interfaces switchport gi1/0/1
 show interfaces status | ip interface | ip route | mac address-table
 do show vlan    write    copy running-config startup-config    reload    ping 10.0.0.2
@@ -66,6 +69,9 @@ ip dhcp-relay / interface … / ip helper-address 192.168.100.2
 nat source / ruleset SNAT / to interface gi1/0/1 / rule 10 / match source-address address-range 192.168.1.1-192.168.1.254 / action source-nat interface / enable
 nat destination / ruleset Dest_NAT / from interface gi1/0/1 / rule 10 / match protocol tcp / match destination-port port-range 80 / action destination-nat netmap 192.168.1.100/32 / enable
 ntp enable / ntp server 192.168.1.10 / minpoll 1 / maxpoll 4
+ip telnet server / ip access-list extended Test1 / rule 10 / action deny / match protocol tcp / match destination-port port-range 23 / enable
+interface gi1/0/1 / service-acl input Test1          show ip access-list Test1
+interface gi1/0/1 / vrrp id 100 / vrrp ip 192.168.10.1/24 / vrrp priority 200 / vrrp          show vrrp
 vlan 100 / interface gi1/0/3 / mode switchport / switchport mode access / switchport access vlan 100
 bridge 100 / vlan 100 / ip address 192.168.220.1/24 / ip firewall disable / enable
 show ip dhcp binding | ip nat translations | ntp peers

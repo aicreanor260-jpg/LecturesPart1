@@ -141,8 +141,8 @@
   cmd('config', 'interface range <if>', function (st, a) { st.mode = 'range'; st.ctx = { ports: a[0] }; });
   function eachPort(st, f) {
     if (!st.ctx || !st.ctx.ports) return '% Команда доступна в настройке физического порта';
-    if (st.ctx.ports.some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
-    st.ctx.ports.forEach(function (k) { f(st.ports[k]); });
+    if (st.ctx.ports.some(function (k) { return !st.ports[k] && !(st.pos && st.pos[k]); })) return '% Такого порта нет на устройстве';
+    st.ctx.ports.forEach(function (k) { f(st.ports[k] || st.pos[k]); });
   }
   var IFM = 'if range';
   cmd(IFM, 'switchport mode access', function (st) { return eachPort(st, function (p) { p.mode = 'access'; }); });
