@@ -114,8 +114,9 @@
 
   // ---------------------------------------------------------------- Reverse Telnet / SSH
   // SCS слушает: 22 (ip ssh server), 23 и каждый transport telnet port (ip telnet server)
+  var lx0 = EL.listensX;
   EL.listensX = function (d, proto, port) {
-    if (!isScs(d) || proto !== 'tcp') return undefined;
+    if (!isScs(d) || proto !== 'tcp') return lx0 ? lx0(d, proto, port) : undefined;
     var c = d.st.run; if (port === 22) return !!c.ssh;
     if (!c.telnet) return false; if (port === 23) return true;
     return Object.keys(c.aux || {}).some(function (k) { return c.aux[k].tport === port; });

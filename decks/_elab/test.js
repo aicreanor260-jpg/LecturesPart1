@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -191,6 +191,68 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ STP по таймерам');
 })();
 
+// DHCP-аренда по таймерам: T1 — продление, T2 — rebind, истечение — адрес снят и освобождён на сервере
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ DHCP-таймеры: ' + name + (extra !== undefined ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), s = n.add('MES2428', 'SW1'), v = n.add('VPC', 'PC1'), db = n.add('Debian', 'D1');
+  n.connect(r.id, 'gi1/0/1', s.id, 'gi1/0/24'); n.connect(v.id, 'eth0', s.id, 'gi1/0/1'); n.connect(db.id, 'ens3', s.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ip address 10.5.0.1/24', 'ip firewall disable', 'exit', 'ip dhcp-server', 'ip dhcp-server pool P1',
+    'network 10.5.0.0/24', 'address-range 10.5.0.10-10.5.0.20', 'default-router 10.5.0.1', 'default-lease-time 0:0:10', 'exit', 'do commit', 'do confirm', 'end'], PC1: ['ip dhcp'] });
+  var sh = n.exec(v.id, 'show ip');
+  chk('VPC получил адрес, show ip: DHCP LEASE 600, 600/300/525', !e.length && /DHCP LEASE  : 600, 600\/300\/525/.test(sh) && /DHCP SERVER : 10\.5\.0\.1/.test(sh), e.join('; ') + sh);
+  chk('ESR show ip dhcp binding: адрес, окончание аренды, active', /10\.5\.0\.10\s+[0-9a-f:]{17}\s+\w+day \d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d\s+active/.test(n.exec(r.id, 'show ip dhcp binding')), n.exec(r.id, 'show ip dhcp binding'));
+  n.tick(299); chk('до T1 аренда не продлевалась', /DHCP LEASE  : 301,/.test(n.exec(v.id, 'show ip')));
+  n.tick(1); chk('T1 (300 с): продлена unicast — снова 600', /DHCP LEASE  : 600,/.test(n.exec(v.id, 'show ip')) && n.leaseLeft(r.id, 'PC1') === 600, n.exec(v.id, 'show ip'));
+  // Debian: dhclient, ip a — dynamic, valid_lft
+  ['root', 'toor', 'dhclient ens3'].forEach(function (l) { n.exec(db.id, l); });
+  chk('Debian: адрес dynamic, valid_lft 600sec', /scope global dynamic ens3\n\s+valid_lft 600sec preferred_lft 600sec/.test(n.exec(db.id, 'ip a')), n.exec(db.id, 'ip a'));
+  // сервер пропал (кабель к ESR вынут): T1 и T2 не проходят, по истечении адрес снят, у сервера запись освободилась
+  n.disconnect(0);
+  n.tick(599); chk('нет сервера: T1 и T2 не прошли, до конца аренды (900 с) адрес держится', n.devs[v.id].st.ip === '10.5.0.10');
+  var g = n.tick(1);
+  chk('аренда истекла — VPC без адреса', !n.devs[v.id].st.ip && /IP\/MASK     : 0\.0\.0\.0\/0/.test(n.exec(v.id, 'show ip')) && g.some(function (x) { return x.kind === 'DHCP'; }), JSON.stringify(g));
+  chk('аренда истекла — запись на сервере освобождена', !n.devs[r.id].st.leases.PC1);
+  // Debian повторяет DISCOVER каждые 300 с: сервер вернулся — адрес снова получен
+  chk('Debian тоже потерял адрес по истечении аренды', !n.devs[db.id].st.ip);
+  n.connect(r.id, 'gi1/0/1', s.id, 'gi1/0/24'); n.tick(300);
+  chk('Debian: retry 300 с — адрес получен снова', n.devs[db.id].st.ip && /^10\.5\.0\./.test(n.devs[db.id].st.ip), n.devs[db.id].st.ip);
+  console.log('✓ DHCP по таймерам');
+})();
+
+// LLDP TTL и таймаут LACP по модельному времени
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ таймеры служб: ' + name + (extra !== undefined ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('vESR', 'RA'), b = n.add('vESR', 'RB');
+  n.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1');
+  var L = ['configure', 'lldp enable', 'interface gi1/0/1', 'lldp receive', 'lldp transmit', 'exit', 'do commit', 'do confirm', 'end'];
+  EL.labs.apply(n, { RA: L, RB: L });
+  function ttl() { var m = n.exec(a.id, 'show lldp neighbors').match(/R\s+(\d+)\s*$/m); return m ? +m[1] : null; }
+  chk('LLDP: TTL соседа 120 (30 × 4)', ttl() === 120, n.exec(a.id, 'show lldp neighbors'));
+  n.tick(10); chk('LLDP: через 10 с TTL 110', ttl() === 110, ttl());
+  n.tick(20); chk('LLDP: через 30 с новый LLDPDU — снова 120', ttl() === 120, ttl());
+  EL.labs.apply(n, { RB: ['configure', 'lldp timer 10', 'lldp hold-multiplier 3', 'do commit', 'do confirm', 'end'] });
+  chk('LLDP: lldp timer 10, hold-multiplier 3 у соседа — TTL 30', ttl() === 30 && /lldp timer 10/.test(n.exec(b.id, 'show running-config')), ttl());
+  n.tick(9); chk('LLDP: через 9 с — 21', ttl() === 21, ttl());
+  // LACP: партнёр вышел из агрегата, линк жив — порт ещё timeout в агрегате
+  var m = new EL.Net(), s1 = m.add('MES2428', 'S1'), s2 = m.add('MES2428', 'S2');
+  m.connect(s1.id, 'gi1/0/1', s2.id, 'gi1/0/1'); m.connect(s1.id, 'gi1/0/2', s2.id, 'gi1/0/2');
+  var lag = ['enable', 'configure', 'interface range gi1/0/1-2', 'channel-group 1 mode active', 'exit', 'end'];
+  EL.labs.apply(m, { S1: lag, S2: lag });
+  function mem() { var P = m.lports(s1.id).filter(function (l) { return l.name === 'po1'; })[0]; return P ? P.members.slice().sort().join(',') : ''; }
+  chk('LACP: агрегат из двух портов', mem() === 'gi1/0/1,gi1/0/2', mem());
+  EL.labs.apply(m, { S2: ['configure', 'interface gi1/0/2', 'no channel-group', 'end'] });
+  m.tick(89); chk('LACP long: 89 с — порт ещё в агрегате (LACPDU не устарели)', mem() === 'gi1/0/1,gi1/0/2' && m.lacpLeft(s1.id, 'gi1/0/2') === 1, mem());
+  m.tick(1); chk('LACP long: 90 с — порт выпал', mem() === 'gi1/0/1', mem());
+  EL.labs.apply(m, { S2: ['configure', 'interface gi1/0/2', 'channel-group 1 mode active', 'end'], S1: ['configure', 'interface range gi1/0/1-2', 'lacp timeout short', 'end'] });
+  chk('LACP: вернулся в агрегат; running-config lacp timeout short', mem() === 'gi1/0/1,gi1/0/2' && /lacp timeout short/.test(m.exec(s1.id, 'show running-config')), mem());
+  EL.labs.apply(m, { S2: ['configure', 'interface gi1/0/2', 'no channel-group', 'end'] });
+  m.tick(2); chk('LACP short: 2 с — ещё в агрегате', mem() === 'gi1/0/1,gi1/0/2', mem());
+  m.tick(1); chk('LACP short: 3 с — выпал', mem() === 'gi1/0/1', mem());
+  EL.labs.apply(m, { S2: ['configure', 'interface gi1/0/1', 'shutdown', 'end'] });
+  chk('LACP: падение линка — сразу', mem() === '', mem());
+  console.log('✓ таймеры служб: LLDP, LACP');
+})();
+
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
@@ -348,6 +410,14 @@ EL.labs.LABS.forEach(runLab);
         'do commit', 'do confirm', 'end'] });
   var q = m.ping(a.id, '200.0.0.2');
   chk('NAT: match source-address object-group', q.ok && q.steps.some(function (s) { return /Source NAT/.test(s.t); }), q.why);
+  // трансляции стареют по таймауту сессий: ICMP — 30 с, каждый новый пакет продлевает
+  var nt = m.exec(r2.id, 'show ip nat translations');
+  chk('NAT-трансляция: icmp 192.168.1.2 → 200.0.0.1, 2 пакета 168 байт', /icmp 192\.168\.1\.2\s+200\.0\.0\.2\s+200\.0\.0\.1\s+200\.0\.0\.2\s+2\s+168/.test(nt), nt);
+  m.tick(20); m.ping(a.id, '200.0.0.2'); m.tick(20);
+  chk('NAT: новый пакет продлил трансляцию (жива через 40 с)', m.natLeft(r2.id, 0) === 10 && /\s4\s+336/.test(m.exec(r2.id, 'show ip nat translations')), m.natLeft(r2.id, 0));
+  m.tick(10); chk('NAT: icmp-timeout 30 с — трансляция удалена', !/icmp/.test(m.exec(r2.id, 'show ip nat translations')));
+  ['configure', 'ip firewall sessions icmp-timeout 100', 'do commit', 'do confirm', 'end'].forEach(function (l) { m.exec(r2.id, l); });
+  m.ping(a.id, '200.0.0.2'); m.tick(90); chk('NAT: icmp-timeout 100 — через 90 с ещё есть', /icmp/.test(m.exec(r2.id, 'show ip nat translations')));
   console.log('✓ межсетевой экран ESR по зонам и object-group');
 })();
 

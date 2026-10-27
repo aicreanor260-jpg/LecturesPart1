@@ -314,6 +314,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>10.x: switchport port-security enable · mac-limit N · mode max-addresses|lock|secure-permanent · violation restrict|protect|discard-shutdown · show port-security</td><td>port security: кадры с чужих MAC отбрасываются, discard-shutdown выключает порт</td></tr>
 <tr><td>6.x/4.x: port security · port security max N · port security mode lock|max-addresses · port security forward|discard|discard-shutdown · show ports security</td><td>port security в ветке 6.x</td></tr>
 <tr><td>spanning-tree forward-time 4..30 · max-age 6..40 · hello-time 1..10 · (10.x) spanning-tree compatibility stp · (порт) spanning-tree auto-edge · link-type shared · (8.x) spanning-tree edgeport</td><td>STP по таймерам: 802.1D — listening/learning по 15 с (непрямой отказ +20 с max-age); RSTP p2p — сразу; порт к ПК — portfast сразу, auto-edge через 3 с; в «Тесте» подписи портов на схеме: янтарный — переход, красный — блок</td></tr>
+<tr><td>default-lease-time · show ip dhcp binding · clear ip dhcp binding · (VPC) show ip · (Debian) ip a</td><td>DHCP-аренда по таймерам: T1 — продление, T2 — rebind, истечение — адрес снят; по умолчанию 12 ч</td></tr>
+<tr><td>show ip nat translations · ip firewall sessions icmp-timeout N</td><td>NAT-трансляции стареют по таймаутам сессий (ICMP 30 с, UDP 30/180, TCP 60/120/30)</td></tr>
+<tr><td>lacp timeout short|long (8.x: [no] lacp actor admin state longtimeout)</td><td>партнёр вышел из LACP — порт ещё 3 / 90 с в агрегате</td></tr>
+<tr><td>lldp timer · lldp hold-multiplier (MES 10.x: lldp transmit-interval · lldp holdtime-multiplier)</td><td>TTL соседа в show lldp neighbors отсчитывается и обновляется каждые timer секунд</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
@@ -2175,8 +2179,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00', '    inet 127.0.0.1/8 scope host lo', '       valid_lft forever preferred_lft forever',
       '2: ens3: <BROADCAST,MULTICAST' + (st.up ? ',UP,LOWER_UP' : '') + '> mtu 1500 qdisc ' + (st.up ? 'pfifo_fast state UP' : 'noop state DOWN') + ' group default qlen 1000',
       '    link/ether ' + mac + ' brd ff:ff:ff:ff:ff:ff', '    altname enp0s3'];
-    if (st.ip) o.push('    inet ' + st.ip + '/' + st.len + ' brd ' + IP.n2ip((IP.ip2n(st.ip) | (~IP.maskN(st.len) >>> 0)) >>> 0) + ' scope global ens3',
-                      '       valid_lft forever preferred_lft forever');
+    if (st.ip) o.push('    inet ' + st.ip + '/' + st.len + ' brd ' + IP.n2ip((IP.ip2n(st.ip) | (~IP.maskN(st.len) >>> 0)) >>> 0) + ' scope global ' + (EL.debLft && EL.debLft(st) !== null ? 'dynamic ' : '') + 'ens3',
+                      '       valid_lft ' + (EL.debLft && EL.debLft(st) !== null ? EL.debLft(st) + 'sec preferred_lft ' + EL.debLft(st) + 'sec' : 'forever preferred_lft forever'));
     return o.join('\n');
   }
   function debExec(st, raw, ui) {
@@ -3025,7 +3029,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var sv = s.snoopReply ? s.snoopReply(ep.path) : null; if (sv) { steps.push({ k: 'drop', t: sv }); return false; }
       lpath = ep.path;
       var own = c.dhcp && c.dhcp.on && poolFor(c, ep.iface.ip);
-      if (own) { lease = alloc(rd, own, cname); if (lease) lease.via = null; lease && (lease.server = rd.name); return !!lease; }
+      if (own) { lease = alloc(rd, own, cname); if (lease) { lease.via = null; lease.server = rd.name; lease.sip = ep.iface.ip; } return !!lease; }
       var x = c.ifs[ep.iface.name];
       if (c.relay && x && x.helper) {
         steps.push({ k: 'route', t: rd.name + ': ретранслятор — DISCOVER принят на ' + ep.iface.name + ', giaddr = ' + ep.iface.ip + ', пересылаю на ' + x.helper + ' (unicast)' });
@@ -3036,7 +3040,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         steps.push({ k: 'ok', t: sd.name + ': пул ' + pl.name + ' — выбран по giaddr ' + ep.iface.ip });
         var b = s.send(f.dev, { src: null, dst: ep.iface.ip, proto: 'udp', dport: 67 }, steps, ct);
         if (!b.ok || b.dev !== ep.dev) { steps.push({ k: 'drop', t: 'Ответ сервера не дошёл до ретранслятора — нет маршрута к ' + ep.iface.ip }); return false; }
-        lease = alloc(sd, pl, cname); if (lease) { lease.server = sd.name; lease.via = rd.name; }
+        lease = alloc(sd, pl, cname); if (lease) { lease.server = sd.name; lease.via = rd.name; lease.sip = x.helper; }
         return !!lease;
       }
       return false;
@@ -3046,7 +3050,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
-    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server };   // pool — опции пула (WLC: опция 43)
+    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server, sip: lease.sip };   // pool — опции пула (WLC: опция 43)
   };
   function poolFor(c, giaddr) {
     var hit = null;
@@ -3181,7 +3185,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var nd = s.devs[pr.dev];
       if (nd.type !== 'esr' || !nd.st.run.lldp || !(nd.st.run.ifs[pr.port] || {}).lldpTx) return;
       o.push((k + '          ').slice(0, 10) + (EL.mac(nd.st.run.host + 'sys') + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) +
-             (nd.st.run.host + '              ').slice(0, 15) + 'R             120');
+             (nd.st.run.host + '              ').slice(0, 15) + 'R             ' + (s.lldpTtl ? s.lldpTtl(id, k) : 120));
     });
     return ['Port      Device ID           Port ID     System name    Capabilities  TTL', '--------  ------------------  ----------  -------------  ------------  ---']
       .concat(o.length ? o : ['% Соседей нет: LLDPDU не приходят (lldp enable, lldp receive у нас, lldp transmit у соседа, commit)']).join('\n');
@@ -3634,7 +3638,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (nd.type === 'esr' && nd.st.run.lldp && (nd.st.run.ifs[pr.port] || {}).lldpTx) { name = nd.st.run.host; cap = 'R'; }
       if (!name) return;
       o.push((k + '          ').slice(0, 11) + ((nd.type === 'mes' ? nd.st.bmac : EL.mac(name + 'sys')) + '    ').slice(0, 20) + (pr.port + '           ').slice(0, 12) +
-             (name + '               ').slice(0, 16) + (cap + '             ').slice(0, 14) + '120'); });
+             (name + '               ').slice(0, 16) + (cap + '             ').slice(0, 14) + (s.lldpTtl ? s.lldpTtl(st.dev, k) : 120)); });
     return ['  Port     Device ID          Port ID     System Name     Capabilities  TTL', '--------- ----------------- ----------- --------------- ------------- ---']
       .concat(o.length ? o : ['% Соседей нет (у соседа выключен LLDP или нет линка)']).join('\n');
   }
@@ -3682,7 +3686,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k]; if (k.indexOf('.') > 0 || !x.lldpRx) return;
       var pr = s.peer(id, k); if (!pr || !s.linkUp(id, k)) return; var nd = s.devs[pr.dev];
       if (nd.type !== 'mes' || nd.st.lldp === false) return;
-      extra.push((k + '          ').slice(0, 10) + (nd.st.bmac + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) + (nd.st.host + '              ').slice(0, 15) + 'B             120'); });
+      extra.push((k + '          ').slice(0, 10) + (nd.st.bmac + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) + (nd.st.host + '              ').slice(0, 15) + 'B             ' + (s.lldpTtl ? s.lldpTtl(id, k) : 120)); });
     if (!extra.length) return out;
     return out.replace(/\n% Соседей нет[^\n]*$/, '') + '\n' + extra.join('\n');
   };
@@ -6001,6 +6005,269 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (p.linkType) d.push(' spanning-tree link-type ' + p.linkType); });
 })(typeof window !== 'undefined' ? window : global);
 
+/* DHCP-аренда по модельному времени (net.now): сервер ESR и клиенты VPC / Debian.
+   Длительность — default-lease-time пула (DD:HH:MM), по умолчанию 12 часов (справочник CLI ESR).
+   Клиент (RFC 2131): T1 = ½ аренды — DHCPREQUEST серверу unicast (продление);
+     не вышло — T2 = ⅞ аренды — DHCPREQUEST широковещательно (rebind, любой сервер, в т.ч. через relay);
+     аренда истекла — адрес снимается. Debian (dhclient) после неудачи повторяет DISCOVER через 300 с (retry по умолчанию).
+   Сервер: запись show ip dhcp binding живёт до конца аренды и освобождается, если клиент не продлил.
+   Упрощения: клиент не просит своё время аренды (берётся default-lease-time); max-lease-time не моделируется;
+   VPC при clear ip не шлёт DHCPRELEASE — запись на сервере доживает до конца аренды. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip, P = EL.Net.prototype, S = EL.esr;
+  var DEF = 12 * 3600, RETRY = 300;
+
+  function dur(pool) { var m = pool && pool.lease && String(pool.lease).match(/^(\d+):(\d+):(\d+)$/);
+    return m ? Math.max(60, ((+m[1] * 24 + +m[2]) * 60 + +m[3]) * 60) : DEF; }
+  function srvT(st) { return st.leaseT || (st.leaseT = {}); }
+
+  // каждая выдача/продление — запись времени у сервера и у клиента
+  var dhcp0 = P.dhcp;
+  P.dhcp = function (id) {
+    var r = dhcp0.apply(this, arguments), d = this.devs[id];
+    if (!r.ok) return r;
+    var sd = this.byName(r.server), D = dur(r.pool);
+    if (sd) srvT(sd.st)[d.name] = { t0: this.now, dur: D };
+    d.st.dl = { srv: sd ? sd.id : null, sip: r.sip || null, ip: r.ip, t0: this.now, dur: D };
+    return r;
+  };
+  P.leaseLeft = function (srvId, cname) { var e = srvT(this.devs[srvId].st)[cname]; return e ? Math.max(0, e.t0 + e.dur - this.now) : null; };
+
+  // ESR с ip dhcp-server принимает DHCPREQUEST на UDP 67 (продление unicast)
+  var lx0 = EL.listensX;
+  EL.listensX = function (d, proto, port) {
+    if (d.type === 'esr' && proto === 'udp' && port === 67 && d.st.run.dhcp && d.st.run.dhcp.on) return true;
+    return lx0 ? lx0(d, proto, port) : undefined;
+  };
+
+  // ближайшее событие таймеров DHCP не позже end
+  function due(s, end) {
+    var best = null;
+    function at(t, f) { if (t <= end && (!best || t < best.t)) best = { t: t, f: f }; }
+    s.order.forEach(function (id) {
+      var d = s.devs[id], st = d.st; if (!st) return;
+      if (d.type === 'esr') Object.keys(st.leaseT || {}).forEach(function (c) { var e = st.leaseT[c]; at(e.t0 + e.dur, function () { expireSrv(s, d, c); }); });
+      var L = st.dl; if (!L || d.off) return;
+      if (L.retry !== undefined) { at(L.retry, function () { rediscover(s, d); }); return; }
+      if (st.ip !== L.ip) { delete st.dl; return; }                         // адрес сменили вручную — аренда не ведётся
+      var t1 = L.t0 + L.dur / 2, t2 = L.t0 + L.dur * 7 / 8, ex = L.t0 + L.dur;
+      if (!L.t1done) at(t1, function () { renew(s, d); });
+      else if (!L.t2done) at(t2, function () { rebind(s, d); });
+      else at(ex, function () { expireCli(s, d); });
+    });
+    return best;
+  }
+  function expireSrv(s, d, c) {
+    var e = d.st.leaseT[c]; delete d.st.leaseT[c];
+    if (d.st.leases && d.st.leases[c]) { s._dhcpGone.push({ dev: d.name, kind: 'DHCP', what: 'аренда ' + d.st.leases[c] + ' (' + c + ') истекла' }); delete d.st.leases[c]; }
+    void e;
+  }
+  function bind(s, d, r) { var st = d.st; st.ip = r.ip; st.len = r.len; st.gw = r.gw || null; if (d.type === 'deb') st.up = true; }
+  function renew(s, d) {                         // T1: unicast серверу, выдавшему адрес
+    var st = d.st, L = st.dl; L.t1done = true;
+    var sd = L.srv && s.devs[L.srv]; if (!sd || sd.off || !L.sip) return;
+    var c = sd.st.run.dhcp, ok = c && c.on && Object.keys(c.pools).some(function (k) { var p = c.pools[k];
+      return p.net && IP.sameNet(L.ip, p.net.split('/')[0], +p.net.split('/')[1]); });
+    if (!ok || !s.request(d.id, L.sip, 'udp', 67).ok) return;
+    var p = Object.keys(c.pools).map(function (k) { return c.pools[k]; }).filter(function (p) { return p.net && IP.sameNet(L.ip, p.net.split('/')[0], +p.net.split('/')[1]); })[0];
+    var D = dur(p); srvT(sd.st)[d.name] = { t0: s.now, dur: D }; (sd.st.leases = sd.st.leases || {})[d.name] = L.ip;
+    st.dl = { srv: L.srv, sip: L.sip, ip: L.ip, t0: s.now, dur: D };
+  }
+  function rebind(s, d) {                        // T2: широковещательно, ответит любой сервер
+    var L = d.st.dl; L.t2done = true;
+    var r = s.dhcp(d.id); if (r.ok) bind(s, d, r); else d.st.dl = L;   // неудача: ждём конца аренды
+  }
+  function expireCli(s, d) {
+    var st = d.st; s._dhcpGone.push({ dev: d.name, kind: 'DHCP', what: 'аренда ' + st.ip + ' истекла — адрес снят' });
+    st.ip = null; st.gw = null; delete st.dl;
+    if (d.type === 'deb') st.dl = { retry: s.now + RETRY };
+  }
+  function rediscover(s, d) {
+    var r = s.dhcp(d.id); if (r.ok) bind(s, d, r); else d.st.dl = { retry: s.now + RETRY };
+  }
+
+  var tick0 = P.tick;
+  P.tick = function (dt) {                       // часы идут до очередного события аренды, затем дальше
+    var s = this, end = this.now + dt, gone = []; s._dhcpGone = [];
+    for (var guard = 0; guard < 10000; guard++) {
+      var e = due(s, end); if (!e) break;
+      gone = gone.concat(tick0.call(this, Math.max(0, e.t - this.now))); e.f();
+    }
+    gone = gone.concat(tick0.call(this, end - this.now), s._dhcpGone); s._dhcpGone = [];
+    return gone;
+  };
+
+  // Debian: dhclient без ответа повторяет DISCOVER через 300 с
+  var deb0 = EL.hosts.debExec;
+  EL.hosts.debExec = function (st, raw) {
+    var out = deb0.apply(this, arguments);
+    if (st.net && /No DHCPOFFERS received/.test(out || '')) st.dl = { retry: st.net.now + RETRY };
+    return out;
+  };
+
+  // ESR: show ip dhcp binding — время окончания аренды по часам устройства (формат справочника 1.23)
+  function pad(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
+  var DAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function when(st, sec) { var t = new Date(EL.clock.now() + (st.clk || 0) + sec * 1000), p = function (n) { return ('0' + n).slice(-2); };
+    return DAY[t.getUTCDay()] + ' ' + t.getUTCFullYear() + '/' + p(t.getUTCMonth() + 1) + '/' + p(t.getUTCDate()) + ' ' + p(t.getUTCHours()) + ':' + p(t.getUTCMinutes()) + ':' + p(t.getUTCSeconds()); }
+  function binding(st, only) {
+    var L = st.leases || {}, s = st.net, ks = Object.keys(L).filter(function (k) { return !only || L[k] === only; });
+    var o = [pad('IP address', 18) + pad('MAC / Client ID', 62) + pad('Lease expires at', 31) + 'Binding type',
+      '----------------- ------------------------------------------------------------- ------------------------------ ------------'];
+    ks.forEach(function (k) { var left = s ? s.leaseLeft(st.dev, k) : null;
+      o.push(pad(L[k], 18) + pad(EL.mac(k + (s && s.byName(k) && s.byName(k).type === 'deb' ? (s.byName(k).st.port || 'ens3') : 'eth0')), 62) +
+        pad(left === null ? '-' : when(st, left), 31) + 'active'); });
+    return o.join('\n');
+  }
+  function scmd(modes, pat, fn, d) { S.cmd(modes, pat, fn, d); var c = S.T.pop(); S.T.unshift(c); return c; }
+  scmd('priv', 'show ip dhcp binding', function (st) { return binding(st); }, 'Выданные адреса DHCP и окончание аренды');
+  scmd('priv', 'show ip dhcp binding <ip>', function (st, a) { return binding(st, a[0]); });
+  scmd('priv', 'clear ip dhcp binding', function (st) { st.leases = {}; st.leaseT = {}; return ''; }, 'Освободить все выданные адреса');
+  scmd('priv', 'clear ip dhcp binding <ip>', function (st, a) { var L = st.leases || {};
+    Object.keys(L).forEach(function (k) { if (L[k] === a[0]) { delete L[k]; delete srvT(st)[k]; } }); return ''; });
+
+  // VPC: show ip — DHCP SERVER / DHCP LEASE: осталось, аренда/T1/T2 (как VPCS)
+  var vpc0 = EL.hosts.vpcExec;
+  EL.hosts.vpcExec = function (st, raw) {
+    var out = vpc0.apply(this, arguments), L = st.dl;
+    if (/^\s*(show|sh)(\s+ip)?\s*$/.test(String(raw)) && L && L.ip === st.ip && st.net) {
+      var left = Math.max(0, Math.round(L.t0 + L.dur - st.net.now)), sd = L.srv && st.net.devs[L.srv];
+      out = out.replace(/\nMAC /, '\nDHCP SERVER : ' + (L.sip || (sd ? sd.name : '-')) + '\nDHCP LEASE  : ' + left + ', ' + L.dur + '/' + Math.round(L.dur / 2) + '/' + Math.round(L.dur * 7 / 8) + '\nMAC ');
+    }
+    return out;
+  };
+  // Debian: ip a — адрес из DHCP помечен dynamic, valid_lft — остаток аренды
+  EL.debLft = function (st) { var L = st.dl; if (!L || L.ip !== st.ip || !st.net) return null; return Math.max(0, Math.round(L.t0 + L.dur - st.net.now)); };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Таймеры служб по модельному времени (net.now).
+   NAT на ESR: трансляция — запись conntrack; живёт по таймаутам сессий (ip firewall sessions …-timeout,
+     справочник ESR 1.23: icmp 30, udp-wait 30, udp-assured 180, tcp-connect 60, tcp-estabilished 120, tcp-disconnect 30, generic 60 с),
+     каждый новый пакет потока продлевает её. show ip nat translations — формат справочника (Prot / Inside / Outside / Pkts / Bytes).
+   Упрощения: размер пакета условный (ICMP 84 байта — как в примере справочника, UDP 60, TCP 60);
+     одна запись на поток «протокол + адреса» без портов. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype;
+  var TO = { icmp: 30, 'udp-wait': 30, 'udp-assured': 180, 'tcp-connect': 60, 'tcp-estabilished': 120, 'tcp-disconnect': 30, generic: 60 };
+  var KEEP_OPEN = [22, 23], BYTES = { icmp: 84, udp: 60, tcp: 60 };
+  function toOf(net, dev, x) { var c = net.devs[dev].st.run; return ((c && c.fwto) || {})[x.to] || TO[x.to]; }
+  function natLeft(net, dev, x) { return toOf(net, dev, x) - (net.now - x.t); }
+  function stateTo(proto, ok, dport) {
+    if (proto === 'icmp') return 'icmp';
+    if (proto === 'udp') return ok ? 'udp-assured' : 'udp-wait';
+    if (proto === 'tcp') return !ok ? 'tcp-connect' : KEEP_OPEN.indexOf(dport) >= 0 ? 'tcp-estabilished' : 'tcp-disconnect';
+    return 'generic';
+  }
+
+  // ---------------------------------------------------------------- NAT: таблица трансляций
+  var req0 = P.request;
+  P.request = function (src, dst, proto, dport) {
+    var r = req0.apply(this, arguments), s = this, T = s.natTab = s.natTab || {};
+    (s.ctLast || []).forEach(function (c) {
+      if (c.kind !== 's' && c.kind !== 'd') return;
+      var row = c.kind === 's' ? { p: c.proto, is: c.orig, id: c.peer, os: c.pub, od: c.peer } : { p: c.proto, is: c.client, id: c.target, os: c.client, od: c.pub };
+      var L = T[c.dev] = T[c.dev] || [], k = [row.p, row.is, row.id, row.os, row.od].join('|'), x = L.filter(function (y) { return y.k === k; })[0];
+      var n = r.ok ? 2 : 1;
+      if (!x) { x = { k: k, row: row, pk: 0, by: 0 }; L.push(x); }
+      x.pk += n; x.by += n * (BYTES[row.p] || 60); x.t = s.now; x.to = stateTo(row.p, r.ok, dport);
+    });
+    return r;
+  };
+  var tick0 = P.tick;
+  P.tick = function () {
+    var g = tick0.apply(this, arguments), s = this;
+    Object.keys(s.natTab || {}).forEach(function (id) { s.natTab[id] = s.natTab[id].filter(function (x) { return natLeft(s, id, x) > 0; }); });
+    return g;
+  };
+  function pad(v, n) { v = String(v); while (v.length < n) v += ' '; return v; }
+  function natText(st, proto) {
+    var L = ((st.net && st.net.natTab) || {})[st.dev] || [];
+    L = L.filter(function (x) { return !proto || x.row.p === proto; });
+    var o = [pad('Prot', 5) + pad('Inside source', 17) + pad('Inside destination', 19) + pad('Outside source', 17) + pad('Outside destination', 20) + pad('Pkts', 6) + 'Bytes',
+      '---- ---------------- ------------------ ---------------- ------------------- ----- -----'];
+    L.forEach(function (x) { var w = x.row; o.push(pad(w.p, 5) + pad(w.is, 17) + pad(w.id, 19) + pad(w.os, 17) + pad(w.od, 20) + pad(x.pk, 6) + x.by); });
+    return o.join('\n');
+  }
+  function scmd(modes, pat, fn, d) { S.cmd(modes, pat, fn, d); var c = S.T.pop(); S.T.unshift(c); return c; }
+  scmd('priv', 'show ip nat translations', function (st) { return natText(st); }, 'Трансляции NAT (живут по таймаутам ip firewall sessions)');
+  scmd('priv', 'show ip nat translations protocol <w>', function (st, a) { return natText(st, a[0].toLowerCase()); });
+  // ---------------------------------------------------------------- LLDP: TTL соседа = timer × hold-multiplier, отсчёт между LLDPDU
+  // ESR: lldp timer 1..32768 (30), lldp hold-multiplier 1..10 (4); MES 10.x: lldp transmit-interval 5..32768, lldp holdtime-multiplier 2..10;
+  // MES 6.x: lldp timer 5..32768, lldp hold-multiplier 2..10. Новый сосед, смена имени — LLDPDU сразу, TTL снова полный.
+  function lldpPar(d) { var c = d.type === 'esr' ? d.st.run : d.st; return { tm: c.lldpTimer || 30, hm: c.lldpHold || 4 }; }
+  P.lldpTtl = function (id, port) {
+    var pr = this.peer(id, port); if (!pr) return 0;
+    var nd = this.devs[pr.dev], q = lldpPar(nd), ttl = Math.min(65535, q.tm * q.hm), K = this._lldp = this._lldp || {};
+    var sig = pr.dev + '|' + pr.port + '|' + (nd.type === 'esr' ? nd.st.run.host : nd.st.host) + '|' + q.tm + '|' + q.hm, k = id + '|' + port;
+    if (!K[k] || K[k].sig !== sig) K[k] = { sig: sig, t0: this.now };
+    return ttl - Math.floor((this.now - K[k].t0) % q.tm);
+  };
+  var tick1 = P.tick;
+  P.tick = function () { var s = this, K = s._lldp || {};          // линк упал — сведения о соседе на порту удаляются
+    Object.keys(K).forEach(function (k) { var p = k.split('|'); if (!s.devs[p[0]] || !s.linkUp(p[0], p[1])) delete K[k]; });
+    return tick1.apply(this, arguments); };
+  function rng(lo, hi, f) { return function (st, a) { var n = +a[0]; if (!/^\d+$/.test(a[0]) || n < lo || n > hi) return '% Допустимо ' + lo + '..' + hi; f(st, n); }; }
+  function etouch(st) { st.pending = true; }
+  S.cmd('config', 'lldp timer <w>', rng(1, 32768, function (st, n) { st.cand.lldpTimer = n; etouch(st); }), 'Период отправки LLDPDU, с (по умолчанию 30)');
+  S.cmd('config', 'no lldp timer', function (st) { delete st.cand.lldpTimer; etouch(st); });
+  S.cmd('config', 'lldp hold-multiplier <w>', rng(1, 10, function (st, n) { st.cand.lldpHold = n; etouch(st); }), 'Сколько периодов хранить сведения о соседе (по умолчанию 4)');
+  S.cmd('config', 'no lldp hold-multiplier', function (st) { delete st.cand.lldpHold; etouch(st); });
+  S.RUNX.push(function (c, o) { if (c.lldpTimer) o.push('lldp timer ' + c.lldpTimer); if (c.lldpHold) o.push('lldp hold-multiplier ' + c.lldpHold); });
+  var E = EL.E, CMDS = E.CMDS;
+  function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  mcmd(['10'], 'config', 'lldp transmit-interval <w>', rng(5, 32768, function (st, n) { st.lldpTimer = n; }), 'Период отправки LLDPDU, с (по умолчанию 30)');
+  mcmd(['10'], 'config', 'no lldp transmit-interval', function (st) { delete st.lldpTimer; });
+  mcmd(['10'], 'config', 'lldp holdtime-multiplier <w>', rng(2, 10, function (st, n) { st.lldpHold = n; }), 'Множитель TTL (по умолчанию 4)');
+  mcmd(['10'], 'config', 'no lldp holdtime-multiplier', function (st) { delete st.lldpHold; });
+  mcmd(['6'], 'config', 'lldp timer <w>', rng(5, 32768, function (st, n) { st.lldpTimer = n; }), 'Период отправки LLDPDU, с (по умолчанию 30)');
+  mcmd(['6'], 'config', 'no lldp timer', function (st) { delete st.lldpTimer; });
+  mcmd(['6'], 'config', 'lldp hold-multiplier <w>', rng(2, 10, function (st, n) { st.lldpHold = n; }), 'Множитель TTL (по умолчанию 4)');
+  mcmd(['6'], 'config', 'no lldp hold-multiplier', function (st) { delete st.lldpHold; });
+  E.RUNX.push(function (st, o) {
+    if (st.lldpTimer) o.push((st.dialect === '6' ? 'lldp timer ' : 'lldp transmit-interval ') + st.lldpTimer);
+    if (st.lldpHold) o.push((st.dialect === '6' ? 'lldp hold-multiplier ' : 'lldp holdtime-multiplier ') + st.lldpHold); });
+
+  // ---------------------------------------------------------------- LACP: партнёр перестал слать LACPDU (линк жив) — порт ещё
+  // timeout в агрегате: short — 3 с (LACPDU раз в 1 с × 3), long — 90 с (раз в 30 с × 3); падение линка — сразу
+  // 10.x и 6.x: lacp timeout long|short на порту (по умолчанию long); 8.x: [no] lacp actor admin state longtimeout
+  function lacpTo(c) { return c && c.lacpTo === 'short' ? 3 : 90; }
+  var lp0 = P.lports;
+  P.lports = function (id) {
+    var out = lp0.apply(this, arguments), d = this.devs[id], st = d.st, s = this, K = (this._lacp = this._lacp || {});
+    if (!st.pos) return out;
+    var inAgg = {}; out.forEach(function (L) { if (L.name.indexOf('po') === 0) L.members.forEach(function (p) { inAgg[p] = L; }); });
+    this.portsOf(d).forEach(function (p) {
+      var x = st.ports[p], k = id + '|' + p; if (!x || !x.cg || x.cg.mode === 'on') { delete K[k]; return; }
+      if (inAgg[p]) { K[k] = s.now; return; }
+      if (K[k] === undefined || !s.linkUp(id, p) || s.now - K[k] >= lacpTo(x)) { delete K[k]; return; }
+      var nm = 'po' + x.cg.id, L = out.filter(function (l) { return l.name === nm; })[0];      // ещё в агрегате: LACPDU партнёра не устарели
+      if (!L) { if (!st.pos[nm]) return; L = { name: nm, cfg: st.pos[nm], members: [], down: [] }; out = out.filter(function (l) { return l.name !== p; }).concat([L]); }
+      else out = out.filter(function (l) { return l.name !== p; });
+      L.members.push(p); L.stale = (L.stale || []).concat([p]);
+    });
+    return out;
+  };
+  P.lacpLeft = function (id, p) { var k = id + '|' + p, K = this._lacp || {}, x = this.devs[id].st.ports[p];
+    this.lports(id); return K[k] === undefined ? null : Math.max(0, lacpTo(x) - (this.now - K[k])); };
+  function lacpSync(s) { s.order.forEach(function (id) { var d = s.devs[id]; if (d.type === 'mes' && d.st.pos) s.lports(id); }); }
+  var ex1 = P.exec;
+  P.exec = function () { lacpSync(this); return ex1.apply(this, arguments); };
+  var tick2 = P.tick;
+  P.tick = function () { lacpSync(this); return tick2.apply(this, arguments); };
+  function mports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k]; }).filter(Boolean) : null; }
+  function each(st, f) { var p = mports(st); if (!p) return '% Команда для физического порта'; p.forEach(f); }
+  mcmd(['10', '6'], 'if range', 'lacp timeout <w>', function (st, a) { var m = a[0].toLowerCase(); if (m !== 'long' && m !== 'short') return '% Таймаут: long | short';
+    return each(st, function (p) { if (m === 'short') p.lacpTo = 'short'; else delete p.lacpTo; }); }, 'Таймаут LACP: short — 3 с, long — 90 с');
+  mcmd(['10', '6'], 'if range', 'no lacp timeout', function (st) { return each(st, function (p) { delete p.lacpTo; }); });
+  mcmd(['8'], 'if range', 'lacp actor admin state longtimeout', function (st) { return each(st, function (p) { delete p.lacpTo; }); }, 'Длинный таймаут LACP (90 с)');
+  mcmd(['8'], 'if range', 'no lacp actor admin state longtimeout', function (st) { return each(st, function (p) { p.lacpTo = 'short'; }); }, 'Короткий таймаут LACP (3 с)');
+  E.PORTX.push(function (st, k, p, d) { if (p.lacpTo === 'short') d.push(st.dialect === '8' ? ' no lacp actor admin state longtimeout' : ' lacp timeout short'); });
+
+  P.natLeft = function (dev, i) { var x = ((this.natTab || {})[dev] || [])[i]; return x ? Math.max(0, Math.ceil(natLeft(this, dev, x))) : null; };
+})(typeof window !== 'undefined' ? window : global);
+
 /* VRF на ESR (справочник ESR-Series CLI 1.23): ip vrf <NAME> → (config-vrf)#; на интерфейсе ip vrf forwarding <NAME>;
    ip route vrf <NAME> <SUBNET> <NEXTHOP>; show ip route vrf <NAME>; ping vrf <NAME> <ADDR>.
    У каждого VRF своя таблица маршрутов: пакет, пришедший на интерфейс VRF, ищет маршрут только среди сетей этого VRF —
@@ -6953,8 +7220,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
   // ---------------------------------------------------------------- Reverse Telnet / SSH
   // SCS слушает: 22 (ip ssh server), 23 и каждый transport telnet port (ip telnet server)
+  var lx0 = EL.listensX;
   EL.listensX = function (d, proto, port) {
-    if (!isScs(d) || proto !== 'tcp') return undefined;
+    if (!isScs(d) || proto !== 'tcp') return lx0 ? lx0(d, proto, port) : undefined;
     var c = d.st.run; if (port === 22) return !!c.ssh;
     if (!c.telnet) return false; if (port === 23) return true;
     return Object.keys(c.aux || {}).some(function (k) { return c.aux[k].tport === port; });

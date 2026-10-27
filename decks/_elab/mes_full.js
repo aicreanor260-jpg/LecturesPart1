@@ -178,7 +178,7 @@
       if (nd.type === 'esr' && nd.st.run.lldp && (nd.st.run.ifs[pr.port] || {}).lldpTx) { name = nd.st.run.host; cap = 'R'; }
       if (!name) return;
       o.push((k + '          ').slice(0, 11) + ((nd.type === 'mes' ? nd.st.bmac : EL.mac(name + 'sys')) + '    ').slice(0, 20) + (pr.port + '           ').slice(0, 12) +
-             (name + '               ').slice(0, 16) + (cap + '             ').slice(0, 14) + '120'); });
+             (name + '               ').slice(0, 16) + (cap + '             ').slice(0, 14) + (s.lldpTtl ? s.lldpTtl(st.dev, k) : 120)); });
     return ['  Port     Device ID          Port ID     System Name     Capabilities  TTL', '--------- ----------------- ----------- --------------- ------------- ---']
       .concat(o.length ? o : ['% Соседей нет (у соседа выключен LLDP или нет линка)']).join('\n');
   }
@@ -226,7 +226,7 @@
     Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k]; if (k.indexOf('.') > 0 || !x.lldpRx) return;
       var pr = s.peer(id, k); if (!pr || !s.linkUp(id, k)) return; var nd = s.devs[pr.dev];
       if (nd.type !== 'mes' || nd.st.lldp === false) return;
-      extra.push((k + '          ').slice(0, 10) + (nd.st.bmac + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) + (nd.st.host + '              ').slice(0, 15) + 'B             120'); });
+      extra.push((k + '          ').slice(0, 10) + (nd.st.bmac + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) + (nd.st.host + '              ').slice(0, 15) + 'B             ' + (s.lldpTtl ? s.lldpTtl(id, k) : 120)); });
     if (!extra.length) return out;
     return out.replace(/\n% Соседей нет[^\n]*$/, '') + '\n' + extra.join('\n');
   };

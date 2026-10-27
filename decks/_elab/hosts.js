@@ -92,8 +92,8 @@
       '    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00', '    inet 127.0.0.1/8 scope host lo', '       valid_lft forever preferred_lft forever',
       '2: ens3: <BROADCAST,MULTICAST' + (st.up ? ',UP,LOWER_UP' : '') + '> mtu 1500 qdisc ' + (st.up ? 'pfifo_fast state UP' : 'noop state DOWN') + ' group default qlen 1000',
       '    link/ether ' + mac + ' brd ff:ff:ff:ff:ff:ff', '    altname enp0s3'];
-    if (st.ip) o.push('    inet ' + st.ip + '/' + st.len + ' brd ' + IP.n2ip((IP.ip2n(st.ip) | (~IP.maskN(st.len) >>> 0)) >>> 0) + ' scope global ens3',
-                      '       valid_lft forever preferred_lft forever');
+    if (st.ip) o.push('    inet ' + st.ip + '/' + st.len + ' brd ' + IP.n2ip((IP.ip2n(st.ip) | (~IP.maskN(st.len) >>> 0)) >>> 0) + ' scope global ' + (EL.debLft && EL.debLft(st) !== null ? 'dynamic ' : '') + 'ens3',
+                      '       valid_lft ' + (EL.debLft && EL.debLft(st) !== null ? EL.debLft(st) + 'sec preferred_lft ' + EL.debLft(st) + 'sec' : 'forever preferred_lft forever'));
     return o.join('\n');
   }
   function debExec(st, raw, ui) {

@@ -691,7 +691,7 @@
       var sv = s.snoopReply ? s.snoopReply(ep.path) : null; if (sv) { steps.push({ k: 'drop', t: sv }); return false; }
       lpath = ep.path;
       var own = c.dhcp && c.dhcp.on && poolFor(c, ep.iface.ip);
-      if (own) { lease = alloc(rd, own, cname); if (lease) lease.via = null; lease && (lease.server = rd.name); return !!lease; }
+      if (own) { lease = alloc(rd, own, cname); if (lease) { lease.via = null; lease.server = rd.name; lease.sip = ep.iface.ip; } return !!lease; }
       var x = c.ifs[ep.iface.name];
       if (c.relay && x && x.helper) {
         steps.push({ k: 'route', t: rd.name + ': ретранслятор — DISCOVER принят на ' + ep.iface.name + ', giaddr = ' + ep.iface.ip + ', пересылаю на ' + x.helper + ' (unicast)' });
@@ -702,7 +702,7 @@
         steps.push({ k: 'ok', t: sd.name + ': пул ' + pl.name + ' — выбран по giaddr ' + ep.iface.ip });
         var b = s.send(f.dev, { src: null, dst: ep.iface.ip, proto: 'udp', dport: 67 }, steps, ct);
         if (!b.ok || b.dev !== ep.dev) { steps.push({ k: 'drop', t: 'Ответ сервера не дошёл до ретранслятора — нет маршрута к ' + ep.iface.ip }); return false; }
-        lease = alloc(sd, pl, cname); if (lease) { lease.server = sd.name; lease.via = rd.name; }
+        lease = alloc(sd, pl, cname); if (lease) { lease.server = sd.name; lease.via = rd.name; lease.sip = x.helper; }
         return !!lease;
       }
       return false;
@@ -712,7 +712,7 @@
     if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
-    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server };   // pool — опции пула (WLC: опция 43)
+    return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server, sip: lease.sip };   // pool — опции пула (WLC: опция 43)
   };
   function poolFor(c, giaddr) {
     var hit = null;
@@ -847,7 +847,7 @@
       var nd = s.devs[pr.dev];
       if (nd.type !== 'esr' || !nd.st.run.lldp || !(nd.st.run.ifs[pr.port] || {}).lldpTx) return;
       o.push((k + '          ').slice(0, 10) + (EL.mac(nd.st.run.host + 'sys') + '   ').slice(0, 20) + (pr.port + '          ').slice(0, 12) +
-             (nd.st.run.host + '              ').slice(0, 15) + 'R             120');
+             (nd.st.run.host + '              ').slice(0, 15) + 'R             ' + (s.lldpTtl ? s.lldpTtl(id, k) : 120));
     });
     return ['Port      Device ID           Port ID     System name    Capabilities  TTL', '--------  ------------------  ----------  -------------  ------------  ---']
       .concat(o.length ? o : ['% Соседей нет: LLDPDU не приходят (lldp enable, lldp receive у нас, lldp transmit у соседа, commit)']).join('\n');
