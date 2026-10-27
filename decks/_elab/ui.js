@@ -728,9 +728,9 @@
     }
     if (tab === 'task') h = '<h4>Случайное задание на коммутатор</h4><p class="note">Как тренажёры дек «Базовая настройка» и «VLAN»: проверяется итоговое состояние.</p>' +
       '<button class="act" data-s="tbase">Базовая настройка</button><button class="act" data-s="tvlan">VLAN</button>';
-    if (tab === 'file') h = '<h4>Схема</h4><button class="act" data-s="save">Сохранить в файл</button><button class="act" data-s="open">Открыть файл</button>' +
+    if (tab === 'file') h = '<h4>Схема</h4><button class="act pri" data-s="png">Сохранить схему (PNG)</button><button class="act" data-s="save">Сохранить проект (.json)</button><button class="act" data-s="open">Открыть проект</button>' +
       '<button class="act" data-s="fit">Показать всю схему</button><button class="act red" data-s="clear">Очистить</button>' +
-      '<p class="note">Файл .json хранит устройства, кабели и все настройки. В браузере ничего не сохраняется само.</p>';
+      '<p class="note">PNG — картинка схемы для отчёта. Проект .json хранит устройства, кабели и все настройки — его можно открыть снова. В браузере ничего не сохраняется само.</p>';
     s.innerHTML = h + X.side(tab);
     var q = $('sq'); if (q) q.addEventListener('input', function () { var v = q.value.trim().toLowerCase();
       [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; });
@@ -747,7 +747,7 @@
     if (a === 'labwin') renderLab(true);
     if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
     X.sideClick(a);
-    if (a === 'save') save(); if (a === 'open') $('fOpen').click(); if (a === 'fit') fit(); if (a === 'clear') clearAll();
+    if (a === 'png') savePng(); if (a === 'save') save(); if (a === 'open') $('fOpen').click(); if (a === 'fit') fit(); if (a === 'clear') clearAll();
   });
 
   // ================================================================== лабы и задания
@@ -858,6 +858,30 @@
     body.innerHTML = src ? src.innerHTML : ''; var c = body.querySelector('.close'); if (c) c.remove();
     makeWin('help', 'Справка', 'команды и управление', body, { x: 60, y: 70, w: Math.min(980, innerWidth - 120), h: innerHeight - 150 });
   }
+  // схема картинкой: SVG поля со встроенными стилями и иконками → canvas → PNG (2×)
+  var STYLE = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'paint-order', 'opacity', 'font-family', 'font-size', 'font-weight', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'display', 'visibility'];
+  function savePng() {
+    if (!net.list().length) { toast('Схема пуста'); return; }
+    var src = $('world'), bb = src.getBBox(), pad = 40, W = Math.ceil(bb.width + pad * 2), H = Math.ceil(bb.height + pad * 2);
+    var svg = document.createElementNS(NS, 'svg'), g = src.cloneNode(true);
+    svg.setAttribute('xmlns', NS); svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    svg.setAttribute('viewBox', (bb.x - pad) + ' ' + (bb.y - pad) + ' ' + W + ' ' + H); svg.setAttribute('width', W * 2); svg.setAttribute('height', H * 2);
+    g.removeAttribute('transform'); g.removeAttribute('id');
+    var a = src.querySelectorAll('*'), b = g.querySelectorAll('*');
+    for (var i = 0; i < a.length; i++) { var cs = getComputedStyle(a[i]), st = STYLE.map(function (k) { return k + ':' + cs.getPropertyValue(k); }).join(';'); b[i].setAttribute('style', st); }
+    [].forEach.call(g.querySelectorAll('#pk,#ghost,title'), function (x) { x.remove(); });
+    var bg = document.createElementNS(NS, 'rect'); bg.setAttribute('x', bb.x - pad); bg.setAttribute('y', bb.y - pad); bg.setAttribute('width', W); bg.setAttribute('height', H);
+    bg.setAttribute('fill', getComputedStyle(document.body).backgroundColor || '#140b0e'); svg.appendChild(bg);
+    var defs = document.createElementNS(NS, 'defs'), sym = document.querySelector('symbol[id^="ic-"]');        // весь спрайт иконок: символы и их градиенты
+    if (sym) [].forEach.call(sym.parentNode.children, function (x) { defs.appendChild(x.cloneNode(true)); });
+    svg.appendChild(defs); svg.appendChild(g);
+    var url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' })), img = new Image();
+    img.onload = function () { var c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(function (blob) { var l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = 'eltex-shema.png'; document.body.appendChild(l); l.click(); l.remove();
+        setTimeout(function () { URL.revokeObjectURL(l.href); }, 2000); toast('Схема сохранена картинкой'); }, 'image/png'); };
+    img.onerror = function () { URL.revokeObjectURL(url); toast('Не удалось нарисовать картинку схемы'); };
+    img.src = url;
+  }
   function save() {
     var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP };
     var blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' }), a = document.createElement('a');
@@ -887,5 +911,5 @@
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
+    renderSide: renderSide, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();

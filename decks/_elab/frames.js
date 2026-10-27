@@ -124,7 +124,8 @@
   };
 
   // ---------------------------------------------------------------- конфигурации текстом (экспорт/импорт)
-  EL.cfgText = function (d) { return d.type === 'mes' ? EL.E.showRun(d.st) : d.type === 'esr' ? EL.esr.showRun(d.st) : null; };
+  EL.cfgText = function (d) { if (d.sub === 'me' && d.st.me) { var sk = d.st.me.stack; d.st.me.stack = []; try { return EL.me.exec(d.st, 'show running-config'); } finally { d.st.me.stack = sk; } }
+    return d.type === 'mes' ? EL.E.showRun(d.st) : d.type === 'esr' ? EL.esr.showRun(d.st) : null; };
   var cfgText = EL.cfgText;
   // применить текст конфигурации, как будто его вставили в консоль: MES — configure … end; ESR — configure … end, commit, confirm
   EL.applyConfig = function (n, id, text) {
@@ -136,7 +137,7 @@
     if (d.type === 'esr') { n.exec(id, 'commit'); n.exec(id, 'confirm'); }
     return errs;
   };
-  EL.exportConfigs = function (n) { return n.list().filter(function (d) { return d.type === 'mes' || d.type === 'esr'; })
+  EL.exportConfigs = function (n, ids) { return n.list().filter(function (d) { return (d.type === 'mes' || d.type === 'esr') && (!ids || ids.indexOf(d.id) >= 0); })
     .map(function (d) { return '! ==== ' + d.name + ' (' + d.model + ') ====\n' + cfgText(d); }).join('\n\n') + '\n'; };
   EL.importConfigs = function (n, text) {
     var errs = [], parts = String(text).split(/^! ==== (\S+)[^\n]*====\s*$/m);

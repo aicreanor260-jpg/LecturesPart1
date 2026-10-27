@@ -4671,7 +4671,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 
   // ---------------------------------------------------------------- конфигурации текстом (экспорт/импорт)
-  EL.cfgText = function (d) { return d.type === 'mes' ? EL.E.showRun(d.st) : d.type === 'esr' ? EL.esr.showRun(d.st) : null; };
+  EL.cfgText = function (d) { if (d.sub === 'me' && d.st.me) { var sk = d.st.me.stack; d.st.me.stack = []; try { return EL.me.exec(d.st, 'show running-config'); } finally { d.st.me.stack = sk; } }
+    return d.type === 'mes' ? EL.E.showRun(d.st) : d.type === 'esr' ? EL.esr.showRun(d.st) : null; };
   var cfgText = EL.cfgText;
   // применить текст конфигурации, как будто его вставили в консоль: MES — configure … end; ESR — configure … end, commit, confirm
   EL.applyConfig = function (n, id, text) {
@@ -4683,7 +4684,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (d.type === 'esr') { n.exec(id, 'commit'); n.exec(id, 'confirm'); }
     return errs;
   };
-  EL.exportConfigs = function (n) { return n.list().filter(function (d) { return d.type === 'mes' || d.type === 'esr'; })
+  EL.exportConfigs = function (n, ids) { return n.list().filter(function (d) { return (d.type === 'mes' || d.type === 'esr') && (!ids || ids.indexOf(d.id) >= 0); })
     .map(function (d) { return '! ==== ' + d.name + ' (' + d.model + ') ====\n' + cfgText(d); }).join('\n\n') + '\n'; };
   EL.importConfigs = function (n, text) {
     var errs = [], parts = String(text).split(/^! ==== (\S+)[^\n]*====\s*$/m);
@@ -10735,9 +10736,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     }
     if (tab === 'task') h = '<h4>Случайное задание на коммутатор</h4><p class="note">Как тренажёры дек «Базовая настройка» и «VLAN»: проверяется итоговое состояние.</p>' +
       '<button class="act" data-s="tbase">Базовая настройка</button><button class="act" data-s="tvlan">VLAN</button>';
-    if (tab === 'file') h = '<h4>Схема</h4><button class="act" data-s="save">Сохранить в файл</button><button class="act" data-s="open">Открыть файл</button>' +
+    if (tab === 'file') h = '<h4>Схема</h4><button class="act pri" data-s="png">Сохранить схему (PNG)</button><button class="act" data-s="save">Сохранить проект (.json)</button><button class="act" data-s="open">Открыть проект</button>' +
       '<button class="act" data-s="fit">Показать всю схему</button><button class="act red" data-s="clear">Очистить</button>' +
-      '<p class="note">Файл .json хранит устройства, кабели и все настройки. В браузере ничего не сохраняется само.</p>';
+      '<p class="note">PNG — картинка схемы для отчёта. Проект .json хранит устройства, кабели и все настройки — его можно открыть снова. В браузере ничего не сохраняется само.</p>';
     s.innerHTML = h + X.side(tab);
     var q = $('sq'); if (q) q.addEventListener('input', function () { var v = q.value.trim().toLowerCase();
       [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; });
@@ -10754,7 +10755,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (a === 'labwin') renderLab(true);
     if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
     X.sideClick(a);
-    if (a === 'save') save(); if (a === 'open') $('fOpen').click(); if (a === 'fit') fit(); if (a === 'clear') clearAll();
+    if (a === 'png') savePng(); if (a === 'save') save(); if (a === 'open') $('fOpen').click(); if (a === 'fit') fit(); if (a === 'clear') clearAll();
   });
 
   // ================================================================== лабы и задания
@@ -10865,6 +10866,30 @@ vesr(config)#         do confirm  — подтвердить</pre>
     body.innerHTML = src ? src.innerHTML : ''; var c = body.querySelector('.close'); if (c) c.remove();
     makeWin('help', 'Справка', 'команды и управление', body, { x: 60, y: 70, w: Math.min(980, innerWidth - 120), h: innerHeight - 150 });
   }
+  // схема картинкой: SVG поля со встроенными стилями и иконками → canvas → PNG (2×)
+  var STYLE = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'paint-order', 'opacity', 'font-family', 'font-size', 'font-weight', 'letter-spacing', 'text-anchor', 'dominant-baseline', 'display', 'visibility'];
+  function savePng() {
+    if (!net.list().length) { toast('Схема пуста'); return; }
+    var src = $('world'), bb = src.getBBox(), pad = 40, W = Math.ceil(bb.width + pad * 2), H = Math.ceil(bb.height + pad * 2);
+    var svg = document.createElementNS(NS, 'svg'), g = src.cloneNode(true);
+    svg.setAttribute('xmlns', NS); svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+    svg.setAttribute('viewBox', (bb.x - pad) + ' ' + (bb.y - pad) + ' ' + W + ' ' + H); svg.setAttribute('width', W * 2); svg.setAttribute('height', H * 2);
+    g.removeAttribute('transform'); g.removeAttribute('id');
+    var a = src.querySelectorAll('*'), b = g.querySelectorAll('*');
+    for (var i = 0; i < a.length; i++) { var cs = getComputedStyle(a[i]), st = STYLE.map(function (k) { return k + ':' + cs.getPropertyValue(k); }).join(';'); b[i].setAttribute('style', st); }
+    [].forEach.call(g.querySelectorAll('#pk,#ghost,title'), function (x) { x.remove(); });
+    var bg = document.createElementNS(NS, 'rect'); bg.setAttribute('x', bb.x - pad); bg.setAttribute('y', bb.y - pad); bg.setAttribute('width', W); bg.setAttribute('height', H);
+    bg.setAttribute('fill', getComputedStyle(document.body).backgroundColor || '#140b0e'); svg.appendChild(bg);
+    var defs = document.createElementNS(NS, 'defs'), sym = document.querySelector('symbol[id^="ic-"]');        // весь спрайт иконок: символы и их градиенты
+    if (sym) [].forEach.call(sym.parentNode.children, function (x) { defs.appendChild(x.cloneNode(true)); });
+    svg.appendChild(defs); svg.appendChild(g);
+    var url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' })), img = new Image();
+    img.onload = function () { var c = document.createElement('canvas'); c.width = W * 2; c.height = H * 2; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob(function (blob) { var l = document.createElement('a'); l.href = URL.createObjectURL(blob); l.download = 'eltex-shema.png'; document.body.appendChild(l); l.click(); l.remove();
+        setTimeout(function () { URL.revokeObjectURL(l.href); }, 2000); toast('Схема сохранена картинкой'); }, 'image/png'); };
+    img.onerror = function () { URL.revokeObjectURL(url); toast('Не удалось нарисовать картинку схемы'); };
+    img.src = url;
+  }
   function save() {
     var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP };
     var blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' }), a = document.createElement('a');
@@ -10894,7 +10919,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
+    renderSide: renderSide, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();
 
 /* Учебные инструменты режима «Тест» поверх ui.js: захват трафика на кабеле (как Wireshark в pnetlab), разбор шага трассы по уровням OSI,
@@ -11099,11 +11124,32 @@ vesr(config)#         do confirm  — подтвердить</pre>
         U.toast(errs.length ? 'Применено с ошибками: ' + errs.length : 'Конфигурация применена'); } });
   }
 
+  // экспорт: выбрать устройства галочками (или «все») — один файл с блоками «! ==== ИМЯ (модель) ====», его же понимает импорт
+  function openExport() {
+    var n = net(), L = n.list().filter(function (d) { return d.type === 'mes' || d.type === 'esr'; });
+    if (!L.length) { U.toast('На схеме нет MES, ESR и ME — экспортировать нечего'); return; }
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<div class="k">Экспорт конфигураций</div><label style="display:block;margin:6px 0"><input type="checkbox" id="xall" checked> <b>Все устройства</b></label>' +
+      L.map(function (d) { return '<label style="display:block;margin:3px 0 3px 14px"><input type="checkbox" data-x="' + d.id + '" checked> ' + esc(d.name) + ' <small style="color:var(--dim)">' + esc(d.model) + '</small></label>'; }).join('') +
+      '<div class="row"><button class="pri" data-g="save">Сохранить .txt</button><button data-g="show">Показать текст</button></div><textarea spellcheck="false" style="display:none;width:100%;height:220px"></textarea>';
+    U.closeWin('cfgx'); U.makeWin('cfgx', 'Экспорт конфигураций', 'running-config выбранных устройств', body, { w: 460, h: Math.min(560, innerHeight - 140) });
+    var all = body.querySelector('#xall'), ta = body.querySelector('textarea');
+    function ids() { return [].map.call(body.querySelectorAll('[data-x]:checked'), function (x) { return x.dataset.x; }); }
+    all.addEventListener('change', function () { [].forEach.call(body.querySelectorAll('[data-x]'), function (x) { x.checked = all.checked; }); });
+    body.addEventListener('change', function (e) { if (e.target.dataset.x) all.checked = ids().length === L.length; });
+    ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-g]'); if (!b) return; var sel = ids();
+      if (!sel.length) { U.toast('Отметьте хотя бы одно устройство'); return; }
+      var txt = EL.exportConfigs(n, sel);
+      if (b.dataset.g === 'save') download(sel.length === 1 ? n.devs[sel[0]].name + '.txt' : 'configs.txt', txt, 'text/plain');
+      else { ta.style.display = ''; ta.value = txt; } });
+  }
+
   // ================================================================== левая панель
   X.side = function (tab) {
     if (tab === 'lab') return '<h4>Лаба из файла</h4><button class="act" data-s="open">Открыть лабу (.json)</button>' + (ulab ? '<button class="act" data-s="ulab">Окно задания: ' + esc(ulab.title) + '</button>' : '') +
       (test() ? '<button class="act" data-s="led">Редактор лабы</button><p class="note">Соберите схему на поле, напишите задание — сохраните .json и раздайте студентам. Строка задания может заканчиваться проверкой {ping PC1 10.0.0.1}.</p>' : '');
-    if (tab === 'file') return '<h4>Конфигурации текстом</h4><button class="act" data-s="cfgx">Экспорт всех (.txt)</button><button class="act" data-s="cfgi">Импорт (.txt)</button>' +
+    if (tab === 'file') return '<h4>Конфигурации текстом</h4><button class="act" data-s="cfgx">Экспорт конфигураций (.txt)…</button><button class="act" data-s="cfgi">Импорт (.txt)</button>' +
       '<p class="note">Текст running-config всех MES и ESR с заголовками «! ==== ИМЯ ====». Импорт применяет каждый блок к устройству с тем же именем. ПКМ по устройству → «Конфигурация текстом» — для одного. Ctrl+Z — отменить действие на поле.</p>';
     return '';
   };
@@ -11114,7 +11160,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   X.sideClick = function (a) {
     if (a === 'led') openLabEditor();
     if (a === 'ulab') showULab();
-    if (a === 'cfgx') download('configs.txt', EL.exportConfigs(net()), 'text/plain');
+    if (a === 'cfgx') openExport();
     if (a === 'cfgi') fin.click();
   };
 })();

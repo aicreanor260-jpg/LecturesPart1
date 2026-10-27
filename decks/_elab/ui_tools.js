@@ -200,11 +200,32 @@
         U.toast(errs.length ? 'Применено с ошибками: ' + errs.length : 'Конфигурация применена'); } });
   }
 
+  // экспорт: выбрать устройства галочками (или «все») — один файл с блоками «! ==== ИМЯ (модель) ====», его же понимает импорт
+  function openExport() {
+    var n = net(), L = n.list().filter(function (d) { return d.type === 'mes' || d.type === 'esr'; });
+    if (!L.length) { U.toast('На схеме нет MES, ESR и ME — экспортировать нечего'); return; }
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<div class="k">Экспорт конфигураций</div><label style="display:block;margin:6px 0"><input type="checkbox" id="xall" checked> <b>Все устройства</b></label>' +
+      L.map(function (d) { return '<label style="display:block;margin:3px 0 3px 14px"><input type="checkbox" data-x="' + d.id + '" checked> ' + esc(d.name) + ' <small style="color:var(--dim)">' + esc(d.model) + '</small></label>'; }).join('') +
+      '<div class="row"><button class="pri" data-g="save">Сохранить .txt</button><button data-g="show">Показать текст</button></div><textarea spellcheck="false" style="display:none;width:100%;height:220px"></textarea>';
+    U.closeWin('cfgx'); U.makeWin('cfgx', 'Экспорт конфигураций', 'running-config выбранных устройств', body, { w: 460, h: Math.min(560, innerHeight - 140) });
+    var all = body.querySelector('#xall'), ta = body.querySelector('textarea');
+    function ids() { return [].map.call(body.querySelectorAll('[data-x]:checked'), function (x) { return x.dataset.x; }); }
+    all.addEventListener('change', function () { [].forEach.call(body.querySelectorAll('[data-x]'), function (x) { x.checked = all.checked; }); });
+    body.addEventListener('change', function (e) { if (e.target.dataset.x) all.checked = ids().length === L.length; });
+    ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-g]'); if (!b) return; var sel = ids();
+      if (!sel.length) { U.toast('Отметьте хотя бы одно устройство'); return; }
+      var txt = EL.exportConfigs(n, sel);
+      if (b.dataset.g === 'save') download(sel.length === 1 ? n.devs[sel[0]].name + '.txt' : 'configs.txt', txt, 'text/plain');
+      else { ta.style.display = ''; ta.value = txt; } });
+  }
+
   // ================================================================== левая панель
   X.side = function (tab) {
     if (tab === 'lab') return '<h4>Лаба из файла</h4><button class="act" data-s="open">Открыть лабу (.json)</button>' + (ulab ? '<button class="act" data-s="ulab">Окно задания: ' + esc(ulab.title) + '</button>' : '') +
       (test() ? '<button class="act" data-s="led">Редактор лабы</button><p class="note">Соберите схему на поле, напишите задание — сохраните .json и раздайте студентам. Строка задания может заканчиваться проверкой {ping PC1 10.0.0.1}.</p>' : '');
-    if (tab === 'file') return '<h4>Конфигурации текстом</h4><button class="act" data-s="cfgx">Экспорт всех (.txt)</button><button class="act" data-s="cfgi">Импорт (.txt)</button>' +
+    if (tab === 'file') return '<h4>Конфигурации текстом</h4><button class="act" data-s="cfgx">Экспорт конфигураций (.txt)…</button><button class="act" data-s="cfgi">Импорт (.txt)</button>' +
       '<p class="note">Текст running-config всех MES и ESR с заголовками «! ==== ИМЯ ====». Импорт применяет каждый блок к устройству с тем же именем. ПКМ по устройству → «Конфигурация текстом» — для одного. Ctrl+Z — отменить действие на поле.</p>';
     return '';
   };
@@ -215,7 +236,7 @@
   X.sideClick = function (a) {
     if (a === 'led') openLabEditor();
     if (a === 'ulab') showULab();
-    if (a === 'cfgx') download('configs.txt', EL.exportConfigs(net()), 'text/plain');
+    if (a === 'cfgx') openExport();
     if (a === 'cfgi') fin.click();
   };
 })();
