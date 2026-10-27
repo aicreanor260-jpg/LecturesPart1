@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -379,7 +379,7 @@ EL.labs.LABS.forEach(runLab);
 // линейка ESR из каталога eltex.ru: порты по типам, имена te/twe/fo/hu, связь через 10G
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
-  var esrs = Object.keys(EL.MODELS).filter(function (k) { return EL.MODELS[k].type === 'esr' && k !== 'vESR'; });
+  var esrs = Object.keys(EL.MODELS).filter(function (k) { return EL.MODELS[k].type === 'esr' && !EL.MODELS[k].kind && k !== 'vESR'; });
   chk('ESR: в каталоге больше 20 моделей', esrs.length > 20, esrs.length);
   esrs.forEach(function (k) { var n = new EL.Net(), d = n.add(k, 'R');
     chk('ESR ' + k + ': порты как в каталоге', Object.keys(d.st.run.ifs).length === EL.MODELS[k].ports && /esr# ?$/.test(n.prompt(d.id) + ' ')); });
@@ -1249,6 +1249,54 @@ EL.labs.LABS.forEach(runLab);
   chk('vESR — esr-cli.pdf + vesr-install.pdf', u('vESR') === 'docs/esr-cli.pdf+docs/vesr-install.pdf');
   chk('VPC и Debian — руководства нет', u('VPC') === null && u('Debian') === null);
   console.log('✓ руководства Eltex по моделям');
+})();
+
+// консольный сервер SCS-32: заводская конфигурация, line aux, консольный кабель, Reverse Telnet / SSH
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), c = n.add('SCS-32', 'SCS'), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), pc = n.add('Debian', 'PC');
+  chk('SCS: приглашение scs-32#, заводской адрес gi1/0/1 192.168.1.1/24, SSH включён', /^scs-32#$/.test(n.prompt(c.id)) && c.st.run.ifs['gi1/0/1'].ip === '192.168.1.1/24' && c.st.run.ssh);
+  chk('SCS: 32 порта aux и console в списке портов', n.portsOf(c).filter(function (p) { return /^aux1\/0\/\d+$/.test(p); }).length === 32 && n.portsOf(c).indexOf('console') >= 0);
+  chk('MES и ESR: порт console', n.portsOf(sw).indexOf('console') >= 0 && n.portsOf(r).indexOf('console') >= 0);
+  chk('консольный кабель aux1/0/1 ↔ console MES — линк up', n.connect(c.id, 'aux1/0/1', sw.id, 'console') === null && n.phys(c.id, 'aux1/0/1').up && n.phys(c.id, 'aux1/0/1').cab === 'rs232');
+  chk('консольный кабель aux1/0/2 ↔ console ESR', n.connect(c.id, 'aux1/0/2', r.id, 'console') === null && n.linkUp(r.id, 'console'));
+  chk('медь в консольный порт — линка нет', n.connect(c.id, 'aux1/0/3', pc.id, 'ens3') === null && !n.linkUp(c.id, 'aux1/0/3'));
+  n.disconnect(n.links.length - 1);
+  n.connect(pc.id, 'ens3', c.id, 'gi1/0/1');
+  chk('SCS: нет межсетевого экрана — ip firewall disable не принимается', /Unknown|Illegal|Unrecognized/i.test(n.exec(c.id, 'configure') || n.exec(c.id, 'interface gi1/0/1') || n.exec(c.id, 'ip firewall disable')) && (n.exec(c.id, 'end'), true));
+  var e = EL.labs.apply(n, { SCS: ['configure', 'line aux 1/0/1', 'transport telnet port 3001', 'exit', 'line aux 1/0/2', 'speed 9600', 'transport input ssh', 'exit',
+    'interface gigabitethernet 1/0/1', 'ip address 192.168.1.2/24', 'exit', 'ip telnet server', 'end', 'commit', 'confirm'],
+    PC: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.1.10/24 dev ens3'] });
+  chk('SCS: line aux, transport telnet port, ip telnet server — без ошибок', !e.length, e.join('; '));
+  chk('SCS: line aux вне 1/0/1–32 и неверная скорость — ошибка', /Illegal/.test(n.exec(c.id, 'configure') || n.exec(c.id, 'line aux 1/0/33')) && /Illegal/.test(n.exec(c.id, 'line aux 1/0/5') || n.exec(c.id, 'speed 1000')) && (n.exec(c.id, 'end'), true));
+  var sl = n.exec(c.id, 'show line aux 1/0/1');
+  chk('show line aux 1/0/1: 115200, 8, NONE, Telnet port 3001', /AUX Line 1\/0\/1/.test(sl) && /Baud rate:\s+115200/.test(sl) && /Parity:\s+NONE/.test(sl) && /Telnet port:\s+3001/.test(sl), sl);
+  chk('running-config: line aux 1/0/1 / transport telnet port 3001', /line aux 1\/0\/1\n  transport telnet port 3001\nexit/.test(n.exec(c.id, 'show running-config')));
+  chk('show system SCS-32', /System type: Eltex SCS-32 Serial Console Server/.test(n.exec(c.id, 'show system')));
+  // Reverse Telnet: вход на SCS, затем консоль MES
+  var o = n.exec(pc.id, 'telnet 192.168.1.2 3001');
+  chk('Reverse Telnet: Connected, приглашение входа SCS', /Connected to 192\.168\.1\.2/.test(o) && /^scs-32 login: $/.test(n.prompt(pc.id)), o + ' | ' + n.prompt(pc.id));
+  n.exec(pc.id, 'admin'); var w = n.exec(pc.id, 'password');
+  chk('Reverse Telnet: после входа — баннер SCS и User Name: консоли MES', /Welcome to SCS-32/.test(w) && n.prompt(pc.id) === 'User Name:', n.prompt(pc.id));
+  n.exec(pc.id, 'admin'); n.exec(pc.id, 'admin');
+  chk('Reverse Telnet: консоль MES — команды выполняются на коммутаторе', /console[>#]$/.test(n.prompt(pc.id)) && (n.exec(pc.id, 'enable'), n.exec(pc.id, 'configure'), n.exec(pc.id, 'hostname CORE'), sw.st.host === 'CORE'), n.prompt(pc.id));
+  n.exec(c.id, 'clear line aux 1/0/1');
+  chk('clear line aux 1/0/1 обрывает сессию', /Connection closed/.test(n.exec(pc.id, 'end')) && !pc.st.ssh);
+  chk('telnet на порт без transport telnet port — отказ', /Unable to connect/.test(n.exec(pc.id, 'telnet 192.168.1.2 3005')));
+  // Reverse SSH на aux2 (ESR), скорость порта 9600 ≠ 115200 — вместо консоли символы
+  var s1 = n.exec(pc.id, 'ssh admin:aux2@192.168.1.2');
+  chk('Reverse SSH: запрос пароля admin:aux2@…', /admin:aux2@192\.168\.1\.2's password: $/.test(n.prompt(pc.id)), s1 + ' | ' + n.prompt(pc.id));
+  n.exec(pc.id, 'password');
+  var g = n.exec(pc.id, '');
+  chk('Reverse SSH на порт 9600: консоль ESR не читается (учебное допущение)', g.length > 5 && !/login/.test(g) && n.prompt(pc.id) === '', g);
+  chk('выход из сессии «~.»', /closed/.test(n.exec(pc.id, '~.')) && !pc.st.ssh);
+  EL.labs.apply(n, { SCS: ['configure', 'line aux 1/0/2', 'no speed', 'end', 'commit', 'confirm'] });
+  n.exec(pc.id, 'ssh admin:aux2@192.168.1.2'); n.exec(pc.id, 'password');
+  chk('Reverse SSH на 115200: вход в консоль ESR', /R1? ?login: $|vesr login: $/.test(n.prompt(pc.id)), n.prompt(pc.id));
+  n.exec(pc.id, 'admin'); n.exec(pc.id, 'password');
+  chk('Reverse SSH: консоль ESR', /#$/.test(n.prompt(pc.id)) && /esr|vesr/i.test(n.prompt(pc.id)), n.prompt(pc.id));
+  n.exec(pc.id, '~.');
+  console.log('✓ SCS-32: консольные порты, Reverse Telnet / SSH');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

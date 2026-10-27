@@ -223,8 +223,8 @@
   };
   function portShut(d, p) {
     if (d.off) return true;
-    if (d.type === 'mes') return !!d.st.ports[p].shut;
-    if (d.type === 'esr') return !!d.st.run.ifs[p].shut;
+    if (d.type === 'mes') return !!(d.st.ports[p] || {}).shut;            // console / aux — не порты данных
+    if (d.type === 'esr') return !!(d.st.run.ifs[p] || {}).shut;
     if (d.type === 'deb') return !d.st.up;
     return false;
   }
@@ -236,7 +236,7 @@
   // ------------------------------------------------------------------ LACP: логические порты коммутатора (порт или собранный port-channel)
   P.lports = function (id) {
     var d = this.devs[id], st = d.st, s = this, out = [], po = {};
-    this.portsOf(d).forEach(function (p) {
+    this.portsOf(d).filter(function (p) { return st.ports[p]; }).forEach(function (p) {
       var x = st.ports[p];
       if (!x.cg) { out.push({ name: p, cfg: x, members: [p] }); return; }
       var k = 'po' + x.cg.id; po[k] = po[k] || { name: k, cfg: (st.pos || {})[k], members: [], down: [] };
@@ -261,7 +261,7 @@
     var L = this.lports(id);
     return ['Group  Port-channel  Protocol  Ports', '-----  ------------  --------  ---------------------------------------']
       .concat(ks.map(function (k) {
-        var mem = s.portsOf(s.devs[id]).filter(function (p) { var c = st.ports[p].cg; return c && 'po' + c.id === k; });
+        var mem = s.portsOf(s.devs[id]).filter(function (p) { var c = (st.ports[p] || {}).cg; return c && 'po' + c.id === k; });
         var up = (L.filter(function (l) { return l.name === k; })[0] || { members: [] }).members;
         var proto = mem.length && st.ports[mem[0]].cg.mode === 'on' ? 'Static' : 'LACP';
         return (k.slice(2) + '      ').slice(0, 7) + (k + (up.length ? '(U)' : '(D)') + '            ').slice(0, 14) + (proto + '          ').slice(0, 10) +
@@ -646,6 +646,7 @@
     return { ok: true, steps: steps, hops: f.hops, dev: f.dev };
   };
   function listens(d, proto, port) {
+    if (EL.listensX) { var lx = EL.listensX(d, proto, port); if (lx !== undefined) return lx; }   // SCS-32 (scs.js)
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
                                  (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) || (proto === 'udp' && port === 53 && s.svc && s.svc.bind9) ||
@@ -658,7 +659,7 @@
   // официальное руководство Eltex по модели: MES — по ветке ПО (4.x — по каталогу, как в show version), ESR и vESR — справочник CLI
   var MAN = { '10': ['mes-10.pdf', 'MES, ПО 10.4.6'], '6': ['mes-6.pdf', 'MES, ПО 6.6.8.8'], '4': ['mes-4.pdf', 'MES, ПО 4.0.23'], '8': ['mes-8.pdf', 'MES5448/7048, ПО 8.4.0.7 (англ.)'] };
   P.manualFor = function (id) {
-    var d = this.devs[id]; if (!d) return null;
+    var d = this.devs[id]; if (!d || d.sub === 'scs') return null;     // PDF SCS-32 на сайт курса не выложен
     if (d.type === 'esr') return { url: 'docs/esr-cli.pdf', title: 'Справочник CLI ESR 1.23', extra: d.model === 'vESR' ? [{ url: 'docs/vesr-install.pdf', title: 'Установка vESR 1.40' }] : [] };
     if (d.type !== 'mes') return null;
     var m = MODELS[d.model] || {}, b = /4\.x/.test(m.fw || m.sw || '') ? '4' : (d.st.dialect || '10'), x = MAN[b];

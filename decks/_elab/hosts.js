@@ -174,8 +174,9 @@
         : R.map(function (r) { return r.ip + ' dev ens3 lladdr ' + r.mac + ' ' + st.net.neighState(st.dev, st.net.arp[st.dev][r.ip]); }).join('\n');
     }
     if (c === 'telnet') {
-      if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D';
+      if (!t[1] || IP.ip2n(t[1]) === null) return 'usage: telnet A.B.C.D [порт]';
       if (!st.net) return '';
+      if (t[2] && st.net.scsOpen) { var rv = st.net.scsOpen(st, t[1], 'telnet', +t[2]); if (rv !== null) return rv; }   // Reverse Telnet на SCS-32
       var tr = st.net.request(st.dev, t[1], 'tcp', 23); if (st.net.onTrace) st.net.onTrace(tr, st.dev, t[1] + ':23');
       if (tr.ok) return 'Trying ' + t[1] + '...\nConnected to ' + t[1] + '.\nEscape character is \'^]\'.\nlogin: \nConnection closed by foreign host. (эмулятор: соединение установлено — Telnet доступен)';
       return 'Trying ' + t[1] + '...\ntelnet: Unable to connect to remote host: ' + (tr.why === 'Connection refused' ? 'Connection refused' : 'Connection timed out');

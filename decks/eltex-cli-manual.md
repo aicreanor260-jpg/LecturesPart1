@@ -448,6 +448,14 @@ tunnel l2tpv3 1
 - **Стратегии как в Linux:** `do` — DF, фрагментация запрещена; `want` (по умолчанию у ESR и Debian) — DF в сети, после «Fragmentation needed» узел запоминает MTU пути и дальше режет пакет сам: первый ping — ошибка, остальные доходят; `dont` — DF не ставится. У VPC и MES DF по умолчанию не ставится (`-D` / `df-bit` — ставится).
 - **Симуляция во времени** берёт MTU самого узкого интерфейса на пути.
 
+### Консольный сервер SCS-32 (РЭ и справочник CLI SCS-32 1.1.0, дерево команд прошивки 1.1.0)
+Палитра → «Консольные серверы SCS». CLI — как у ESR (`commit` / `confirm`, `interface gi|te`, `ip ssh server`, `ip telnet server`, `username`), приглашение `scs-32#`. Заводская конфигурация: `gi1/0/1` 192.168.1.1/24, остальные порты выключены, SSH включён. Межсетевого экрана нет: `ip firewall`, `security zone`, `security-zone` недоступны.
+- **Консольные порты:** 32 порта RS-232 `aux1/0/1…32`; у каждого MES и ESR есть порт `console`. Кабель «Консольный RS-232 (RJ-45 ↔ RJ-45)» соединяет `aux` консольного сервера с `console` устройства (на схеме — пунктир); Ethernet-кабель в консольный порт линка не даёт.
+- **Настройка порта:** `line aux 1/0/1` → `(config-line-aux)#`: `speed 300…115200` (115200), `databits 7|8`, `stopbits 1|2`, `parity odd|even|none`, `flowcontrol software|hardware|disabled`, `transport input ssh|telnet|none`, `transport telnet port 3001`, `modem inout` (нельзя вместе с telnet port), `description`, `exec-timeout`, `login authentication`; `no line aux 1/0/1 | all`. Просмотр — `show line aux [1/0/1]`, оборвать сессию — `clear line aux 1/0/1`.
+- **Reverse Telnet:** `line aux 1/0/1` → `transport telnet port 3001`, `ip telnet server`, `commit`, `confirm`; с Debian — `telnet 192.168.1.2 3001` → вход на SCS (`admin` / `password`) → баннер SCS → консоль устройства на порту со своим входом (MES `User Name:`, ESR `login:`). Команды выполняются на том устройстве — как с консольного кабеля.
+- **Reverse SSH:** `ssh admin:aux1@192.168.1.2` (нужен `ip ssh server`, он включён с завода); `aux1` — порт 1/0/1.
+- **Упрощения (в источниках нет):** выход из сессии — строкой `~.`; если скорость порта не 115200 (как у консоли MES/ESR), вместо консоли идут случайные символы — учебное допущение; `transport input` по умолчанию разрешает telnet и ssh; блок `line aux` в running-config — по образцу других блоков; непривилегированный режим `scs>` и смена пароля при первом входе не моделируются; `show users` — в формате ESR.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:

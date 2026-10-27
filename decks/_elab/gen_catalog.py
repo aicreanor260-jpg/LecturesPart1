@@ -4,6 +4,7 @@
 у MES5448/MES7048 (ПО 8.x, FASTPATH) — просто 1/0/N подряд. Диалект CLI: '10', '6' (6.x и 4.x — общий синтаксис), '8'."""
 import json
 import os
+import re
 
 D = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(D, "..", "..", "sources", "eltex", "catalog", "switches.json")
@@ -78,6 +79,26 @@ def main():
                                   "full": " + ".join("%d × %s" % (p["count"], p["type"]) for p in ports) + ((" · " + m["note"]) if m.get("note") else ""),
                                   "url": m.get("url")}
             nr += 1
+    # консольные серверы SCS (console-servers.json): Ethernet по скорости, консольные порты aux1/0/1…N — из «other» (32 × Serial RS-232)
+    csrc = os.path.join(os.path.dirname(SRC), "console-servers.json")
+    if os.path.exists(csrc):
+        RP = {"1G": "gi", "10G": "te"}
+        for m in json.load(open(csrc, encoding="utf-8")):
+            names, cnt = [], {}
+            for p in m.get("ports") or []:
+                k = RP.get(p.get("speed"))
+                for _ in range(p.get("count") or 0):
+                    if k:
+                        cnt[k] = cnt.get(k, 0) + 1
+                        names.append("%s1/0/%d" % (k, cnt[k]))
+            na = re.search(r"(\d+)\s*×\s*Serial RS-232", m.get("other") or "")
+            if not names or not na:
+                continue
+            models[m["model"]] = {"type": "esr", "kind": "scs", "ports": len(names), "portList": names, "aux": int(na.group(1)),
+                                  "group": "Консольные серверы SCS", "host": "scs-32", "sw": "ПО SCS " + (m.get("sw_version") or "?"),
+                                  "note": "%s × RS-232 (aux) + %s" % (na.group(1), " + ".join("%d×%s" % (p["count"], p["speed"]) for p in m["ports"])),
+                                  "full": " + ".join("%d × %s" % (p["count"], p["type"]) for p in m["ports"]) + " + " + na.group(1) + " × RS-232 (RJ-45) · ПО " + (m.get("sw_version") or "?"),
+                                  "url": m.get("url")}
     js = ("/* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */\n"
           "(function (G) {\n  'use strict';\n  G.EL.CATALOG = %s;\n  G.EL.CATALOG_OTHER = {};\n})(typeof window !== 'undefined' ? window : global);\n"
           % json.dumps(models, ensure_ascii=False, separators=(",", ":")))

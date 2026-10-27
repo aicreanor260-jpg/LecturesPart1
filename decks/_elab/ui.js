@@ -16,7 +16,7 @@
   var ICONS = {
     mes: function (g, d) { var m = EL.MODELS[d.model] || {}, big = /агрегации|ЦОД/.test(m.group || '');
       use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
-    esr: function (g) { use(g, 'ic-router', 96); },
+    esr: function (g, d) { var scs = (EL.MODELS[d.model] || {}).kind === 'scs'; use(g, scs ? 'ic-console' : 'ic-router', scs ? 100 : 96); },   // SCS-32 — консольный сервер
     vpc: function (g) { use(g, 'ic-pc', 78); },
     deb: function (g, d) { use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);
       if (d.model === 'Debian') el('path', { d: 'M24 -26a7 7 0 1 0 0 10', fill: 'none', stroke: '#d4574f', 'stroke-width': 3 }, g); }
@@ -63,7 +63,7 @@
     net.links.forEach(function (l, i) {
       var a = net.devs[l.a.dev], b = net.devs[l.b.dev], o = linkOff(i), A = { x: a.x + o.x, y: a.y + o.y }, B = { x: b.x + o.x, y: b.y + o.y };
       var up = net.linkUp(l.a.dev, l.a.port);
-      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i ? ' sel' : '') }, gl);
+      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i ? ' sel' : '') + (/^(console|aux)/.test(l.a.port) || /^(console|aux)/.test(l.b.port) ? ' ser' : '') }, gl);   // ser — консольный RS-232
       ln.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button === 0) { selLink = i; sel = null; draw(); } });
       ln.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); linkMenu(i, e); });
       [[A, B, l.a.port], [B, A, l.b.port]].forEach(function (zz) {

@@ -155,6 +155,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>Консольный сервер SCS-32</h2>
+<table>
+<tr><td>aux1/0/1…32 ↔ console MES/ESR · кабель «Консольный RS-232»</td><td>консольный порт устройства через SCS</td></tr>
+<tr><td>line aux 1/0/1 · speed · databits · stopbits · parity · flowcontrol · transport input ssh|telnet|none · transport telnet port 3001 · modem inout</td><td>настройка порта; show line aux, clear line aux 1/0/1</td></tr>
+<tr><td>Debian: telnet 192.168.1.2 3001 · ssh admin:aux1@192.168.1.2</td><td>Reverse Telnet / SSH: вход на SCS, затем консоль устройства; выход — ~.</td></tr>
+</table>
+
 <h2>MTU и размер пакета</h2>
 <table>
 <tr><td>ESR: mtu 1400 (интерфейс 552–9018, туннель 552–10000, GRE по умолчанию 1476) · no mtu</td><td>MTU выходного интерфейса</td></tr>
