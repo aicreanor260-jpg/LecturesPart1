@@ -154,15 +154,51 @@
     if (!ulab) return; var key = 'ulab', body = document.getElementById('ulabbody');
     if (!U.wins[key]) { body = document.createElement('div'); body.className = 'pad'; body.id = 'ulabbody';
       U.makeWin(key, 'Задание', ulab.title, body, { x: 30, y: 80, w: 470, h: Math.min(560, innerHeight - 160) });
-      body.addEventListener('click', function (e) { if (e.target.closest('[data-u="chk"]')) showULab(); }); }
+      body.addEventListener('click', function (e) { if (e.target.closest('[data-u="chk"]')) showULab(); if (e.target.closest('[data-u="sub"]')) X.submit({ id: 'file', title: ulab.title }); }); }
     var ts = ulab.tasks.map(parseTask), ok = 0, hasChk = ts.some(function (x) { return x.chk; });
     var li = ts.map(function (x) { var y = null;
       if (test() && x.chk) { y = x.chk.k === 'ping' ? net().reach(x.chk.from, x.chk.to) : net().http(x.chk.from, x.chk.to); if (y) ok++; }
       return '<li class="' + (y ? 'ok' : '') + '">' + esc(x.t) + '</li>'; }).join('');
     body.innerHTML = '<div class="k">Лабораторная из файла</div><h2>' + esc(ulab.title) + '</h2><p>' + esc(ulab.goal) + '</p><ol>' + li + '</ol>' +
       (test() && hasChk ? '<div class="sum ' + (ok === ts.filter(function (x) { return x.chk; }).length ? 'ok' : '') + '">Проверки: ' + ok + ' из ' + ts.filter(function (x) { return x.chk; }).length +
-        '</div><div class="row"><button class="pri" data-u="chk">Проверить</button></div>' : '');
+        '</div><div class="row"><button class="pri" data-u="chk">Проверить</button></div>' : '') +
+      (!test() ? '<div class="row"><button class="pri" data-u="sub">Сдать работу</button></div>' : '');
   }
+
+  // ================================================================== сдача работы на сайт курса (POST /api/submit) или в файл
+  var SUB_MAX = 2 * 1024 * 1024;
+  X.submit = function (info) {
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<div class="k">Сдать работу</div><h2>' + esc(info.id + ' · ' + info.title) + '</h2>' +
+      '<label>ФИО</label><input class="q" id="sbN" maxlength="80" autocomplete="name" placeholder="Иванов Иван Иванович">' +
+      '<label>Группа</label><input class="q" id="sbG" maxlength="32" placeholder="ИКС-21">' +
+      '<p class="note">Отправляется схема с настройками всех устройств (как «Файл → Сохранить») и running-config текстом. Перед сдачей сохраните конфигурацию (write / commit + confirm).</p>' +
+      '<div class="row"><button class="pri" data-s2="send">Отправить на сайт курса</button><button data-s2="file">Сохранить для сдачи (.json)</button></div><div class="sbres" style="margin-top:8px"></div>';
+    U.closeWin('sub'); U.makeWin('sub', 'Сдача работы', info.id, body, { w: 460, h: 430 });
+    var N = body.querySelector('#sbN'), Gp = body.querySelector('#sbG'), res = body.querySelector('.sbres');
+    [N, Gp].forEach(function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    if (location.protocol === 'file:') { body.querySelector('[data-s2="send"]').style.display = 'none'; res.textContent = 'Файл открыт с диска — отправка недоступна. Сохраните работу и сдайте файл преподавателю или на сайте курса net-cat.duckdns.org.'; }
+    function payload() {
+      var name = N.value.trim().replace(/\s+/g, ' '), group = Gp.value.trim();
+      if (!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'-]{1,79}$/.test(name)) { res.textContent = 'ФИО: буквы, пробел, дефис (2–80 символов)'; return null; }
+      if (!/^[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9._-]{0,31}$/.test(group)) { res.textContent = 'Группа: буквы, цифры, точка, дефис (до 32 символов)'; return null; }
+      var p = { name: name, group: group, lab: /^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$/.test(info.id) ? info.id : 'file', title: info.title, variant: info.variant || null,
+                mode: U.mode(), configs: EL.exportConfigs(net()), scheme: U.saveJSON() };
+      if (JSON.stringify(p).length > SUB_MAX) { res.textContent = 'Работа больше 2 МБ — уменьшите схему'; return null; }
+      return p;
+    }
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-s2]'); if (!b) return; var p = payload(); if (!p) return;
+      if (b.dataset.s2 === 'file') { download(safe(p.group) + '_' + safe(p.name) + '_' + p.lab + '.json', JSON.stringify(p, null, 1), 'application/json'); res.textContent = 'Файл сохранён'; return; }
+      b.disabled = true; res.textContent = 'Отправка…';
+      fetch('/api/submit', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'сервер сдачи недоступен (код ' + r.status + ')' }; }); })
+        .then(function (j) { b.disabled = false;
+          res.innerHTML = j.ok ? '<b style="color:var(--ok)">Работа сдана ✓</b> ' + esc(j.received || '') : '<span style="color:var(--bad)">Не отправлено: ' + esc(j.error || 'ошибка') + '</span> — сохраните работу файлом.'; })
+        .catch(function () { b.disabled = false; res.innerHTML = '<span style="color:var(--bad)">Нет связи с сайтом курса</span> — сохраните работу файлом.'; });
+    });
+    setTimeout(function () { N.focus(); }, 0);
+  };
+  function safe(s) { return String(s).replace(/[^\wА-Яа-яЁё.-]+/g, '_'); }
   function openLabEditor() {
     var body = document.createElement('div'), L = ulab || { title: '', goal: '', tasks: [] }; body.className = 'cfgw';
     body.innerHTML = '<label>Название</label><input id="leT" class="q"><label>Цель работы</label><input id="leG" class="q">' +

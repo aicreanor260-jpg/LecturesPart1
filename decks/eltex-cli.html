@@ -7097,7 +7097,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var ts = lab.tasks(labP), ok = 0;
     if (mode === 'work') {   // как методичка: текст задания, без проверки и подсказок
       body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol>' +
-        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>' + (hasDoc(lab) ? '<div class="row"><button data-a="doc">Методичка</button></div>' : '');
+        ts.map(function (t) { return '<li>' + t.t + '</li>'; }).join('') + '</ol>' + '<div class="row">' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + '<button data-a="sub" class="pri">Сдать работу</button></div>';
       return;
     }
     var li = ts.map(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) ok++; return '<li class="' + (y ? 'ok' : '') + '">' + t.t + '</li>'; }).join('');
@@ -7122,7 +7122,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       box.className = ''; box.style.cssText = 'flex:1;min-height:0;display:flex'; box.innerHTML = '<iframe src="' + url + '" title="Методичка ' + id + '" style="flex:1;border:0;background:#fff"></iframe>';
     }).catch(miss);
   }
-  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
+  function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; } if (a === 'sub') { X.submit({ id: lab.id, title: lab.title, variant: labP }); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
     lab = null; resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';
@@ -7154,12 +7154,22 @@ vesr(config)#         do confirm  — подтвердить</pre>
     makeWin('help', 'Справка', 'команды и управление', body, { x: 60, y: 70, w: Math.min(980, innerWidth - 120), h: innerHeight - 150 });
   }
   function save() {
-    var j = net.toJSON(); X.saveX(j);
+    var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP };
     var blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' }), a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'eltex-shema.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
   }
-  function loadScheme(j) { var n = EL.Net.fromJSON(j); lab = null; task = null; resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
-    X.loadX(j); draw(); fit(); renderSide(); }
+  function loadScheme(j) { if (j && !j.devs && j.scheme) j = j.scheme;    // файл сдачи: {name, group, lab, scheme}
+    var n = EL.Net.fromJSON(j); lab = null; task = null; resetNet(); net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
+    X.loadX(j); draw(); fit();
+    var bl = j.builtin && EL.labs.byId(j.builtin.id);           // сданная работа по встроенной лабе — с тем же вариантом и проверками
+    if (bl) { lab = bl; labP = j.builtin.p; labShow = false; renderLab(true); }
+    renderSide(); }
+  // страница преподавателя открывает эмулятор и передаёт схему сдачи (только с того же сайта)
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'elab-load' || !e.data.scheme) return;
+    try { loadScheme(e.data.scheme); if (e.data.test) setMode('test'); toast('Открыта работа: ' + (e.data.title || '')); } catch (err) { toast('Не удалось открыть: ' + err.message); }
+  });
+  if (window.opener && location.protocol !== 'file:') try { window.opener.postMessage({ type: 'elab-ready' }, location.origin); } catch (err) { /* окно открыто не со своего сайта */ }
   $('fOpen').addEventListener('change', function () { var f = this.files[0]; if (!f) return; var rd = new FileReader();
     rd.onload = function () { try { loadScheme(JSON.parse(rd.result)); toast('Схема загружена: ' + net.list().length + ' устройств'); } catch (err) { toast('Не удалось открыть: ' + err.message); } };
     rd.readAsText(f); this.value = ''; });
@@ -7182,7 +7192,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   window.addEventListener('resize', applyView);
   window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme };
+    renderSide: renderSide, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();
 
 /* Учебные инструменты режима «Тест» поверх ui.js: захват трафика на кабеле (как Wireshark в pnetlab), разбор шага трассы по уровням OSI,
@@ -7341,15 +7351,51 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (!ulab) return; var key = 'ulab', body = document.getElementById('ulabbody');
     if (!U.wins[key]) { body = document.createElement('div'); body.className = 'pad'; body.id = 'ulabbody';
       U.makeWin(key, 'Задание', ulab.title, body, { x: 30, y: 80, w: 470, h: Math.min(560, innerHeight - 160) });
-      body.addEventListener('click', function (e) { if (e.target.closest('[data-u="chk"]')) showULab(); }); }
+      body.addEventListener('click', function (e) { if (e.target.closest('[data-u="chk"]')) showULab(); if (e.target.closest('[data-u="sub"]')) X.submit({ id: 'file', title: ulab.title }); }); }
     var ts = ulab.tasks.map(parseTask), ok = 0, hasChk = ts.some(function (x) { return x.chk; });
     var li = ts.map(function (x) { var y = null;
       if (test() && x.chk) { y = x.chk.k === 'ping' ? net().reach(x.chk.from, x.chk.to) : net().http(x.chk.from, x.chk.to); if (y) ok++; }
       return '<li class="' + (y ? 'ok' : '') + '">' + esc(x.t) + '</li>'; }).join('');
     body.innerHTML = '<div class="k">Лабораторная из файла</div><h2>' + esc(ulab.title) + '</h2><p>' + esc(ulab.goal) + '</p><ol>' + li + '</ol>' +
       (test() && hasChk ? '<div class="sum ' + (ok === ts.filter(function (x) { return x.chk; }).length ? 'ok' : '') + '">Проверки: ' + ok + ' из ' + ts.filter(function (x) { return x.chk; }).length +
-        '</div><div class="row"><button class="pri" data-u="chk">Проверить</button></div>' : '');
+        '</div><div class="row"><button class="pri" data-u="chk">Проверить</button></div>' : '') +
+      (!test() ? '<div class="row"><button class="pri" data-u="sub">Сдать работу</button></div>' : '');
   }
+
+  // ================================================================== сдача работы на сайт курса (POST /api/submit) или в файл
+  var SUB_MAX = 2 * 1024 * 1024;
+  X.submit = function (info) {
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<div class="k">Сдать работу</div><h2>' + esc(info.id + ' · ' + info.title) + '</h2>' +
+      '<label>ФИО</label><input class="q" id="sbN" maxlength="80" autocomplete="name" placeholder="Иванов Иван Иванович">' +
+      '<label>Группа</label><input class="q" id="sbG" maxlength="32" placeholder="ИКС-21">' +
+      '<p class="note">Отправляется схема с настройками всех устройств (как «Файл → Сохранить») и running-config текстом. Перед сдачей сохраните конфигурацию (write / commit + confirm).</p>' +
+      '<div class="row"><button class="pri" data-s2="send">Отправить на сайт курса</button><button data-s2="file">Сохранить для сдачи (.json)</button></div><div class="sbres" style="margin-top:8px"></div>';
+    U.closeWin('sub'); U.makeWin('sub', 'Сдача работы', info.id, body, { w: 460, h: 430 });
+    var N = body.querySelector('#sbN'), Gp = body.querySelector('#sbG'), res = body.querySelector('.sbres');
+    [N, Gp].forEach(function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    if (location.protocol === 'file:') { body.querySelector('[data-s2="send"]').style.display = 'none'; res.textContent = 'Файл открыт с диска — отправка недоступна. Сохраните работу и сдайте файл преподавателю или на сайте курса net-cat.duckdns.org.'; }
+    function payload() {
+      var name = N.value.trim().replace(/\s+/g, ' '), group = Gp.value.trim();
+      if (!/^[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё .'-]{1,79}$/.test(name)) { res.textContent = 'ФИО: буквы, пробел, дефис (2–80 символов)'; return null; }
+      if (!/^[A-Za-zА-Яа-яЁё0-9][A-Za-zА-Яа-яЁё0-9._-]{0,31}$/.test(group)) { res.textContent = 'Группа: буквы, цифры, точка, дефис (до 32 символов)'; return null; }
+      var p = { name: name, group: group, lab: /^[A-Za-z0-9][A-Za-z0-9._-]{0,15}$/.test(info.id) ? info.id : 'file', title: info.title, variant: info.variant || null,
+                mode: U.mode(), configs: EL.exportConfigs(net()), scheme: U.saveJSON() };
+      if (JSON.stringify(p).length > SUB_MAX) { res.textContent = 'Работа больше 2 МБ — уменьшите схему'; return null; }
+      return p;
+    }
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-s2]'); if (!b) return; var p = payload(); if (!p) return;
+      if (b.dataset.s2 === 'file') { download(safe(p.group) + '_' + safe(p.name) + '_' + p.lab + '.json', JSON.stringify(p, null, 1), 'application/json'); res.textContent = 'Файл сохранён'; return; }
+      b.disabled = true; res.textContent = 'Отправка…';
+      fetch('/api/submit', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'сервер сдачи недоступен (код ' + r.status + ')' }; }); })
+        .then(function (j) { b.disabled = false;
+          res.innerHTML = j.ok ? '<b style="color:var(--ok)">Работа сдана ✓</b> ' + esc(j.received || '') : '<span style="color:var(--bad)">Не отправлено: ' + esc(j.error || 'ошибка') + '</span> — сохраните работу файлом.'; })
+        .catch(function () { b.disabled = false; res.innerHTML = '<span style="color:var(--bad)">Нет связи с сайтом курса</span> — сохраните работу файлом.'; });
+    });
+    setTimeout(function () { N.focus(); }, 0);
+  };
+  function safe(s) { return String(s).replace(/[^\wА-Яа-яЁё.-]+/g, '_'); }
   function openLabEditor() {
     var body = document.createElement('div'), L = ulab || { title: '', goal: '', tasks: [] }; body.className = 'cfgw';
     body.innerHTML = '<label>Название</label><input id="leT" class="q"><label>Цель работы</label><input id="leG" class="q">' +
