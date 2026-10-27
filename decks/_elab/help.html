@@ -15,7 +15,7 @@
 switch#            configure
 switch(config)#    interface gigabitethernet 1/0/1
 switch(config-if)# exit / end
-switch(config)#    vlan database   → (config-vlan)#
+switch(config)#    vlan 10,20      → (config-vlan)#   (6.x: vlan database)
 switch(config)#    line console    → (config-line)#
 switch(config)#    interface range gi1/0/1-4 → (config-if-range)#</pre>
 <h2>Режимы ESR</h2>
@@ -29,7 +29,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 </div>
 <h2>Ветки ПО коммутаторов</h2>
 <table>
-<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable</td></tr>
+<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable · VLAN из config (vlan 10,20) · write startup-config · ip route 0.0.0.0 0.0.0.0 NH · clock utc-offset · show system information · show ip arp · show mac-address-table · storm-control … level pps|kbps N; нет ip default-gateway, ip ssh/http server, terminal datadump</td></tr>
 <tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
 <tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
 </table>
@@ -39,29 +39,29 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>
 <tr><td>username admin1 password P privilege 15</td><td>пользователь</td></tr>
 <tr><td>enable password [level N] P</td><td>пароль на вход в #</td></tr>
-<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication, login-attempts, history size</td></tr>
+<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication; login-attempts, history size — только 6.x</td></tr>
 <tr><td>banner motd|login|exec @ текст @</td><td>баннеры с разделителем</td></tr>
-<tr><td>vlan database · vlan 10,20 · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
+<tr><td>vlan 10,20 (10.x, из config) · vlan database → vlan 10,20 (6.x) · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
 <tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
 <tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
 <tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
 <tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
 <tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
 <tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>
-<tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
+<tr><td>ip route 0.0.0.0 0.0.0.0 NH (10.x) · ip default-gateway A.B.C.D (6.x) · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
 <tr><td>spanning-tree · spanning-tree mode rst · spanning-tree priority 16384 · show spanning-tree</td><td>RSTP</td></tr>
 <tr><td>interface port-channel 1 · channel-group 1 mode active|passive|on · show etherchannel summary</td><td>LACP</td></tr>
 <tr><td>monitor session 1 destination interface gi1/0/12 · monitor session 1 source interface gi1/0/1 both · show monitor session 1</td><td>SPAN</td></tr>
-<tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
-<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
-<tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
+<tr><td>crypto key generate rsa · ip ssh server, ip http server (6.x)</td><td>управление</td></tr>
+<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route · 10.x: mac-address-table, ip arp · 6.x: mac address-table, arp</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
+<tr><td>write · write startup-config (10.x) · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
 <tr><td>sh ru · sh int st · int gi 1/0/1 · sw mode trunk · conf t · wr</td><td>сокращения как на железе: любое слово сокращается до однозначного начала</td></tr>
 <tr><td>10.x: switchport port-security enable · mac-limit N · mode max-addresses|lock|secure-permanent · violation restrict|protect|discard-shutdown · show port-security</td><td>port security: кадры с чужих MAC отбрасываются, discard-shutdown выключает порт</td></tr>
 <tr><td>6.x/4.x: port security · port security max N · port security mode lock|max-addresses · port security forward|discard|discard-shutdown · show ports security</td><td>port security в ветке 6.x</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
-<tr><td>show version · show system · show clock · clock set 10:20:30 5 Mar 2026 · clock timezone MSK +3 · show users</td><td>версия, время</td></tr>
+<tr><td>10.x: show system information · show system id · clock utc-offset +3 — 6.x: show version · show system · clock timezone MSK +3 — show clock · clock set 10:20:30 5 Mar 2026 · show users</td><td>версия, время</td></tr>
 <tr><td>show interfaces description · show running-config interface gi1/0/1 · show lldp neighbors · traceroute A.B.C.D (6.x: traceroute ip A.B.C.D)</td><td>описания портов, конфиг порта, соседи, маршрут</td></tr>
 </table>
 <h2>Команды ESR (маршрутизатор)</h2>

@@ -12,7 +12,7 @@
 - вход в консоль как на железе: MES — `User Name:` / `Password:` (заводской admin / admin или `username` из конфигурации), ESR — `login:` / `Password:` (admin / password), Debian — root / toor; после перезагрузки — снова вход;
 - только сообщения устройства: `% Unrecognized command`, `% Incomplete command`, `% Invalid input detected at '^' marker.` (MES), `Syntax error: Unknown command | Incomplete command | Illegal parameter` (ESR) — подсказок эмулятора на русском нет;
 - клавиши консоли: ↑ ↓ — история, ← → / Home / End — по строке, Backspace / Delete, Tab — дописать, `?` — подсказка, **Ctrl+Z** — выход в `#`;
-- таблицы смотрят только командами (`show mac address-table`, `show arp`, `show ip route` …); время идёт как на железе (MAC стареют, OSPF ждёт выбора DR), часов и пути пакета нет.
+- таблицы смотрят только командами (10.x: `show mac-address-table`, `show ip arp`; 6.x: `show mac address-table`, `show arp`; `show ip route` …); время идёт как на железе (MAC стареют, OSPF ждёт выбора DR), часов и пути пакета нет.
 
 **Тест** — учебные инструменты: окно «Таблицы», путь пакета по шагам, часы с ускорением и «промотать», автопроверка лаб, «Новый вариант», «Решение», случайные задания, файл схемы, справка.
 
@@ -64,25 +64,25 @@
 ## Ветки ПО коммутаторов — свой CLI у каждой
 | Ветка | Модели | Отличия синтаксиса |
 |---|---|---|
-| 10.x | MES14xx, MES24xx, MES3400, MES37xx | `spanning-tree mode rst\|mst\|rapid-pvst`, `channel-group N mode active\|passive\|on`, `set lldp enable`, `monitor session` |
+| 10.x | MES14xx, MES24xx, MES3400, MES37xx | `spanning-tree mode rst\|mst\|rapid-pvst`, `channel-group N mode active\|passive\|on`, `set lldp enable`, `monitor session`; VLAN прямо из config (`vlan 10,20`, без `vlan database`); `write startup-config`; шлюз — `ip route 0.0.0.0 0.0.0.0 NH`; `clock utc-offset +3`; `show system information`, `show ip arp`, `clear ip arp`, `show mac-address-table`, `show monitor session all`; `storm-control broadcast level pps\|kbps N`. Нет: `switchport trunk allowed vlan`, `ip default-gateway`, `ip ssh server`, `ip http server`, `terminal datadump`, `login-attempts`, `history size` (сверено с ПО 10.4.6) |
 | 6.x и 4.x | MES23xx, MES33xx, MES35xx, MES53xx, MES54xx–57xx | `spanning-tree mode stp\|rstp\|mstp`, `channel-group N mode auto\|on`, `lldp run`, `port monitor <порт>` на порту-получателе, `show interfaces channel-group` |
 | 8.x (FASTPATH) | MES5448, MES7048 | приглашения `(switch) #`, `(switch) (Config)#`, `(switch) (Interface 1/0/1)#`; порты `1/0/N`, диапазон `interface 1/0/1-1/0/4`; `vlan database` из `#`, `vlan name 10 IT`; LAG: `port-channel ИМЯ`, `addport lag 1`, `port-channel static`; `vlan participation include`, `vlan tagging`, `vlan pvid`; `spanning-tree mst priority 0 4096`; `monitor session 1 … mode`; `show port-channel brief` |
 
 Порты называются по типу, как на устройстве: `fa` 100M, `gi` 1G, `tw` 2.5G, `te` 10G, `fo` 40G, `hu` 100G — например, у MES2424 это gi1/0/1–24 и te1/0/1–4, у MES5324 te1/0/1–24 и fo1/0/1–4.
 
 ## Режимы
-**MES:** `switch>` → `enable` → `switch#` → `configure` → `switch(config)#` → `interface gi1/0/1` → `switch(config-if)#`; также `(config-if-range)#`, `(config-vlan)#` (`vlan database`/`vlan N`), `(config-line)#`. `exit` — на уровень выше, `end` — в `#`.
+**MES:** `switch>` → `enable` → `switch#` → `configure` → `switch(config)#` → `interface gi1/0/1` → `switch(config-if)#`; также `(config-if-range)#`, `(config-vlan)#` (10.x: `vlan N` из config; 6.x: `vlan database`), `(config-line)#`. `exit` — на уровень выше, `end` — в `#`.
 
 **ESR:** `vesr#` → `configure` → `(config)#` → `(config-if-gi)#`, `(config-if-sub)#` (саб-интерфейс `1/0/1.10`), `(config-if-loopback)#`, `(config-user)#`. Правки копятся в кандидате и **вступают в силу только после `commit`**, затем `confirm`.
 
 ## Поддерживаемые команды (с примерами)
-**MES**
+**MES** (общий набор; где синтаксис веток 10.x и 6.x различается — пометки «10.x» / «6.x», полный список отличий — в таблице веток выше)
 ```
 hostname SW1                       username admin1 password P privilege 15
 enable password eltex15            enable password level 7 eltex7
 line console / password c0n / exec-timeout 5 / login authentication console
 banner login @ Authorized only! @  banner exec @ Welcome! @   banner motd @ ... @
-vlan database / vlan 10,20 / exit  vlan 10 / name IT          no vlan 30
+vlan 10,20 / exit (10.x)  vlan database / vlan 10,20 / exit (6.x)  vlan 10 / name IT   no vlan 30
 interface range gigabitethernet 1/0/1-4
 switchport mode access | trunk | general
 switchport access vlan 10          no switchport access vlan
@@ -90,16 +90,17 @@ switchport trunk allowed vlan add 10,20     switchport trunk native vlan 99
 switchport general allowed vlan add 100 tagged     switchport general pvid 10
 shutdown / no shutdown
 interface vlan 10 / ip address 10.0.0.1 255.255.255.0   (или /24)
-ip default-gateway 10.0.0.254      ip route 10.2.0.0 255.255.0.0 10.0.0.2
-ip ssh server / crypto key generate rsa
+ip route 0.0.0.0 0.0.0.0 10.0.0.254 (10.x)   ip default-gateway 10.0.0.254 (6.x)   ip route 10.2.0.0 255.255.0.0 10.0.0.2
+ip ssh server (6.x) / crypto key generate rsa
 spanning-tree / spanning-tree mode rst / spanning-tree priority 16384 / (на порту) spanning-tree cost 20000
 interface port-channel 1 / interface range gi1/0/1-4 / channel-group 1 mode active|passive|on
 show spanning-tree | etherchannel summary
 monitor session 1 destination interface gi1/0/12 / monitor session 1 source interface gi1/0/1 both / show monitor session 1
 show running-config | startup-config | vlan | interfaces switchport gi1/0/1
-show arp · clear arp-cache · clear mac address-table dynamic
-show interfaces status | ip interface | ip route | mac address-table
-do show vlan    write    copy running-config startup-config    reload    ping 10.0.0.2
+10.x: show ip arp · clear ip arp · show mac-address-table · clear mac-address-table dynamic · show system information · show monitor session all
+6.x:  show arp · clear arp-cache · show mac address-table · clear mac address-table dynamic · show version
+show interfaces status | ip interface | ip route
+do show vlan    write    write startup-config (10.x)    copy running-config startup-config    reload    ping 10.0.0.2
 ```
 **ESR**
 ```
@@ -210,8 +211,8 @@ security zone-pair trusted self        ← трафик самому маршр�
 | Port security | `switchport port-security enable`, `… mac-limit N`, `… mode max-addresses\|lock\|secure-permanent`, `… violation restrict\|protect\|discard-shutdown`, `show port-security` | `port security`, `port security max N`, `port security mode lock\|max-addresses`, `port security forward\|discard\|discard-shutdown`, `show ports security` | кадр с неразрешённого MAC отбрасывается (в трассе — шаг «port security»), при discard-shutdown порт выключается; разрешённые адреса — secure, не стареют |
 | BPDU guard | `spanning-tree portfast`, `spanning-tree bpduguard enable` | то же | к порту подключили коммутатор с STP — порт выключается (err-disable), вернуть — `no shutdown` после отключения |
 | Статический MAC | `mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent` | `mac address-table static MAC vlan N interface gi1/0/7` | запись Static в таблице, не стареет и не переучивается |
-| Время | `clock set 10:20:30 5 Mar 2026`, `clock timezone MSK +3`, `show clock` | то же | |
-| Сведения | `show version`, `show system`, `show users`, `show interfaces description`, `show running-config interface gi1/0/1`, `show lldp neighbors`, `traceroute A.B.C.D` | то же, `traceroute ip A.B.C.D` | LLDP: MES видит соседей-MES и ESR, ESR видит MES |
+| Время | `clock set 10:20:30 5 Mar 2026`, `clock utc-offset +3`, `show clock` | `clock set …`, `clock timezone MSK +3`, `show clock` | |
+| Сведения | `show system information`, `show system id`, `show users`, `show interfaces description`, `show running-config interface gi1/0/1`, `show lldp neighbors`, `traceroute A.B.C.D` | `show version`, `show system`, остальное то же, `traceroute ip A.B.C.D` | LLDP: MES видит соседей-MES и ESR, ESR видит MES |
 
 ### Живая консоль: фильтры, страницы, сообщения, счётчики
 Работает в обоих режимах — это поведение устройства.
@@ -219,7 +220,7 @@ security zone-pair trusted self        ← трафик самому маршр�
 | Что | MES | ESR | Откуда |
 |---|---|---|---|
 | Фильтр вывода | `show running-config \| include vlan`, `\| exclude`, `\| begin`, `\| section 1/0/3` (до `exit`), `\| section "s" "конец"`, `\| section "s" include "s2"`, `\| no-more`; регистр не учитывается | `\| include "^gi1/0/1 "`, `\| exclude`, `\| begin`, `\| until`, `\| count`, `\| counter`; шаблон — регулярное выражение | ESR: справочник 1.23 «фильтрация»; MES: руководство 8.4.0.7 гл. 6.2. В руководствах 10.4.6 и 6.6.8.8 фильтры не описаны — ветки 10 и 6 работают как 8.4 |
-| Постраничный вывод | 24 строки, строка `More: <space>,  Quit: q or CTRL+Z, One line: <return>` (10, 6), `--More-- or (q)uit` (8); `terminal datadump` / `terminal no datadump` (10, 6), `terminal length N` (8) | 24 строки, `More? Enter – next line; Space – next page; Q – quit; R – show the rest.`; `terminal datadump` / `no terminal datadump` | строки «More» — дословно из руководств; для ветки 10 команд нет в 10.4.6 — сделано как в 6.6.8.8 |
+| Постраничный вывод | 24 строки, строка `More: <space>,  Quit: q or CTRL+Z, One line: <return>` (10, 6), `--More-- or (q)uit` (8); `terminal datadump` / `terminal no datadump` (6), `terminal length N` (8); в 10.4.6 такой команды нет — `\| no-more` у отдельной команды | 24 строки, `More? Enter – next line; Space – next page; Q – quit; R – show the rest.`; `terminal datadump` / `no terminal datadump` | строки «More» — дословно из руководств |
 | Сообщения в консоль | 10.x: `CFA-6-Interface gi 1/0/1 link status UP`, `CFA-4-… DOWN`, `AST-6-[Instance 0] Interface gi 1/0/2 is moved to state Forwarding`, `AST-6-… This is the root bridge`, `AST-6-BPDU received on Bpdu Guard enabled edge …`; 6.x: `%LINK-I-Up:  gi1/0/1`, `%LINK-W-Down:  gi1/0/1`, `%STP-W-PORTSTATUS: …` | `%LINK-I-Up:  gi1/0/1`, `%LINK-W-Down:  …`, `%OSPF-I-NEIGHBOR: Neighbor 2.2.2.2 on gi1/0/1 changed state to Full`, `%VRRP-I-STATE: gi1/0/1 VRID 1 changed state to Master` | 10.x — «Руководство по сообщениям Syslog MES14xx/24xx/3400/37xx»; **6.x и ESR — формат условный** (в руководствах не приведён) |
 | Журнал | `show logging` (буфер 200 строк, новые сверху), `logging console` / `no logging console` | `syslog console` / `no syslog console`; сообщения уходят и на удалённый syslog-сервер (`syslog host`) | |
 | Счётчики | `show interfaces counters [gi1/0/1]` (таблицы In/Out Ucast/Mcast/Bcast/Octets, у одного порта — список ошибок), `show interfaces gi1/0/1`, `clear counters [gi1/0/1]` | `show interfaces counters [gi1/0/1]`, `clear interfaces counters [gi1/0/1]` | форматы таблиц — из 6.6.8.8 и ESR 1.23; сводка `show interfaces gi1/0/1` в руководствах не приведена — упрощена |
@@ -331,7 +332,7 @@ SA устанавливается, когда у пары ESR зеркальны
 |---|---|---|---|
 | DHCP snooping | `ip dhcp snooping`, `ip dhcp snooping vlan 10`; доверенный порт — `port-security-state trusted` (+ `set port-role uplink`) | `ip dhcp snooping`, `… vlan 10`, на порту `ip dhcp snooping trust` | ответ DHCP-сервера с недоверенного порта отброшен (чужой сервер не раздаёт адреса); выданные адреса — в `show ip dhcp snooping binding` |
 | ARP inspection | `ip arp inspection enable`, `ip arp inspection vlan 10` (доверенный — тот же `port-security-state trusted`) | `ip arp inspection`, `… vlan 10`, на порту `ip arp inspection trust` | ARP с недоверенного порта проходит, только если пара IP–MAC есть в базе DHCP snooping: ПК со статическим адресом и порт к маршрутизатору без trusted — ARP отброшен |
-| Storm-control | `storm-control broadcast level N`, `storm-control broadcast action shutdown` | `storm-control broadcast level N` | широковещательный шторм (петля без STP) выключает порт с action shutdown (err-disable) — петля разорвана, следующий ping проходит; включить порт — `no shutdown` |
+| Storm-control | `storm-control broadcast level pps\|kbps N` (pps 1–262142, kbps 16–4194272), `storm-control broadcast action shutdown` | `storm-control broadcast level N` | широковещательный шторм (петля без STP) выключает порт с action shutdown (err-disable) — петля разорвана, следующий ping проходит; включить порт — `no shutdown` |
 
 Показ: `show ip dhcp snooping`, `show ip dhcp snooping binding`, `show ip arp inspection`. Упрощения: опция 82, verify mac-address, IP source guard и пороги pps/kbps не моделируются (шторм либо есть, либо нет); формат `show ip dhcp snooping binding` в руководствах не приведён.
 
@@ -451,7 +452,7 @@ tunnel l2tpv3 1
 | `% Unrecognized command` | опечатка или команды нет — нажмите `?` |
 | `% Incomplete command` | команда не дописана (`show` → `show vlan`) |
 | `% Команда недоступна в этом режиме` | смотрите на приглашение: нужен `#`, `(config)#` или режим интерфейса |
-| `% VLAN 30 не создана` | сначала `vlan database` / `vlan 30` |
+| `% VLAN 30 не создана` | сначала `vlan 30` в config (10.x) или `vlan database` / `vlan 30` (6.x) |
 | ESR не отвечает | нет `commit` или не отключён экран: `ip firewall disable` |
 | Маршрут есть в `show ip route all`, но без `*` | шлюз недоступен (интерфейс выключен) или есть маршрут с меньшей метрикой — это и есть плавающий маршрут в резерве |
 | Нет маршрутов R/O | протокол не включён (`enable`), сеть не в `network`, интерфейс пассивный или не применён `commit` |

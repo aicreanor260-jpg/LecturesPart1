@@ -257,7 +257,7 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 switch#            configure
 switch(config)#    interface gigabitethernet 1/0/1
 switch(config-if)# exit / end
-switch(config)#    vlan database   → (config-vlan)#
+switch(config)#    vlan 10,20      → (config-vlan)#   (6.x: vlan database)
 switch(config)#    line console    → (config-line)#
 switch(config)#    interface range gi1/0/1-4 → (config-if-range)#</pre>
 <h2>Режимы ESR</h2>
@@ -271,7 +271,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 </div>
 <h2>Ветки ПО коммутаторов</h2>
 <table>
-<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable</td></tr>
+<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable · VLAN из config (vlan 10,20) · write startup-config · ip route 0.0.0.0 0.0.0.0 NH · clock utc-offset · show system information · show ip arp · show mac-address-table · storm-control … level pps|kbps N; нет ip default-gateway, ip ssh/http server, terminal datadump</td></tr>
 <tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
 <tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
 </table>
@@ -281,29 +281,29 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>
 <tr><td>username admin1 password P privilege 15</td><td>пользователь</td></tr>
 <tr><td>enable password [level N] P</td><td>пароль на вход в #</td></tr>
-<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication, login-attempts, history size</td></tr>
+<tr><td>line console | telnet | ssh</td><td>password, exec-timeout, login authentication; login-attempts, history size — только 6.x</td></tr>
 <tr><td>banner motd|login|exec @ текст @</td><td>баннеры с разделителем</td></tr>
-<tr><td>vlan database · vlan 10,20 · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
+<tr><td>vlan 10,20 (10.x, из config) · vlan database → vlan 10,20 (6.x) · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
 <tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
 <tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
 <tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
 <tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
 <tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
 <tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>
-<tr><td>ip default-gateway A.B.C.D · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
+<tr><td>ip route 0.0.0.0 0.0.0.0 NH (10.x) · ip default-gateway A.B.C.D (6.x) · ip route NET MASK NH</td><td>шлюз и статические маршруты</td></tr>
 <tr><td>spanning-tree · spanning-tree mode rst · spanning-tree priority 16384 · show spanning-tree</td><td>RSTP</td></tr>
 <tr><td>interface port-channel 1 · channel-group 1 mode active|passive|on · show etherchannel summary</td><td>LACP</td></tr>
 <tr><td>monitor session 1 destination interface gi1/0/12 · monitor session 1 source interface gi1/0/1 both · show monitor session 1</td><td>SPAN</td></tr>
-<tr><td>ip ssh server · crypto key generate rsa · ip http server</td><td>управление</td></tr>
-<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route | mac address-table</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
-<tr><td>write · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
+<tr><td>crypto key generate rsa · ip ssh server, ip http server (6.x)</td><td>управление</td></tr>
+<tr><td>show running-config | startup-config | vlan | interfaces switchport gi1/0/1 | interfaces status | ip interface | ip route · 10.x: mac-address-table, ip arp · 6.x: mac address-table, arp</td><td>просмотр (в конфигурации — через <code>do</code>)</td></tr>
+<tr><td>write · write startup-config (10.x) · copy running-config startup-config · reload · ping A.B.C.D</td><td>сохранение, перезагрузка, проверка</td></tr>
 <tr><td>sh ru · sh int st · int gi 1/0/1 · sw mode trunk · conf t · wr</td><td>сокращения как на железе: любое слово сокращается до однозначного начала</td></tr>
 <tr><td>10.x: switchport port-security enable · mac-limit N · mode max-addresses|lock|secure-permanent · violation restrict|protect|discard-shutdown · show port-security</td><td>port security: кадры с чужих MAC отбрасываются, discard-shutdown выключает порт</td></tr>
 <tr><td>6.x/4.x: port security · port security max N · port security mode lock|max-addresses · port security forward|discard|discard-shutdown · show ports security</td><td>port security в ветке 6.x</td></tr>
 <tr><td>spanning-tree portfast · spanning-tree bpduguard enable</td><td>BPDU guard: пришёл BPDU от коммутатора — порт выключается; включить: no shutdown</td></tr>
 <tr><td>10.x: mac-address-table static unicast MAC vlan N interface gi1/0/7 status permanent · 6.x: mac address-table static MAC vlan N interface gi1/0/7</td><td>статическая MAC-запись (не стареет)</td></tr>
 <tr><td>mac-address-table aging-time N (10.x) · mac address-table aging-time N (6.x) · bridge aging-time N (8.x) · arp timeout N</td><td>таймеры старения</td></tr>
-<tr><td>show version · show system · show clock · clock set 10:20:30 5 Mar 2026 · clock timezone MSK +3 · show users</td><td>версия, время</td></tr>
+<tr><td>10.x: show system information · show system id · clock utc-offset +3 — 6.x: show version · show system · clock timezone MSK +3 — show clock · clock set 10:20:30 5 Mar 2026 · show users</td><td>версия, время</td></tr>
 <tr><td>show interfaces description · show running-config interface gi1/0/1 · show lldp neighbors · traceroute A.B.C.D (6.x: traceroute ip A.B.C.D)</td><td>описания портов, конфиг порта, соседи, маршрут</td></tr>
 </table>
 <h2>Команды ESR (маршрутизатор)</h2>
@@ -5574,7 +5574,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
      выданные адреса записываются в базу соответствий (show ip dhcp snooping binding).
    ARP inspection — 10.x: ip arp inspection enable, ip arp inspection vlan N; 6.x: ip arp inspection, ip arp inspection vlan N, ip arp inspection trust.
      На недоверенном порту ARP пропускается, только если пара IP–MAC есть в базе DHCP snooping (статический адрес ПК — ARP отброшен).
-   Storm-control — storm-control broadcast level N, storm-control broadcast action shutdown (10.x), storm-control broadcast level N (6.x):
+   Storm-control — storm-control broadcast level pps|kbps N, storm-control broadcast action shutdown (10.x), storm-control broadcast level N (6.x):
      при широковещательном шторме (петля без STP) порт с действием shutdown выключается (err-disable) и петля разрывается.
    Упрощения: опция 82, verify mac-address, ip source guard, пороги pps/kbps не моделируются (шторм — либо есть, либо нет). */
 (function (G) {
@@ -5604,8 +5604,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
   mcmd(['6'], 'if range', 'no ip dhcp snooping trust', function (st) { return each(st, function (p) { delete p.trust; }); });
   mcmd(['6'], 'if range', 'ip arp inspection trust', function (st) { return each(st, function (p) { p.atrust = true; }); }, 'Доверенный порт ARP inspection');
   mcmd(['6'], 'if range', 'no ip arp inspection trust', function (st) { return each(st, function (p) { delete p.atrust; }); });
-  mcmd(['10', '6'], 'if range', 'storm-control broadcast level <n>', function (st, a) { return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[0]; }); }, 'Контроль широковещательного трафика');
-  mcmd(['10', '6'], 'if range', 'no storm-control broadcast level', function (st) { return each(st, function (p) { delete p.storm; }); });
+  mcmd(['6'], 'if range', 'storm-control broadcast level <n>', function (st, a) { return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[0]; delete p.storm.unit; }); }, 'Контроль широковещательного трафика');
+  mcmd(['6'], 'if range', 'no storm-control broadcast level', function (st) { return each(st, function (p) { delete p.storm; }); });
+  // 10.x: единица обязательна — pps 1..262142 или kbps 16..4194272
+  var SU = { pps: [1, 262142], kbps: [16, 4194272] };
+  mcmd(['10'], 'if range', 'storm-control broadcast level <w> <n>', function (st, a) { var u = a[0].toLowerCase(), r = SU[u];
+    if (!r) return '% Invalid input: storm-control broadcast level {pps | kbps} <value>'; if (a[1] < r[0] || a[1] > r[1]) return '% ' + u + ': ' + r[0] + '..' + r[1];
+    return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[1]; p.storm.unit = u; }); }, 'Порог широковещательного трафика: pps | kbps');
+  mcmd(['10'], 'if range', 'no storm-control broadcast level <w>', function (st) { return each(st, function (p) { if (p.storm) { delete p.storm.level; delete p.storm.unit; } }); });
   mcmd(['10'], 'if range', 'storm-control broadcast action <w>', function (st, a) { if (['shutdown', 'trap', 'trap-and-shutdown'].indexOf(a[0]) < 0) return '% Invalid input';
     return each(st, function (p) { p.storm = p.storm || {}; p.storm.act = a[0]; }); }, 'Действие при шторме');
   mcmd(['10'], 'if range', 'no storm-control broadcast action', function (st) { return each(st, function (p) { if (p.storm) delete p.storm.act; }); });
@@ -5626,7 +5632,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   E.PORTX.push(function (st, k, p, d) {
     if (p.trust) d.push(st.dialect === '6' ? ' ip dhcp snooping trust' : ' port-security-state trusted'); if (p.role) d.push(' set port-role ' + p.role);
     if (p.atrust) d.push(' ip arp inspection trust');
-    if (p.storm) { if (p.storm.level) d.push(' storm-control broadcast level ' + p.storm.level); if (p.storm.act) d.push(' storm-control broadcast action ' + p.storm.act); } });
+    if (p.storm) { if (p.storm.level) d.push(' storm-control broadcast level ' + (p.storm.unit ? p.storm.unit + ' ' : '') + p.storm.level); if (p.storm.act) d.push(' storm-control broadcast action ' + p.storm.act); } });
 
   // ---------------------------------------------------------------- поведение
   function trusted(st, p, kind) { var x = st.ports[p] || {}; return kind === 'arp' && st.dialect === '6' ? !!x.atrust : !!x.trust; }
@@ -6459,6 +6465,81 @@ vesr(config)#         do confirm  — подтвердить</pre>
         .concat(L.map(function (l) { return rp((st.stackBoot || {}).unit || 1, 9) + rp(l[1], 21) + rp(l[3].replace('1/0', (s.devs[l[2]].st.stackBoot || {}).unit + '/0'), 21) + '10G'; })).join('\n'); }, 'Стековые линки'); });
 })(typeof window !== 'undefined' ? window : global);
 
+/* Ветка 10.x (MES14xx/24xx/3400/37xx, ПО 10.4.6): сверка с прошивкой и руководством 10.4.6.
+   Общий движок коммутатора (_dk_cli.js) пишет часть команд синтаксисом ветки 6.x — в диалекте 10 их нет, вместо них:
+   write memory → write startup-config;  ip default-gateway → ip route 0.0.0.0 0.0.0.0 <next-hop>;  clock timezone → clock utc-offset;
+   show version / show system → show system information, show system id;  show arp → show ip arp;  clear arp-cache → clear ip arp;
+   show mac address-table → show mac-address-table;  clear mac address-table dynamic → clear mac-address-table dynamic;
+   show ports monitor → show monitor session {<id>|all} [detail];  vlan database → vlan 10,20 прямо в config;
+   terminal datadump, ip ssh server, ip http server, line: login-attempts / history size — в 10.x нет.
+   Storm-control 10.x (единица обязательна) — в l2sec.js. Модуль грузится после всех модулей MES, чтобы закрыть их команды. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, CMDS = E.CMDS, CFG = E.CFG;
+  function find(pat) { return CMDS.filter(function (c) { return c.pat.join(' ') === pat; }); }
+  function run(pat) { var c = find(pat).filter(function (x) { return !x.dl || x.dl.indexOf('10') >= 0; })[0]; return c ? c.run : function () { return ''; }; }
+  function cmd(modes, pat, fn, d) { var n = CMDS.length; E.cmd(modes, pat, fn); var c = CMDS.splice(n, 1)[0]; c.dl = ['10']; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function both(pat, fn, d) { cmd('priv', pat, fn, d); cmd(CFG, 'do ' + pat, fn); }
+
+  // старые обработчики — до закрытия, чтобы формы 10.x делали то же самое
+  var verRun = run('show version'), sysRun = run('show system'), arpRun = run('show arp'), arpClr = run('clear arp-cache'),
+      macRun = run('show mac address-table'), macAge = run('show mac address-table aging-time'), macClr = run('clear mac address-table dynamic'), monRun = run('show monitor session <n>');
+
+  // ---------------------------------------------------------------- закрыть в диалекте 10
+  var CLOSED = ['write memory', 'ip default-gateway <ip>', 'no ip default-gateway', 'clock timezone <w> <w>', 'no clock timezone',
+    'terminal datadump', 'terminal no datadump', 'vlan database', 'ip ssh server', 'no ip ssh server', 'ip http server', 'no ip http server',
+    'login-attempts <n>', 'history size <n>'];
+  ['show version', 'show system', 'show arp', 'clear arp-cache', 'show mac address-table', 'show mac address-table aging-time',
+    'clear mac address-table dynamic', 'show ports monitor'].forEach(function (p) { CLOSED.push(p, 'do ' + p); });
+  CLOSED.forEach(function (p) { find(p).forEach(function (c) { if (!c.dl || c.dl.indexOf('10') >= 0) c.xdl = (c.xdl || []).concat('10'); }); });
+  EL.mes10 = { closed: CLOSED };
+
+  // ---------------------------------------------------------------- варианты 10.x
+  cmd('priv', 'write startup-config', function (st) { return EL.mes.save(st); }, 'Сохранить конфигурацию');
+  cmd('config', 'clock utc-offset <w>', function (st, a) { var h = +a[0];
+    if (!/^[+-]?\d{1,2}$/.test(a[0]) || h < -12 || h > 14) return '% Смещение от UTC: -12..+14';
+    delete st.tzn; st.tzo = h; }, 'Смещение от UTC (часовой пояс)');
+  cmd('config', 'no clock utc-offset', function (st) { delete st.tzn; delete st.tzo; });
+  both('show system information', function (st) { return sysRun(st); }, 'Сведения о системе и ПО');
+  both('show system id', function (st) { var b = String(st.bmac || '').replace(/:/g, '').toUpperCase();
+    return 'Unit    Serial number\n----    -------------\n1       ES' + (b.slice(-8) || '00000000'); }, 'Серийный номер');
+  both('show ip arp', function (st) { return arpRun(st); }, 'ARP-таблица');
+  both('show ip arp <rest>', function (st) { return arpRun(st); });
+  both('clear ip arp', function (st) { return arpClr(st); }, 'Очистить ARP-таблицу');
+  both('show mac-address-table', function (st) { return macRun(st); }, 'Таблица MAC-адресов');
+  // параметры show mac-address-table по руководству 10.4.6; «show mac address-table» (6.x) сюда не попадает
+  var MACW = ['aging-time', 'vlan', 'interface', 'address', 'static', 'dynamic', 'count', 'multicast'];
+  both('show mac-address-table <rest>', function (st, a) { var w = String(a[0]).split(/\s+/)[0].toLowerCase();
+    if (MACW.indexOf(w) < 0) return '% Invalid input detected'; return w === 'aging-time' ? macAge(st) : macRun(st); });
+  both('clear mac-address-table dynamic', function (st) { return macClr(st); }, 'Очистить динамические MAC-записи');
+  both('clear mac-address-table dynamic <rest>', function (st) { return macClr(st); });
+  both('show monitor session all', function (st) { var m = st.mon || {}, k = Object.keys(m);
+    return k.length ? k.map(function (n) { return monRun(st, [+n]); }).join('\n\n') : '% Сессии зеркалирования не настроены'; }, 'Все сессии зеркалирования');
+  both('show monitor session <n> detail', function (st, a) { return monRun(st, [a[0]]); });
+  both('show monitor session all detail', function (st) { var m = st.mon || {};
+    return Object.keys(m).map(function (n) { return monRun(st, [+n]); }).join('\n\n') || '% Сессии зеркалирования не настроены'; });
+
+  // ---------------------------------------------------------------- running-config 10.x
+  // общий движок пишет блок «vlan database» и строки ветки 6.x — в 10.x VLAN задаются из config, шлюз — маршрутом
+  E.RUNX.push(function (st, o) {
+    if (st.dialect && st.dialect !== '10') return;
+    var out = [], inDb = false;
+    o.forEach(function (l) {
+      if (l === 'vlan database') { inDb = true; return; }
+      if (inDb) { if (l === 'exit') { inDb = false; return; }
+        var m = l.match(/^ vlan (\d+) name (.+)$/); if (m) { out.push('vlan ' + m[1], ' name ' + m[2], 'exit'); return; }
+        out.push(l.replace(/^ /, ''), 'exit'); return; }
+      var g = l.match(/^ip default-gateway (\S+)$/); if (g) { out.push('ip route 0.0.0.0 0.0.0.0 ' + g[1]); return; }
+      if (l === 'ip ssh server' || l === 'no ip http server' || /^ (login-attempts|history size) /.test(l)) return;
+      out.push(l);
+    });
+    // статические маршруты коммутатора (ip route NET MASK NH) — в running-config, чтобы конфигурация восстанавливалась целиком
+    (st.routes || []).forEach(function (r) { var c = EL.ip.parseCidr(r.net); if (c) out.push('ip route ' + c.ip + ' ' + EL.ip.len2mask(c.len) + ' ' + r.nh); });
+    if (st.tzo !== undefined && !st.tzn) out.push('clock utc-offset ' + (st.tzo >= 0 ? '+' : '') + st.tzo);
+    o.length = 0; out.forEach(function (l) { o.push(l); });
+  });
+})(typeof window !== 'undefined' ? window : global);
+
 /* Симуляция во времени (как в OMNeT++): дискретные события поверх логики сети.
    Путь пакета берётся из модели (тот же ping/запрос: ARP, VLAN, маршруты, NAT, межсетевой экран), а время считается по каждому кабелю:
    — передача (сериализация) = размер кадра × 8 / скорость линка (из согласования speed/duplex, Мбит/с);
@@ -6573,7 +6654,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
       build: function (net) { net.add('MES2428', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
-        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan database → vlan ' + v.join(',') + ')', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
+        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
         { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'gi1/0/4–6 → access VLAN ' + v[2], ok: function (n) { return acc(n, 'SW1', [4, 5, 6], v[2]); } },
@@ -6581,7 +6662,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
         { t: 'gi1/0/3 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 3); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
         { t: 'Сохраните конфигурацию (write)', ok: function (n) { return !!dev(n, 'SW1').startup; } }]; },
-      sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v.join(','), 'exit', 'do show vlan',
+      sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan ' + v.join(','), 'exit', 'do show vlan',
         'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
         'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
         'interface range gigabitethernet 1/0/4-6', 'switchport mode access', 'switchport access vlan ' + v[2], 'exit',
@@ -6635,7 +6716,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         { t: 'ping VPC1 → VPC2 (внутри VLAN)', ok: function (n) { return n.reach('VPC1', A + '.3'); } },
         { t: 'ping VPC1 → VPC3 и VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC4', A + '.3'); } }]; },
       sol: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return {
-        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
               'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
               'interface vlan ' + v[0], 'ip address ' + A + '.1 255.255.255.0', 'exit', 'interface vlan ' + v[1], 'ip address ' + B + '.1 255.255.255.0', 'end', 'write'],
@@ -6659,7 +6740,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
             return dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC4').ip === B + '.3' && dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
         { t: 'ping VPC1 → VPC3 и VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC2', B + '.3'); } }]; },
       sol: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return {
-        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
               'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
               'interface gigabitethernet 1/0/6', 'switchport mode trunk', 'switchport trunk allowed vlan add ' + v[0] + ',' + v[1], 'end', 'write'],
@@ -6678,7 +6759,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         [['VPC1', s1, 120, 480, 1], ['VPC2', s1, 300, 520, 11], ['VPC3', s2, 620, 520, 1], ['VPC4', s2, 820, 480, 11]].forEach(function (x) {
           var d = net.add('VPC', x[0], x[2], x[3]); net.connect(d.id, 'eth0', x[1].id, 'gi1/0/' + x[4]); });
         var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v, f = p.fault;
-        var sw = function (acc2, trunks, extra) { return ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        var sw = function (acc2, trunks, extra) { return ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
           'interface gigabitethernet 1/0/1', 'switchport mode access', 'switchport access vlan ' + acc2[0], 'exit',
           'interface gigabitethernet 1/0/11', 'switchport mode access', 'switchport access vlan ' + acc2[1], 'exit']
           .concat(trunks.reduce(function (o, t) { return o.concat(['interface gigabitethernet 1/0/' + t[0], 'switchport mode trunk', 'switchport trunk allowed vlan add ' + t[1], 'exit']); }, []))
@@ -8224,7 +8305,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
-    lab = null; resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';
+    lab = null; resetNet(); var d = net.add('MES3300-24', 'SW1', 500, 300);   // тренажёры дек написаны синтаксисом ветки 6.x d.st.mode = 'priv'; d.st.host = 'switch';
     task = EL.labs.randomTask(kind); task.kind = kind; task.dev = d.id; if (task.T.setup) task.T.setup(task.P, d.st);
     task.html = task.T.text(task.P); task.res = ''; task.sol = false; term(d.id).auth = true; draw(); fit(); renderTask(true); openTerm(d.id);
   }

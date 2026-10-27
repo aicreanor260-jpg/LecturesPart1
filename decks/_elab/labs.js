@@ -27,7 +27,7 @@
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
       build: function (net) { net.add('MES2428', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
-        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan database → vlan ' + v.join(',') + ')', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
+        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
         { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'gi1/0/4–6 → access VLAN ' + v[2], ok: function (n) { return acc(n, 'SW1', [4, 5, 6], v[2]); } },
@@ -35,7 +35,7 @@
         { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
         { t: 'gi1/0/3 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 3); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
         { t: 'Сохраните конфигурацию (write)', ok: function (n) { return !!dev(n, 'SW1').startup; } }]; },
-      sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v.join(','), 'exit', 'do show vlan',
+      sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan ' + v.join(','), 'exit', 'do show vlan',
         'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
         'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
         'interface range gigabitethernet 1/0/4-6', 'switchport mode access', 'switchport access vlan ' + v[2], 'exit',
@@ -89,7 +89,7 @@
         { t: 'ping VPC1 → VPC2 (внутри VLAN)', ok: function (n) { return n.reach('VPC1', A + '.3'); } },
         { t: 'ping VPC1 → VPC3 и VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC4', A + '.3'); } }]; },
       sol: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return {
-        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
               'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
               'interface vlan ' + v[0], 'ip address ' + A + '.1 255.255.255.0', 'exit', 'interface vlan ' + v[1], 'ip address ' + B + '.1 255.255.255.0', 'end', 'write'],
@@ -113,7 +113,7 @@
             return dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC4').ip === B + '.3' && dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
         { t: 'ping VPC1 → VPC3 и VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC2', B + '.3'); } }]; },
       sol: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return {
-        SW1: ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
               'interface range gigabitethernet 1/0/11-12', 'switchport mode access', 'switchport access vlan ' + v[1], 'exit',
               'interface gigabitethernet 1/0/6', 'switchport mode trunk', 'switchport trunk allowed vlan add ' + v[0] + ',' + v[1], 'end', 'write'],
@@ -132,7 +132,7 @@
         [['VPC1', s1, 120, 480, 1], ['VPC2', s1, 300, 520, 11], ['VPC3', s2, 620, 520, 1], ['VPC4', s2, 820, 480, 11]].forEach(function (x) {
           var d = net.add('VPC', x[0], x[2], x[3]); net.connect(d.id, 'eth0', x[1].id, 'gi1/0/' + x[4]); });
         var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v, f = p.fault;
-        var sw = function (acc2, trunks, extra) { return ['enable', 'configure', 'vlan database', 'vlan ' + v[0] + ',' + v[1], 'exit',
+        var sw = function (acc2, trunks, extra) { return ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
           'interface gigabitethernet 1/0/1', 'switchport mode access', 'switchport access vlan ' + acc2[0], 'exit',
           'interface gigabitethernet 1/0/11', 'switchport mode access', 'switchport access vlan ' + acc2[1], 'exit']
           .concat(trunks.reduce(function (o, t) { return o.concat(['interface gigabitethernet 1/0/' + t[0], 'switchport mode trunk', 'switchport trunk allowed vlan add ' + t[1], 'exit']); }, []))

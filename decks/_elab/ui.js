@@ -659,7 +659,7 @@
   function labClick(e) { var b = e.target.closest('[data-a]'); if (!b) return; var a = b.dataset.a; if (a === 'doc') { openDoc(lab.id); return; }
     if (a === 'new') startLab(lab.id); if (a === 'sol') { labShow = labShow === true ? false : true; renderLab(); } if (a === 'hint') { labShow = 'hint'; renderLab(); } }
   function startTask(kind) {
-    lab = null; resetNet(); var d = net.add('MES2428', 'SW1', 500, 300); d.st.mode = 'priv'; d.st.host = 'switch';
+    lab = null; resetNet(); var d = net.add('MES3300-24', 'SW1', 500, 300);   // тренажёры дек написаны синтаксисом ветки 6.x d.st.mode = 'priv'; d.st.host = 'switch';
     task = EL.labs.randomTask(kind); task.kind = kind; task.dev = d.id; if (task.T.setup) task.T.setup(task.P, d.st);
     task.html = task.T.text(task.P); task.res = ''; task.sol = false; term(d.id).auth = true; draw(); fit(); renderTask(true); openTerm(d.id);
   }

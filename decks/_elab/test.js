@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -36,7 +36,7 @@ EL.labs.LABS.forEach(runLab);
   EL.E.TASKS[kind].forEach(function (T, k) {
     for (var i = 0; i < N; i++) {
       total++;
-      var net = new EL.Net(), d = net.add('MES2428', 'SW1'), P = T.gen();
+      var net = new EL.Net(), d = net.add('MES3300-24', 'SW1'), P = T.gen();
       d.st.mode = 'priv'; if (T.setup) T.setup(P, d.st);
       T.text(P);
       var errs = [];
@@ -121,7 +121,7 @@ EL.labs.LABS.forEach(runLab);
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), s = n.add('MES2428', 'SW1'), v = ['VPC1', 'VPC2', 'VPC3'].map(function (x) { return n.add('VPC', x); });
   v.forEach(function (d, i) { n.connect(d.id, 'eth0', s.id, 'gi1/0/' + (i + 1)); });
-  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 10,20', 'exit', 'interface range gi1/0/1-2', 'switchport access vlan 10', 'exit',
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan 10,20', 'exit', 'interface range gi1/0/1-2', 'switchport access vlan 10', 'exit',
                            'interface gi1/0/3', 'switchport access vlan 20', 'end'],
                      VPC1: ['ip 10.0.0.1/24'], VPC2: ['ip 10.0.0.2/24'], VPC3: ['ip 10.0.0.3/24'] });
   var m1 = EL.mac('VPC1eth0'), m2 = EL.mac('VPC2eth0'), m3 = EL.mac('VPC3eth0');
@@ -144,7 +144,7 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { SW1: ['configure', 'interface gi1/0/2', 'switchport access vlan 20', 'end'] });
   var r4 = n.ping(v[0].id, '10.0.0.2'), r5 = n.ping(v[0].id, '10.0.0.2');
   chk('таблицы: устаревшая ARP-запись после смены VLAN', !r4.ok && !n.arp[v[0].id]['10.0.0.2'] && !r5.ok && r5.why === 'Host unreachable');
-  chk('таблицы: show mac address-table / show arp', /Learnt/.test(n.exec(s.id, 'show mac address-table')) && /10\.0\.0\.1/.test(n.exec(v[1].id, 'arp')));
+  chk('таблицы: show mac-address-table / arp', /Learnt/.test(n.exec(s.id, 'show mac-address-table')) && /10\.0\.0\.1/.test(n.exec(v[1].id, 'arp')));
   console.log('✓ таблицы ARP и MAC');
 })();
 
@@ -191,7 +191,7 @@ EL.labs.LABS.forEach(runLab);
   var o = x(n, s, ['en', 'conf t', 'int gi 1/0/1', 'desc UPLINK', 'sw mode trunk', 'end', 'sh ru', 'sh int desc', 'sh run int gi1/0/1']);
   chk('CLI: int gi 1/0/1, sw mode trunk, sh ru', s.st.ports['gi1/0/1'].mode === 'trunk' && /switchport mode trunk/.test(o[6]) && /description UPLINK/.test(o[6]), o[6]);
   chk('CLI: sh int desc / sh run int', /UPLINK/.test(o[7]) && /^interface gigabitethernet1\/0\/1/.test(o[8]) && /description UPLINK/.test(o[8]), o[8]);
-  chk('CLI: sh ver / sh clock', /10\.4\.6/.test(n.exec(s.id, 'sh ver')) && /UTC/.test(n.exec(s.id, 'sh clock')));
+  chk('CLI: sh system information / sh clock', /10\.4\.6/.test(n.exec(s.id, 'sh system information')) && /UTC/.test(n.exec(s.id, 'sh clock')));
   x(n, s, ['clock set 10:20:30 5 Mar 2026']);
   chk('CLI: clock set', /^10:20:3\d UTC Thu Mar 5 2026/.test(n.exec(s.id, 'show clock')), n.exec(s.id, 'show clock'));
   // port security 10.x: на порту разрешён один MAC — второй ПК через хаб не проходит
@@ -220,7 +220,7 @@ EL.labs.LABS.forEach(runLab);
   chk('BPDU guard выключает порт', g1.st.ports['gi1/0/5'].shut && g1.st.ports['gi1/0/5'].errdis === 'bpduguard' && /bpduguard enable/.test(g.exec(g1.id, 'show running-config')));
   // статическая MAC-запись
   var m = new EL.Net(), sm = m.add('MES2428', 'M');
-  var e = x(m, sm, ['en', 'conf', 'mac-address-table static unicast 00:11:22:33:44:55 vlan 1 interface gi 1/0/7 status permanent', 'end', 'show mac address-table']);
+  var e = x(m, sm, ['en', 'conf', 'mac-address-table static unicast 00:11:22:33:44:55 vlan 1 interface gi 1/0/7 status permanent', 'end', 'show mac-address-table']);
   chk('статический MAC (10.x)', /00:11:22:33:44:55\s+Static\s+gi1\/0\/7/.test(e[4]) && isFinite(m.ttl(sm.id, 'm', m.macRows(sm.id)[0])) === false, e[2] + e[4]);
   console.log('✓ расширенный CLI MES');
 })();
@@ -444,8 +444,8 @@ EL.labs.LABS.forEach(runLab);
   chk('ESR: «|» в кавычках — не фильтр', !n.exec(r.id, 'configure') && !n.exec(r.id, 'interface gi1/0/2') && !n.exec(r.id, 'description "a|b"') && (n.exec(r.id, 'end'), true));
   // постраничный вывод
   chk('страница 24 строки, строки More по руководствам', n.pageLen(sw.id) === 24 && /More: <space>/.test(n.moreText(sw.id)) && /More\? Enter/.test(n.moreText(r.id)));
-  n.exec(sw.id, 'terminal datadump'); chk('MES terminal datadump', n.pageLen(sw.id) === 0);
-  n.exec(sw.id, 'terminal no datadump'); n.exec(r.id, 'terminal datadump'); chk('ESR terminal datadump', n.pageLen(sw.id) === 24 && n.pageLen(r.id) === 0);
+  chk('MES 10.x: terminal datadump нет (команда ветки 6.x)', /^%/.test(n.exec(sw.id, 'terminal datadump')) && n.pageLen(sw.id) === 24);
+  n.exec(r.id, 'terminal datadump'); chk('ESR terminal datadump', n.pageLen(sw.id) === 24 && n.pageLen(r.id) === 0);
   n.exec(sw.id, 'show running-config | no-more'); chk('| no-more — без страниц', n.pageLen(sw.id) === 0);
   // события: shutdown, logging console
   n.events(true);
@@ -469,7 +469,7 @@ EL.labs.LABS.forEach(runLab);
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), pc = n.add('VPC', 'PC1');
   n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', pc.id, 'eth0');
-  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'exit',
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'exit',
                            'interface gi1/0/2', 'switchport access vlan 10', 'end'],
                      R1: ['configure', 'interface gi1/0/1.10', 'ip address 192.168.10.1/24', 'ip firewall disable', 'end', 'commit', 'confirm'],
                      PC1: ['ip 192.168.10.10/24 192.168.10.1'] });
@@ -776,7 +776,7 @@ EL.labs.LABS.forEach(runLab);
   // storm-control: петля без STP — шторм; action shutdown разрывает петлю
   var k = new EL.Net(), a = k.add('MES2428', 'A'), b = k.add('MES2428', 'B'), pa = k.add('VPC', 'PA'), pb = k.add('VPC', 'PB');
   k.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); k.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2'); k.connect(pa.id, 'eth0', a.id, 'gi1/0/10'); k.connect(pb.id, 'eth0', b.id, 'gi1/0/10');
-  EL.labs.apply(k, { A: ['enable', 'configure', 'no spanning-tree', 'end'], B: ['enable', 'configure', 'no spanning-tree', 'interface gi1/0/2', 'storm-control broadcast level 1000', 'storm-control broadcast action shutdown', 'end'],
+  EL.labs.apply(k, { A: ['enable', 'configure', 'no spanning-tree', 'end'], B: ['enable', 'configure', 'no spanning-tree', 'interface gi1/0/2', 'storm-control broadcast level pps 1000', 'storm-control broadcast action shutdown', 'end'],
                      PA: ['ip 10.0.0.1/24'], PB: ['ip 10.0.0.2/24'] });
   var s1 = k.ping(pa.id, '10.0.0.2');
   chk('storm-control: шторм выключил порт B gi1/0/2', !s1.ok && s1.steps.some(function (s) { return /Storm-control/.test(s.t); }) && b.st.ports['gi1/0/2'].shut, s1.steps.map(function (s) { return s.t; }).join(' | '));
@@ -789,7 +789,7 @@ EL.labs.LABS.forEach(runLab);
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), ca = n.add('MES2428', 'CA'), cb = n.add('MES2428', 'CB'), pa = n.add('MES3300-24', 'PA'), pb = n.add('MES3300-24', 'PB'), va = n.add('VPC', 'VA'), vb = n.add('VPC', 'VB');
   n.connect(va.id, 'eth0', ca.id, 'gi1/0/1'); n.connect(vb.id, 'eth0', cb.id, 'gi1/0/1'); n.connect(ca.id, 'gi1/0/24', pa.id, 'gi1/0/1'); n.connect(cb.id, 'gi1/0/24', pb.id, 'gi1/0/1'); n.connect(pa.id, 'gi1/0/24', pb.id, 'gi1/0/24');
-  var cust = ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'end'];
+  var cust = ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'end'];
   var prov = function (sv) { return ['enable', 'configure', 'vlan database', 'vlan 100', 'exit', 'interface gi1/0/1', 'switchport mode customer', 'switchport customer vlan ' + sv, 'exit',
     'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 100', 'end']; };
   var e = EL.labs.apply(n, { CA: cust, CB: cust, PA: prov(100), PB: prov(100), VA: ['ip 10.0.10.1/24'], VB: ['ip 10.0.10.2/24'] });
@@ -811,7 +811,7 @@ EL.labs.LABS.forEach(runLab);
   var n = new EL.Net(), a = n.add('MES2428', 'SW1'), b = n.add('MES2428', 'SW2'), p1 = n.add('VPC', 'P10a'), p2 = n.add('VPC', 'P10b'), p3 = n.add('VPC', 'P20a'), p4 = n.add('VPC', 'P20b');
   n.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); n.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2');
   n.connect(p1.id, 'eth0', a.id, 'gi1/0/10'); n.connect(p2.id, 'eth0', b.id, 'gi1/0/10'); n.connect(p3.id, 'eth0', a.id, 'gi1/0/20'); n.connect(p4.id, 'eth0', b.id, 'gi1/0/20');
-  var sw = function (extra) { return ['enable', 'configure', 'vlan database', 'vlan 10,20', 'exit', 'spanning-tree mode mst', 'interface range gi1/0/1-2', 'switchport mode trunk', 'switchport trunk allowed vlan add 10,20', 'exit',
+  var sw = function (extra) { return ['enable', 'configure', 'vlan 10,20', 'exit', 'spanning-tree mode mst', 'interface range gi1/0/1-2', 'switchport mode trunk', 'switchport trunk allowed vlan add 10,20', 'exit',
     'interface gi1/0/10', 'switchport access vlan 10', 'exit', 'interface gi1/0/20', 'switchport access vlan 20', 'exit',
     'spanning-tree mst configuration', 'instance 1 vlan 10', 'instance 2 vlan 20', 'name LAB', 'revision 1', 'exit'].concat(extra || [], ['end']); };
   var e = EL.labs.apply(n, { SW1: sw(['spanning-tree mst 1 priority 4096', 'spanning-tree mst 2 priority 4096']), SW2: sw(['interface gi1/0/1', 'spanning-tree mst 2 cost 200000', 'exit']),
@@ -1057,7 +1057,7 @@ EL.labs.LABS.forEach(runLab);
   chk('до перезагрузки стека нет', /Stack is not formed/.test(n.exec(a.id, 'show stack')));
   n.reboot(a.id); n.reboot(b.id); a.st.mode = 'priv'; b.st.mode = 'priv';
   chk('после перезагрузки: U1 master, U2 slave', /1\s+\S+\s+master\s+MES3400-24\n2\s+\S+\s+slave/.test(n.exec(b.id, 'show stack')), n.exec(b.id, 'show stack'));
-  EL.labs.apply(n, { U1: ['configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'end'] });
+  EL.labs.apply(n, { U1: ['configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'end'] });
   n.stackSync();
   chk('база VLAN общая: VLAN 10 появилась на U2', !!b.st.vlans[10]);
   EL.labs.apply(n, { U2: ['configure', 'interface gi1/0/1', 'switchport access vlan 10', 'end'] });
@@ -1150,6 +1150,39 @@ EL.labs.LABS.forEach(runLab);
   var s7 = n.simulate([{ kind: 'ping', src: pc.id, dst: '10.9.9.9', count: 2 }]);
   chk('сим: нет пути — все потеряны, причина из трассы', s7.flows[0].recv === 0 && s7.flows[0].blocked && !!s7.flows[0].why);
   console.log('✓ симуляция во времени');
+})();
+
+// MES 10.x (ПО 10.4.6): команды ветки 6.x закрыты, у каждой — форма 10.x
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s = n.add('MES2428', 'SW1'), o = n.add('MES3300-24', 'SW6'), pc = n.add('VPC', 'PC1');
+  n.connect(pc.id, 'eth0', s.id, 'gi1/0/1');
+  s.st.mode = 'priv'; o.st.mode = 'priv';
+  var old = ['write memory', 'show version', 'show system', 'show arp', 'clear arp-cache', 'show mac address-table', 'clear mac address-table dynamic', 'show ports monitor', 'terminal datadump'];
+  var bad = old.filter(function (c) { return !/^%/.test(n.exec(s.id, c)); });
+  chk('10.x: команды ветки 6.x в привилегированном режиме — % Unrecognized', !bad.length, bad.join(', '));
+  n.exec(s.id, 'configure');
+  var badc = ['vlan database', 'ip default-gateway 10.0.0.1', 'clock timezone MSK +3', 'ip ssh server', 'ip http server'].filter(function (c) { var r = n.exec(s.id, c); if (s.st.mode !== 'config') n.exec(s.id, 'exit'); return !/^%/.test(r); });
+  chk('10.x: команды ветки 6.x в config — % Unrecognized', !badc.length, badc.join(', '));
+  n.exec(s.id, 'line console'); chk('10.x: login-attempts и history size в line — нет', /^%/.test(n.exec(s.id, 'login-attempts 3')) && /^%/.test(n.exec(s.id, 'history size 20'))); n.exec(s.id, 'exit');
+  n.exec(o.id, 'configure');
+  chk('6.x: vlan database, ip default-gateway, clock timezone остаются', !/^%/.test(n.exec(o.id, 'ip default-gateway 10.0.0.1')) && !/^%/.test(n.exec(o.id, 'clock timezone MSK +3')) && !/^%/.test(n.exec(o.id, 'vlan database')));
+  var e = EL.labs.apply(n, { SW1: ['vlan 10,20', 'exit', 'vlan 30', 'name IT', 'exit', 'interface vlan 10', 'ip address 10.0.0.2 255.255.255.0', 'exit',
+    'ip route 0.0.0.0 0.0.0.0 10.0.0.1', 'clock utc-offset +7', 'interface gi1/0/1', 'switchport access vlan 10', 'storm-control broadcast level pps 500', 'exit', 'end', 'write startup-config'] });
+  chk('10.x: vlan в config, ip route 0.0.0.0, clock utc-offset, storm-control pps, write startup-config', !e.length, e.join('; '));
+  var run = n.exec(s.id, 'show running-config');
+  chk('10.x running-config: без vlan database, VLAN из config, utc-offset, маршрут по умолчанию', !/vlan database/.test(run) && /^vlan 10,20,30\nexit$/m.test(run) && /^vlan 30\n name IT\nexit/m.test(run) &&
+    /clock utc-offset \+7/.test(run) && /ip route 0\.0\.0\.0 0\.0\.0\.0 10\.0\.0\.1/.test(run) && /storm-control broadcast level pps 500/.test(run) && !/ip http server|ip default-gateway/.test(run), run);
+  chk('10.x: storm-control без единицы и вне диапазона — ошибка', /^%/.test(n.exec(s.id, 'configure') || n.exec(s.id, 'interface gi1/0/2') || n.exec(s.id, 'storm-control broadcast level 500')) &&
+    /^%/.test(n.exec(s.id, 'storm-control broadcast level kbps 8')) && (n.exec(s.id, 'end'), true));
+  chk('10.x: show system information / show system id', /10\.4\.6/.test(n.exec(s.id, 'show system information')) && /Serial number/.test(n.exec(s.id, 'show system id')));
+  chk('10.x: show ip arp, clear ip arp, show mac-address-table, clear mac-address-table dynamic', !/^%/.test(n.exec(s.id, 'show ip arp')) && !/^%/.test(n.exec(s.id, 'clear ip arp')) &&
+    /Learnt|Vlan/i.test(n.exec(s.id, 'show mac-address-table')) && !/^%/.test(n.exec(s.id, 'clear mac-address-table dynamic')) && !/^%/.test(n.exec(s.id, 'show mac-address-table aging-time')));
+  EL.labs.apply(n, { SW1: ['configure', 'monitor session 1 destination interface gi1/0/5', 'monitor session 1 source interface gi1/0/1 both', 'end'] });
+  chk('10.x: show monitor session all / 1 detail', /Destination port: gi1\/0\/5/.test(n.exec(s.id, 'show monitor session all')) && /gi1\/0\/1\s+both/.test(n.exec(s.id, 'show monitor session 1 detail')));
+  var c2 = EL.applyConfig(n, s.id, run);
+  chk('10.x: running-config применяется обратно без ошибок', !c2.length, c2.join('; '));
+  console.log('✓ MES 10.x по ПО 10.4.6');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

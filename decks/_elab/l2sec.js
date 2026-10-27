@@ -4,7 +4,7 @@
      выданные адреса записываются в базу соответствий (show ip dhcp snooping binding).
    ARP inspection — 10.x: ip arp inspection enable, ip arp inspection vlan N; 6.x: ip arp inspection, ip arp inspection vlan N, ip arp inspection trust.
      На недоверенном порту ARP пропускается, только если пара IP–MAC есть в базе DHCP snooping (статический адрес ПК — ARP отброшен).
-   Storm-control — storm-control broadcast level N, storm-control broadcast action shutdown (10.x), storm-control broadcast level N (6.x):
+   Storm-control — storm-control broadcast level pps|kbps N, storm-control broadcast action shutdown (10.x), storm-control broadcast level N (6.x):
      при широковещательном шторме (петля без STP) порт с действием shutdown выключается (err-disable) и петля разрывается.
    Упрощения: опция 82, verify mac-address, ip source guard, пороги pps/kbps не моделируются (шторм — либо есть, либо нет). */
 (function (G) {
@@ -34,8 +34,14 @@
   mcmd(['6'], 'if range', 'no ip dhcp snooping trust', function (st) { return each(st, function (p) { delete p.trust; }); });
   mcmd(['6'], 'if range', 'ip arp inspection trust', function (st) { return each(st, function (p) { p.atrust = true; }); }, 'Доверенный порт ARP inspection');
   mcmd(['6'], 'if range', 'no ip arp inspection trust', function (st) { return each(st, function (p) { delete p.atrust; }); });
-  mcmd(['10', '6'], 'if range', 'storm-control broadcast level <n>', function (st, a) { return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[0]; }); }, 'Контроль широковещательного трафика');
-  mcmd(['10', '6'], 'if range', 'no storm-control broadcast level', function (st) { return each(st, function (p) { delete p.storm; }); });
+  mcmd(['6'], 'if range', 'storm-control broadcast level <n>', function (st, a) { return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[0]; delete p.storm.unit; }); }, 'Контроль широковещательного трафика');
+  mcmd(['6'], 'if range', 'no storm-control broadcast level', function (st) { return each(st, function (p) { delete p.storm; }); });
+  // 10.x: единица обязательна — pps 1..262142 или kbps 16..4194272
+  var SU = { pps: [1, 262142], kbps: [16, 4194272] };
+  mcmd(['10'], 'if range', 'storm-control broadcast level <w> <n>', function (st, a) { var u = a[0].toLowerCase(), r = SU[u];
+    if (!r) return '% Invalid input: storm-control broadcast level {pps | kbps} <value>'; if (a[1] < r[0] || a[1] > r[1]) return '% ' + u + ': ' + r[0] + '..' + r[1];
+    return each(st, function (p) { p.storm = p.storm || {}; p.storm.level = a[1]; p.storm.unit = u; }); }, 'Порог широковещательного трафика: pps | kbps');
+  mcmd(['10'], 'if range', 'no storm-control broadcast level <w>', function (st) { return each(st, function (p) { if (p.storm) { delete p.storm.level; delete p.storm.unit; } }); });
   mcmd(['10'], 'if range', 'storm-control broadcast action <w>', function (st, a) { if (['shutdown', 'trap', 'trap-and-shutdown'].indexOf(a[0]) < 0) return '% Invalid input';
     return each(st, function (p) { p.storm = p.storm || {}; p.storm.act = a[0]; }); }, 'Действие при шторме');
   mcmd(['10'], 'if range', 'no storm-control broadcast action', function (st) { return each(st, function (p) { if (p.storm) delete p.storm.act; }); });
@@ -56,7 +62,7 @@
   E.PORTX.push(function (st, k, p, d) {
     if (p.trust) d.push(st.dialect === '6' ? ' ip dhcp snooping trust' : ' port-security-state trusted'); if (p.role) d.push(' set port-role ' + p.role);
     if (p.atrust) d.push(' ip arp inspection trust');
-    if (p.storm) { if (p.storm.level) d.push(' storm-control broadcast level ' + p.storm.level); if (p.storm.act) d.push(' storm-control broadcast action ' + p.storm.act); } });
+    if (p.storm) { if (p.storm.level) d.push(' storm-control broadcast level ' + (p.storm.unit ? p.storm.unit + ' ' : '') + p.storm.level); if (p.storm.act) d.push(' storm-control broadcast action ' + p.storm.act); } });
 
   // ---------------------------------------------------------------- поведение
   function trusted(st, p, kind) { var x = st.ports[p] || {}; return kind === 'arp' && st.dialect === '6' ? !!x.atrust : !!x.trust; }
