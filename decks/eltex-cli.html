@@ -9032,7 +9032,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function banner(d) {
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
     if (d.type === 'vpc') return 'Welcome to Virtual PC Simulator, version 0.8.3' + (mode === 'test' ? ' · введите ? для справки' : '');
-    if (d.type === 'esr') return 'Eltex ' + d.model + ' · software version 1.24.2\n';
+    if (d.type === 'esr') return d.sub ? 'Eltex ' + d.model + '\n' : 'Eltex ' + d.model + ' · software version 1.24.2\n';   // SCS, WLC, ME — без версии ESR
     return d.model + '\n';
   }
   function openTerm(id) {
