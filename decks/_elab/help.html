@@ -146,6 +146,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>Новый кабель → Кабель / модуль</td><td>медь, SFP 1G, SFP+ 10G; оптика в медный порт — нет линка</td></tr>
 </table>
 
+<h2>Защита L2 на MES</h2>
+<table>
+<tr><td>ip dhcp snooping · ip dhcp snooping vlan N · порт: port-security-state trusted (6.x: ip dhcp snooping trust)</td><td>чужой DHCP-сервер не раздаёт адреса; show ip dhcp snooping binding</td></tr>
+<tr><td>ip arp inspection enable (6.x: ip arp inspection) · ip arp inspection vlan N</td><td>ARP только от пар IP–MAC из базы snooping</td></tr>
+<tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -735,6 +735,43 @@ EL.labs.LABS.forEach(runLab);
   var j = n.toJSON(), m = EL.Net.fromJSON(j);
   chk('тип кабеля сохраняется в файле схемы', m.links.some(function (l) { return l.cab === 'sfp10g'; }));
   console.log('✓ физика: кабели, speed/duplex');
+})();
+
+// защита L2 MES: DHCP snooping (чужой сервер), ARP inspection, storm-control
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), rogue = n.add('vESR', 'ROGUE'), pc = n.add('VPC', 'PC1'), pc2 = n.add('VPC', 'PC2');
+  n.connect(sw.id, 'gi1/0/24', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/5', rogue.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/1', pc.id, 'eth0'); n.connect(sw.id, 'gi1/0/2', pc2.id, 'eth0');
+  var dh = function (net) { return ['configure', 'interface gi1/0/1', 'ip address ' + net + '.1/24', 'ip firewall disable', 'exit', 'ip dhcp-server pool P', 'network ' + net + '.0/24',
+    'address-range ' + net + '.100-' + net + '.150', 'default-router ' + net + '.1', 'exit', 'ip dhcp-server', 'end', 'commit', 'confirm']; };
+  var e1 = EL.labs.apply(n, { R1: dh('192.168.1'), ROGUE: dh('10.66.66') });
+  chk('L2sec: DHCP-серверы настроены', !e1.length, e1.join('; '));
+  var e2 = EL.labs.apply(n, { SW1: ['enable', 'configure', 'ip dhcp snooping', 'ip dhcp snooping vlan 1', 'interface gi1/0/24', 'port-security-state trusted', 'set port-role uplink', 'exit', 'end'] });
+  chk('DHCP snooping: команды MES 10', !e2.length, e2.join('; '));
+  var d = n.dhcp(pc.id);
+  chk('DHCP snooping: адрес только от доверенного R1, чужой сервер отброшен', d.ok && /^192\.168\.1\./.test(d.ip) && d.steps.some(function (s) { return /DHCP snooping — ответ DHCP-сервера пришёл на недоверенный порт gi1\/0\/5/.test(s.t); }),
+      d.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('show ip dhcp snooping binding', new RegExp(d.ip.replace(/\./g, '\\.') + '\\s+86400\\s+learned\\s+1\\s+gi1/0/1').test(n.exec(sw.id, 'show ip dhcp snooping binding')), n.exec(sw.id, 'show ip dhcp snooping binding'));
+  n.exec(pc.id, 'ip dhcp');
+  // ARP inspection: ПК по DHCP проходит, ПК со статикой — нет
+  EL.labs.apply(n, { SW1: ['configure', 'ip arp inspection enable', 'ip arp inspection vlan 1', 'end'], PC2: ['ip 192.168.1.50/24 192.168.1.1'] });
+  chk('ARP inspection: ПК с адресом по DHCP пингует шлюз', n.ping(pc.id, '192.168.1.1').ok);
+  var r2 = n.ping(pc2.id, '192.168.1.1');
+  chk('ARP inspection: статический адрес — ARP отброшен', !r2.ok && JSON.stringify(r2.steps).indexOf('ARP inspection') >= 0, JSON.stringify(r2.steps).slice(0, 300));
+  chk('running-config: snooping, arp inspection, trusted', /ip dhcp snooping\nip dhcp snooping vlan 1/.test(n.exec(sw.id, 'show running-config')) && /ip arp inspection enable/.test(n.exec(sw.id, 'show running-config')) && /port-security-state trusted/.test(n.exec(sw.id, 'show running-config')));
+  // MES 6.x
+  var m = new EL.Net(), s6 = m.add('MES3300-24', 'S6'); s6.st.mode = 'priv';
+  var e3 = EL.labs.apply(m, { S6: ['configure', 'ip dhcp snooping', 'ip dhcp snooping vlan 1', 'ip arp inspection', 'ip arp inspection vlan 1', 'interface gi1/0/1', 'ip dhcp snooping trust', 'ip arp inspection trust', 'end'] });
+  chk('MES 6.x: ip dhcp snooping trust / ip arp inspection trust', !e3.length && /ip dhcp snooping trust/.test(m.exec(s6.id, 'show running-config')), e3.join('; '));
+  // storm-control: петля без STP — шторм; action shutdown разрывает петлю
+  var k = new EL.Net(), a = k.add('MES2428', 'A'), b = k.add('MES2428', 'B'), pa = k.add('VPC', 'PA'), pb = k.add('VPC', 'PB');
+  k.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); k.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2'); k.connect(pa.id, 'eth0', a.id, 'gi1/0/10'); k.connect(pb.id, 'eth0', b.id, 'gi1/0/10');
+  EL.labs.apply(k, { A: ['enable', 'configure', 'no spanning-tree', 'end'], B: ['enable', 'configure', 'no spanning-tree', 'interface gi1/0/2', 'storm-control broadcast level 1000', 'storm-control broadcast action shutdown', 'end'],
+                     PA: ['ip 10.0.0.1/24'], PB: ['ip 10.0.0.2/24'] });
+  var s1 = k.ping(pa.id, '10.0.0.2');
+  chk('storm-control: шторм выключил порт B gi1/0/2', !s1.ok && s1.steps.some(function (s) { return /Storm-control/.test(s.t); }) && b.st.ports['gi1/0/2'].shut, s1.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('после storm-control петля разорвана — ping проходит', k.ping(pa.id, '10.0.0.2').ok);
+  console.log('✓ защита L2: DHCP snooping, ARP inspection, storm-control');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

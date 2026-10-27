@@ -326,6 +326,15 @@ SA устанавливается, когда у пары ESR зеркальны
 - **Согласование:** обе стороны auto — максимум общей скорости, full; одна сторона принудительно, другая auto — auto-сторона берёт скорость, но **half-duplex** (как в 802.3); обе принудительно с разной скоростью — линка нет; 1000 по меди без автосогласования с auto-соседом — линка нет; на оптике скорость — только скорость модуля.
 - **Несовпадение дуплекса:** линк есть, ping проходит, но каждый кадр по такому кабелю — FCS-ошибка на full-стороне и поздняя коллизия на half-стороне (`show interfaces counters gi1/0/1`: FCS Errors, Late Collisions; ESR — Receive errors / Collisions). Кадры не теряются — потери в модели не считаются.
 
+### Защита L2 на MES (руководства 10.4.6 и 6.6.8.8)
+| Функция | MES 10.x | MES 6.x | Что происходит |
+|---|---|---|---|
+| DHCP snooping | `ip dhcp snooping`, `ip dhcp snooping vlan 10`; доверенный порт — `port-security-state trusted` (+ `set port-role uplink`) | `ip dhcp snooping`, `… vlan 10`, на порту `ip dhcp snooping trust` | ответ DHCP-сервера с недоверенного порта отброшен (чужой сервер не раздаёт адреса); выданные адреса — в `show ip dhcp snooping binding` |
+| ARP inspection | `ip arp inspection enable`, `ip arp inspection vlan 10` (доверенный — тот же `port-security-state trusted`) | `ip arp inspection`, `… vlan 10`, на порту `ip arp inspection trust` | ARP с недоверенного порта проходит, только если пара IP–MAC есть в базе DHCP snooping: ПК со статическим адресом и порт к маршрутизатору без trusted — ARP отброшен |
+| Storm-control | `storm-control broadcast level N`, `storm-control broadcast action shutdown` | `storm-control broadcast level N` | широковещательный шторм (петля без STP) выключает порт с action shutdown (err-disable) — петля разорвана, следующий ping проходит; включить порт — `no shutdown` |
+
+Показ: `show ip dhcp snooping`, `show ip dhcp snooping binding`, `show ip arp inspection`. Упрощения: опция 82, verify mac-address, IP source guard и пороги pps/kbps не моделируются (шторм либо есть, либо нет); формат `show ip dhcp snooping binding` в руководствах не приведён.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:
@@ -335,7 +344,7 @@ SA устанавливается, когда у пары ESR зеркальны
 - **Потерь нет.** Перегрузка канала не моделируется; несовпадение дуплекса даёт ошибки в счётчиках, но кадры доходят.
 - **Протоколы маршрутизации IPv4 (RIP, OSPF)** идут по реальным таймерам; **RIPng, OSPFv3** сходятся сразу; через туннели GRE/VTI соседства не строятся.
 - **Межсетевой экран ESR** к IPv6 не применяется; NAT-T, DPD, rekey IPsec нет.
-- **Не моделируются:** L2TP, BGP, VRF, PBR (route-map), BFD; на MES — DHCP snooping, ARP inspection, 802.1X, storm-control, IGMP snooping, QinQ, MSTP-инстансы, стек; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
+- **Не моделируются:** L2TP, BGP, VRF, PBR (route-map), BFD; на MES — 802.1X, IGMP snooping, QinQ, MSTP-инстансы, стек; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
 
 ## Типовые ошибки
 | Сообщение | Что делать |

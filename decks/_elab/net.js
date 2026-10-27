@@ -508,9 +508,12 @@
           pk.src = r.iface.ip; }
       }
       var srcMac = this.ifMac(cur, r.iface);
-      var fl = this.flood(cur, r.iface, srcMac);
+      this._arpSip = r.iface.ip;                     // для ARP inspection: IP отправителя ARP
+      var fl; try { fl = this.flood(cur, r.iface, srcMac); } finally { this._arpSip = null; }
       var ep = fl.eps.filter(function (e) { return e.iface.ip === r.nh; })[0];
       if (fl.storm) { steps.push({ k: 'arp', segs: fl.segs, t: cd.name + ': ARP-запрос «у кого ' + r.nh + '?» — широковещательно', notes: fl.notes });
+        var sc = this.stormControl ? this.stormControl(fl.segs) : [];
+        if (sc.length) { steps.push({ k: 'drop', t: 'Storm-control: широковещательный шторм — порт ' + sc.join(', ') + ' выключен (err-disable), петля разорвана. Повторите ping' }); return { ok: false, why: 'Request timed out', pk: pk }; }
         steps.push({ k: 'drop', t: 'Широковещательный шторм: в сети петля, а STP выключен — кадры бесконечно размножаются, связи нет', notes: fl.notes });
         return { ok: false, why: 'Request timed out', pk: pk }; }
       var vl = r.iface.vlan || r.iface.tag, cached = this.arp[cur][r.nh], dmac = ep ? this.ifMac(ep.dev, ep.iface) : null;
@@ -530,7 +533,7 @@
       }
       var nd = this.devs[ep.dev];
       var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
-      var viol = this.learn(back, dmac);
+      this._arpSip = r.nh; var viol; try { viol = this.learn(back, dmac); } finally { this._arpSip = null; }
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd.name + ': ARP-ответ отброшен — ' + viol }); return { ok: false, why: 'Host unreachable', pk: pk }; }
       this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
       this.arp[ep.dev][r.iface.ip] = { mac: srcMac, ifn: ep.iface.name, t: this.now };   // отвечающий тоже запоминает спросившего
@@ -621,12 +624,14 @@
     var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
     steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
       f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
-    var lease = null;
+    var lease = null, lpath = null;
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
       var c = rd.st.run;
       var fw = s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', dport: 67 }, []);
       if (!fw.ok) { steps.push({ k: 'drop', t: fw.t + ' — DHCP не принят' }); return false; }
+      var sv = s.snoopReply ? s.snoopReply(ep.path) : null; if (sv) { steps.push({ k: 'drop', t: sv }); return false; }
+      lpath = ep.path;
       var own = c.dhcp && c.dhcp.on && poolFor(c, ep.iface.ip);
       if (own) { lease = alloc(rd, own, cname); if (lease) lease.via = null; lease && (lease.server = rd.name); return !!lease; }
       var x = c.ifs[ep.iface.name];
@@ -646,6 +651,7 @@
     });
     if (!lease) { steps.push({ k: 'drop', t: 'DHCPOFFER не пришёл: в этом широковещательном домене нет DHCP-сервера или ретранслятора' });
       return { ok: false, steps: steps }; }
+    if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
     return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw };
