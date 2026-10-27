@@ -355,7 +355,9 @@ EL.labs.LABS.forEach(runLab);
   chk('OSPF: hello 10/40 против 5/20 — соседства нет, причина видна', !has(m.n, m.r1.id, 'O', '192.168.2.0/24') && /таймеры hello\/dead 5\/20, а у нас 10\/40/.test(tm), tm);
   // RIP: маршруты сразу, сосед пропал — invalid 180, possibly down до flush 240
   var r = build('rip');
-  chk('RIP: маршрут появляется сразу (request/response)', has(r.n, r.r1.id, 'R', '192.168.2.0/24') && r.n.ping(r.a.id, '192.168.2.2').ok);
+  chk('RIP: в первую секунду маршрута ещё нет — триггерное обновление идёт 1–5 с', !has(r.n, r.r1.id, 'R', '192.168.2.0/24'));
+  r.n.tick(6);
+  chk('RIP: через 6 с маршрут пришёл', has(r.n, r.r1.id, 'R', '192.168.2.0/24') && r.n.ping(r.a.id, '192.168.2.2').ok);
   r.n.power(r.r2.id, false); r.n.tick(100);
   var rl = r.n.exec(r.r1.id, 'show ip rip');
   chk('RIP: R2 выключен — 100 с маршрут ещё в таблице (invalid 180)', has(r.n, r.r1.id, 'R', '192.168.2.0/24') && /invalid через 80 с/.test(rl), rl);
@@ -365,11 +367,11 @@ EL.labs.LABS.forEach(runLab);
   r.n.tick(60);
   chk('RIP: после flush 240 с — удалён', !/possibly down/.test(r.n.exec(r.r1.id, 'show ip rip')));
   // свой интерфейс выключили — маршруты через него уходят сразу
-  var q = build('rip'); EL.labs.apply(q.n, { R1: ['configure', 'interface gi1/0/1', 'shutdown', 'exit', 'do commit', 'do confirm', 'end'] });
+  var q = build('rip'); q.n.tick(6); EL.labs.apply(q.n, { R1: ['configure', 'interface gi1/0/1', 'shutdown', 'exit', 'do commit', 'do confirm', 'end'] });
   chk('RIP: свой интерфейс shutdown — маршрут удалён сразу', !has(q.n, q.r1.id, 'R', '192.168.2.0/24'));
   // timers invalid
   var v = build('rip'); EL.labs.apply(v.n, { R1: ['configure', 'router rip', 'timers invalid 60', 'exit', 'do commit', 'do confirm', 'end'] });
-  v.n.dyn(); v.n.power(v.r2.id, false); v.n.tick(61);
+  v.n.tick(6); v.n.power(v.r2.id, false); v.n.tick(61);
   chk('RIP: timers invalid 60 — маршрут недействителен через 60 с', !has(v.n, v.r1.id, 'R', '192.168.2.0/24') && /timers invalid 60/.test(v.n.exec(v.r1.id, 'show running-config')));
   console.log('✓ RIP и OSPF по таймерам');
 })();

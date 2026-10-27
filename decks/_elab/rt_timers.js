@@ -71,6 +71,17 @@
     var f1 = s.ifaces(x.id).filter(function (f) { return f.name === x.ifn; })[0], f2 = s.ifaces(r.id).filter(function (f) { return f.name === r.ifn; })[0];
     return !!(f1 && f2 && f1.len === f2.len && IP.sameNet(f1.ip, f2.ip, f1.len));
   }
+  // RIP: новый маршрут уходит соседям триггерным обновлением с задержкой 1–5 с (RFC 2453, 3.10.1) — по переходу на каждом роутере
+  P.originAt = function (proto, id, n) {
+    if (proto !== 'R') return 0; var o = (this._orig = this._orig || {}), k = id + '|' + n;
+    if (o[k] === undefined) o[k] = this.now; return o[k];
+  };
+  function trigDelay(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0; return 1 + h % 5; }
+  P.hopAt = function (proto, id, nb, ent) {
+    if (proto !== 'R' || nb.frozen) return ent.at || 0;
+    var r = ((this._adj || {}).R || {})[id + '|' + nb.dev + '|' + nb.ifn], since = r ? r.since : this.now;
+    return Math.max(ent.at || 0, since) + trigDelay(this.devs[nb.dev].name);
+  };
   // время тикает — пересчитываем соседства в момент до скачка, чтобы события не «опаздывали»
   var tick0 = P.tick;
   P.tick = function (dt) { this.dyn(); return tick0.call(this, dt); };

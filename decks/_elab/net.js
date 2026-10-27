@@ -149,7 +149,7 @@
         });
         if (proto === 'R' && c.rip.redist.indexOf('static') >= 0) c.routes.forEach(function (r) { orig.push(r.net); });
         info[id] = { part: part, nb: [] };
-        tab[id] = {}; orig.forEach(function (n) { tab[id][n] = { m: 0, nh: null, ifn: null, own: true }; });
+        tab[id] = {}; orig.forEach(function (n) { tab[id][n] = { m: 0, nh: null, ifn: null, own: true, at: s.originAt ? s.originAt(proto, id, n) : 0 }; });
       });
       rs.forEach(function (id) {               // соседи — через L2, как реальные hello/update
         info[id].part.forEach(function (pp) {
@@ -175,7 +175,8 @@
               var m2 = nt[n].m + nb.cost, cur = tab[id][n];
               if (proto === 'R' && m2 > 15) return;
               if (cur && (cur.own || cur.m <= m2)) return;
-              tab[id][n] = { m: m2, nh: nb.nh, ifn: nb.ifn, via: nb.dev, stale: !!nb.frozen }; ch = true;
+              var at = s.hopAt ? s.hopAt(proto, id, nb, nt[n]) : 0; if (at > s.now) return;   // обновление ещё не дошло
+              tab[id][n] = { m: m2, nh: nb.nh, ifn: nb.ifn, via: nb.dev, stale: !!nb.frozen, at: at }; ch = true;
             });
           });
         });
