@@ -44,6 +44,8 @@
     if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
     if (f.dhcp) return 'DHCP ' + f.dhcp;
     if (f.dns) return 'Standard query' + (f.reply ? ' response' : '') + ' A ' + f.dns.q + (f.reply && f.dns.a ? ' A ' + f.dns.a : f.reply ? ' No such name' : '');
+    if (f.icmp6 === 'rs') return 'Router Solicitation from ' + f.smac;
+    if (f.icmp6 === 'ra') return 'Router Advertisement from ' + f.smac + (f.prefix ? ' (prefix ' + f.prefix + ')' : '');
     if (f.icmp6 === 'ns') return 'Neighbor Solicitation for ' + f.target + ' from ' + f.smac;
     if (f.icmp6 === 'na') return 'Neighbor Advertisement ' + f.target + ' (sol, ovr) is at ' + f.smac;
     if (f.proto === 'icmp6') return 'Echo (ping) ' + (f.reply ? 'reply' : 'request') + '  hlim=' + f.hlim;
@@ -81,7 +83,7 @@
       return L;
     }
     if (f.type === 'ip6') {
-      var pl = Math.max(8, len - 18 - (tagged ? 4 : 0) - 40), ty = f.icmp6 === 'ns' ? '135 (Neighbor Solicitation)' : f.icmp6 === 'na' ? '136 (Neighbor Advertisement)' : f.reply ? '129 (Echo (ping) reply)' : '128 (Echo (ping) request)';
+      var pl = Math.max(8, len - 18 - (tagged ? 4 : 0) - 40), ty = f.icmp6 === 'rs' ? '133 (Router Solicitation)' : f.icmp6 === 'ra' ? '134 (Router Advertisement)' : f.icmp6 === 'ns' ? '135 (Neighbor Solicitation)' : f.icmp6 === 'na' ? '136 (Neighbor Advertisement)' : f.reply ? '129 (Echo (ping) reply)' : '128 (Echo (ping) request)';
       L.push({ osi: 'L3', name: 'Internet Protocol Version 6, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 6], ['Traffic Class', '0x00'], ['Flow Label', '0x00000'],
         ['Payload Length', pl], ['Next Header', 'ICMPv6 (58)'], ['Hop Limit', f.hlim], ['Source Address', f.src], ['Destination Address', f.dst]] });
       var fl = [['Type', ty], ['Code', 0]];

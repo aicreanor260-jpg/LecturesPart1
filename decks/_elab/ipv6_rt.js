@@ -44,10 +44,10 @@
 
   S.RUNX.push(function (c, o) {
     Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k].ospf6; if (!x) return; var d = [];
-      if (x.inst) d.push('  ipv6 ospf instance ' + x.inst); if (x.area) d.push('  ipv6 ospf area ' + x.area); if (x.on) d.push('  ipv6 ospf');
+      if (x.inst) d.push('  ipv6 ospf instance ' + x.inst); if (x.hello) d.push('  ipv6 ospf hello-interval ' + x.hello); if (x.dead) d.push('  ipv6 ospf dead-interval ' + x.dead); if (x.area) d.push('  ipv6 ospf area ' + x.area); if (x.on) d.push('  ipv6 ospf');
       if (d.length) o.push('interface ' + S.longIf(k), d.join('\n'), 'exit'); });
     if (c.ripng) { o.push('ipv6 router rip'); c.ripng.nets.forEach(function (n) { o.push('  network ' + n); });
-      c.ripng.redist.forEach(function (n) { o.push('  redistribute ' + n); }); if (c.ripng.on) o.push('  enable'); o.push('exit'); }
+      c.ripng.redist.forEach(function (n) { o.push('  redistribute ' + n); }); Object.keys(c.ripng.timers || {}).forEach(function (k) { o.push('  timers ' + k + ' ' + c.ripng.timers[k]); }); if (c.ripng.on) o.push('  enable'); o.push('exit'); }
     if (c.ospf6) { o.push('ipv6 router ospf ' + c.ospf6.id); if (c.ospf6.rid) o.push('  router-id ' + c.ospf6.rid);
       Object.keys(c.ospf6.areas).forEach(function (k) { o.push('  area ' + k); if (c.ospf6.areas[k].on) o.push('    enable'); o.push('  exit'); });
       if (c.ospf6.on) o.push('  enable'); o.push('exit'); }
@@ -81,12 +81,23 @@
     return o.filter(function (v, i, a) { return a.indexOf(v) === i; });
   }
   P.dyn6 = function () {
-    if (this._dyn6 && this._dyn6.gen === this.gen) return this._dyn6.t;
+    if (this._dyn6 && this._dyn6.gen === this.gen && this._dyn6.now === this.now) return this._dyn6.t;
     var s = this, t = {}, N = {};
     s.gen0 = s.gen;
     ['R', 'O'].forEach(function (proto) {
       var rs = s.order.filter(function (id) { return active(s, id, proto).length; });
       var info = {}; rs.forEach(function (id) { info[id] = { nb: nbrs(s, id, proto, active(s, id, proto)), own: originated(s, id, proto) }; N[proto + id] = info[id].nb; });
+      // время: OSPFv3 — соседство Full через wait timer (= dead), RIPng — триггерное обновление 1–5 с; пропавший сосед держится dead / invalid
+      var Ad = (s._t6 = s._t6 || { R: {}, O: {} })[proto], seenK = {};
+      rs.forEach(function (id) { info[id].nb = info[id].nb.filter(function (nb) { var k = id + '|' + nb.dev + '|' + nb.ifn;
+        if (proto === 'O' && !timersOk(s, id, nb)) { (s._o6mis = s._o6mis || {})[k] = true; return false; } if (s._o6mis) delete s._o6mis[k];
+        seenK[k] = 1; var a = Ad[k]; if (!a) a = Ad[k] = { since: s.now };
+        if (a.lost !== undefined) { if (s.now - a.lost >= hold(s, proto, id, nb.ifn)) a.since = s.now; delete a.lost; }
+        a.id = id; a.dev = nb.dev; a.ifn = nb.ifn; a.nh = nb.nh; return true; }); });
+      Object.keys(Ad).forEach(function (k) { if (seenK[k]) return; var a = Ad[k]; if (a.lost === undefined) a.lost = s.now;
+        if (s.now - a.lost >= (proto === 'R' ? flush(s, a.id) : hold(s, proto, a.id, a.ifn))) delete Ad[k]; });
+      rs.forEach(function (id) { info[id].nb = info[id].nb.filter(function (nb) { var a = Ad[id + '|' + nb.dev + '|' + nb.ifn];
+        return s.now - a.since >= (proto === 'O' ? wait(s, id, nb.ifn) : trig(s.devs[nb.dev].name)); }); });
       // RIPng — вектор расстояний (метрика = переходы, 16 — недостижимо); OSPFv3 — кратчайший путь, стоимость интерфейса 10
       var step = proto === 'R' ? 1 : 10, lim = proto === 'R' ? 15 : 1e9, ad = proto === 'R' ? 120 : 110;
       rs.forEach(function (id) {
@@ -98,12 +109,28 @@
             if (u.m + step <= lim) q.push({ id: nb.dev, m: u.m + step, via: u.via || nb }); }); }
         var mine = s.ifaces6(id).filter(function (f) { return !f.ll; }).map(function (f) { return A.netOf(f.ip, f.len); });
         Object.keys(dist).forEach(function (n) { if (mine.indexOf(n) >= 0 || !first[n]) return;
-          (t[id] = t[id] || []).push({ p: proto, net: n, len: +n.split('/')[1], nh: first[n].nh, ifn: first[n].ifn, ad: ad, m: proto === 'R' ? dist[n] + 1 : dist[n] + 10 }); });
+          (t[id] = t[id] || []).push({ p: proto, net: n, len: +n.split('/')[1], nh: first[n].nh, ifn: first[n].ifn, ad: ad, m: proto === 'R' ? dist[n] + 1 : dist[n] + 10, via: id + '|' + first[n].dev + '|' + first[n].ifn }); });
+        // маршруты через пропавшего соседа живут до истечения таймера (RIPng invalid, OSPFv3 dead)
+        var L6 = (s._last6 = s._last6 || { R: {}, O: {} })[proto], prev = L6[id] || [];
+        prev.forEach(function (r) { var a = Ad[r.via]; if (!a || a.lost === undefined || s.now - a.lost >= hold(s, proto, id, a.ifn)) return;
+          if ((t[id] || []).some(function (x) { return x.net === r.net && x.p === proto; })) return;
+          if (!s.ifaces6(id).some(function (f) { return f.name === r.ifn; })) return;
+          var g = Object.assign({}, r); g.stale = true; (t[id] = t[id] || []).push(g); });
+        L6[id] = (t[id] || []).filter(function (x) { return x.p === proto; });
       });
     });
-    this._dyn6 = { gen: this.gen, t: t, nb: N };
+    this._dyn6 = { gen: this.gen, now: this.now, t: t, nb: N };
     return t;
   };
+  // таймеры по справочнику: OSPFv3 hello 10 / dead 40 (wait = dead), RIPng update 30 / invalid 180 / flush 240
+  function o6if(s, id, ifn) { var x = (s.devs[id].st.run.ifs[ifn] || {}).ospf6 || {}, h = x.hello || 10; return { hello: h, dead: x.dead || h * 4 }; }
+  function timersOk(s, id, nb) { var a = o6if(s, id, nb.ifn), b = o6if(s, nb.dev, nb.his); return a.hello === b.hello && a.dead === b.dead; }
+  function wait(s, id, ifn) { return o6if(s, id, ifn).dead; }
+  function rt(s, id, k, d) { var r = s.devs[id] && s.devs[id].st.run.ripng; return (r && r.timers && r.timers[k]) || d; }
+  function hold(s, proto, id, ifn) { return proto === 'O' ? o6if(s, id, ifn).dead : rt(s, id, 'invalid', 180); }
+  function flush(s, id) { return rt(s, id, 'flush', rt(s, id, 'invalid', 180) + 60); }
+  function trig(name) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0; return 1 + h % 5; }
+  var tick0 = P.tick; P.tick = function () { this.dyn6(); return tick0.apply(this, arguments); };
   var routes0 = P.routes6;
   P.routes6 = function (id) { return routes0.call(this, id).concat(this.devs[id].type === 'esr' ? this.dyn6()[id] || [] : []); };
   P.lookup6 = (function (lk0) { return function (id, dst) {
@@ -121,7 +148,15 @@
     return (s.dyn6()[st.dev] || []).filter(function (r) { return r.p === 'R'; }).map(function (r) {
       return rp(r.net, 16) + 'via ' + r.nh + ' on ' + r.ifn + ' [rip 00:00:00] * (120/' + r.m + ')'; }).join('\n'); }, 'Таблица маршрутов RIPng');
   S.cmd('priv', 'show ipv6 ospf neighbors', function (st) { var s = st.net; if (!s) return ''; s.dyn6();
-    var L = (s._dyn6.nb['O' + st.dev] || []); if (!L.length) return '';
-    return ['Router ID        Pri  State           DTime  Interface  Router IP'].concat(L.map(function (nb) {
-      return rp(rid(s, nb.dev), 17) + '1    ' + rp('full/ptp', 16) + '00:40  ' + rp(nb.ifn, 11) + nb.nh; })).join('\n'); }, 'Соседи OSPFv3');
+    var Ad = (s._t6 || { O: {} }).O, L = Object.keys(Ad).map(function (k) { return Ad[k]; }).filter(function (a) { return a.id === st.dev; }); if (!L.length) return '';
+    function mmss(n) { n = Math.max(0, Math.ceil(n)); return ('0' + Math.floor(n / 60)).slice(-2) + ':' + ('0' + n % 60).slice(-2); }
+    return ['Router ID        Pri  State           DTime  Interface  Router IP'].concat(L.map(function (a) { var t = o6if(s, st.dev, a.ifn), w = s.now - a.since;
+      var stt = a.lost !== undefined ? 'full' : w >= t.dead ? 'full' : w >= 1 ? '2way' : 'init';
+      var dt = a.lost !== undefined ? t.dead - (s.now - a.lost) : t.dead - (w % t.hello);
+      return rp(rid(s, a.dev), 17) + '1    ' + rp(stt + (stt === 'full' ? '/dr' : ''), 16) + rp(mmss(dt), 7) + rp(a.ifn, 11) + a.nh; })).join('\n'); }, 'Соседи OSPFv3');
+  S.cmd('gi sub lo', 'ipv6 ospf hello-interval <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return 'Syntax error: Illegal parameter';
+    (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { (st.cand.ifs[k].ospf6 = st.cand.ifs[k].ospf6 || {}).hello = a[0]; }); touch(st); }, 'Интервал hello OSPFv3');
+  S.cmd('gi sub lo', 'ipv6 ospf dead-interval <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return 'Syntax error: Illegal parameter';
+    (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { (st.cand.ifs[k].ospf6 = st.cand.ifs[k].ospf6 || {}).dead = a[0]; }); touch(st); }, 'Интервал dead OSPFv3');
+  ['update', 'invalid', 'flush'].forEach(function (k) { S.cmd('ripng', 'timers ' + k + ' <n>', function (st, a) { var r = rng(st); (r.timers = r.timers || {})[k] = a[0]; touch(st); }, 'Таймер ' + k + ' RIPng'); });
 })(typeof window !== 'undefined' ? window : global);

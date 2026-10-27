@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -567,19 +567,29 @@ EL.labs.LABS.forEach(runLab);
   }
   var v = chain('R');
   chk('RIPng: конфигурация без ошибок', !v.errs.length, v.errs.join('; '));
+  chk('RIPng: сразу после настройки маршрутов ещё нет (триггерное обновление 1–5 с на переход)', !v.n.ping6(v.pa.id, '2001:b::10').ok);
+  v.n.tick(12);
   chk('RIPng: PA → PB через три ESR', v.n.ping6(v.pa.id, '2001:b::10').ok);
   chk('RIPng: show ipv6 rip — via link-local, метрика 3', /2001:b::\/64\s+via fe80::\S+ on gi1\/0\/1 \[rip 00:00:00\] \* \(120\/3\)/.test(v.n.exec(v.r1.id, 'show ipv6 rip')), v.n.exec(v.r1.id, 'show ipv6 rip'));
   chk('RIPng: show ipv6 route — R', /^R\s+\* 2001:b::\/64/m.test(v.n.exec(v.r1.id, 'show ipv6 route')));
   chk('RIPng: running-config', /ipv6 router rip\n  network 2001::\/16\n  enable\nexit/.test(v.n.exec(v.r1.id, 'show running-config')));
+  v.n.dyn6(); EL.labs.apply(v.n, { R3: ['configure', 'ipv6 router rip', 'no enable', 'exit', 'end', 'commit', 'confirm'] }); v.n.tick(60);
+  chk('RIPng: сосед пропал — маршрут живёт до invalid (180 с)', /2001:b::\/64/.test(v.n.exec(v.r2.id, 'show ipv6 route')), v.n.exec(v.r2.id, 'show ipv6 route'));
+  v.n.tick(200); chk('RIPng: после invalid маршрут удалён', !/2001:b::\/64/.test(v.n.exec(v.r2.id, 'show ipv6 route')), v.n.exec(v.r2.id, 'show ipv6 route'));
+  EL.labs.apply(v.n, { R3: ['configure', 'ipv6 router rip', 'enable', 'exit', 'end', 'commit', 'confirm'] }); v.n.tick(12);
   EL.labs.apply(v.n, { R2: ['configure', 'ipv6 router rip', 'no enable', 'exit', 'end', 'commit', 'confirm'] });
   chk('RIPng выключен на R2 — связи нет', !v.n.ping6(v.pa.id, '2001:b::10').ok);
   var o = chain('O');
   chk('OSPFv3: конфигурация без ошибок', !o.errs.length, o.errs.join('; '));
+  o.n.dyn6(); o.n.tick(5);
+  chk('OSPFv3: до wait timer (40 с) соседи в 2way, маршрута нет', !o.n.ping6(o.pa.id, '2001:b::10').ok && /2way/.test(o.n.exec(o.r2.id, 'show ipv6 ospf neighbors')), o.n.exec(o.r2.id, 'show ipv6 ospf neighbors'));
+  o.n.tick(40);
   chk('OSPFv3: PA → PB', o.n.ping6(o.pa.id, '2001:b::10').ok);
   chk('OSPFv3: соседи R2 — R1 и R3', (o.n.exec(o.r2.id, 'show ipv6 ospf neighbors').match(/full/g) || []).length === 2, o.n.exec(o.r2.id, 'show ipv6 ospf neighbors'));
   chk('OSPFv3: маршрут O', /^O\s+\* 2001:b::\/64\s+\[110\/0\]/m.test(o.n.exec(o.r1.id, 'show ipv6 route')), o.n.exec(o.r1.id, 'show ipv6 route'));
   EL.labs.apply(o.n, { R1: ['configure', 'ipv6 router ospf 1', 'area 0.0.0.0', 'no enable', 'end', 'commit', 'confirm'] });
-  chk('OSPFv3: область выключена — связи нет', !o.n.ping6(o.pa.id, '2001:b::10').ok);
+  o.n.tick(41); chk('OSPFv3: область выключена — после dead-interval связи нет', !o.n.ping6(o.pa.id, '2001:b::10').ok);
+
   console.log('✓ RIPng и OSPFv3');
 })();
 
@@ -1078,6 +1088,28 @@ EL.labs.LABS.forEach(runLab);
       y.steps.map(function (s) { return s.t; }).join(' | '));
   chk('DMZ → LAN: нет zone-pair — запрещено', !n.ping6(b.id, '2001:a::10').ok);
   console.log('✓ межсетевой экран ESR для IPv6');
+})();
+
+// SLAAC: ESR рассылает RA, VPC (ip auto) и Debian (ip link up) строят адрес сами
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES2428', 'SW1'), pc = n.add('VPC', 'PC1'), deb = n.add('Debian', 'D1'), srv = n.add('VPC', 'SRV');
+  n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/24'); n.connect(pc.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(deb.id, 'ens3', sw.id, 'gi1/0/2'); n.connect(srv.id, 'eth0', r.id, 'gi1/0/2');
+  chk('без RA: ip auto — нет ответа', /No router answered/.test(n.exec(pc.id, 'ip auto')));
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:db8:1::1/64', 'ipv6 nd prefix 2001:db8:1::/64 86400 3600', 'ip firewall disable', 'exit',
+    'interface gi1/0/2', 'ipv6 address 2001:db8:2::1/64', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'], SRV: ['ip 2001:db8:2::10/64 2001:db8:2::1'] });
+  chk('ipv6 nd prefix без ошибок', !e.length, e.join('; '));
+  var o = n.exec(pc.id, 'ip auto');
+  chk('VPC ip auto: адрес из префикса + EUI-64, шлюз — link-local ESR', /GLOBAL SCOPE\s+: 2001:db8:1:[0-9a-f:]+\/64/.test(o) && /ROUTER LINK-LAYER : fe80::/.test(o), o);
+  chk('VPC по SLAAC пингует сервер за ESR', n.ping6(pc.id, '2001:db8:2::10').ok);
+  ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(deb.id, l); });
+  chk('Debian: адрес по SLAAC при ip link set ens3 up', /inet6 2001:db8:1:[0-9a-f:]+\/64 scope global/.test(n.exec(deb.id, 'ip -6 addr')), n.exec(deb.id, 'ip -6 addr'));
+  chk('Debian ping6 сервер', /64 bytes from 2001:db8:2::10/.test(n.exec(deb.id, 'ping -6 2001:db8:2::10')));
+  chk('rdisc6 ens3', /Prefix\s+: 2001:db8:1::\/64[\s\S]*from fe80::/.test(n.exec(deb.id, 'rdisc6 ens3')), n.exec(deb.id, 'rdisc6 ens3'));
+  var tr = n.slaac(pc.id);
+  chk('трасса: RS на ff02::2 и RA с префиксом', tr.steps.some(function (s) { return s.f && s.f.icmp6 === 'rs'; }) && tr.steps.some(function (s) { return s.f && s.f.icmp6 === 'ra' && s.f.prefix === '2001:db8:1::/64'; }));
+  chk('running-config: ipv6 nd prefix', /ipv6 nd prefix 2001:db8:1::\/64 86400 3600/.test(n.exec(r.id, 'show running-config')));
+  console.log('✓ SLAAC');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
