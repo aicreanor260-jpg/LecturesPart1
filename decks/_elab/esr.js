@@ -203,7 +203,7 @@
       if (d.length || k.indexOf('.') > 0 || k.charAt(0) === 'l') o.push('interface ' + longIf(k), d.join('\n'), 'exit');
     });
     RUNX.forEach(function (f) { f(c, o); });
-    c.routes.forEach(function (r) { o.push('ip route ' + (r.vrf ? 'vrf ' + r.vrf + ' ' : '') + r.net + ' ' + r.nh + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
+    c.routes.forEach(function (r) { o.push('ip route ' + (r.vrf ? 'vrf ' + r.vrf + ' ' : '') + r.net + ' ' + r.nh + (r.bfd ? ' bfd' : '') + (r.ad && r.ad !== 1 ? ' ' + r.ad : '')); });
     if (c.rip) { o.push('router rip'); c.rip.nets.forEach(function (n) { o.push('  network ' + n); });
       c.rip.passive.forEach(function (n) { o.push('  passive-interface ' + longIf(n)); }); c.rip.redist.forEach(function (n) { o.push('  redistribute ' + n); });
       if (c.rip.on) o.push('  enable'); o.push('exit'); }

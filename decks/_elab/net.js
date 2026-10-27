@@ -100,7 +100,7 @@
     if ((d.type === 'vpc' || d.type === 'deb') && st.gw) stat = [{ net: '0.0.0.0/0', nh: st.gw }];
     stat.forEach(function (r) {            // статический маршрут действует, только если шлюз в подключённой работающей сети
       var out = fs.filter(function (f) { return (f.port !== null || f.vlan || f.br || f.tun) && (f.vrf || null) === (r.vrf || null) && IP.sameNet(r.nh, f.ip, f.len); })[0];
-      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out, vrf: r.vrf || null });
+      o.push({ p: 'S', net: r.net, len: +r.net.split('/')[1], nh: r.nh, ifn: out ? out.name : null, ad: r.ad || 1, m: 0, dead: !out, vrf: r.vrf || null, bfd: !!r.bfd });
     });
     if (d.type === 'esr') (this.dyn()[id] || []).forEach(function (r) { o.push(r); });
     return o;

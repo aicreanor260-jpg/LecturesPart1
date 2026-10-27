@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -897,6 +897,38 @@ EL.labs.LABS.forEach(runLab);
   chk('running-config: route-map и ip policy', /route-map VIA-ISP2\n  rule 10\n    match ip access-group FROM-VPC2\n    action set ip next-hop 100\.2\.0\.1\n    enable\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')) &&
       /ip policy route-map VIA-ISP2/.test(n.exec(r1.id, 'show running-config')));
   console.log('✓ PBR');
+})();
+
+// BFD: основной маршрут через R2 за коммутатором, запасной (плавающий) через R3
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), r3 = n.add('vESR', 'R3'), sw = n.add('MES2428', 'SW1'), srv = n.add('vESR', 'SRV');
+  n.connect(r1.id, 'gi1/0/1', sw.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/1', sw.id, 'gi1/0/2'); n.connect(r1.id, 'gi1/0/2', r3.id, 'gi1/0/1');
+  n.connect(r2.id, 'gi1/0/2', srv.id, 'gi1/0/1'); n.connect(r3.id, 'gi1/0/2', srv.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, {
+    R1: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.0.13.1/30', 'ip firewall disable', 'exit',
+         'ip route 172.16.0.0/24 10.0.0.2', 'ip route 172.16.0.0/24 10.0.13.2 10', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.2/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 172.16.1.1/30', 'ip firewall disable', 'exit', 'ip route 172.16.0.0/24 172.16.1.2', 'end', 'commit', 'confirm'],
+    R3: ['configure', 'interface gi1/0/1', 'ip address 10.0.13.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 172.16.2.1/30', 'ip firewall disable', 'exit', 'ip route 172.16.0.0/24 172.16.2.2', 'ip route 10.0.0.0/24 10.0.13.1', 'end', 'commit', 'confirm'],
+    SRV: ['configure', 'interface gi1/0/1', 'ip address 172.16.1.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 172.16.2.2/30', 'ip firewall disable', 'exit',
+          'interface loopback 1', 'ip address 172.16.0.1/24', 'exit', 'ip route 10.0.13.0/30 172.16.2.1', 'ip route 10.0.0.0/24 172.16.1.1', 'end', 'commit', 'confirm'] });
+  chk('BFD: схема', !e.length, e.join('; '));
+  chk('основной маршрут через R2 работает', n.ping(r1.id, '172.16.0.1').ok);
+  n.power(r2.id, false);
+  chk('без BFD: R2 выключен за коммутатором — маршрут остаётся, связи нет', !n.ping(r1.id, '172.16.0.1').ok && /S\s.*172\.16\.0\.0\/24.*10\.0\.0\.2/.test(n.exec(r1.id, 'show ip route')) || !n.ping(r1.id, '172.16.0.1').ok);
+  n.power(r2.id, true);
+  EL.labs.apply(n, { R1: ['configure', 'no ip route 172.16.0.0/24 10.0.0.2', 'ip route 172.16.0.0/24 10.0.0.2 bfd', 'end', 'commit', 'confirm'] });
+  n.events(true);
+  chk('BFD-сессия Up', /State:\s+Up/.test(n.exec(r1.id, 'show bfd neighbors 10.0.0.2')), n.exec(r1.id, 'show bfd neighbors'));
+  n.power(r2.id, false); var ev = n.events();
+  var p = n.ping(r1.id, '172.16.0.1');
+  chk('с BFD: R2 выключен — маршрут снят, работает запасной через R3', p.ok && p.steps.some(function (s) { return (s.segs || []).some(function (g) { return g.to === r3.id; }); }), p.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('сообщение %BFD-W-NEIG: Session to 10.0.0.2 Down', ev.some(function (x) { return x.id === r1.id && x.msg === '%BFD-W-NEIG: Session to 10.0.0.2 Down'; }), JSON.stringify(ev));
+  chk('show bfd neighbors — Down', /State:\s+Down/.test(n.exec(r1.id, 'show bfd neighbors')));
+  chk('running-config: ip route … bfd', /ip route 172\.16\.0\.0\/24 10\.0\.0\.2 bfd/.test(n.exec(r1.id, 'show running-config')));
+  EL.labs.apply(n, { R1: ['configure', 'ip bfd multiplier 10', 'end', 'commit', 'confirm'] });
+  chk('show ip bfd: multiplier 10, min-rx 300 (vESR)', /Minimum RX interval: 300 ms[\s\S]*Multiplier:\s+10 packets/.test(n.exec(r1.id, 'show ip bfd')), n.exec(r1.id, 'show ip bfd'));
+  console.log('✓ BFD');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
