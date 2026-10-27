@@ -196,6 +196,121 @@ def _radius_cs():
     return F.wrap(fig("".join(o), "60 30 820 260"))
 
 
+# ====================================================================== иллюстрации к пустоватым слайдам AAA
+def _ill(kind):
+    """Крупная иллюстрация 300×190: что происходит на этом шаге / в этом режиме."""
+    mr = I._mr
+    o = []
+    if kind == "who":
+        o += ['<rect x="20" y="30" width="260" height="130" rx="16" style="fill:#fff;stroke:#b9c6ff" stroke-width="2"/>',
+              t(150, 62, "esr login:", 18, SOFT, 800, mono=True),
+              '<rect x="60" y="76" width="180" height="30" rx="8" style="fill:#eef2ff;stroke:%s" stroke-width="2"/>' % BL,
+              t(150, 97, "admin", 18, INK, 800, mono=True),
+              '<rect x="60" y="114" width="180" height="30" rx="8" style="fill:#eef2ff;stroke:%s" stroke-width="2"/>' % BL,
+              t(150, 136, "••••••••", 18, INK, 800, mono=True)]
+    elif kind == "authn":
+        o += [mr(150, 80, 30),
+              '<rect x="20" y="62" width="76" height="34" rx="8" style="fill:#eef2ff;stroke:%s" stroke-width="2"/>' % BL,
+              t(58, 85, "admin", 15, INK, 800, mono=True), arr(98, 80, 116, 80, BL, "b", 3),
+              '<rect x="204" y="44" width="76" height="72" rx="10" style="fill:#fff;stroke:%s" stroke-width="2"/>' % VI,
+              t(242, 68, "база", 14, VI, 800), t(242, 88, "admin ✓", 14, INK, 800, mono=True),
+              t(242, 106, "user1", 14, SOFT, 700, mono=True), arr(184, 80, 200, 80, VI, "a", 3),
+              '<circle cx="150" cy="158" r="20" style="fill:#e2f7ea;stroke:%s" stroke-width="2.6"/>' % GR,
+              '<path d="M140 158l7 7 13-14" style="stroke:%s;fill:none" stroke-width="3.6" stroke-linecap="round"/>' % GR]
+    elif kind == "authz":
+        o += [mr(70, 95, 26), arr(100, 95, 150, 60, GR, "g", 3.4), arr(100, 100, 150, 140, RD, "r", 3.4),
+              '<rect x="156" y="36" width="126" height="44" rx="10" style="fill:#e2f7ea;stroke:%s" stroke-width="2"/>' % GR,
+              t(219, 64, "configure ✓", 16, INK, 800, mono=True),
+              '<rect x="156" y="118" width="126" height="44" rx="10" style="fill:#ffe6ea;stroke:%s" stroke-width="2"/>' % RD,
+              t(219, 146, "reload ✗", 16, INK, 800, mono=True), t(70, 150, "privilege 10", 14, VI, 800)]
+    elif kind == "acct":
+        o += ['<rect x="40" y="22" width="220" height="150" rx="12" style="fill:#fff;stroke:#e0b3f0" stroke-width="2"/>',
+              '<rect x="40" y="22" width="220" height="30" rx="12" style="fill:#f6e6ff"/>', t(150, 43, "журнал", 15, MG, 900)]
+        for i, (tm, s) in enumerate((("10:02", "admin вход"), ("10:05", "commit"), ("10:31", "admin выход"))):
+            o.append(t(56, 82 + i * 32, tm, 15, SOFT, 800, "start", True) + t(116, 82 + i * 32, s, 15, INK, 800, "start"))
+    elif kind == "none":
+        o += ['<rect x="30" y="60" width="70" height="60" rx="10" style="fill:#eef2ff;stroke:%s" stroke-width="2"/>' % BL,
+              t(65, 96, "user", 15, INK, 800), arr(104, 90, 196, 90, AM, "b", 4), mr(240, 86, 28),
+              t(150, 74, "без проверки", 15, AM, 800), t(150, 150, "вход сразу", 16, INK, 800)]
+    elif kind == "local":
+        o += [mr(120, 90, 30),
+              '<rect x="180" y="44" width="100" height="96" rx="12" style="fill:#fff;stroke:%s" stroke-width="2"/>' % BL,
+              t(230, 70, "локальная", 13, BL, 800), t(230, 86, "база", 13, BL, 800),
+              t(230, 110, "admin", 14, INK, 800, mono=True), t(230, 128, "user1", 14, INK, 800, mono=True),
+              arr(152, 90, 176, 90, BL, "b", 3), t(120, 150, "проверка на самом R", 14, SOFT, 800)]
+    elif kind == "remote":
+        o += [mr(60, 96, 26), arr(90, 86, 196, 66, VI, "a", 3.4, flow=True), arr(196, 112, 90, 106, GR, "g", 3.4, flow=True),
+              F.server(240, 40, "", 70), t(150, 64, "логин", 14, VI, 800), t(150, 132, "ответ", 14, GR, 800),
+              t(240, 170, "RADIUS / TACACS+", 13, VI, 800)]
+    elif kind == "perf":
+        o += ['<path d="M50 150a100 100 0 0 1 200 0" style="fill:none;stroke:#e9e4ff" stroke-width="22"/>',
+              '<path d="M50 150a100 100 0 0 1 180 -58" style="fill:none;stroke:%s" stroke-width="22" stroke-linecap="round"/>' % AM,
+              '<path d="M150 150L222 98" style="stroke:%s" stroke-width="6" stroke-linecap="round"/>' % INK,
+              '<circle cx="150" cy="150" r="10" style="fill:%s"/>' % INK, t(150, 184, "реальное время", 16, AM, 900)]
+    elif kind == "rel":
+        o += [mr(50, 96, 24), F.server(200, 8, "", 56), F.server(200, 104, "", 56),
+              arr(78, 88, 172, 40, RD, "r", 3), '<path d="M118 52l12 12M130 52l-12 12" style="stroke:%s" stroke-width="3.4"/>' % RD,
+              arr(78, 104, 172, 136, GR, "g", 3.4, flow=True), t(262, 46, "основной", 13, RD, 800, "start"),
+              t(262, 142, "резервный", 13, GR, 800, "start"), t(110, 182, "повтор → резерв", 14, SOFT, 800)]
+    return '<svg class="c-ill" viewBox="0 0 300 190">%s</svg>' % "".join(o)
+
+
+def _aaa_cards():
+    st = [("Шаг 1", "Определение пользователя", "Определение пользователей по такой информации, как учетная запись и пароль.",
+           "who", "b"),
+          ("Шаг 2", "Аутентификация", "Определение и аутентификация пользователей, которые пытаются получить доступ к ресурсам.",
+           "authn", "v"),
+          ("Шаг 3", "Авторизация", "Определяется, разрешён ли доступ авторизацией.", "authz", "g"),
+          ("Шаг 4", "Учет", "Проверяется и записывается информация о доступе.", "acct", "m")]
+    return '<div class="c-steps4">%s</div>' % "".join(
+        step('<div class="c-s4 t-%s"><u>%s</u><b>%s</b><p>%s</p>%s</div>' % (tn, n, h, p, _ill(k))) for n, h, p, k, tn in st)
+
+
+def _domains():
+    """NAS разбирает домен и применяет схемы ААА этого домена."""
+    o = [router(150, 230, "NAS", 72), t(150, 310, "определяет домен по имени", 17, VI, 800)]
+    for i, (dm, cs) in enumerate((("Домен 1", ("без аутент.", "без автор.", "без учета")),
+                                  ("Домен 2", ("локальная", "локальная", "без учета")),
+                                  ("Домен 3", ("RADIUS", "RADIUS", "RADIUS")))):
+        y = 60 + i * 170
+        o.append(arr(232, 230, 330, y + 50, VI, "a", 3.2))
+        o.append('<rect x="340" y="%g" width="620" height="110" rx="16" style="fill:#fff;stroke:#c9c5f5" stroke-width="2" '
+                 'filter="url(#erSh)"/>' % y)
+        o.append(t(420, y + 62, dm, 22, INK, 900))
+        for j, (lb, col) in enumerate((("аутентификация", BL), ("авторизация", VI), ("учет", MG))):
+            x = 510 + j * 150
+            o.append('<rect x="%g" y="%g" width="138" height="72" rx="12" style="fill:#f6f6ff;stroke:%s" stroke-width="2"/>'
+                     % (x, y + 19, col))
+            o.append(t(x + 69, y + 46, lb, 14, col, 800) + t(x + 69, y + 72, cs[j], 15, INK, 800))
+    return '<div class="c-dom">%s</div>' % F.wrap(fig("".join(o), "40 40 940 500"))
+
+
+def _rsum():
+    o = [t(40, 22, "Пользователь", 13, INK, 800), t(150, 22, "NAS", 13, INK, 800), t(262, 22, "RADIUS", 13, INK, 800)]
+    for x in (40, 150, 262):
+        o.append('<path d="M%g 30V196" style="stroke:#c9c5f5" stroke-width="2" stroke-dasharray="4 4"/>' % x)
+    for i, (a, b, lb, c) in enumerate(((40, 150, "логин", BL), (150, 262, "Access-Request", BL), (262, 150, "Access-Accept", BL),
+                                       (150, 262, "Acct-Request Start", VI), (262, 150, "Acct-Response Start", VI),
+                                       (150, 262, "Acct-Request Stop", MG), (262, 150, "Acct-Response Stop", MG))):
+        y = 44 + i * 23
+        o.append(arr(a, y, b + (-6 if b > a else 6), y, c, "b" if c == BL else ("a" if c == VI else "m"), 2.2))
+        o.append(t((a + b) / 2.0, y - 4, lb, 10, c, 800))
+    return '<svg class="c-ill" viewBox="0 0 300 200">%s</svg>' % "".join(o)
+
+
+def _authz_rows():
+    rows = (("Пользователь 1@Домен 1", "Домен 1", "Без авторизации", "—", "unlock", "a"),
+            ("Пользователь 2@Домен 2", "Домен 2", "Локальная авторизация", "Доступ в Интернет разрешен.", "db", "b"),
+            ("Пользователь 3@Домен 3", "Домен 3", "Удаленная авторизация", "Авторизация предоставляется удаленным сервером.",
+             "server", "v"))
+    head_ = ('<div class="c-az c-azh"><span>Пользователь</span><span>Домен</span><span>Режим авторизации</span>'
+             '<span>Содержание авторизации</span></div>')
+    body = "".join(step('<div class="c-az t-%s"><span>%s%s</span><span><u>%s</u></span><span>%s<b>%s</b></span>'
+                        '<span class="c-azr">%s</span></div>' % (tn, pico("user"), u, d, pico(ic), m, r))
+                   for u, d, m, r, ic, tn in rows)
+    return '<div class="c-azw">%s%s</div>' % (head_, body)
+
+
 # ====================================================================== слайды
 def build():
     # ---------------------------------------------------------------- pptx 38
@@ -215,7 +330,7 @@ def build():
              'пользователя по имени и паролю.</p></div><div class="c-br"><b>Аутентификация может производиться по:</b>%s</div></div>'
              % (pico("term"), chips([("db", "локальной базе пользователей;", "b"), ("server", "протоколу RADIUS;", "v"),
                                      ("server", "протоколу TACACS+;", "m"), ("server", "протоколу LDAP.", "a")])))))
-    full("Этапы AAA", T38, F.aaa_steps())
+    full("Этапы AAA", T38, _aaa_cards())
     info(38, T38)
     # ---------------------------------------------------------------- pptx 39
     T39 = "Общая <em>ААА архитектура</em>"
@@ -238,7 +353,7 @@ def build():
                             "пользователь, на основе имени пользователя,"),
                 ("4", "shield", "осуществляет менеджмент пользователей и контроль основанный на ААА схемах, настроенных для "
                                 "данного домена.")], "v")
-        + step(chips([("key", "схема аутентификации", "b"), ("lock", "схема авторизации", "v"), ("eye", "схема учета", "m")]))))
+        + step(_domains())))
     full("Общая архитектура AAA", T39, step(F.aaa_arch()))
     info(39, T39)
     # ---------------------------------------------------------------- pptx 40
@@ -246,9 +361,9 @@ def build():
     page("Аутентификация", T40, '<div class="c-v">%s%s%s</div>' % (
         step(defb("ААА поддерживает следующие режимы аутентификации: без аутентификации, локальная аутентификация и удаленная "
                   "аутентификация.")),
-        '<div class="c-aaa">%s</div>' % steps(tl("unlock", "без аутентификации", "a", "Режим 1"),
-                                              tl("db", "локальная аутентификация", "b", "Режим 2"),
-                                              tl("server", "удаленная аутентификация", "v", "Режим 3")),
+        '<div class="c-aaa c-ill3">%s</div>' % steps(tl("unlock", "без аутентификации", "a", "Режим 1") + _ill("none"),
+                                                     tl("db", "локальная аутентификация", "b", "Режим 2") + _ill("local"),
+                                                     tl("server", "удаленная аутентификация", "v", "Режим 3") + _ill("remote")),
         step(F.htable(*F.AUTH_T))))
     full("Аутентификация: схема", T40, step(F.aaa_arch("auth")))
     info(40, T40)
@@ -313,9 +428,11 @@ def build():
                          "1812 и 1813 в качестве портов аутентификации и учета соответственно.", "v", "UDP 1812 / 1813")),
         steps('<div class="c-ports"><div class="t-b"><u>1812</u><b>аутентификация</b></div><div class="t-m"><u>1813</u>'
               '<b>учет</b></div></div>',
-              tl("chart", "RADIUS отличается высокой производительностью в реальном времени.", "a", "Производительность"),
-              tl("shield", "Также поддерживаются механизм повторной передачи и механизм резервного сервера, что обеспечивает "
-                           "хорошую надежность.", "r", "Надежность")), cls="c-g2 c-stk"))
+              '<div class="c-wi">%s%s</div>' % (tl("chart", "RADIUS отличается высокой производительностью в реальном времени.",
+                                                     "a", "Производительность"), _ill("perf")),
+              '<div class="c-wi">%s%s</div>' % (tl("shield", "Также поддерживаются механизм повторной передачи и механизм "
+                                                     "резервного сервера, что обеспечивает хорошую надежность.", "r",
+                                                     "Надежность"), _ill("rel"))), cls="c-g2 c-stk"))
     rs = [("1", "Когда пользователь получает доступ к сети, он инициирует запрос на соединение и отправляет имя пользователя и "
                 "пароль клиенту RADIUS (NAS).", "b"),
           ("2", "Клиент RADIUS отправляет пакет запроса аутентификации, содержащий имя пользователя и пароль, на сервер RADIUS.", "b"),
@@ -337,7 +454,8 @@ def build():
     page("Обмен RADIUS: шаги", T42, '<div class="c-v">%s<div class="c-rs">%s</div></div>' % (
         step('<div class="c-hd t-b">Процесс обмена сообщениями между RADIUS-сервером и клиентом заключается в следующем:%s</div>'
              % legend),
-        "".join(step('<div class="c-r t-%s"><u>%s</u><p>%s</p></div>' % (tn, n, s)) for n, s, tn in rs)))
+        "".join(step('<div class="c-r t-%s"><u>%s</u><p>%s</p></div>' % (tn, n, s)) for n, s, tn in rs)
+        + step('<div class="c-r c-rsum">%s</div>' % _rsum())))
     slide("Сцена: обмен RADIUS", sc(head(T42, "Обмен сообщениями пользователь — NAS — сервер RADIUS по шагам."),
                                     '<div class="g grow g"><div class="col">%s</div></div>' % F.radius_seq()))
     info(43, T42)
@@ -371,7 +489,7 @@ def build():
              '<b>сервер авторизации</b><u>приоритет выше</u></div><div class="t-b" style="--h:52%%"><b>NAS</b>'
              '<u>ниже</u></div></div></div>')))
     full("Авторизация: схема", T44, step(F.aaa_arch("authz")))
-    full("Авторизация: режимы", T44, step(F.htable(*F.AUTHZ_T)))
+    full("Авторизация: режимы", T44, _authz_rows())
     info(44, T44)
     # ---------------------------------------------------------------- pptx 45
     T45 = "<em>Учет</em>"
@@ -563,6 +681,30 @@ def build():
 
 
 CSS = r"""
+.c-steps4{flex:1;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;min-height:0}.c-steps4>.step{display:flex}
+.c-s4{flex:1;display:flex;flex-direction:column;gap:10px;padding:22px;border-radius:18px;background:var(--panel);border:1.5px solid #fff;
+ border-top:6px solid var(--tc);box-shadow:0 10px 30px rgba(70,60,190,.16)}
+.c-s4 u{align-self:flex-start;text-decoration:none;background:var(--tc);color:#fff;font:800 clamp(13px,1.1vw,21px)/1 var(--fd);padding:8px 14px;border-radius:10px}
+.c-s4 b{font:800 clamp(18px,1.8vw,34px)/1.15 var(--fd);color:#10145a}
+.c-s4 p{margin:0;font:600 clamp(15px,1.45vw,28px)/1.4 "Golos Text",sans-serif;color:#2a3070}
+.c-ill{display:block;width:100%;height:auto;margin-top:auto;background:color-mix(in srgb,var(--tc,#6a4cff) 6%,#fff);border-radius:14px;padding:6px}
+.c-s4 .c-ill{flex:1 1 0;min-height:0;height:100%;margin-top:8px}
+.c-dom .figwrap svg{max-height:40vh!important;width:100%}
+.c-ill text{font-family:"Golos Text",sans-serif}
+.c-ill3>.step{flex-direction:column;gap:10px}.c-ill3 .ixt{flex:0 0 auto!important;height:auto!important}.c-ill3 .c-ill{flex:1 1 0;min-height:140px;height:100%;margin:0}
+.c-ill3>.step:nth-child(1){--tc:#e08a00}.c-ill3>.step:nth-child(2){--tc:#2f6bff}.c-ill3>.step:nth-child(3){--tc:#6a4cff}
+.c-wi{display:flex;gap:12px;align-items:stretch;height:100%}.c-wi>.ixt{flex:1}.c-wi>.c-ill{flex:0 0 40%;margin:0;align-self:center}
+.c-wi:has(.t-a){--tc:#e08a00}.c-wi:has(.t-r){--tc:#e23b5a}
+.c-rsum{padding:4px!important;background:#fff!important}.c-rsum .c-ill{height:100%;margin:0}
+.c-azw{flex:1;display:flex;flex-direction:column;gap:14px;justify-content:center}
+.c-az{display:grid;grid-template-columns:1.25fr .6fr 1.1fr 1.5fr;gap:14px;align-items:center;padding:20px 24px;border-radius:18px;
+ background:rgba(255,255,255,.92);border:1.5px solid #fff;border-left:8px solid var(--tc);box-shadow:0 10px 28px rgba(70,60,190,.15);min-height:15vh;
+ font:700 clamp(16px,1.5vw,29px)/1.3 "Golos Text",sans-serif;color:#141a5c}
+.c-az span{display:flex;align-items:center;gap:12px}.c-az .ixp{width:clamp(34px,3vw,56px);height:clamp(34px,3vw,56px)}
+.c-az u{text-decoration:none;padding:6px 14px;border-radius:10px;background:color-mix(in srgb,var(--tc) 12%,#fff);color:var(--tc)}
+.c-az b{color:var(--tc)!important;-webkit-text-fill-color:var(--tc)!important}
+.c-azr{padding:12px 16px;border-radius:12px;background:color-mix(in srgb,var(--tc) 8%,#fff)}
+.c-azh{min-height:0!important;background:linear-gradient(90deg,#2f6bff,#6a4cff);color:#fff;border:0;padding:14px 24px;font:800 clamp(14px,1.2vw,23px)/1.2 var(--fd)}
 .c-v{flex:1;min-height:0;display:flex;flex-direction:column;gap:14px}
 .c-g2{grid-template-columns:1fr 1fr!important;gap:20px!important}.c-g12{grid-template-columns:.85fr 1.4fr!important;gap:20px!important}
 .c-stk>.col{gap:12px!important}
@@ -574,7 +716,7 @@ CSS = r"""
 .c-v>.step>.tw{flex:0 0 auto}
 .c-v>.step:has(>.c-chips),.c-v>.step:has(>.c-hd){flex:0 0 auto}.c-v>.c-rs{flex:1 1 0}
 .ixdef .ixtag{align-self:flex-start}
-.c-stk .ixdef p{font-size:clamp(14px,1.3vw,25px)}.c-stk .figwrap svg{max-height:30vh}
+.c-stk .ixdef p{font-size:clamp(14px,1.3vw,25px)}.c-stk .figwrap svg{max-height:64vh}
 .c-prio p{font-size:clamp(16px,1.6vw,30px)!important}
 .c-aaa>.step,.c-pm>.step,.c-acts>.step,.c-users>.step,.c-vs>.step{display:flex}.c-aaa .ixt,.c-pm .ixt,.c-vs .ixt{flex:1;align-items:center}
 .c-v .ixt p{font-size:clamp(14px,1.32vw,26px)}.c-v .ixk{font-size:clamp(14px,1.25vw,24px)}.c-v .c-fs p{font-size:clamp(14px,1.28vw,25px)}
