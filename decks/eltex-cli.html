@@ -10794,8 +10794,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
     $('bOut').hidden = false;
     $('bOut').addEventListener('click', function () {
-      autoOff = true; autoClear(); lab = null; labP = null; task = null; resetNet();   // состояние лабы студента не переживает выход
-      try { history.replaceState(null, '', location.pathname); } catch (err) { /* без истории */ }
+      autoSave(); autoOff = true;                                          // выход не стирает работу: при следующем входе — «Продолжить?»
       fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
     });
   }
