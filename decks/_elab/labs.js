@@ -25,7 +25,7 @@
     { id: '2.1', title: 'Создание и удаление VLAN — режимы access и trunk',
       goal: 'Освоить создание, удаление и просмотр VLAN на коммутаторе MES.',
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
-      build: function (net) { net.add('MES2428', 'SW1', 420, 260); },
+      build: function (net) { net.add('MES2300-24', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
         { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
@@ -75,7 +75,7 @@
     { id: '4.1', title: 'Маршрутизация между VLAN на коммутаторе (SVI)',
       goal: 'Разделить сеть на две VLAN и обеспечить связь между ними через интерфейсы VLAN коммутатора MES (L3-интерфейсы SVI).',
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, n: [R(1, 99), R(100, 199)] }; },
-      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 280);
+      build: function (net) { var s = net.add('MES2300-24', 'SW1', 420, 280);
         [['VPC1', 140, 150, 1], ['VPC2', 140, 410, 2], ['VPC3', 700, 150, 11], ['VPC4', 700, 410, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return [
@@ -99,7 +99,7 @@
     { id: '4.2', title: 'Маршрутизация между VLAN: Router-on-a-Stick',
       goal: 'Коммутатор MES разделяет ПК по VLAN, trunk передаёт обе VLAN на ESR, ESR маршрутизирует через саб-интерфейсы.',
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, a: R(1, 254), b: R(1, 254) }; },
-      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 330), r = net.add('vESR', 'R1', 420, 110);
+      build: function (net) { var s = net.add('MES2300-24', 'SW1', 420, 330), r = net.add('vESR', 'R1', 420, 110);
         net.connect(s.id, 'gi1/0/6', r.id, 'gi1/0/1');
         [['VPC1', 140, 230, 1], ['VPC2', 140, 470, 2], ['VPC3', 700, 230, 11], ['VPC4', 700, 470, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
@@ -127,7 +127,7 @@
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; });
         return { v: v, a: R(1, 254), b: R(1, 254), fault: R(0, 5) }; },
       build: function (net, p) {
-        var s1 = net.add('MES2428', 'SW1', 300, 330), s2 = net.add('MES2428', 'SW2', 620, 330), r = net.add('vESR', 'R1', 300, 110);
+        var s1 = net.add('MES2300-24', 'SW1', 300, 330), s2 = net.add('MES2300-24', 'SW2', 620, 330), r = net.add('vESR', 'R1', 300, 110);
         net.connect(s1.id, 'gi1/0/24', s2.id, 'gi1/0/24'); net.connect(s1.id, 'gi1/0/6', r.id, 'gi1/0/1');
         [['VPC1', s1, 120, 480, 1], ['VPC2', s1, 300, 520, 11], ['VPC3', s2, 620, 520, 1], ['VPC4', s2, 820, 480, 11]].forEach(function (x) {
           var d = net.add('VPC', x[0], x[2], x[3]); net.connect(d.id, 'eth0', x[1].id, 'gi1/0/' + x[4]); });

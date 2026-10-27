@@ -469,7 +469,7 @@ EL.labs.LABS.forEach(runLab);
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), pc = n.add('VPC', 'PC1');
   n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', pc.id, 'eth0');
-  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'exit',
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport mode trunk', 'exit',
                            'interface gi1/0/2', 'switchport access vlan 10', 'end'],
                      R1: ['configure', 'interface gi1/0/1.10', 'ip address 192.168.10.1/24', 'ip firewall disable', 'end', 'commit', 'confirm'],
                      PC1: ['ip 192.168.10.10/24 192.168.10.1'] });
@@ -789,7 +789,7 @@ EL.labs.LABS.forEach(runLab);
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
   var n = new EL.Net(), ca = n.add('MES2428', 'CA'), cb = n.add('MES2428', 'CB'), pa = n.add('MES3300-24', 'PA'), pb = n.add('MES3300-24', 'PB'), va = n.add('VPC', 'VA'), vb = n.add('VPC', 'VB');
   n.connect(va.id, 'eth0', ca.id, 'gi1/0/1'); n.connect(vb.id, 'eth0', cb.id, 'gi1/0/1'); n.connect(ca.id, 'gi1/0/24', pa.id, 'gi1/0/1'); n.connect(cb.id, 'gi1/0/24', pb.id, 'gi1/0/1'); n.connect(pa.id, 'gi1/0/24', pb.id, 'gi1/0/24');
-  var cust = ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'end'];
+  var cust = ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'end'];
   var prov = function (sv) { return ['enable', 'configure', 'vlan database', 'vlan 100', 'exit', 'interface gi1/0/1', 'switchport mode customer', 'switchport customer vlan ' + sv, 'exit',
     'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 100', 'end']; };
   var e = EL.labs.apply(n, { CA: cust, CB: cust, PA: prov(100), PB: prov(100), VA: ['ip 10.0.10.1/24'], VB: ['ip 10.0.10.2/24'] });
@@ -811,7 +811,7 @@ EL.labs.LABS.forEach(runLab);
   var n = new EL.Net(), a = n.add('MES2428', 'SW1'), b = n.add('MES2428', 'SW2'), p1 = n.add('VPC', 'P10a'), p2 = n.add('VPC', 'P10b'), p3 = n.add('VPC', 'P20a'), p4 = n.add('VPC', 'P20b');
   n.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); n.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2');
   n.connect(p1.id, 'eth0', a.id, 'gi1/0/10'); n.connect(p2.id, 'eth0', b.id, 'gi1/0/10'); n.connect(p3.id, 'eth0', a.id, 'gi1/0/20'); n.connect(p4.id, 'eth0', b.id, 'gi1/0/20');
-  var sw = function (extra) { return ['enable', 'configure', 'vlan 10,20', 'exit', 'spanning-tree mode mst', 'interface range gi1/0/1-2', 'switchport mode trunk', 'switchport trunk allowed vlan add 10,20', 'exit',
+  var sw = function (extra) { return ['enable', 'configure', 'vlan 10,20', 'exit', 'spanning-tree mode mst', 'interface range gi1/0/1-2', 'switchport mode trunk', 'exit',
     'interface gi1/0/10', 'switchport access vlan 10', 'exit', 'interface gi1/0/20', 'switchport access vlan 20', 'exit',
     'spanning-tree mst configuration', 'instance 1 vlan 10', 'instance 2 vlan 20', 'name LAB', 'revision 1', 'exit'].concat(extra || [], ['end']); };
   var e = EL.labs.apply(n, { SW1: sw(['spanning-tree mst 1 priority 4096', 'spanning-tree mst 2 priority 4096']), SW2: sw(['interface gi1/0/1', 'spanning-tree mst 2 cost 200000', 'exit']),
@@ -1182,6 +1182,19 @@ EL.labs.LABS.forEach(runLab);
   chk('10.x: show monitor session all / 1 detail', /Destination port: gi1\/0\/5/.test(n.exec(s.id, 'show monitor session all')) && /gi1\/0\/1\s+both/.test(n.exec(s.id, 'show monitor session 1 detail')));
   var c2 = EL.applyConfig(n, s.id, run);
   chk('10.x: running-config применяется обратно без ошибок', !c2.length, c2.join('; '));
+  // trunk 10.x: allowed vlan нет, trunk передаёт все VLAN; в 6.x VLAN надо разрешить
+  var t = new EL.Net(), A = t.add('MES2428', 'A'), B = t.add('MES2428', 'B'), C = t.add('MES2300-24', 'C'), D = t.add('MES2300-24', 'D'), pa = t.add('VPC', 'PA'), pb = t.add('VPC', 'PB'), pc2 = t.add('VPC', 'PC'), pd = t.add('VPC', 'PD');
+  t.connect(A.id, 'gi1/0/24', B.id, 'gi1/0/24'); t.connect(C.id, 'gi1/0/24', D.id, 'gi1/0/24');
+  [[pa, A], [pb, B], [pc2, C], [pd, D]].forEach(function (x) { t.connect(x[0].id, 'eth0', x[1].id, 'gi1/0/1'); });
+  var sw10 = ['enable', 'configure', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'end'];
+  var sw6 = ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'end'];
+  e = EL.labs.apply(t, { A: sw10, B: sw10, C: sw6, D: sw6, PA: ['ip 10.0.0.1/24'], PB: ['ip 10.0.0.2/24'], PC: ['ip 10.0.0.3/24'], PD: ['ip 10.0.0.4/24'] });
+  chk('trunk: команды без ошибок', !e.length, e.join('; '));
+  chk('10.x: switchport trunk allowed vlan add — нет', /^%/.test(t.exec(A.id, 'configure') || t.exec(A.id, 'interface gi1/0/24') || t.exec(A.id, 'switchport trunk allowed vlan add 10')) && (t.exec(A.id, 'end'), true));
+  chk('10.x: trunk передаёт VLAN 10 без allowed', t.ping(pa.id, '10.0.0.2').ok);
+  chk('6.x: trunk без allowed vlan add 10 VLAN 10 не передаёт', !t.ping(pc2.id, '10.0.0.4').ok);
+  EL.labs.apply(t, { C: ['configure', 'interface gi1/0/24', 'switchport trunk allowed vlan add 10', 'end'], D: ['configure', 'interface gi1/0/24', 'switchport trunk allowed vlan add 10', 'end'] });
+  chk('6.x: после switchport trunk allowed vlan add 10 — проходит', t.ping(pc2.id, '10.0.0.4').ok);
   console.log('✓ MES 10.x по ПО 10.4.6');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

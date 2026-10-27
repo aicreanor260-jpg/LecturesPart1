@@ -275,6 +275,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
 <tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
 </table>
+<p>Коммутаторы в лабах NTF-2 — MES2300-24 (6.x): команды методичек вводятся слово в слово.</p>
 <p>Порты: fa 100M, gi 1G, tw 2.5G, te 10G, fo 40G, hu 100G (например te1/0/1). Ветка ПО видна в палитре рядом с моделью.</p>
 <h2>Команды MES (коммутатор)</h2>
 <table>
@@ -286,7 +287,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>vlan 10,20 (10.x, из config) · vlan database → vlan 10,20 (6.x) · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
 <tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
 <tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
-<tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
+<tr><td>switchport trunk allowed vlan add|remove 10,20 (6.x)</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code>. В 10.x trunk пропускает все VLAN, выбор — mode general</td></tr>
 <tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
 <tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
 <tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>
@@ -2645,7 +2646,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (p.stackLink) return p.stackLink === 'active' ? 't' : null;   // стековый линк: внутренняя шина стека, все VLAN (резервный — standby)
     if (p.mode === 'access') return p.access === v ? 'u' : null;
     if (p.mode === 'customer') return p.cvlan === v ? 'c' : null;
-    if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allowed.indexOf(v) >= 0 ? 't' : null);
+    if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allAll || p.allowed.indexOf(v) >= 0 ? 't' : null);   // allAll — MES 10.x: trunk пропускает все VLAN
     if (p.guntag.indexOf(v) >= 0) return 'u';
     return p.gtag.indexOf(v) >= 0 ? 't' : null;
   }
@@ -2660,7 +2661,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
     else {
       if (p.mode === 'access') return { drop: port + ' в режиме access принимает только кадры без тега, пришёл тег ' + tag };
-      if (p.mode === 'trunk' && p.allowed.indexOf(tag) < 0 && p.native !== tag) return { drop: 'VLAN ' + tag + ' не разрешена на trunk ' + port };
+      if (p.mode === 'trunk' && !p.allAll && p.allowed.indexOf(tag) < 0 && p.native !== tag) return { drop: 'VLAN ' + tag + ' не разрешена на trunk ' + port };
       if (p.mode === 'general' && p.gtag.indexOf(tag) < 0 && p.guntag.indexOf(tag) < 0) return { drop: 'VLAN ' + tag + ' не разрешена на general-порту ' + port };
       v = tag;
     }
@@ -6471,7 +6472,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
    show version / show system → show system information, show system id;  show arp → show ip arp;  clear arp-cache → clear ip arp;
    show mac address-table → show mac-address-table;  clear mac address-table dynamic → clear mac-address-table dynamic;
    show ports monitor → show monitor session {<id>|all} [detail];  vlan database → vlan 10,20 прямо в config;
-   terminal datadump, ip ssh server, ip http server, line: login-attempts / history size — в 10.x нет.
+   terminal datadump, ip ssh server, ip http server, line: login-attempts / history size — в 10.x нет;
+   switchport trunk allowed vlan add/remove — в 10.x нет: trunk пропускает все VLAN, выбор VLAN — switchport mode general +
+   switchport general allowed vlan add … tagged. Лабы NTF2 (методички на синтаксисе 6.x) идут на MES2300-24, ветка 6.x.
    Storm-control 10.x (единица обязательна) — в l2sec.js. Модуль грузится после всех модулей MES, чтобы закрыть их команды. */
 (function (G) {
   'use strict';
@@ -6488,11 +6491,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ---------------------------------------------------------------- закрыть в диалекте 10
   var CLOSED = ['write memory', 'ip default-gateway <ip>', 'no ip default-gateway', 'clock timezone <w> <w>', 'no clock timezone',
     'terminal datadump', 'terminal no datadump', 'vlan database', 'ip ssh server', 'no ip ssh server', 'ip http server', 'no ip http server',
-    'login-attempts <n>', 'history size <n>'];
+    'login-attempts <n>', 'history size <n>',
+    'switchport trunk allowed vlan add <list>', 'switchport trunk allowed vlan remove <list>'];   // 10.x: trunk пропускает все VLAN, выбор — mode general
   ['show version', 'show system', 'show arp', 'clear arp-cache', 'show mac address-table', 'show mac address-table aging-time',
     'clear mac address-table dynamic', 'show ports monitor'].forEach(function (p) { CLOSED.push(p, 'do ' + p); });
   CLOSED.forEach(function (p) { find(p).forEach(function (c) { if (!c.dl || c.dl.indexOf('10') >= 0) c.xdl = (c.xdl || []).concat('10'); }); });
   EL.mes10 = { closed: CLOSED };
+  // 10.x: порт trunk передаёт с тегом все VLAN коммутатора (кроме native) — отмечаем порт при переводе в trunk
+  find('switchport mode trunk').forEach(function (c) { var r0 = c.run;
+    c.run = function (st) { var r = r0.apply(this, arguments); if ((st.dialect || '10') === '10' && st.ctx && st.ctx.ports)
+      st.ctx.ports.forEach(function (k) { var p = st.ports[k] || (st.pos || {})[k]; if (p) p.allAll = true; }); return r; }; });
 
   // ---------------------------------------------------------------- варианты 10.x
   cmd('priv', 'write startup-config', function (st) { return EL.mes.save(st); }, 'Сохранить конфигурацию');
@@ -6652,7 +6660,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     { id: '2.1', title: 'Создание и удаление VLAN — режимы access и trunk',
       goal: 'Освоить создание, удаление и просмотр VLAN на коммутаторе MES.',
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
-      build: function (net) { net.add('MES2428', 'SW1', 420, 260); },
+      build: function (net) { net.add('MES2300-24', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
         { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
@@ -6702,7 +6710,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     { id: '4.1', title: 'Маршрутизация между VLAN на коммутаторе (SVI)',
       goal: 'Разделить сеть на две VLAN и обеспечить связь между ними через интерфейсы VLAN коммутатора MES (L3-интерфейсы SVI).',
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, n: [R(1, 99), R(100, 199)] }; },
-      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 280);
+      build: function (net) { var s = net.add('MES2300-24', 'SW1', 420, 280);
         [['VPC1', 140, 150, 1], ['VPC2', 140, 410, 2], ['VPC3', 700, 150, 11], ['VPC4', 700, 410, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return [
@@ -6726,7 +6734,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     { id: '4.2', title: 'Маршрутизация между VLAN: Router-on-a-Stick',
       goal: 'Коммутатор MES разделяет ПК по VLAN, trunk передаёт обе VLAN на ESR, ESR маршрутизирует через саб-интерфейсы.',
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; }); return { v: v, a: R(1, 254), b: R(1, 254) }; },
-      build: function (net) { var s = net.add('MES2428', 'SW1', 420, 330), r = net.add('vESR', 'R1', 420, 110);
+      build: function (net) { var s = net.add('MES2300-24', 'SW1', 420, 330), r = net.add('vESR', 'R1', 420, 110);
         net.connect(s.id, 'gi1/0/6', r.id, 'gi1/0/1');
         [['VPC1', 140, 230, 1], ['VPC2', 140, 470, 2], ['VPC3', 700, 230, 11], ['VPC4', 700, 470, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
@@ -6754,7 +6762,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { var v = distinct(2, V10).sort(function (a, b) { return a - b; });
         return { v: v, a: R(1, 254), b: R(1, 254), fault: R(0, 5) }; },
       build: function (net, p) {
-        var s1 = net.add('MES2428', 'SW1', 300, 330), s2 = net.add('MES2428', 'SW2', 620, 330), r = net.add('vESR', 'R1', 300, 110);
+        var s1 = net.add('MES2300-24', 'SW1', 300, 330), s2 = net.add('MES2300-24', 'SW2', 620, 330), r = net.add('vESR', 'R1', 300, 110);
         net.connect(s1.id, 'gi1/0/24', s2.id, 'gi1/0/24'); net.connect(s1.id, 'gi1/0/6', r.id, 'gi1/0/1');
         [['VPC1', s1, 120, 480, 1], ['VPC2', s1, 300, 520, 11], ['VPC3', s2, 620, 520, 1], ['VPC4', s2, 820, 480, 11]].forEach(function (x) {
           var d = net.add('VPC', x[0], x[2], x[3]); net.connect(d.id, 'eth0', x[1].id, 'gi1/0/' + x[4]); });
@@ -7015,7 +7023,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'R1 раздаёт адреса компьютерам за коммутатором. Пошаговая трасса покажет обмен DISCOVER → OFFER → REQUEST → ACK.',
       gen: function () { return { x: R(10, 250), lo: PK([100, 50, 20]), lease: PK(['0:1:0', '0:0:30', '1:0:0']) }; },
       build: function (net) {
-        var o = place(net, [['R1', 'vESR', 500, 110], ['SW1', 'MES2428', 500, 320], ['VPC1', 'VPC', 220, 500], ['VPC2', 'VPC', 500, 540], ['VPC3', 'VPC', 780, 500]]);
+        var o = place(net, [['R1', 'vESR', 500, 110], ['SW1', 'MES2300-24', 500, 320], ['VPC1', 'VPC', 220, 500], ['VPC2', 'VPC', 500, 540], ['VPC3', 'VPC', 780, 500]]);
         wire(net, o, [['R1', 'gi1/0/1', 'SW1', 'gi1/0/1'], ['VPC1', 'eth0', 'SW1', 'gi1/0/10'], ['VPC2', 'eth0', 'SW1', 'gi1/0/11'], ['VPC3', 'eth0', 'SW1', 'gi1/0/12']]); },
       net: function (p) { var A = '192.168.' + p.x; return { A: A, a: A + '.' + p.lo, b: A + '.' + (p.lo + 100), pool: 'DHCP-' + p.x }; },
       tasks: function (p) { var N = this.net(p); return [
@@ -7077,7 +7085,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Две одинаковые частные сети 192.168.1.0/24 за R1 и R2 выходят в «интернет» (ISP) под адресом внешнего интерфейса — Source NAT. На R2 веб-сервер публикуется наружу по TCP 80 — Destination NAT. Docker-браузер за R1 открывает сайт по внешнему адресу R2.',
       gen: function () { return { y: R(10, 99) }; },
       build: function (net) {
-        var o = place(net, [['R1', 'vESR', 330, 330], ['ISP', 'vESR', 500, 110], ['R2', 'vESR', 670, 330], ['SW1', 'MES2428', 260, 470], ['SW2', 'MES2428', 740, 470],
+        var o = place(net, [['R1', 'vESR', 330, 330], ['ISP', 'vESR', 500, 110], ['R2', 'vESR', 670, 330], ['SW1', 'MES2300-24', 260, 470], ['SW2', 'MES2300-24', 740, 470],
                             ['Docker', 'Docker', 60, 470], ['VPC1', 'VPC', 260, 595], ['VPC2', 'VPC', 740, 595], ['Server', 'Debian-server', 940, 470]]);
         wire(net, o, [['R1', 'gi1/0/1', 'ISP', 'gi1/0/1'], ['R2', 'gi1/0/1', 'ISP', 'gi1/0/2'], ['R1', 'gi1/0/3', 'SW1', 'gi1/0/1'], ['R2', 'gi1/0/3', 'SW2', 'gi1/0/1'],
                       ['Docker', 'ens3', 'SW1', 'gi1/0/3'], ['VPC1', 'eth0', 'SW1', 'gi1/0/2'], ['VPC2', 'eth0', 'SW2', 'gi1/0/2'], ['Server', 'ens3', 'SW2', 'gi1/0/12']]); },
@@ -7215,8 +7223,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Кольцо из пяти коммутаторов MES. Без STP кадры зацикливаются; с RSTP один порт уходит в Alternate и блокируется. Смените корень приоритетом и посмотрите, как перестроится дерево (show spanning-tree, путь пакета).',
       gen: function () { return { root: R(2, 5) }; },
       build: function (net) {
-        var o = place(net, [['vMES1', 'MES2428', 240, 130], ['vMES3', 'MES2428', 760, 130], ['vMES2', 'MES2428', 240, 400], ['vMES4', 'MES2428', 620, 470],
-                            ['vMES5', 'MES2428', 860, 330], ['VPC1', 'VPC', 80, 260], ['VPC2', 'VPC', 920, 560]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 240, 130], ['vMES3', 'MES2300-24', 760, 130], ['vMES2', 'MES2300-24', 240, 400], ['vMES4', 'MES2300-24', 620, 470],
+                            ['vMES5', 'MES2300-24', 860, 330], ['VPC1', 'VPC', 80, 260], ['VPC2', 'VPC', 920, 560]]);
         wire(net, o, [['vMES1', 'gi1/0/1', 'vMES3', 'gi1/0/12'], ['vMES1', 'gi1/0/12', 'vMES2', 'gi1/0/1'], ['vMES2', 'gi1/0/12', 'vMES4', 'gi1/0/1'],
                       ['vMES3', 'gi1/0/1', 'vMES5', 'gi1/0/12'], ['vMES4', 'gi1/0/12', 'vMES5', 'gi1/0/1'],
                       ['VPC1', 'eth0', 'vMES1', 'gi1/0/5'], ['VPC2', 'eth0', 'vMES5', 'gi1/0/5']]);
@@ -7226,7 +7234,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         { t: 'Имена vMES1…vMES5 (hostname)', ok: function (n) { return M.every(function (m) { return dev(n, m).host === m; }); } },
         { t: 'VPC1 192.168.1.1/24 и VPC2 192.168.1.2/24; сейчас ping не проходит — в кольце петля без STP (смотрите трассу)', ok: function (n) {
             return dev(n, 'VPC1').ip === '192.168.1.1' && dev(n, 'VPC2').ip === '192.168.1.2'; } },
-        { t: 'На всех коммутаторах: spanning-tree и spanning-tree mode rst', ok: function (n) { return M.every(function (m) { var s = dev(n, m).stp; return s && s.on && s.mode === 'rst'; }); } },
+        { t: 'На всех коммутаторах: spanning-tree и spanning-tree mode rstp', ok: function (n) { return M.every(function (m) { var s = dev(n, m).stp; return s && s.on && s.mode === 'rst'; }); } },
         { t: 'Корнем сделайте ' + rt + ': spanning-tree priority 16384', ok: function (n) { var d = n.byName(rt); n.stp();
             return dev(n, rt).stp.prio === 16384 && n._stp.root[d.id] === d.id; } },
         { t: 'В кольце ровно один порт в роли Alternate (заблокирован), ping VPC1 → VPC2 проходит', ok: function (n) { var t = n.stp(), c = 0;
@@ -7234,35 +7242,35 @@ vesr(config)#         do confirm  — подтвердить</pre>
             return c === 1 && n.reach('VPC1', '192.168.1.2'); } }]; },
       sol: function (p) { var o = {};
         ['vMES1', 'vMES2', 'vMES3', 'vMES4', 'vMES5'].forEach(function (m, i) {
-          o[m] = ['enable', 'configure', 'hostname ' + m, 'spanning-tree', 'spanning-tree mode rst'].concat(i + 1 === p.root ? ['spanning-tree priority 16384'] : [], ['end', 'show spanning-tree']); });
+          o[m] = ['enable', 'configure', 'hostname ' + m, 'spanning-tree', 'spanning-tree mode rstp'].concat(i + 1 === p.root ? ['spanning-tree priority 16384'] : [], ['end', 'show spanning-tree']); });
         o.VPC1 = ['ip 192.168.1.1/24', 'ping 192.168.1.2']; o.VPC2 = ['ip 192.168.1.2/24'];
         return o; } },
 
     // ------------------------------------------------------------ 8.2
     { id: '8.2', title: 'Агрегация каналов (LACP)',
       goal: 'Два коммутатора соединены несколькими кабелями. Без агрегации STP оставит работать только один; объедините их в Port-channel 1 по LACP — каналы работают вместе, и связь сохраняется, пока жив хотя бы один кабель.',
-      gen: function () { return { k: R(3, 8), pas: R(0, 1) === 1 }; },
+      gen: function () { return { k: R(3, 8) }; },
       build: function (net, p) {
-        var o = place(net, [['vMES1', 'MES2428', 300, 300], ['vMES2', 'MES2428', 700, 300], ['VPC1', 'VPC', 120, 500], ['VPC2', 'VPC', 880, 500]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 300, 300], ['vMES2', 'MES2300-24', 700, 300], ['VPC1', 'VPC', 120, 500], ['VPC2', 'VPC', 880, 500]]);
         for (var i = 1; i <= p.k; i++) net.connect(o.vMES1.id, 'gi1/0/' + i, o.vMES2.id, 'gi1/0/' + i);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/10'], ['VPC2', 'eth0', 'vMES2', 'gi1/0/10']]); },
       tasks: function (p) { var K = p.k, rng = 'gi1/0/1-' + K; return [
         { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
-        { t: 'vMES1 и vMES2: interface port-channel 1, порты ' + rng + ' — channel-group 1 mode ' + (p.pas ? 'active на vMES1 и passive на vMES2' : 'active'),
-          ok: function (n) { return [['vMES1', 'active'], ['vMES2', p.pas ? 'passive' : 'active']].every(function (x) { var s = dev(n, x[0]);
+        { t: 'vMES1 и vMES2: interface port-channel 1, порты ' + rng + ' — channel-group 1 mode auto (LACP)',
+          ok: function (n) { return [['vMES1', 'active'], ['vMES2', 'active']].every(function (x) { var s = dev(n, x[0]);
             if (!s.pos || !s.pos.po1) return false;
             for (var i = 1; i <= K; i++) { var c = s.ports['gi1/0/' + i].cg; if (!c || c.id !== 1 || c.mode !== x[1]) return false; } return true; }); } },
         { t: 'Отключите на vMES1 все кабели агрегата, кроме одного (shutdown на gi1/0/1-' + (K - 1) + ')', ok: function (n) { var s = dev(n, 'vMES1');
             for (var i = 1; i < K; i++) if (!s.ports['gi1/0/' + i].shut) return false; return !s.ports['gi1/0/' + K].shut; } },
-        { t: 'Port-channel 1 собран на оставшемся канале, ping VPC1 → VPC2 проходит (show etherchannel summary)', ok: function (n) {
+        { t: 'Port-channel 1 собран на оставшемся канале, ping VPC1 → VPC2 проходит (show interfaces channel-group)', ok: function (n) {
             var L = n.lports(n.byName('vMES1').id).filter(function (l) { return l.name === 'po1'; })[0];
             return !!L && L.members.length === 1 && n.reach('VPC1', '192.168.10.20'); } }]; },
       sol: function (p) { var K = p.k, o = {};
-        [['vMES1', 'active'], ['vMES2', p.pas ? 'passive' : 'active']].forEach(function (x) {
-          o[x[0]] = ['enable', 'configure', 'hostname ' + x[0], 'interface port-channel 1', 'exit', 'interface range gigabitethernet 1/0/1-' + K,
-                     'channel-group 1 mode ' + x[1], 'end', 'show etherchannel summary']; });
+        ['vMES1', 'vMES2'].forEach(function (m) {
+          o[m] = ['enable', 'configure', 'hostname ' + m, 'interface port-channel 1', 'exit', 'interface range gigabitethernet 1/0/1-' + K,
+                  'channel-group 1 mode auto', 'end', 'show interfaces channel-group']; });
         o.VPC1 = ['ip 192.168.10.10/24', 'ping 192.168.10.20']; o.VPC2 = ['ip 192.168.10.20/24'];
-        o.vMES1 = o.vMES1.concat(K > 1 ? ['configure', 'interface range gigabitethernet 1/0/1-' + (K - 1), 'shutdown', 'end', 'show etherchannel summary'] : []);
+        o.vMES1 = o.vMES1.concat(K > 1 ? ['configure', 'interface range gigabitethernet 1/0/1-' + (K - 1), 'shutdown', 'end', 'show interfaces channel-group'] : []);
         return o; } },
 
     // ------------------------------------------------------------ 8.3
@@ -7270,7 +7278,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Два маршрутизатора делят один виртуальный адрес шлюза 192.168.10.1. Мастер отвечает за него; при разрыве мастера роль сразу берёт резервный, и ПК этого не замечают.',
       gen: function () { return { id: R(1, 255) }; },
       build: function (net) {
-        var o = place(net, [['vESR1', 'vESR', 250, 120], ['vESR2', 'vESR', 750, 120], ['vMES', 'MES2428', 500, 330], ['VPC1', 'VPC', 270, 540], ['VPC2', 'VPC', 730, 540]]);
+        var o = place(net, [['vESR1', 'vESR', 250, 120], ['vESR2', 'vESR', 750, 120], ['vMES', 'MES2300-24', 500, 330], ['VPC1', 'VPC', 270, 540], ['VPC2', 'VPC', 730, 540]]);
         wire(net, o, [['vESR1', 'gi1/0/1', 'vMES', 'gi1/0/1'], ['vESR2', 'gi1/0/1', 'vMES', 'gi1/0/2'], ['VPC1', 'eth0', 'vMES', 'gi1/0/3'], ['VPC2', 'eth0', 'vMES', 'gi1/0/4']]); },
       tasks: function (p) { var ID = p.id; return [
         { t: 'vESR1 gi1/0/1 — 10.10.10.1/30, vESR2 gi1/0/1 — 10.10.10.2/30 (экран отключён); VPC1 192.168.10.10, VPC2 192.168.10.11, шлюз 192.168.10.1', ok: function (n) {
@@ -7360,7 +7368,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Копия всего трафика порта, к которому подключён ПК, уходит на порт gi1/0/12 — туда подключён анализатор (Debian, tcpdump). Синтаксис — настоящий MES: monitor session.',
       gen: function () { return { src: R(1, 2) }; },
       build: function (net) {
-        var o = place(net, [['vMES1', 'MES2428', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/1'], ['VPC2', 'eth0', 'vMES1', 'gi1/0/2'], ['Sniffer', 'ens3', 'vMES1', 'gi1/0/12']]); },
       tasks: function (p) { var S = 'gi1/0/' + p.src; return [
         { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
@@ -7577,7 +7585,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     goal: 'Офис (VPC1 за R1) должен видеть сервер SRV за R2. Маршруты настроены статически, но ping VPC1 → SRV не проходит. Найдите и исправьте одну ошибку.',
     gen: function () { return { a: R(1, 254), b: R(16, 31), fault: R(0, 5) }; },
     build: function (net, p) {
-      var r1 = net.add('vESR', 'R1', 300, 200), r2 = net.add('vESR', 'R2', 640, 200), sw = net.add('MES2428', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540),
+      var r1 = net.add('vESR', 'R1', 300, 200), r2 = net.add('vESR', 'R2', 640, 200), sw = net.add('MES2300-24', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540),
           srv = net.add('Debian-server', 'SRV', 820, 400);
       net.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1'); net.connect(r1.id, 'gi1/0/2', sw.id, 'gi1/0/24'); net.connect(v.id, 'eth0', sw.id, 'gi1/0/1'); net.connect(srv.id, 'ens3', r2.id, 'gi1/0/2');
       var A = '192.168.' + p.a, B = '172.' + p.b + '.0', f = p.fault;
@@ -7614,7 +7622,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     goal: 'На SRV работает DNS-сервер BIND9 с зоной lab.local и сайт www.lab.local. VPC1 не может выполнить ping www.lab.local. Найдите и исправьте одну ошибку (nslookup на SRV, show на VPC1, трасса).',
     gen: function () { return { a: R(1, 254), b: R(16, 31), fault: R(0, 5) }; },
     build: function (net, p) {
-      var r1 = net.add('vESR', 'R1', 460, 200), sw = net.add('MES2428', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540), srv = net.add('Debian-server', 'SRV', 720, 400);
+      var r1 = net.add('vESR', 'R1', 460, 200), sw = net.add('MES2300-24', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540), srv = net.add('Debian-server', 'SRV', 720, 400);
       net.connect(r1.id, 'gi1/0/1', sw.id, 'gi1/0/24'); net.connect(v.id, 'eth0', sw.id, 'gi1/0/1'); net.connect(srv.id, 'ens3', r1.id, 'gi1/0/2');
       var A = '192.168.' + p.a, B = '10.' + p.b + '.0', f = p.fault;
       apply(net, { R1: esr(['interface gi1/0/1', 'ip address ' + A + '.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address ' + B + '.1/24'].concat(f === 4 ? [] : ['ip firewall disable'], ['exit'])),
@@ -8104,7 +8112,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
-        else (c.mode === 'trunk' ? c.allowed.concat([c.native]) : c.gtag.concat(c.guntag)).forEach(function (v) { (by[v] = by[v] || []).push(L.name + (c.mode === 'trunk' && v !== c.native || c.gtag && c.gtag.indexOf(v) >= 0 ? '(T)' : '')); }); });
+        else (c.mode === 'trunk' ? (c.allAll ? Object.keys(d.st.vlans).map(Number) : c.allowed.concat([c.native])) : c.gtag.concat(c.guntag)).forEach(function (v) { (by[v] = by[v] || []).push(L.name + (c.mode === 'trunk' && v !== c.native || c.gtag && c.gtag.indexOf(v) >= 0 ? '(T)' : '')); }); });
       h += '<h3>VLAN и порты</h3>' + tbl(['VLAN', 'Имя', 'Порты'], Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (v) {
         var p = by[v].filter(function (x) { return net.linked(id, x.replace('(T)', '')) || x.indexOf('po') === 0; });
         return [v, d.st.vlans[v] || '—', p.join(', ') || '(подключённых нет)']; }), '');

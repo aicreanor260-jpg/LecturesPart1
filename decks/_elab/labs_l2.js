@@ -66,8 +66,8 @@
       goal: 'Кольцо из пяти коммутаторов MES. Без STP кадры зацикливаются; с RSTP один порт уходит в Alternate и блокируется. Смените корень приоритетом и посмотрите, как перестроится дерево (show spanning-tree, путь пакета).',
       gen: function () { return { root: R(2, 5) }; },
       build: function (net) {
-        var o = place(net, [['vMES1', 'MES2428', 240, 130], ['vMES3', 'MES2428', 760, 130], ['vMES2', 'MES2428', 240, 400], ['vMES4', 'MES2428', 620, 470],
-                            ['vMES5', 'MES2428', 860, 330], ['VPC1', 'VPC', 80, 260], ['VPC2', 'VPC', 920, 560]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 240, 130], ['vMES3', 'MES2300-24', 760, 130], ['vMES2', 'MES2300-24', 240, 400], ['vMES4', 'MES2300-24', 620, 470],
+                            ['vMES5', 'MES2300-24', 860, 330], ['VPC1', 'VPC', 80, 260], ['VPC2', 'VPC', 920, 560]]);
         wire(net, o, [['vMES1', 'gi1/0/1', 'vMES3', 'gi1/0/12'], ['vMES1', 'gi1/0/12', 'vMES2', 'gi1/0/1'], ['vMES2', 'gi1/0/12', 'vMES4', 'gi1/0/1'],
                       ['vMES3', 'gi1/0/1', 'vMES5', 'gi1/0/12'], ['vMES4', 'gi1/0/12', 'vMES5', 'gi1/0/1'],
                       ['VPC1', 'eth0', 'vMES1', 'gi1/0/5'], ['VPC2', 'eth0', 'vMES5', 'gi1/0/5']]);
@@ -77,7 +77,7 @@
         { t: 'Имена vMES1…vMES5 (hostname)', ok: function (n) { return M.every(function (m) { return dev(n, m).host === m; }); } },
         { t: 'VPC1 192.168.1.1/24 и VPC2 192.168.1.2/24; сейчас ping не проходит — в кольце петля без STP (смотрите трассу)', ok: function (n) {
             return dev(n, 'VPC1').ip === '192.168.1.1' && dev(n, 'VPC2').ip === '192.168.1.2'; } },
-        { t: 'На всех коммутаторах: spanning-tree и spanning-tree mode rst', ok: function (n) { return M.every(function (m) { var s = dev(n, m).stp; return s && s.on && s.mode === 'rst'; }); } },
+        { t: 'На всех коммутаторах: spanning-tree и spanning-tree mode rstp', ok: function (n) { return M.every(function (m) { var s = dev(n, m).stp; return s && s.on && s.mode === 'rst'; }); } },
         { t: 'Корнем сделайте ' + rt + ': spanning-tree priority 16384', ok: function (n) { var d = n.byName(rt); n.stp();
             return dev(n, rt).stp.prio === 16384 && n._stp.root[d.id] === d.id; } },
         { t: 'В кольце ровно один порт в роли Alternate (заблокирован), ping VPC1 → VPC2 проходит', ok: function (n) { var t = n.stp(), c = 0;
@@ -85,35 +85,35 @@
             return c === 1 && n.reach('VPC1', '192.168.1.2'); } }]; },
       sol: function (p) { var o = {};
         ['vMES1', 'vMES2', 'vMES3', 'vMES4', 'vMES5'].forEach(function (m, i) {
-          o[m] = ['enable', 'configure', 'hostname ' + m, 'spanning-tree', 'spanning-tree mode rst'].concat(i + 1 === p.root ? ['spanning-tree priority 16384'] : [], ['end', 'show spanning-tree']); });
+          o[m] = ['enable', 'configure', 'hostname ' + m, 'spanning-tree', 'spanning-tree mode rstp'].concat(i + 1 === p.root ? ['spanning-tree priority 16384'] : [], ['end', 'show spanning-tree']); });
         o.VPC1 = ['ip 192.168.1.1/24', 'ping 192.168.1.2']; o.VPC2 = ['ip 192.168.1.2/24'];
         return o; } },
 
     // ------------------------------------------------------------ 8.2
     { id: '8.2', title: 'Агрегация каналов (LACP)',
       goal: 'Два коммутатора соединены несколькими кабелями. Без агрегации STP оставит работать только один; объедините их в Port-channel 1 по LACP — каналы работают вместе, и связь сохраняется, пока жив хотя бы один кабель.',
-      gen: function () { return { k: R(3, 8), pas: R(0, 1) === 1 }; },
+      gen: function () { return { k: R(3, 8) }; },
       build: function (net, p) {
-        var o = place(net, [['vMES1', 'MES2428', 300, 300], ['vMES2', 'MES2428', 700, 300], ['VPC1', 'VPC', 120, 500], ['VPC2', 'VPC', 880, 500]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 300, 300], ['vMES2', 'MES2300-24', 700, 300], ['VPC1', 'VPC', 120, 500], ['VPC2', 'VPC', 880, 500]]);
         for (var i = 1; i <= p.k; i++) net.connect(o.vMES1.id, 'gi1/0/' + i, o.vMES2.id, 'gi1/0/' + i);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/10'], ['VPC2', 'eth0', 'vMES2', 'gi1/0/10']]); },
       tasks: function (p) { var K = p.k, rng = 'gi1/0/1-' + K; return [
         { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
-        { t: 'vMES1 и vMES2: interface port-channel 1, порты ' + rng + ' — channel-group 1 mode ' + (p.pas ? 'active на vMES1 и passive на vMES2' : 'active'),
-          ok: function (n) { return [['vMES1', 'active'], ['vMES2', p.pas ? 'passive' : 'active']].every(function (x) { var s = dev(n, x[0]);
+        { t: 'vMES1 и vMES2: interface port-channel 1, порты ' + rng + ' — channel-group 1 mode auto (LACP)',
+          ok: function (n) { return [['vMES1', 'active'], ['vMES2', 'active']].every(function (x) { var s = dev(n, x[0]);
             if (!s.pos || !s.pos.po1) return false;
             for (var i = 1; i <= K; i++) { var c = s.ports['gi1/0/' + i].cg; if (!c || c.id !== 1 || c.mode !== x[1]) return false; } return true; }); } },
         { t: 'Отключите на vMES1 все кабели агрегата, кроме одного (shutdown на gi1/0/1-' + (K - 1) + ')', ok: function (n) { var s = dev(n, 'vMES1');
             for (var i = 1; i < K; i++) if (!s.ports['gi1/0/' + i].shut) return false; return !s.ports['gi1/0/' + K].shut; } },
-        { t: 'Port-channel 1 собран на оставшемся канале, ping VPC1 → VPC2 проходит (show etherchannel summary)', ok: function (n) {
+        { t: 'Port-channel 1 собран на оставшемся канале, ping VPC1 → VPC2 проходит (show interfaces channel-group)', ok: function (n) {
             var L = n.lports(n.byName('vMES1').id).filter(function (l) { return l.name === 'po1'; })[0];
             return !!L && L.members.length === 1 && n.reach('VPC1', '192.168.10.20'); } }]; },
       sol: function (p) { var K = p.k, o = {};
-        [['vMES1', 'active'], ['vMES2', p.pas ? 'passive' : 'active']].forEach(function (x) {
-          o[x[0]] = ['enable', 'configure', 'hostname ' + x[0], 'interface port-channel 1', 'exit', 'interface range gigabitethernet 1/0/1-' + K,
-                     'channel-group 1 mode ' + x[1], 'end', 'show etherchannel summary']; });
+        ['vMES1', 'vMES2'].forEach(function (m) {
+          o[m] = ['enable', 'configure', 'hostname ' + m, 'interface port-channel 1', 'exit', 'interface range gigabitethernet 1/0/1-' + K,
+                  'channel-group 1 mode auto', 'end', 'show interfaces channel-group']; });
         o.VPC1 = ['ip 192.168.10.10/24', 'ping 192.168.10.20']; o.VPC2 = ['ip 192.168.10.20/24'];
-        o.vMES1 = o.vMES1.concat(K > 1 ? ['configure', 'interface range gigabitethernet 1/0/1-' + (K - 1), 'shutdown', 'end', 'show etherchannel summary'] : []);
+        o.vMES1 = o.vMES1.concat(K > 1 ? ['configure', 'interface range gigabitethernet 1/0/1-' + (K - 1), 'shutdown', 'end', 'show interfaces channel-group'] : []);
         return o; } },
 
     // ------------------------------------------------------------ 8.3
@@ -121,7 +121,7 @@
       goal: 'Два маршрутизатора делят один виртуальный адрес шлюза 192.168.10.1. Мастер отвечает за него; при разрыве мастера роль сразу берёт резервный, и ПК этого не замечают.',
       gen: function () { return { id: R(1, 255) }; },
       build: function (net) {
-        var o = place(net, [['vESR1', 'vESR', 250, 120], ['vESR2', 'vESR', 750, 120], ['vMES', 'MES2428', 500, 330], ['VPC1', 'VPC', 270, 540], ['VPC2', 'VPC', 730, 540]]);
+        var o = place(net, [['vESR1', 'vESR', 250, 120], ['vESR2', 'vESR', 750, 120], ['vMES', 'MES2300-24', 500, 330], ['VPC1', 'VPC', 270, 540], ['VPC2', 'VPC', 730, 540]]);
         wire(net, o, [['vESR1', 'gi1/0/1', 'vMES', 'gi1/0/1'], ['vESR2', 'gi1/0/1', 'vMES', 'gi1/0/2'], ['VPC1', 'eth0', 'vMES', 'gi1/0/3'], ['VPC2', 'eth0', 'vMES', 'gi1/0/4']]); },
       tasks: function (p) { var ID = p.id; return [
         { t: 'vESR1 gi1/0/1 — 10.10.10.1/30, vESR2 gi1/0/1 — 10.10.10.2/30 (экран отключён); VPC1 192.168.10.10, VPC2 192.168.10.11, шлюз 192.168.10.1', ok: function (n) {

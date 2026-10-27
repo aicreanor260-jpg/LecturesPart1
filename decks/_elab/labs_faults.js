@@ -12,7 +12,7 @@
     goal: 'Офис (VPC1 за R1) должен видеть сервер SRV за R2. Маршруты настроены статически, но ping VPC1 → SRV не проходит. Найдите и исправьте одну ошибку.',
     gen: function () { return { a: R(1, 254), b: R(16, 31), fault: R(0, 5) }; },
     build: function (net, p) {
-      var r1 = net.add('vESR', 'R1', 300, 200), r2 = net.add('vESR', 'R2', 640, 200), sw = net.add('MES2428', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540),
+      var r1 = net.add('vESR', 'R1', 300, 200), r2 = net.add('vESR', 'R2', 640, 200), sw = net.add('MES2300-24', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540),
           srv = net.add('Debian-server', 'SRV', 820, 400);
       net.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1'); net.connect(r1.id, 'gi1/0/2', sw.id, 'gi1/0/24'); net.connect(v.id, 'eth0', sw.id, 'gi1/0/1'); net.connect(srv.id, 'ens3', r2.id, 'gi1/0/2');
       var A = '192.168.' + p.a, B = '172.' + p.b + '.0', f = p.fault;
@@ -49,7 +49,7 @@
     goal: 'На SRV работает DNS-сервер BIND9 с зоной lab.local и сайт www.lab.local. VPC1 не может выполнить ping www.lab.local. Найдите и исправьте одну ошибку (nslookup на SRV, show на VPC1, трасса).',
     gen: function () { return { a: R(1, 254), b: R(16, 31), fault: R(0, 5) }; },
     build: function (net, p) {
-      var r1 = net.add('vESR', 'R1', 460, 200), sw = net.add('MES2428', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540), srv = net.add('Debian-server', 'SRV', 720, 400);
+      var r1 = net.add('vESR', 'R1', 460, 200), sw = net.add('MES2300-24', 'SW1', 300, 400), v = net.add('VPC', 'VPC1', 140, 540), srv = net.add('Debian-server', 'SRV', 720, 400);
       net.connect(r1.id, 'gi1/0/1', sw.id, 'gi1/0/24'); net.connect(v.id, 'eth0', sw.id, 'gi1/0/1'); net.connect(srv.id, 'ens3', r1.id, 'gi1/0/2');
       var A = '192.168.' + p.a, B = '10.' + p.b + '.0', f = p.fault;
       apply(net, { R1: esr(['interface gi1/0/1', 'ip address ' + A + '.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address ' + B + '.1/24'].concat(f === 4 ? [] : ['ip firewall disable'], ['exit'])),

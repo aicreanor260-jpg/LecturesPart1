@@ -33,6 +33,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
 <tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
 </table>
+<p>Коммутаторы в лабах NTF-2 — MES2300-24 (6.x): команды методичек вводятся слово в слово.</p>
 <p>Порты: fa 100M, gi 1G, tw 2.5G, te 10G, fo 40G, hu 100G (например te1/0/1). Ветка ПО видна в палитре рядом с моделью.</p>
 <h2>Команды MES (коммутатор)</h2>
 <table>
@@ -44,7 +45,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>vlan 10,20 (10.x, из config) · vlan database → vlan 10,20 (6.x) · vlan 10 → name IT</td><td>создание VLAN; <code>no vlan 10</code> — удаление</td></tr>
 <tr><td>switchport mode access|trunk|general</td><td>режим порта</td></tr>
 <tr><td>switchport access vlan 10</td><td>VLAN доступа; <code>no switchport access vlan</code></td></tr>
-<tr><td>switchport trunk allowed vlan add|remove 10,20</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code></td></tr>
+<tr><td>switchport trunk allowed vlan add|remove 10,20 (6.x)</td><td>VLAN на транке; <code>switchport trunk native vlan 99</code>. В 10.x trunk пропускает все VLAN, выбор — mode general</td></tr>
 <tr><td>switchport general allowed vlan add 10 tagged|untagged · switchport general pvid 10</td><td>режим general</td></tr>
 <tr><td>shutdown / no shutdown</td><td>выключить / включить порт или SVI</td></tr>
 <tr><td>interface vlan 10 · ip address 10.0.0.1 255.255.255.0</td><td>SVI (также <code>/24</code>)</td></tr>

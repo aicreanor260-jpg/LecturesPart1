@@ -63,7 +63,7 @@
       goal: 'Копия всего трафика порта, к которому подключён ПК, уходит на порт gi1/0/12 — туда подключён анализатор (Debian, tcpdump). Синтаксис — настоящий MES: monitor session.',
       gen: function () { return { src: R(1, 2) }; },
       build: function (net) {
-        var o = place(net, [['vMES1', 'MES2428', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
+        var o = place(net, [['vMES1', 'MES2300-24', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/1'], ['VPC2', 'eth0', 'vMES1', 'gi1/0/2'], ['Sniffer', 'ens3', 'vMES1', 'gi1/0/12']]); },
       tasks: function (p) { var S = 'gi1/0/' + p.src; return [
         { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },

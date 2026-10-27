@@ -458,7 +458,7 @@
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
-        else (c.mode === 'trunk' ? c.allowed.concat([c.native]) : c.gtag.concat(c.guntag)).forEach(function (v) { (by[v] = by[v] || []).push(L.name + (c.mode === 'trunk' && v !== c.native || c.gtag && c.gtag.indexOf(v) >= 0 ? '(T)' : '')); }); });
+        else (c.mode === 'trunk' ? (c.allAll ? Object.keys(d.st.vlans).map(Number) : c.allowed.concat([c.native])) : c.gtag.concat(c.guntag)).forEach(function (v) { (by[v] = by[v] || []).push(L.name + (c.mode === 'trunk' && v !== c.native || c.gtag && c.gtag.indexOf(v) >= 0 ? '(T)' : '')); }); });
       h += '<h3>VLAN и порты</h3>' + tbl(['VLAN', 'Имя', 'Порты'], Object.keys(by).map(Number).sort(function (a, b) { return a - b; }).map(function (v) {
         var p = by[v].filter(function (x) { return net.linked(id, x.replace('(T)', '')) || x.indexOf('po') === 0; });
         return [v, d.st.vlans[v] || '—', p.join(', ') || '(подключённых нет)']; }), '');

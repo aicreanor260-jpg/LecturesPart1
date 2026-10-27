@@ -62,9 +62,11 @@
 Чего нет: голосовых портов FXS/FXO, E1, USB, LTE-модема (ESR-15R-4G) — только Ethernet.
 
 ## Ветки ПО коммутаторов — свой CLI у каждой
+Коммутаторы во встроенных лабах NTF-2 — **MES2300-24 (ветка 6.x)**: команды методичек (`vlan 10,20`, `switchport trunk allowed vlan add 10,20`, `channel-group 1 mode auto`, `spanning-tree mode rstp`) вводятся слово в слово. MES2428 и другие модели 10.x — синтаксис ПО 10.4.6.
+
 | Ветка | Модели | Отличия синтаксиса |
 |---|---|---|
-| 10.x | MES14xx, MES24xx, MES3400, MES37xx | `spanning-tree mode rst\|mst\|rapid-pvst`, `channel-group N mode active\|passive\|on`, `set lldp enable`, `monitor session`; VLAN прямо из config (`vlan 10,20`, без `vlan database`); `write startup-config`; шлюз — `ip route 0.0.0.0 0.0.0.0 NH`; `clock utc-offset +3`; `show system information`, `show ip arp`, `clear ip arp`, `show mac-address-table`, `show monitor session all`; `storm-control broadcast level pps\|kbps N`. Нет: `switchport trunk allowed vlan`, `ip default-gateway`, `ip ssh server`, `ip http server`, `terminal datadump`, `login-attempts`, `history size` (сверено с ПО 10.4.6) |
+| 10.x | MES14xx, MES24xx, MES3400, MES37xx | `spanning-tree mode rst\|mst\|rapid-pvst`, `channel-group N mode active\|passive\|on`, `set lldp enable`, `monitor session`; VLAN прямо из config (`vlan 10,20`, без `vlan database`); `write startup-config`; шлюз — `ip route 0.0.0.0 0.0.0.0 NH`; `clock utc-offset +3`; `show system information`, `show ip arp`, `clear ip arp`, `show mac-address-table`, `show monitor session all`; `storm-control broadcast level pps\|kbps N`. Порт trunk передаёт с тегом все VLAN коммутатора (кроме native); выбрать VLAN — `switchport mode general` + `switchport general allowed vlan add 10,20 tagged`. Нет: `switchport trunk allowed vlan`, `ip default-gateway`, `ip ssh server`, `ip http server`, `terminal datadump`, `login-attempts`, `history size` (сверено с ПО 10.4.6) |
 | 6.x и 4.x | MES23xx, MES33xx, MES35xx, MES53xx, MES54xx–57xx | `spanning-tree mode stp\|rstp\|mstp`, `channel-group N mode auto\|on`, `lldp run`, `port monitor <порт>` на порту-получателе, `show interfaces channel-group` |
 | 8.x (FASTPATH) | MES5448, MES7048 | приглашения `(switch) #`, `(switch) (Config)#`, `(switch) (Interface 1/0/1)#`; порты `1/0/N`, диапазон `interface 1/0/1-1/0/4`; `vlan database` из `#`, `vlan name 10 IT`; LAG: `port-channel ИМЯ`, `addport lag 1`, `port-channel static`; `vlan participation include`, `vlan tagging`, `vlan pvid`; `spanning-tree mst priority 0 4096`; `monitor session 1 … mode`; `show port-channel brief` |
 
@@ -86,7 +88,7 @@ vlan 10,20 / exit (10.x)  vlan database / vlan 10,20 / exit (6.x)  vlan 10 / nam
 interface range gigabitethernet 1/0/1-4
 switchport mode access | trunk | general
 switchport access vlan 10          no switchport access vlan
-switchport trunk allowed vlan add 10,20     switchport trunk native vlan 99
+switchport trunk allowed vlan add 10,20 (6.x; в 10.x trunk пропускает все VLAN)     switchport trunk native vlan 99
 switchport general allowed vlan add 100 tagged     switchport general pvid 10
 shutdown / no shutdown
 interface vlan 10 / ip address 10.0.0.1 255.255.255.0   (или /24)

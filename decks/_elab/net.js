@@ -386,7 +386,7 @@
     if (p.stackLink) return p.stackLink === 'active' ? 't' : null;   // стековый линк: внутренняя шина стека, все VLAN (резервный — standby)
     if (p.mode === 'access') return p.access === v ? 'u' : null;
     if (p.mode === 'customer') return p.cvlan === v ? 'c' : null;
-    if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allowed.indexOf(v) >= 0 ? 't' : null);
+    if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allAll || p.allowed.indexOf(v) >= 0 ? 't' : null);   // allAll — MES 10.x: trunk пропускает все VLAN
     if (p.guntag.indexOf(v) >= 0) return 'u';
     return p.gtag.indexOf(v) >= 0 ? 't' : null;
   }
@@ -401,7 +401,7 @@
     if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
     else {
       if (p.mode === 'access') return { drop: port + ' в режиме access принимает только кадры без тега, пришёл тег ' + tag };
-      if (p.mode === 'trunk' && p.allowed.indexOf(tag) < 0 && p.native !== tag) return { drop: 'VLAN ' + tag + ' не разрешена на trunk ' + port };
+      if (p.mode === 'trunk' && !p.allAll && p.allowed.indexOf(tag) < 0 && p.native !== tag) return { drop: 'VLAN ' + tag + ' не разрешена на trunk ' + port };
       if (p.mode === 'general' && p.gtag.indexOf(tag) < 0 && p.guntag.indexOf(tag) < 0) return { drop: 'VLAN ' + tag + ' не разрешена на general-порту ' + port };
       v = tag;
     }

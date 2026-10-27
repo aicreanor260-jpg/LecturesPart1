@@ -22,7 +22,7 @@
       goal: 'R1 раздаёт адреса компьютерам за коммутатором. Пошаговая трасса покажет обмен DISCOVER → OFFER → REQUEST → ACK.',
       gen: function () { return { x: R(10, 250), lo: PK([100, 50, 20]), lease: PK(['0:1:0', '0:0:30', '1:0:0']) }; },
       build: function (net) {
-        var o = place(net, [['R1', 'vESR', 500, 110], ['SW1', 'MES2428', 500, 320], ['VPC1', 'VPC', 220, 500], ['VPC2', 'VPC', 500, 540], ['VPC3', 'VPC', 780, 500]]);
+        var o = place(net, [['R1', 'vESR', 500, 110], ['SW1', 'MES2300-24', 500, 320], ['VPC1', 'VPC', 220, 500], ['VPC2', 'VPC', 500, 540], ['VPC3', 'VPC', 780, 500]]);
         wire(net, o, [['R1', 'gi1/0/1', 'SW1', 'gi1/0/1'], ['VPC1', 'eth0', 'SW1', 'gi1/0/10'], ['VPC2', 'eth0', 'SW1', 'gi1/0/11'], ['VPC3', 'eth0', 'SW1', 'gi1/0/12']]); },
       net: function (p) { var A = '192.168.' + p.x; return { A: A, a: A + '.' + p.lo, b: A + '.' + (p.lo + 100), pool: 'DHCP-' + p.x }; },
       tasks: function (p) { var N = this.net(p); return [
@@ -84,7 +84,7 @@
       goal: 'Две одинаковые частные сети 192.168.1.0/24 за R1 и R2 выходят в «интернет» (ISP) под адресом внешнего интерфейса — Source NAT. На R2 веб-сервер публикуется наружу по TCP 80 — Destination NAT. Docker-браузер за R1 открывает сайт по внешнему адресу R2.',
       gen: function () { return { y: R(10, 99) }; },
       build: function (net) {
-        var o = place(net, [['R1', 'vESR', 330, 330], ['ISP', 'vESR', 500, 110], ['R2', 'vESR', 670, 330], ['SW1', 'MES2428', 260, 470], ['SW2', 'MES2428', 740, 470],
+        var o = place(net, [['R1', 'vESR', 330, 330], ['ISP', 'vESR', 500, 110], ['R2', 'vESR', 670, 330], ['SW1', 'MES2300-24', 260, 470], ['SW2', 'MES2300-24', 740, 470],
                             ['Docker', 'Docker', 60, 470], ['VPC1', 'VPC', 260, 595], ['VPC2', 'VPC', 740, 595], ['Server', 'Debian-server', 940, 470]]);
         wire(net, o, [['R1', 'gi1/0/1', 'ISP', 'gi1/0/1'], ['R2', 'gi1/0/1', 'ISP', 'gi1/0/2'], ['R1', 'gi1/0/3', 'SW1', 'gi1/0/1'], ['R2', 'gi1/0/3', 'SW2', 'gi1/0/1'],
                       ['Docker', 'ens3', 'SW1', 'gi1/0/3'], ['VPC1', 'eth0', 'SW1', 'gi1/0/2'], ['VPC2', 'eth0', 'SW2', 'gi1/0/2'], ['Server', 'ens3', 'SW2', 'gi1/0/12']]); },

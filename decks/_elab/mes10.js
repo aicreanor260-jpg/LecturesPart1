@@ -4,7 +4,9 @@
    show version / show system → show system information, show system id;  show arp → show ip arp;  clear arp-cache → clear ip arp;
    show mac address-table → show mac-address-table;  clear mac address-table dynamic → clear mac-address-table dynamic;
    show ports monitor → show monitor session {<id>|all} [detail];  vlan database → vlan 10,20 прямо в config;
-   terminal datadump, ip ssh server, ip http server, line: login-attempts / history size — в 10.x нет.
+   terminal datadump, ip ssh server, ip http server, line: login-attempts / history size — в 10.x нет;
+   switchport trunk allowed vlan add/remove — в 10.x нет: trunk пропускает все VLAN, выбор VLAN — switchport mode general +
+   switchport general allowed vlan add … tagged. Лабы NTF2 (методички на синтаксисе 6.x) идут на MES2300-24, ветка 6.x.
    Storm-control 10.x (единица обязательна) — в l2sec.js. Модуль грузится после всех модулей MES, чтобы закрыть их команды. */
 (function (G) {
   'use strict';
@@ -21,11 +23,16 @@
   // ---------------------------------------------------------------- закрыть в диалекте 10
   var CLOSED = ['write memory', 'ip default-gateway <ip>', 'no ip default-gateway', 'clock timezone <w> <w>', 'no clock timezone',
     'terminal datadump', 'terminal no datadump', 'vlan database', 'ip ssh server', 'no ip ssh server', 'ip http server', 'no ip http server',
-    'login-attempts <n>', 'history size <n>'];
+    'login-attempts <n>', 'history size <n>',
+    'switchport trunk allowed vlan add <list>', 'switchport trunk allowed vlan remove <list>'];   // 10.x: trunk пропускает все VLAN, выбор — mode general
   ['show version', 'show system', 'show arp', 'clear arp-cache', 'show mac address-table', 'show mac address-table aging-time',
     'clear mac address-table dynamic', 'show ports monitor'].forEach(function (p) { CLOSED.push(p, 'do ' + p); });
   CLOSED.forEach(function (p) { find(p).forEach(function (c) { if (!c.dl || c.dl.indexOf('10') >= 0) c.xdl = (c.xdl || []).concat('10'); }); });
   EL.mes10 = { closed: CLOSED };
+  // 10.x: порт trunk передаёт с тегом все VLAN коммутатора (кроме native) — отмечаем порт при переводе в trunk
+  find('switchport mode trunk').forEach(function (c) { var r0 = c.run;
+    c.run = function (st) { var r = r0.apply(this, arguments); if ((st.dialect || '10') === '10' && st.ctx && st.ctx.ports)
+      st.ctx.ports.forEach(function (k) { var p = st.ports[k] || (st.pos || {})[k]; if (p) p.allAll = true; }); return r; }; });
 
   // ---------------------------------------------------------------- варианты 10.x
   cmd('priv', 'write startup-config', function (st) { return EL.mes.save(st); }, 'Сохранить конфигурацию');
