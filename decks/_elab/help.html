@@ -153,6 +153,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>storm-control broadcast level N · storm-control broadcast action shutdown</td><td>шторм выключает порт</td></tr>
 </table>
 
+<h2>Перезагрузка</h2>
+<table>
+<tr><td>MES: reload → y</td><td>перезагрузка с подтверждением; загружается startup-config (сначала write)</td></tr>
+<tr><td>ESR: reload system · reload system in 5 · reload system at 13:00:00 10 august 2026 · reload cancel · show system reload</td><td>сразу или по расписанию (модельное время)</td></tr>
+<tr><td>ESR: commit без confirm</td><td>через 600 с и при перезагрузке — откат к последней подтверждённой конфигурации</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

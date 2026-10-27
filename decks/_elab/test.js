@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -846,6 +846,29 @@ EL.labs.LABS.forEach(runLab);
   chk('ip vrf forwarding несуществующего VRF', /not found/.test((n.exec(r.id, 'configure'), n.exec(r.id, 'interface gi1/0/6'), n.exec(r.id, 'ip vrf forwarding NOPE'))));
   n.exec(r.id, 'end');
   console.log('✓ VRF');
+})();
+
+// перезагрузка ESR по расписанию и откат неподтверждённого commit
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1');
+  EL.labs.apply(n, { R1: ['configure', 'hostname BASE', 'end', 'commit', 'confirm'] });
+  n.exec(r.id, 'reload system in 5');
+  chk('show system reload — запланировано', /^System reload is scheduled for \d\d:\d\d:\d\d \d+ [A-Z][a-z]+ \d{4}$/.test(n.exec(r.id, 'show system reload')), n.exec(r.id, 'show system reload'));
+  n.exec(r.id, 'reload cancel'); chk('reload cancel', n.exec(r.id, 'show system reload') === '');
+  EL.labs.apply(n, { R1: ['configure', 'hostname TEMP', 'end', 'commit'] });
+  chk('после commit без confirm — новый hostname', r.st.run.host === 'TEMP');
+  n.tick(300); chk('таймер ещё идёт (300 с)', r.st.run.host === 'TEMP');
+  n.tick(301); var ev = n.events();
+  chk('600 с без confirm — откат к подтверждённой конфигурации', r.st.run.host === 'BASE' && !r.st.unconfirmed && ev.some(function (e) { return /reverted/.test(e.msg); }), r.st.run.host);
+  EL.labs.apply(n, { R1: ['configure', 'hostname TEMP2', 'end', 'commit'] });
+  n.reboot(r.id); chk('перезагрузка без confirm — загружается подтверждённая', r.st.run.host === 'BASE');
+  EL.labs.apply(n, { R1: ['configure', 'hostname KEEP', 'end', 'commit', 'confirm'] });
+  n.reboot(r.id); chk('с confirm — конфигурация сохраняется после перезагрузки', r.st.run.host === 'KEEP');
+  n.exec(r.id, 'reload system in 1'); var booted = false; n.onReload = function () { booted = true; }; n.tick(61);
+  chk('reload system in 1 — перезагрузка через минуту модельного времени', booted && n.exec(r.id, 'show system reload') === '');
+  chk('reload system at в прошлом — ошибка', /Illegal/.test(n.exec(r.id, 'reload system at 10:00:00 1 january 2001')));
+  console.log('✓ перезагрузка и таймер commit');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

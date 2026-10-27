@@ -102,6 +102,7 @@
   }
   $('mode').addEventListener('click', function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); });
   function advance(dt, jump) {
+    net.onReload = function (rid) { boot(rid, true); };   // reload system in/at — по модельному времени
     var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
     $('clkT').textContent = net.clockText();
     if (gone.length && mode === 'test') { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
@@ -331,6 +332,7 @@
   }
   function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
     if (t.more && !d.off) p = net.moreText(id);
+    if (t.ask && !d.off) p = t.ask.q;
     w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
@@ -345,10 +347,12 @@
         else tlog(id, d.type === 'esr' ? 'Login incorrect' : '% Authentication failed', 'e'); }
       setPr(id); return;
     }
+    if (t.ask) { var q = t.ask; t.ask = null; tlog(id, q.q + line, 'c'); if (/^\s*y/i.test(line)) q.yes(); setPr(id); return; }   // подтверждение (y/n)
     var p = net.prompt(id);
     tlog(id, p + (pw ? '' : line), 'c'); if (line.trim()) t.hist.push(line); t.hi = t.hist.length;
     hooks.cur = id;
-    if (d.type === 'mes' && /^\s*rel(o(a(d)?)?)?\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
+    if (d.type === 'mes' && /^\s*rel(o(a(d)?)?)?\s*$/i.test(line) && d.st.mode === 'priv') {   // руководство 6.6.8.8: reload спрашивает подтверждение
+      t.ask = { q: 'This command will reset the whole system and disconnect your current session. Do you want to continue (y/n) [n]? ', yes: function () { boot(id, true); } }; setPr(id); return; }
     if (d.type === 'esr' && /^\s*reload\s+system\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
     var r = realOut(d, line, net.exec(id, line, hooks));
     if (r) outPaged(id, r, /^%|Unrecognized|Bad command|command not found|Permission denied|\bError\b|not reachable|timeout|100% packet loss|Login incorrect|Unable|refused/i.test(r) ? 'e' : '');
