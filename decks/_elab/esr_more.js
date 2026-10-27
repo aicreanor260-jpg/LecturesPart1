@@ -26,18 +26,20 @@
     if (['tcp', 'udp', 'icmp', 'any'].indexOf(p) < 0) return '% Протокол: tcp | udp | icmp | any'; rule(st).proto = p; touch(st); }, 'Протокол');
   cmd('aclr', 'match destination-port port-range <w>', function (st, a) { var m = String(a[0]).match(/^(\d+)(?:-(\d+))?$/);
     if (!m) return '% Порт или диапазон: 23 или 20-23'; rule(st).dport = [+m[1], +(m[2] || m[1])]; touch(st); }, 'Порт назначения');
-  function rng(s) { var m = String(s).match(/^(\d+\.\d+\.\d+\.\d+)-(\d+\.\d+\.\d+\.\d+)$/); if (m) return [m[1], m[2]];
-    var c = IP.parseCidr(s); if (c) { var n = IP.ip2n(c.ip) & IP.maskN(c.len); return [IP.n2ip(n >>> 0), IP.n2ip((n | ~IP.maskN(c.len)) >>> 0)]; } return null; }
-  cmd('aclr', 'match source-address address-range <w>', function (st, a) { var r = rng(a[0]); if (!r) return '% Формат: A.B.C.D-A.B.C.D';
-    rule(st).src = r; touch(st); }, 'Адрес источника');
-  cmd('aclr', 'match destination-address address-range <w>', function (st, a) { var r = rng(a[0]); if (!r) return '% Формат: A.B.C.D-A.B.C.D';
-    rule(st).dst = r; touch(st); }, 'Адрес назначения');
+  // match source-address | destination-address { <ADDR> <WILDCARD> | any } — адрес с wildcard-маской (0.0.0.255); маска вида 255.255.255.0 тоже принимается
+  function wc(ip, m) { var a = IP.ip2n(ip), w = IP.ip2n(m); if (a === null || w === null) return null; if ((w >>> 24) === 255) w = (~w) >>> 0;
+    var lo = (a & ~w) >>> 0, hi = (lo | w) >>> 0; return { r: [IP.n2ip(lo), IP.n2ip(hi)], txt: ip + ' ' + IP.n2ip(w) }; }
+  ['source', 'destination'].forEach(function (k) { var f = k === 'source' ? 'src' : 'dst';
+    cmd('aclr', 'match ' + k + '-address <ip> <ip>', function (st, a) { var x = wc(a[0], a[1]); if (!x) return 'Syntax error: Illegal parameter';
+      rule(st)[f] = x.r; rule(st)[f + 'T'] = x.txt; touch(st); }, k === 'source' ? 'Адрес источника и wildcard' : 'Адрес назначения и wildcard');
+    cmd('aclr', 'match ' + k + '-address any', function (st) { delete rule(st)[f]; rule(st)[f + 'T'] = 'any'; touch(st); });
+    cmd('aclr', 'no match ' + k + '-address', function (st) { delete rule(st)[f]; delete rule(st)[f + 'T']; touch(st); }); });
   cmd('aclr', 'enable', function (st) { if (!rule(st).act) return '% Сначала задайте action permit | deny'; rule(st).on = true; touch(st); }, 'Включить правило');
   cmd('aclr', 'no enable', function (st) { rule(st).on = false; touch(st); });
   function eachIf(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
-  cmd('gi sub', 'service-acl input <w>', function (st, a) { if (!acls(st)[a[0]]) return '% Список доступа ' + a[0] + ' не создан';
+  cmd('gi', 'service-acl input <w>', function (st, a) { if (!acls(st)[a[0]]) return '% Список доступа ' + a[0] + ' не создан';
     eachIf(st, function (x) { x.acl = a[0]; }); }, 'Назначить список доступа на вход');
-  cmd('gi sub', 'no service-acl input', function (st) { eachIf(st, function (x) { delete x.acl; }); });
+  cmd('gi', 'no service-acl input', function (st) { eachIf(st, function (x) { delete x.acl; }); });
   cmd('priv', 'show ip access-list <w>', function (st, a) { var L = (st.run.acls || {})[a[0]]; if (!L) return '% Список не найден';
     return Object.keys(L.rules).sort(function (x, y) { return x - y; }).map(function (k) { var r = L.rules[k];
       return 'rule ' + k + ': ' + (r.act || '-') + (r.proto ? ' ' + r.proto : '') + (r.dport ? ' dport ' + r.dport.join('-') : '') +
@@ -60,7 +62,7 @@
     Object.keys(c.acls || {}).forEach(function (n) { var L = c.acls[n]; o.push('ip access-list extended ' + n);
       Object.keys(L.rules).forEach(function (k) { var r = L.rules[k]; o.push('  rule ' + k); if (r.act) o.push('    action ' + r.act);
         if (r.proto) o.push('    match protocol ' + r.proto); if (r.dport) o.push('    match destination-port port-range ' + (r.dport[0] === r.dport[1] ? r.dport[0] : r.dport.join('-')));
-        if (r.src) o.push('    match source-address address-range ' + r.src.join('-')); if (r.dst) o.push('    match destination-address address-range ' + r.dst.join('-'));
+        if (r.srcT) o.push('    match source-address ' + r.srcT); if (r.dstT) o.push('    match destination-address ' + r.dstT);
         if (r.on) o.push('    enable'); o.push('  exit'); });
       o.push('exit'); });
     Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k], d = [];

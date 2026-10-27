@@ -227,17 +227,13 @@
 
   // ================================================================ таймауты сессий
   Object.keys(TO).forEach(function (k) {
-    var pats = [k]; if (k === 'tcp-estabilished') pats.push('tcp-established');   // в CLI ESR команда написана с опечаткой — принимаем оба
+    var pats = [k];          // tcp-estabilished — так (с опечаткой) команда называется в самом ПО ESR
     pats.forEach(function (w, i) {
       cmd('config', 'ip firewall sessions ' + w + '-timeout <n>', function (st, a) { if (a[0] < 1 || a[0] > 8553600) return '% Допустимо 1..8553600 с';
         st.cand.fwto = st.cand.fwto || {}; st.cand.fwto[k] = a[0]; touch(st); }, i ? undefined : 'Таймаут сессий, с (по умолчанию ' + TO[k] + ')');
       cmd('config', 'no ip firewall sessions ' + w + '-timeout', function (st) { if (st.cand.fwto) delete st.cand.fwto[k]; touch(st); });
     });
   });
-  cmd('priv', 'show ip firewall sessions timeouts', function (st) {
-    return ['Timeout                    Value  Default', '-------------------------  -----  -------'].concat(Object.keys(TO).map(function (k) {
-      return (k + '-timeout                          ').slice(0, 27) + (toVal(st.run, k) + '       ').slice(0, 7) + TO[k]; })).join('\n'); }, 'Таймауты сессий по протоколам');
-
   // ================================================================ show
   function zoneText(st) {
     var c = st.run, Z = Object.keys(c.zones || {});

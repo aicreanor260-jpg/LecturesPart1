@@ -19,7 +19,12 @@
       .concat(R.map(function (r) { return '  ' + (r.ifn + '            ').slice(0, 12) + (r.ip + '                  ').slice(0, 18) + r.mac + '    dynamic'; }))
       .join('\n') + (R.length ? '' : '\n% ARP-таблица пуста'); }
   S.cmd('priv', 'show arp', function (st) { return st.net ? arpEsr(st) : ''; }, 'ARP-таблица');
-  S.cmd('priv', 'clear arp', function (st) { if (st.net) st.net.arp[st.dev] = {}; }, 'Очистить ARP-таблицу');
+  // clear arp-cache [<IF>] [ip-address A.B.C.D] [mac-address M] [vrf V] — справочник ESR, раздел clear arp-cache
+  S.cmd('priv', 'clear arp-cache', function (st) { if (st.net) st.net.arp[st.dev] = {}; }, 'Очистить ARP-кэш');
+  S.cmd('priv', 'clear arp-cache <rest>', function (st, a) { if (!st.net) return; var A = st.net.arp[st.dev], w = String(a[0]).split(/\s+/), ip = null, mac = null, ifn = null;
+    for (var i = 0; i < w.length; i++) { if (w[i] === 'ip-address') ip = w[++i]; else if (w[i] === 'mac-address') mac = (w[++i] || '').toLowerCase(); else if (w[i] === 'vrf') i++;
+      else { var f = S.ifName(w[i] + (w[i + 1] && /^\d/.test(w[i + 1]) ? w[++i] : '')); if (!f) return 'Syntax error: Illegal parameter'; ifn = f.name; } }
+    Object.keys(A).forEach(function (k) { var e = A[k]; if ((!ip || k === ip) && (!mac || e.mac === mac) && (!ifn || e.ifn === ifn)) delete A[k]; }); });
   ['', 'do '].forEach(function (pre) {
     var m = pre ? E.CFG : 'priv';
     E.cmd(m, pre + 'show arp', function (st) { return st.net ? arpMes(st) : ''; });

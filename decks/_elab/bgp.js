@@ -1,6 +1,6 @@
-/* BGP на ESR (справочник ESR-Series CLI 1.23): router bgp <AS> → (config-bgp)#: router-id, address-family ipv4 unicast → (config-bgp-af)#:
-   network <ADDR/LEN>, redistribute connected | static, neighbor <ADDR> → (config-bgp-neighbor)#: remote-as, update-source, ebgp-multihop,
-   next-hop-self, description, enable; enable (процесс). Показ: show bgp summary, show bgp ipv4 unicast, show ip route (код B).
+/* BGP на ESR (справочник ESR-Series CLI 1.23, иерархия режимов сверена с ПО ESR): router bgp <AS> → (config-bgp)#: router-id, enable (процесс),
+   neighbor <ADDR> → (config-bgp-neighbor)#: remote-as, update-source, ebgp-multihop, description, enable, address-family ipv4 unicast →
+   (config-bgp-neighbor-af)#: enable (обмен маршрутами), next-hop-self, route-map; address-family ipv4 unicast → (config-bgp-af)#: network, redistribute. Показ: show bgp summary, show bgp ipv4 unicast, show ip route (код B).
    Сессия: соседи ссылаются друг на друга (адрес соседа — адрес интерфейса/update-source другой стороны), AS совпадают с remote-as,
    TCP 179 доступен по таблице маршрутов (без BGP); eBGP — сосед в подключённой сети или ebgp-multihop. Маршруты: эталонный вектор путей —
    AS_PATH (петля — маршрут отбрасывается), выбор по длине AS_PATH, затем меньшему адресу соседа; от iBGP-соседа к iBGP-соседу не передаётся;
@@ -9,46 +9,57 @@
 (function (G) {
   'use strict';
   var EL = G.EL, S = EL.esr, P = EL.Net.prototype, IP = EL.ip;
-  S.PROMPT.bgp = '(config-bgp)#'; S.PROMPT.bgpaf = '(config-bgp-af)#'; S.PROMPT.bgpn = '(config-bgp-neighbor)#';
-  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('bgp', 'bgpaf', 'bgpn'); });
+  S.PROMPT.bgp = '(config-bgp)#'; S.PROMPT.bgpaf = '(config-bgp-af)#'; S.PROMPT.bgpn = '(config-bgp-neighbor)#'; S.PROMPT.bgpnaf = '(config-bgp-neighbor-af)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('bgp', 'bgpaf', 'bgpn', 'bgpnaf'); });
   function touch(st) { st.pending = true; }
   function B(st) { return st.cand.bgp; }
+  // иерархия как в ПО ESR: (config-bgp) → neighbor → (config-bgp-neighbor) → address-family ipv4 unicast → (config-bgp-neighbor-af);
+  // network / redistribute — в (config-bgp) → address-family ipv4 unicast → (config-bgp-af)
   S.cmd('config', 'router bgp <n>', function (st, a) { if (a[0] < 1 || a[0] > 4294967295) return 'Syntax error: Illegal parameter';
     if (!st.cand.bgp || st.cand.bgp.as !== a[0]) st.cand.bgp = { as: a[0], on: false, rid: null, nets: [], redist: [], nbr: {} };
     touch(st); st.mode = 'bgp'; st.ctx = null; }, 'Настройка BGP');
   S.cmd('config', 'no router bgp <n>', function (st, a) { if (st.cand.bgp && st.cand.bgp.as === a[0]) st.cand.bgp = null; touch(st); });
   S.cmd('bgp', 'router-id <ip>', function (st, a) { B(st).rid = a[0]; touch(st); }, 'Идентификатор маршрутизатора');
-  S.cmd('bgp', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpaf'; }, 'Семейство IPv4 unicast');
-  S.cmd('bgp bgpaf', 'network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter';
+  S.cmd('bgp', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpaf'; }, 'Семейство IPv4 unicast: network, redistribute');
+  S.cmd('bgpaf', 'network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter';
     var v = IP.netOf(c.ip, c.len), L = B(st).nets; if (L.indexOf(v) < 0) L.push(v); touch(st); }, 'Анонсировать сеть');
-  S.cmd('bgp bgpaf', 'no network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (c) B(st).nets = B(st).nets.filter(function (x) { return x !== IP.netOf(c.ip, c.len); }); touch(st); });
+  S.cmd('bgpaf', 'no network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (c) B(st).nets = B(st).nets.filter(function (x) { return x !== IP.netOf(c.ip, c.len); }); touch(st); });
   ['connected', 'static'].forEach(function (k) {
-    S.cmd('bgp bgpaf', 'redistribute ' + k, function (st) { var L = B(st).redist; if (L.indexOf(k) < 0) L.push(k); touch(st); }, 'Анонсировать ' + (k === 'connected' ? 'подключённые' : 'статические'));
-    S.cmd('bgp bgpaf', 'no redistribute ' + k, function (st) { B(st).redist = B(st).redist.filter(function (x) { return x !== k; }); touch(st); }); });
-  S.cmd('bgp bgpaf', 'neighbor <ip>', function (st, a) { var N = B(st).nbr; N[a[0]] = N[a[0]] || { as: null, src: null, on: false, multihop: false, nhs: false };
-    st.ctxAf = st.mode === 'bgpaf'; st.mode = 'bgpn'; st.ctx = a[0]; touch(st); }, 'BGP-сосед');
-  S.cmd('bgp bgpaf', 'no neighbor <ip>', function (st, a) { delete B(st).nbr[a[0]]; touch(st); });
+    S.cmd('bgpaf', 'redistribute ' + k, function (st) { var L = B(st).redist; if (L.indexOf(k) < 0) L.push(k); touch(st); }, 'Анонсировать ' + (k === 'connected' ? 'подключённые' : 'статические'));
+    S.cmd('bgpaf', 'no redistribute ' + k, function (st) { B(st).redist = B(st).redist.filter(function (x) { return x !== k; }); touch(st); }); });
+  S.cmd('bgp', 'neighbor <ip>', function (st, a) { var N = B(st).nbr; N[a[0]] = N[a[0]] || { as: null, src: null, on: false, af: false, multihop: false, nhs: false };
+    st.mode = 'bgpn'; st.ctx = a[0]; touch(st); }, 'BGP-сосед');
+  S.cmd('bgp', 'no neighbor <ip>', function (st, a) { delete B(st).nbr[a[0]]; touch(st); });
   function nb(st) { return B(st).nbr[st.ctx]; }
   S.cmd('bgpn', 'remote-as <n>', function (st, a) { nb(st).as = a[0]; touch(st); }, 'AS соседа');
   S.cmd('bgpn', 'update-source <ip>', function (st, a) { nb(st).src = a[0]; touch(st); }, 'Адрес источника сессии');
   S.cmd('bgpn', 'ebgp-multihop', function (st) { nb(st).multihop = true; touch(st); }, 'eBGP через несколько хопов');
   S.cmd('bgpn', 'ebgp-multihop <n>', function (st) { nb(st).multihop = true; touch(st); });
-  S.cmd('bgpn', 'next-hop-self', function (st) { nb(st).nhs = true; touch(st); }, 'Next-hop — свой адрес (iBGP)');
   S.cmd('bgpn', 'description <rest>', function (st, a) { nb(st).desc = a[0].replace(/^["']|["']$/g, ''); touch(st); }, 'Описание');
   S.cmd('bgpn', 'enable', function (st) { nb(st).on = true; touch(st); }, 'Включить соседство');
   S.cmd('bgpn', 'no enable', function (st) { nb(st).on = false; touch(st); });
-  S.cmd('bgpn', 'exit', function (st) { st.mode = st.ctxAf ? 'bgpaf' : 'bgp'; st.ctx = null; });
+  S.cmd('bgpn', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpnaf'; }, 'Семейство IPv4 для соседа: enable, next-hop-self');
+  S.cmd('bgpnaf', 'enable', function (st) { nb(st).af = true; touch(st); }, 'Обмениваться маршрутами IPv4 с соседом');
+  S.cmd('bgpnaf', 'no enable', function (st) { nb(st).af = false; touch(st); });
+  S.cmd('bgpnaf', 'next-hop-self', function (st) { nb(st).nhs = true; touch(st); }, 'Next-hop — свой адрес (iBGP)');
+  S.cmd('bgpnaf', 'no next-hop-self', function (st) { nb(st).nhs = false; touch(st); });
+  S.cmd('bgpnaf', 'route-map <w> <w>', function (st, a) { if (a[1] !== 'in' && a[1] !== 'out') return 'Syntax error: Illegal parameter'; (nb(st).rmap = nb(st).rmap || {})[a[1]] = a[0]; touch(st); }, 'Маршрутная карта in | out (не моделируется)');
+  S.cmd('bgpnaf', 'exit', function (st) { st.mode = 'bgpn'; });
+  S.cmd('bgpn', 'exit', function (st) { st.mode = 'bgp'; st.ctx = null; });
   S.cmd('bgpaf', 'exit', function (st) { st.mode = 'bgp'; });
   S.cmd('bgp', 'exit', function (st) { st.mode = 'config'; });
-  S.cmd('bgp bgpaf', 'enable', function (st) { B(st).on = true; touch(st); }, 'Запустить BGP');
-  S.cmd('bgp bgpaf', 'no enable', function (st) { B(st).on = false; touch(st); });
+  S.cmd('bgp', 'enable', function (st) { B(st).on = true; touch(st); }, 'Запустить BGP');
+  S.cmd('bgp', 'no enable', function (st) { B(st).on = false; touch(st); });
   S.RUNX.push(function (c, o) { var b = c.bgp; if (!b) return;
-    o.push('router bgp ' + b.as); if (b.rid) o.push('  router-id ' + b.rid); o.push('  address-family ipv4 unicast');
-    b.nets.forEach(function (n) { o.push('    network ' + n); }); b.redist.forEach(function (n) { o.push('    redistribute ' + n); });
-    Object.keys(b.nbr).forEach(function (ip) { var x = b.nbr[ip]; o.push('    neighbor ' + ip); if (x.desc) o.push('      description "' + x.desc + '"');
-      if (x.as) o.push('      remote-as ' + x.as); if (x.src) o.push('      update-source ' + x.src); if (x.multihop) o.push('      ebgp-multihop'); if (x.nhs) o.push('      next-hop-self');
-      if (x.on) o.push('      enable'); o.push('    exit'); });
-    if (b.on) o.push('    enable'); o.push('  exit', 'exit'); });
+    o.push('router bgp ' + b.as); if (b.rid) o.push('  router-id ' + b.rid);
+    Object.keys(b.nbr).forEach(function (ip) { var x = b.nbr[ip]; o.push('  neighbor ' + ip); if (x.desc) o.push('    description "' + x.desc + '"');
+      if (x.as) o.push('    remote-as ' + x.as); if (x.src) o.push('    update-source ' + x.src); if (x.multihop) o.push('    ebgp-multihop');
+      if (x.af || x.nhs || x.rmap) { o.push('    address-family ipv4 unicast'); if (x.nhs) o.push('      next-hop-self');
+        Object.keys(x.rmap || {}).forEach(function (d) { o.push('      route-map ' + x.rmap[d] + ' ' + d); }); if (x.af) o.push('      enable'); o.push('    exit'); }
+      if (x.on) o.push('    enable'); o.push('  exit'); });
+    if (b.nets.length || b.redist.length) { o.push('  address-family ipv4 unicast'); b.nets.forEach(function (n) { o.push('    network ' + n); });
+      b.redist.forEach(function (n) { o.push('    redistribute ' + n); }); o.push('  exit'); }
+    if (b.on) o.push('  enable'); o.push('exit'); });
 
   // ---------------------------------------------------------------- расчёт
   function rid(s, id) { var b = s.devs[id].st.run.bgp; return (b && b.rid) || (s.ifaces(id).map(function (f) { return f.ip; }).sort(function (a, b2) { return IP.ip2n(b2) - IP.ip2n(a); })[0] || '0.0.0.0'); }
@@ -99,6 +110,7 @@
       ids.forEach(function (id) { if (!rib[id]) return; var asMe = s.devs[id].st.run.bgp.as;
         Object.keys(S2[id]).forEach(function (ip) { var ss = S2[id][ip]; if (ss.state !== 'Established') return; var pd = ss.peer.dev; if (!rib[pd]) return;
           var pAs = s.devs[pd].st.run.bgp.as, pn = s.devs[pd].st.run.bgp.nbr[ss.peer.ip] || {};
+          var my = s.devs[id].st.run.bgp.nbr[ip] || {}; if (!my.af || !pn.af) return;    // address-family ipv4 unicast → enable у обоих
           Object.keys(rib[pd]).forEach(function (net) { var e = rib[pd][net];
             if (!ss.peer.ebgp && e.ibgp) return;                       // iBGP → iBGP не передаётся
             var path = ss.peer.ebgp ? [pAs].concat(e.path) : e.path.slice();

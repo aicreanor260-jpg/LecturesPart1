@@ -318,14 +318,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>nat source → ruleset → to interface → rule → match source-address address-range → action source-nat interface → enable</td><td>Source NAT</td></tr>
 <tr><td>nat destination → ruleset → from interface → rule → match protocol tcp · match destination-port port-range 80 · action destination-nat netmap IP/32</td><td>Destination NAT</td></tr>
 <tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
-<tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
+<tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match source-address|destination-address A.B.C.D WILDCARD | any · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
 <tr><td>vrrp id N · vrrp ip A.B.C.D/len · vrrp priority N · vrrp · show vrrp · ip telnet server</td><td>VRRP, Telnet</td></tr>
 <tr><td>security zone trusted · security zone untrusted · на интерфейсе: security-zone trusted</td><td>зоны безопасности; без зоны и без ip firewall disable пакет отбрасывается</td></tr>
 <tr><td>security zone-pair trusted untrusted (или … self) → rule 10 → action permit|deny|reject → match protocol tcp · match source-address object-group LAN · match destination-port object-group WEB → enable</td><td>правила между зонами; ответы разрешённой сессии проходят сами (stateful); не подошло ни одно правило — неявный запрет</td></tr>
 <tr><td>match [not] source-address|destination-address address-range A-B | prefix A/L | object-group N | any · match [not] destination-port port-range 80,443 | object-group N</td><td>условия правила</td></tr>
 <tr><td>object-group network LAN → ip prefix 192.168.1.0/24 · ip address-range A-B; object-group service WEB → port-range 80,443</td><td>группы адресов и портов (также в NAT: match source-address object-group LAN)</td></tr>
 <tr><td>show security zone · show security zone-pair [ИЗ В] · show ip firewall sessions · show ip firewall counters · clear ip firewall sessions|counters · show object-group</td><td>просмотр межсетевого экрана</td></tr>
-<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show ip firewall sessions timeouts</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
+<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show running-config</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
 <tr><td>router rip → timers update 30 · timers invalid 180 · timers flush 240 · show ip rip</td><td>RIP по таймерам: новые маршруты сразу; сосед замолчал — маршрут живёт до invalid, затем «possibly down» до flush</td></tr>
 <tr><td>ip ospf hello-interval 10 · ip ospf dead-interval 40 · ip ospf priority 128 · ip ospf network broadcast|point-to-point · show ip ospf neighbors · show ip ospf interface</td><td>OSPF по таймерам: на broadcast-сегменте 2way и ожидание выбора DR 40 с, потом full; hello/dead должны совпадать; сосед замолчал — full до dead-interval. Ускорить: часы ×10 или ⏩ 1 мин</td></tr>
 <tr><td>show configuration changes · show version · show interfaces description</td><td>что изменится после commit; версия; описания</td></tr>
@@ -401,9 +401,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <h2>ESR: VRF, PBR, BFD, BGP</h2>
 <table>
 <tr><td>ip vrf RED · ip vrf forwarding RED · ip route vrf RED … · show ip route vrf RED · ping vrf RED A.B.C.D</td><td>отдельные таблицы маршрутов</td></tr>
-<tr><td>route-map M → rule 10 → match ip access-group ACL, action set ip next-hop A, enable · ip policy route-map M</td><td>маршрутизация по политике (PBR)</td></tr>
+<tr><td>route-map M → rule 10 → match ip access-group ACL, action set ip next-hop A · ip policy route-map M</td><td>маршрутизация по политике (PBR)</td></tr>
 <tr><td>ip route СЕТЬ ШЛЮЗ bfd · show bfd neighbors · show ip bfd</td><td>маршрут снимается при недоступном next-hop</td></tr>
-<tr><td>router bgp AS → address-family ipv4 unicast → network, neighbor A → remote-as, enable · show bgp summary · show bgp ipv4 unicast</td><td>BGP (eBGP/iBGP, AS_PATH)</td></tr>
+<tr><td>router bgp AS → neighbor A → remote-as, address-family ipv4 unicast → enable, exit, enable; address-family ipv4 unicast → network · show bgp summary · show bgp ipv4 unicast</td><td>BGP (eBGP/iBGP, AS_PATH)</td></tr>
 </table>
 
 <h2>MES: 802.1X, IGMP snooping, стек, QinQ, MSTP</h2>
@@ -1543,18 +1543,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (['tcp', 'udp', 'icmp', 'any'].indexOf(p) < 0) return '% Протокол: tcp | udp | icmp | any'; rule(st).proto = p; touch(st); }, 'Протокол');
   cmd('aclr', 'match destination-port port-range <w>', function (st, a) { var m = String(a[0]).match(/^(\d+)(?:-(\d+))?$/);
     if (!m) return '% Порт или диапазон: 23 или 20-23'; rule(st).dport = [+m[1], +(m[2] || m[1])]; touch(st); }, 'Порт назначения');
-  function rng(s) { var m = String(s).match(/^(\d+\.\d+\.\d+\.\d+)-(\d+\.\d+\.\d+\.\d+)$/); if (m) return [m[1], m[2]];
-    var c = IP.parseCidr(s); if (c) { var n = IP.ip2n(c.ip) & IP.maskN(c.len); return [IP.n2ip(n >>> 0), IP.n2ip((n | ~IP.maskN(c.len)) >>> 0)]; } return null; }
-  cmd('aclr', 'match source-address address-range <w>', function (st, a) { var r = rng(a[0]); if (!r) return '% Формат: A.B.C.D-A.B.C.D';
-    rule(st).src = r; touch(st); }, 'Адрес источника');
-  cmd('aclr', 'match destination-address address-range <w>', function (st, a) { var r = rng(a[0]); if (!r) return '% Формат: A.B.C.D-A.B.C.D';
-    rule(st).dst = r; touch(st); }, 'Адрес назначения');
+  // match source-address | destination-address { <ADDR> <WILDCARD> | any } — адрес с wildcard-маской (0.0.0.255); маска вида 255.255.255.0 тоже принимается
+  function wc(ip, m) { var a = IP.ip2n(ip), w = IP.ip2n(m); if (a === null || w === null) return null; if ((w >>> 24) === 255) w = (~w) >>> 0;
+    var lo = (a & ~w) >>> 0, hi = (lo | w) >>> 0; return { r: [IP.n2ip(lo), IP.n2ip(hi)], txt: ip + ' ' + IP.n2ip(w) }; }
+  ['source', 'destination'].forEach(function (k) { var f = k === 'source' ? 'src' : 'dst';
+    cmd('aclr', 'match ' + k + '-address <ip> <ip>', function (st, a) { var x = wc(a[0], a[1]); if (!x) return 'Syntax error: Illegal parameter';
+      rule(st)[f] = x.r; rule(st)[f + 'T'] = x.txt; touch(st); }, k === 'source' ? 'Адрес источника и wildcard' : 'Адрес назначения и wildcard');
+    cmd('aclr', 'match ' + k + '-address any', function (st) { delete rule(st)[f]; rule(st)[f + 'T'] = 'any'; touch(st); });
+    cmd('aclr', 'no match ' + k + '-address', function (st) { delete rule(st)[f]; delete rule(st)[f + 'T']; touch(st); }); });
   cmd('aclr', 'enable', function (st) { if (!rule(st).act) return '% Сначала задайте action permit | deny'; rule(st).on = true; touch(st); }, 'Включить правило');
   cmd('aclr', 'no enable', function (st) { rule(st).on = false; touch(st); });
   function eachIf(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
-  cmd('gi sub', 'service-acl input <w>', function (st, a) { if (!acls(st)[a[0]]) return '% Список доступа ' + a[0] + ' не создан';
+  cmd('gi', 'service-acl input <w>', function (st, a) { if (!acls(st)[a[0]]) return '% Список доступа ' + a[0] + ' не создан';
     eachIf(st, function (x) { x.acl = a[0]; }); }, 'Назначить список доступа на вход');
-  cmd('gi sub', 'no service-acl input', function (st) { eachIf(st, function (x) { delete x.acl; }); });
+  cmd('gi', 'no service-acl input', function (st) { eachIf(st, function (x) { delete x.acl; }); });
   cmd('priv', 'show ip access-list <w>', function (st, a) { var L = (st.run.acls || {})[a[0]]; if (!L) return '% Список не найден';
     return Object.keys(L.rules).sort(function (x, y) { return x - y; }).map(function (k) { var r = L.rules[k];
       return 'rule ' + k + ': ' + (r.act || '-') + (r.proto ? ' ' + r.proto : '') + (r.dport ? ' dport ' + r.dport.join('-') : '') +
@@ -1577,7 +1579,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     Object.keys(c.acls || {}).forEach(function (n) { var L = c.acls[n]; o.push('ip access-list extended ' + n);
       Object.keys(L.rules).forEach(function (k) { var r = L.rules[k]; o.push('  rule ' + k); if (r.act) o.push('    action ' + r.act);
         if (r.proto) o.push('    match protocol ' + r.proto); if (r.dport) o.push('    match destination-port port-range ' + (r.dport[0] === r.dport[1] ? r.dport[0] : r.dport.join('-')));
-        if (r.src) o.push('    match source-address address-range ' + r.src.join('-')); if (r.dst) o.push('    match destination-address address-range ' + r.dst.join('-'));
+        if (r.srcT) o.push('    match source-address ' + r.srcT); if (r.dstT) o.push('    match destination-address ' + r.dstT);
         if (r.on) o.push('    enable'); o.push('  exit'); });
       o.push('exit'); });
     Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k], d = [];
@@ -3252,7 +3254,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       .concat(R.map(function (r) { return '  ' + (r.ifn + '            ').slice(0, 12) + (r.ip + '                  ').slice(0, 18) + r.mac + '    dynamic'; }))
       .join('\n') + (R.length ? '' : '\n% ARP-таблица пуста'); }
   S.cmd('priv', 'show arp', function (st) { return st.net ? arpEsr(st) : ''; }, 'ARP-таблица');
-  S.cmd('priv', 'clear arp', function (st) { if (st.net) st.net.arp[st.dev] = {}; }, 'Очистить ARP-таблицу');
+  // clear arp-cache [<IF>] [ip-address A.B.C.D] [mac-address M] [vrf V] — справочник ESR, раздел clear arp-cache
+  S.cmd('priv', 'clear arp-cache', function (st) { if (st.net) st.net.arp[st.dev] = {}; }, 'Очистить ARP-кэш');
+  S.cmd('priv', 'clear arp-cache <rest>', function (st, a) { if (!st.net) return; var A = st.net.arp[st.dev], w = String(a[0]).split(/\s+/), ip = null, mac = null, ifn = null;
+    for (var i = 0; i < w.length; i++) { if (w[i] === 'ip-address') ip = w[++i]; else if (w[i] === 'mac-address') mac = (w[++i] || '').toLowerCase(); else if (w[i] === 'vrf') i++;
+      else { var f = S.ifName(w[i] + (w[i + 1] && /^\d/.test(w[i + 1]) ? w[++i] : '')); if (!f) return 'Syntax error: Illegal parameter'; ifn = f.name; } }
+    Object.keys(A).forEach(function (k) { var e = A[k]; if ((!ip || k === ip) && (!mac || e.mac === mac) && (!ifn || e.ifn === ifn)) delete A[k]; }); });
   ['', 'do '].forEach(function (pre) {
     var m = pre ? E.CFG : 'priv';
     E.cmd(m, pre + 'show arp', function (st) { return st.net ? arpMes(st) : ''; });
@@ -3809,17 +3816,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
   // ================================================================ таймауты сессий
   Object.keys(TO).forEach(function (k) {
-    var pats = [k]; if (k === 'tcp-estabilished') pats.push('tcp-established');   // в CLI ESR команда написана с опечаткой — принимаем оба
+    var pats = [k];          // tcp-estabilished — так (с опечаткой) команда называется в самом ПО ESR
     pats.forEach(function (w, i) {
       cmd('config', 'ip firewall sessions ' + w + '-timeout <n>', function (st, a) { if (a[0] < 1 || a[0] > 8553600) return '% Допустимо 1..8553600 с';
         st.cand.fwto = st.cand.fwto || {}; st.cand.fwto[k] = a[0]; touch(st); }, i ? undefined : 'Таймаут сессий, с (по умолчанию ' + TO[k] + ')');
       cmd('config', 'no ip firewall sessions ' + w + '-timeout', function (st) { if (st.cand.fwto) delete st.cand.fwto[k]; touch(st); });
     });
   });
-  cmd('priv', 'show ip firewall sessions timeouts', function (st) {
-    return ['Timeout                    Value  Default', '-------------------------  -----  -------'].concat(Object.keys(TO).map(function (k) {
-      return (k + '-timeout                          ').slice(0, 27) + (toVal(st.run, k) + '       ').slice(0, 7) + TO[k]; })).join('\n'); }, 'Таймауты сессий по протоколам');
-
   // ================================================================ show
   function zoneText(st) {
     var c = st.run, Z = Object.keys(c.zones || {});
@@ -5849,7 +5852,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
 /* PBR — маршрутизация по политике на ESR (справочник ESR-Series CLI 1.23):
    route-map <NAME> → (config-route-map)#: rule <ORDER> → (config-route-map-rule)#: match ip access-group <ACL>,
-   action set ip next-hop <NEXTHOP>, action deny (пакет идёт по обычной таблице), enable;
+   action set ip next-hop <NEXTHOP>, action deny (пакет идёт по обычной таблице) — правило route-map действует сразу (enable у него нет);
    на интерфейсе: ip policy route-map <NAME>. Пакет, пришедший на такой интерфейс и попавший под ACL правила
    (permit в ip access-list extended), уходит на заданный next-hop мимо таблицы маршрутов; next-hop должен быть
    в подключённой сети. Не подошло ни одно правило — обычная маршрутизация. */
@@ -5865,7 +5868,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var M = st.cand.rmaps = st.cand.rmaps || {}; M[a[0]] = M[a[0]] || { rules: {} }; touch(st); st.mode = 'rmap'; st.ctx = a[0]; }, 'Маршрутная карта (PBR)');
   S.cmd('config', 'no route-map <w>', function (st, a) { if (st.cand.rmaps) delete st.cand.rmaps[a[0]]; touch(st); });
   S.cmd('rmap', 'rule <n>', function (st, a) { if (a[0] < 1 || a[0] > 10000) return 'Syntax error: Illegal parameter';
-    var R = rm(st).rules; R[a[0]] = R[a[0]] || { act: 'permit', on: false }; touch(st); st.mode = 'rmapr'; st.ctx = st.ctx + '|' + a[0]; }, 'Правило маршрутной карты');
+    var R = rm(st).rules; R[a[0]] = R[a[0]] || { act: 'permit' }; touch(st); st.mode = 'rmapr'; st.ctx = st.ctx + '|' + a[0]; }, 'Правило маршрутной карты');
   S.cmd('rmap', 'no rule <n>', function (st, a) { delete rm(st).rules[a[0]]; touch(st); });
   S.cmd('rmapr', 'match ip access-group <w>', function (st, a) { rule(st).acl = a[0]; touch(st); }, 'Пакеты, разрешённые этим ACL');
   S.cmd('rmapr', 'no match ip access-group', function (st) { delete rule(st).acl; touch(st); });
@@ -5873,8 +5876,6 @@ vesr(config)#         do confirm  — подтвердить</pre>
   S.cmd('rmapr', 'no action set ip next-hop', function (st) { delete rule(st).nh; touch(st); });
   S.cmd('rmapr', 'action deny', function (st) { rule(st).act = 'deny'; touch(st); }, 'Не применять политику (обычный маршрут)');
   S.cmd('rmapr', 'action permit', function (st) { rule(st).act = 'permit'; touch(st); });
-  S.cmd('rmapr', 'enable', function (st) { rule(st).on = true; touch(st); }, 'Включить правило');
-  S.cmd('rmapr', 'no enable', function (st) { rule(st).on = false; touch(st); });
   S.cmd('rmapr', 'exit', function (st) { st.mode = 'rmap'; st.ctx = st.ctx.split('|')[0]; });
   S.cmd('rmap', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
   S.cmd('gi sub gre vti', 'ip policy route-map <w>', function (st, a) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { st.cand.ifs[k].pbr = a[0]; }); touch(st); }, 'Маршрутизация по политике на входе');
@@ -5883,7 +5884,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     Object.keys(c.rmaps || {}).forEach(function (n) { o.push('route-map ' + n);
       Object.keys(c.rmaps[n].rules).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) { var r = c.rmaps[n].rules[k]; o.push('  rule ' + k);
         if (r.acl) o.push('    match ip access-group ' + r.acl); if (r.act === 'deny') o.push('    action deny'); if (r.nh) o.push('    action set ip next-hop ' + r.nh);
-        if (r.on) o.push('    enable'); o.push('  exit'); }); o.push('exit'); });
+        o.push('  exit'); }); o.push('exit'); });
     Object.keys(c.ifs).forEach(function (k) { if (c.ifs[k].pbr) o.push((c.ifs[k].tun ? 'tunnel ' + c.ifs[k].tun + ' ' + k.slice(3) : 'interface ' + S.longIf(k)), '  ip policy route-map ' + c.ifs[k].pbr, 'exit'); });
   });
   // поиск маршрута: сначала политика входного интерфейса
@@ -5893,7 +5894,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (cx && cx.dev === id && cx.inIf && d.type === 'esr') {
       var c = d.st.run, x = c.ifs[cx.inIf.name.split(':')[0]], M = x && x.pbr && (c.rmaps || {})[x.pbr];
       if (M) { var ks = Object.keys(M.rules).map(Number).sort(function (a, b) { return a - b; });
-        for (var i = 0; i < ks.length; i++) { var r = M.rules[ks[i]]; if (!r.on) continue;
+        for (var i = 0; i < ks.length; i++) { var r = M.rules[ks[i]];
           if (r.acl && !EL.aclPass((c.acls || {})[r.acl], cx.pk).ok) continue;
           if (r.act === 'deny' || !r.nh) break;
           var out = this.ifaces(id).filter(function (f) { return (f.port !== null || f.br || f.tun) && IP.sameNet(r.nh, f.ip, f.len); })[0];
@@ -5974,9 +5975,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 })(typeof window !== 'undefined' ? window : global);
 
-/* BGP на ESR (справочник ESR-Series CLI 1.23): router bgp <AS> → (config-bgp)#: router-id, address-family ipv4 unicast → (config-bgp-af)#:
-   network <ADDR/LEN>, redistribute connected | static, neighbor <ADDR> → (config-bgp-neighbor)#: remote-as, update-source, ebgp-multihop,
-   next-hop-self, description, enable; enable (процесс). Показ: show bgp summary, show bgp ipv4 unicast, show ip route (код B).
+/* BGP на ESR (справочник ESR-Series CLI 1.23, иерархия режимов сверена с ПО ESR): router bgp <AS> → (config-bgp)#: router-id, enable (процесс),
+   neighbor <ADDR> → (config-bgp-neighbor)#: remote-as, update-source, ebgp-multihop, description, enable, address-family ipv4 unicast →
+   (config-bgp-neighbor-af)#: enable (обмен маршрутами), next-hop-self, route-map; address-family ipv4 unicast → (config-bgp-af)#: network, redistribute. Показ: show bgp summary, show bgp ipv4 unicast, show ip route (код B).
    Сессия: соседи ссылаются друг на друга (адрес соседа — адрес интерфейса/update-source другой стороны), AS совпадают с remote-as,
    TCP 179 доступен по таблице маршрутов (без BGP); eBGP — сосед в подключённой сети или ebgp-multihop. Маршруты: эталонный вектор путей —
    AS_PATH (петля — маршрут отбрасывается), выбор по длине AS_PATH, затем меньшему адресу соседа; от iBGP-соседа к iBGP-соседу не передаётся;
@@ -5985,46 +5986,57 @@ vesr(config)#         do confirm  — подтвердить</pre>
 (function (G) {
   'use strict';
   var EL = G.EL, S = EL.esr, P = EL.Net.prototype, IP = EL.ip;
-  S.PROMPT.bgp = '(config-bgp)#'; S.PROMPT.bgpaf = '(config-bgp-af)#'; S.PROMPT.bgpn = '(config-bgp-neighbor)#';
-  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('bgp', 'bgpaf', 'bgpn'); });
+  S.PROMPT.bgp = '(config-bgp)#'; S.PROMPT.bgpaf = '(config-bgp-af)#'; S.PROMPT.bgpn = '(config-bgp-neighbor)#'; S.PROMPT.bgpnaf = '(config-bgp-neighbor-af)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('bgp', 'bgpaf', 'bgpn', 'bgpnaf'); });
   function touch(st) { st.pending = true; }
   function B(st) { return st.cand.bgp; }
+  // иерархия как в ПО ESR: (config-bgp) → neighbor → (config-bgp-neighbor) → address-family ipv4 unicast → (config-bgp-neighbor-af);
+  // network / redistribute — в (config-bgp) → address-family ipv4 unicast → (config-bgp-af)
   S.cmd('config', 'router bgp <n>', function (st, a) { if (a[0] < 1 || a[0] > 4294967295) return 'Syntax error: Illegal parameter';
     if (!st.cand.bgp || st.cand.bgp.as !== a[0]) st.cand.bgp = { as: a[0], on: false, rid: null, nets: [], redist: [], nbr: {} };
     touch(st); st.mode = 'bgp'; st.ctx = null; }, 'Настройка BGP');
   S.cmd('config', 'no router bgp <n>', function (st, a) { if (st.cand.bgp && st.cand.bgp.as === a[0]) st.cand.bgp = null; touch(st); });
   S.cmd('bgp', 'router-id <ip>', function (st, a) { B(st).rid = a[0]; touch(st); }, 'Идентификатор маршрутизатора');
-  S.cmd('bgp', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpaf'; }, 'Семейство IPv4 unicast');
-  S.cmd('bgp bgpaf', 'network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter';
+  S.cmd('bgp', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpaf'; }, 'Семейство IPv4 unicast: network, redistribute');
+  S.cmd('bgpaf', 'network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (!c) return 'Syntax error: Illegal parameter';
     var v = IP.netOf(c.ip, c.len), L = B(st).nets; if (L.indexOf(v) < 0) L.push(v); touch(st); }, 'Анонсировать сеть');
-  S.cmd('bgp bgpaf', 'no network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (c) B(st).nets = B(st).nets.filter(function (x) { return x !== IP.netOf(c.ip, c.len); }); touch(st); });
+  S.cmd('bgpaf', 'no network <w>', function (st, a) { var c = IP.parseCidr(a[0]); if (c) B(st).nets = B(st).nets.filter(function (x) { return x !== IP.netOf(c.ip, c.len); }); touch(st); });
   ['connected', 'static'].forEach(function (k) {
-    S.cmd('bgp bgpaf', 'redistribute ' + k, function (st) { var L = B(st).redist; if (L.indexOf(k) < 0) L.push(k); touch(st); }, 'Анонсировать ' + (k === 'connected' ? 'подключённые' : 'статические'));
-    S.cmd('bgp bgpaf', 'no redistribute ' + k, function (st) { B(st).redist = B(st).redist.filter(function (x) { return x !== k; }); touch(st); }); });
-  S.cmd('bgp bgpaf', 'neighbor <ip>', function (st, a) { var N = B(st).nbr; N[a[0]] = N[a[0]] || { as: null, src: null, on: false, multihop: false, nhs: false };
-    st.ctxAf = st.mode === 'bgpaf'; st.mode = 'bgpn'; st.ctx = a[0]; touch(st); }, 'BGP-сосед');
-  S.cmd('bgp bgpaf', 'no neighbor <ip>', function (st, a) { delete B(st).nbr[a[0]]; touch(st); });
+    S.cmd('bgpaf', 'redistribute ' + k, function (st) { var L = B(st).redist; if (L.indexOf(k) < 0) L.push(k); touch(st); }, 'Анонсировать ' + (k === 'connected' ? 'подключённые' : 'статические'));
+    S.cmd('bgpaf', 'no redistribute ' + k, function (st) { B(st).redist = B(st).redist.filter(function (x) { return x !== k; }); touch(st); }); });
+  S.cmd('bgp', 'neighbor <ip>', function (st, a) { var N = B(st).nbr; N[a[0]] = N[a[0]] || { as: null, src: null, on: false, af: false, multihop: false, nhs: false };
+    st.mode = 'bgpn'; st.ctx = a[0]; touch(st); }, 'BGP-сосед');
+  S.cmd('bgp', 'no neighbor <ip>', function (st, a) { delete B(st).nbr[a[0]]; touch(st); });
   function nb(st) { return B(st).nbr[st.ctx]; }
   S.cmd('bgpn', 'remote-as <n>', function (st, a) { nb(st).as = a[0]; touch(st); }, 'AS соседа');
   S.cmd('bgpn', 'update-source <ip>', function (st, a) { nb(st).src = a[0]; touch(st); }, 'Адрес источника сессии');
   S.cmd('bgpn', 'ebgp-multihop', function (st) { nb(st).multihop = true; touch(st); }, 'eBGP через несколько хопов');
   S.cmd('bgpn', 'ebgp-multihop <n>', function (st) { nb(st).multihop = true; touch(st); });
-  S.cmd('bgpn', 'next-hop-self', function (st) { nb(st).nhs = true; touch(st); }, 'Next-hop — свой адрес (iBGP)');
   S.cmd('bgpn', 'description <rest>', function (st, a) { nb(st).desc = a[0].replace(/^["']|["']$/g, ''); touch(st); }, 'Описание');
   S.cmd('bgpn', 'enable', function (st) { nb(st).on = true; touch(st); }, 'Включить соседство');
   S.cmd('bgpn', 'no enable', function (st) { nb(st).on = false; touch(st); });
-  S.cmd('bgpn', 'exit', function (st) { st.mode = st.ctxAf ? 'bgpaf' : 'bgp'; st.ctx = null; });
+  S.cmd('bgpn', 'address-family ipv4 unicast', function (st) { st.mode = 'bgpnaf'; }, 'Семейство IPv4 для соседа: enable, next-hop-self');
+  S.cmd('bgpnaf', 'enable', function (st) { nb(st).af = true; touch(st); }, 'Обмениваться маршрутами IPv4 с соседом');
+  S.cmd('bgpnaf', 'no enable', function (st) { nb(st).af = false; touch(st); });
+  S.cmd('bgpnaf', 'next-hop-self', function (st) { nb(st).nhs = true; touch(st); }, 'Next-hop — свой адрес (iBGP)');
+  S.cmd('bgpnaf', 'no next-hop-self', function (st) { nb(st).nhs = false; touch(st); });
+  S.cmd('bgpnaf', 'route-map <w> <w>', function (st, a) { if (a[1] !== 'in' && a[1] !== 'out') return 'Syntax error: Illegal parameter'; (nb(st).rmap = nb(st).rmap || {})[a[1]] = a[0]; touch(st); }, 'Маршрутная карта in | out (не моделируется)');
+  S.cmd('bgpnaf', 'exit', function (st) { st.mode = 'bgpn'; });
+  S.cmd('bgpn', 'exit', function (st) { st.mode = 'bgp'; st.ctx = null; });
   S.cmd('bgpaf', 'exit', function (st) { st.mode = 'bgp'; });
   S.cmd('bgp', 'exit', function (st) { st.mode = 'config'; });
-  S.cmd('bgp bgpaf', 'enable', function (st) { B(st).on = true; touch(st); }, 'Запустить BGP');
-  S.cmd('bgp bgpaf', 'no enable', function (st) { B(st).on = false; touch(st); });
+  S.cmd('bgp', 'enable', function (st) { B(st).on = true; touch(st); }, 'Запустить BGP');
+  S.cmd('bgp', 'no enable', function (st) { B(st).on = false; touch(st); });
   S.RUNX.push(function (c, o) { var b = c.bgp; if (!b) return;
-    o.push('router bgp ' + b.as); if (b.rid) o.push('  router-id ' + b.rid); o.push('  address-family ipv4 unicast');
-    b.nets.forEach(function (n) { o.push('    network ' + n); }); b.redist.forEach(function (n) { o.push('    redistribute ' + n); });
-    Object.keys(b.nbr).forEach(function (ip) { var x = b.nbr[ip]; o.push('    neighbor ' + ip); if (x.desc) o.push('      description "' + x.desc + '"');
-      if (x.as) o.push('      remote-as ' + x.as); if (x.src) o.push('      update-source ' + x.src); if (x.multihop) o.push('      ebgp-multihop'); if (x.nhs) o.push('      next-hop-self');
-      if (x.on) o.push('      enable'); o.push('    exit'); });
-    if (b.on) o.push('    enable'); o.push('  exit', 'exit'); });
+    o.push('router bgp ' + b.as); if (b.rid) o.push('  router-id ' + b.rid);
+    Object.keys(b.nbr).forEach(function (ip) { var x = b.nbr[ip]; o.push('  neighbor ' + ip); if (x.desc) o.push('    description "' + x.desc + '"');
+      if (x.as) o.push('    remote-as ' + x.as); if (x.src) o.push('    update-source ' + x.src); if (x.multihop) o.push('    ebgp-multihop');
+      if (x.af || x.nhs || x.rmap) { o.push('    address-family ipv4 unicast'); if (x.nhs) o.push('      next-hop-self');
+        Object.keys(x.rmap || {}).forEach(function (d) { o.push('      route-map ' + x.rmap[d] + ' ' + d); }); if (x.af) o.push('      enable'); o.push('    exit'); }
+      if (x.on) o.push('    enable'); o.push('  exit'); });
+    if (b.nets.length || b.redist.length) { o.push('  address-family ipv4 unicast'); b.nets.forEach(function (n) { o.push('    network ' + n); });
+      b.redist.forEach(function (n) { o.push('    redistribute ' + n); }); o.push('  exit'); }
+    if (b.on) o.push('  enable'); o.push('exit'); });
 
   // ---------------------------------------------------------------- расчёт
   function rid(s, id) { var b = s.devs[id].st.run.bgp; return (b && b.rid) || (s.ifaces(id).map(function (f) { return f.ip; }).sort(function (a, b2) { return IP.ip2n(b2) - IP.ip2n(a); })[0] || '0.0.0.0'); }
@@ -6075,6 +6087,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       ids.forEach(function (id) { if (!rib[id]) return; var asMe = s.devs[id].st.run.bgp.as;
         Object.keys(S2[id]).forEach(function (ip) { var ss = S2[id][ip]; if (ss.state !== 'Established') return; var pd = ss.peer.dev; if (!rib[pd]) return;
           var pAs = s.devs[pd].st.run.bgp.as, pn = s.devs[pd].st.run.bgp.nbr[ss.peer.ip] || {};
+          var my = s.devs[id].st.run.bgp.nbr[ip] || {}; if (!my.af || !pn.af) return;    // address-family ipv4 unicast → enable у обоих
           Object.keys(rib[pd]).forEach(function (net) { var e = rib[pd][net];
             if (!ss.peer.ebgp && e.ibgp) return;                       // iBGP → iBGP не передаётся
             var path = ss.peer.ebgp ? [pAs].concat(e.path) : e.path.slice();

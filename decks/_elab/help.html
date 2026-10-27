@@ -80,14 +80,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>nat source → ruleset → to interface → rule → match source-address address-range → action source-nat interface → enable</td><td>Source NAT</td></tr>
 <tr><td>nat destination → ruleset → from interface → rule → match protocol tcp · match destination-port port-range 80 · action destination-nat netmap IP/32</td><td>Destination NAT</td></tr>
 <tr><td>ntp enable · ntp server IP → minpoll · maxpoll · show ntp peers</td><td>NTP</td></tr>
-<tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
+<tr><td>ip access-list extended NAME → rule N → action permit|deny · match protocol · match source-address|destination-address A.B.C.D WILDCARD | any · match destination-port port-range · enable; на интерфейсе service-acl input NAME</td><td>ACL (не подошло ни одно правило — запрет)</td></tr>
 <tr><td>vrrp id N · vrrp ip A.B.C.D/len · vrrp priority N · vrrp · show vrrp · ip telnet server</td><td>VRRP, Telnet</td></tr>
 <tr><td>security zone trusted · security zone untrusted · на интерфейсе: security-zone trusted</td><td>зоны безопасности; без зоны и без ip firewall disable пакет отбрасывается</td></tr>
 <tr><td>security zone-pair trusted untrusted (или … self) → rule 10 → action permit|deny|reject → match protocol tcp · match source-address object-group LAN · match destination-port object-group WEB → enable</td><td>правила между зонами; ответы разрешённой сессии проходят сами (stateful); не подошло ни одно правило — неявный запрет</td></tr>
 <tr><td>match [not] source-address|destination-address address-range A-B | prefix A/L | object-group N | any · match [not] destination-port port-range 80,443 | object-group N</td><td>условия правила</td></tr>
 <tr><td>object-group network LAN → ip prefix 192.168.1.0/24 · ip address-range A-B; object-group service WEB → port-range 80,443</td><td>группы адресов и портов (также в NAT: match source-address object-group LAN)</td></tr>
 <tr><td>show security zone · show security zone-pair [ИЗ В] · show ip firewall sessions · show ip firewall counters · clear ip firewall sessions|counters · show object-group</td><td>просмотр межсетевого экрана</td></tr>
-<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show ip firewall sessions timeouts</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
+<tr><td>ip firewall sessions icmp-timeout 30 · udp-wait-timeout 30 · udp-assured-timeout 180 · tcp-connect-timeout 60 · tcp-estabilished-timeout 120 · tcp-disconnect-timeout 30 · generic-timeout 60 · show running-config</td><td>таймауты сессий по протоколам (значения по умолчанию из справочника ESR)</td></tr>
 <tr><td>router rip → timers update 30 · timers invalid 180 · timers flush 240 · show ip rip</td><td>RIP по таймерам: новые маршруты сразу; сосед замолчал — маршрут живёт до invalid, затем «possibly down» до flush</td></tr>
 <tr><td>ip ospf hello-interval 10 · ip ospf dead-interval 40 · ip ospf priority 128 · ip ospf network broadcast|point-to-point · show ip ospf neighbors · show ip ospf interface</td><td>OSPF по таймерам: на broadcast-сегменте 2way и ожидание выбора DR 40 с, потом full; hello/dead должны совпадать; сосед замолчал — full до dead-interval. Ускорить: часы ×10 или ⏩ 1 мин</td></tr>
 <tr><td>show configuration changes · show version · show interfaces description</td><td>что изменится после commit; версия; описания</td></tr>
@@ -163,9 +163,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <h2>ESR: VRF, PBR, BFD, BGP</h2>
 <table>
 <tr><td>ip vrf RED · ip vrf forwarding RED · ip route vrf RED … · show ip route vrf RED · ping vrf RED A.B.C.D</td><td>отдельные таблицы маршрутов</td></tr>
-<tr><td>route-map M → rule 10 → match ip access-group ACL, action set ip next-hop A, enable · ip policy route-map M</td><td>маршрутизация по политике (PBR)</td></tr>
+<tr><td>route-map M → rule 10 → match ip access-group ACL, action set ip next-hop A · ip policy route-map M</td><td>маршрутизация по политике (PBR)</td></tr>
 <tr><td>ip route СЕТЬ ШЛЮЗ bfd · show bfd neighbors · show ip bfd</td><td>маршрут снимается при недоступном next-hop</td></tr>
-<tr><td>router bgp AS → address-family ipv4 unicast → network, neighbor A → remote-as, enable · show bgp summary · show bgp ipv4 unicast</td><td>BGP (eBGP/iBGP, AS_PATH)</td></tr>
+<tr><td>router bgp AS → neighbor A → remote-as, address-family ipv4 unicast → enable, exit, enable; address-family ipv4 unicast → network · show bgp summary · show bgp ipv4 unicast</td><td>BGP (eBGP/iBGP, AS_PATH)</td></tr>
 </table>
 
 <h2>MES: 802.1X, IGMP snooping, стек, QinQ, MSTP</h2>

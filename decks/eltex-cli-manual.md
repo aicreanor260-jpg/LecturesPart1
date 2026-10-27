@@ -177,13 +177,13 @@ security zone-pair trusted self        ← трафик самому маршр�
 |---|---|---|---|---|
 | ICMP | ICMP | echo-запрос и ответ | 30 с | `ip firewall sessions icmp-timeout` |
 | TCP | SYN_SENT | первый пакет (рукопожатие) | 60 с | `… tcp-connect-timeout` |
-| TCP | ESTABLISHED | пришёл ответ, сессия открыта (SSH, Telnet) | 120 с | `… tcp-estabilished-timeout` (так в CLI ESR; `tcp-established` тоже принимается) |
+| TCP | ESTABLISHED | пришёл ответ, сессия открыта (SSH, Telnet) | 120 с | `… tcp-estabilished-timeout` (именно так, с опечаткой, команда называется в ПО ESR) |
 | TCP | TIME_WAIT | обмен закончен, соединение закрыто (HTTP) | 30 с | `… tcp-disconnect-timeout` |
 | UDP | UNREPLIED | ответа ещё не было | 30 с | `… udp-wait-timeout` |
 | UDP | ASSURED | ответ был (NTP, DNS) | 180 с | `… udp-assured-timeout` |
 | прочие | GENERIC | GRE, OSPF … | 60 с | `… generic-timeout` |
 
-Живой UDP-поток (тот же адрес и порт) идёт по сессии без проверки правил — поэтому, если удалить правило, поток работает до истечения сессии: `clear ip firewall sessions` или подождать таймаут. Таймауты: `show ip firewall sessions timeouts`.
+Живой UDP-поток (тот же адрес и порт) идёт по сессии без проверки правил — поэтому, если удалить правило, поток работает до истечения сессии: `clear ip firewall sessions` или подождать таймаут. Таймауты: `show running-config`.
 
 ### RIP и OSPF по реальным таймерам (справочник ESR 1.23)
 Время модельное: часы в шапке, ×10 / ×60, «⏩ 1 мин».
@@ -359,8 +359,8 @@ SA устанавливается, когда у пары ESR зеркальны
 
 ### PBR — маршрутизация по политике на ESR (справочник 1.23)
 ```
-ip access-list extended FROM-VPC2 → rule 10 → action permit, match source-address address-range 192.168.1.20-192.168.1.20, enable
-route-map VIA-ISP2 → rule 10 → match ip access-group FROM-VPC2, action set ip next-hop 100.2.0.1, enable
+ip access-list extended FROM-VPC2 → rule 10 → action permit, match source-address 192.168.1.20 0.0.0.0, enable
+route-map VIA-ISP2 → rule 10 → match ip access-group FROM-VPC2, action set ip next-hop 100.2.0.1   (у правила route-map нет enable — действует сразу)
 interface gi1/0/3 → ip policy route-map VIA-ISP2
 ```
 Пакет, пришедший на интерфейс с политикой и разрешённый ACL правила, уходит на next-hop правила мимо таблицы маршрутов (в трассе — «политика VIA-ISP2 (rule 10, ACL …)»). `action deny` или ни одно правило не подошло — обычная маршрутизация; next-hop не в подключённой сети — тоже обычная. Route-map в RIP/OSPF/BGP (фильтрация маршрутов) не моделируется.
@@ -370,18 +370,21 @@ interface gi1/0/3 → ip policy route-map VIA-ISP2
 Параметры: `ip bfd min-rx-interval`, `min-tx-interval`, `idle-tx-interval`, `multiplier` (по умолчанию 200 мс на ESR-1000/1200/1500/1511/1700/3100/3200/3300, 300 мс на остальных, multiplier 5); `show ip bfd`, `show bfd neighbors [A.B.C.D]` (Neighbor/Local address, Interface, discriminators, State), `clear bfd`. Падение сессии — сообщение `%BFD-W-NEIG: Session to 10.0.0.2 Down` (формат из справочника).
 Упрощения: сессия поднимается с любым ESR, достижимым в подключённой сети (команда `ip bfd neighbor` не требуется); время обнаружения считается мгновенным; `ip ospf bfd-enable` не моделируется.
 
-### BGP на ESR (справочник 1.23)
+### BGP на ESR (справочник 1.23, иерархия режимов сверена с ПО ESR)
 ```
 router bgp 65001
   router-id 1.1.1.1
-  address-family ipv4 unicast
-    network 192.168.1.0/24          (или redistribute connected | static)
-    neighbor 10.12.0.2
-      remote-as 65002               (update-source, ebgp-multihop, next-hop-self, description)
-      enable
+  neighbor 10.12.0.2
+    remote-as 65002                 (update-source, ebgp-multihop, description)
+    address-family ipv4 unicast
+      enable                        (обмен маршрутами; next-hop-self, route-map … in|out)
     exit
     enable
   exit
+  address-family ipv4 unicast
+    network 192.168.1.0/24          (или redistribute connected | static)
+  exit
+  enable
 exit
 ```
 Показ: `show bgp summary` (сосед, AS, Up/Down, состояние или число префиксов), `show bgp ipv4 unicast` (сеть, next-hop, AS_PATH), `show bgp neighbors` (состояние и причина в «Тесте»), в `show ip route` — код B с AD 20 (eBGP) / 200 (iBGP).

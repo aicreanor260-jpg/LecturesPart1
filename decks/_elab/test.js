@@ -305,7 +305,7 @@ EL.labs.LABS.forEach(runLab);
   chk('сессии: сессия истекла — UDP упирается в неявный запрет', !u3.ok && u3.steps.some(function (s) { return /неявный запрет/.test(s.t); }));
   EL.labs.apply(n, { R1: ['configure', 'ip firewall sessions icmp-timeout 5', 'ip firewall sessions tcp-estabilished-timeout 600', 'do commit', 'do confirm', 'end'] });
   n.ping(pc.id, '10.0.0.2'); n.tick(6);
-  chk('сессии: ip firewall sessions icmp-timeout 5', !sess('icmp') && /icmp-timeout\s+5\s+30/.test(n.exec(r.id, 'show ip firewall sessions timeouts')) &&
+  chk('сессии: ip firewall sessions icmp-timeout 5', !sess('icmp') && /ip firewall sessions tcp-estabilished-timeout 600/.test(n.exec(r.id, 'show running-config')) &&
       /ip firewall sessions icmp-timeout 5/.test(n.exec(r.id, 'show running-config')));
   console.log('✓ сессии межсетевого экрана по протоколам');
 })();
@@ -897,14 +897,14 @@ EL.labs.LABS.forEach(runLab);
   function via(r, dev) { return r.steps.some(function (s) { return s.k === 'ip' && (s.segs || []).some(function (g) { return g.to === dev.id || g.from === dev.id; }); }); }
   var a = n.ping(v2.id, '8.8.1.8');
   chk('без политики VPC2 идёт через ISP1 (маршрут по умолчанию)', a.ok && via(a, i1));
-  var e = EL.labs.apply(n, { R1: ['configure', 'ip access-list extended FROM-VPC2', 'rule 10', 'action permit', 'match source-address address-range 192.168.1.20-192.168.1.20', 'enable', 'exit', 'exit',
-    'route-map VIA-ISP2', 'rule 10', 'match ip access-group FROM-VPC2', 'action set ip next-hop 100.2.0.1', 'enable', 'exit', 'exit',
+  var e = EL.labs.apply(n, { R1: ['configure', 'ip access-list extended FROM-VPC2', 'rule 10', 'action permit', 'match source-address 192.168.1.20 0.0.0.0', 'enable', 'exit', 'exit',
+    'route-map VIA-ISP2', 'rule 10', 'match ip access-group FROM-VPC2', 'action set ip next-hop 100.2.0.1', 'exit', 'exit',
     'interface gi1/0/3', 'ip policy route-map VIA-ISP2', 'exit', 'end', 'commit', 'confirm'] });
   chk('PBR: команды без ошибок', !e.length, e.join('; '));
   var b = n.ping(v2.id, '8.8.2.8'), c = n.ping(v1.id, '8.8.1.8');
   chk('по политике VPC2 уходит через ISP2', b.ok && via(b, i2) && b.steps.some(function (s) { return /политика VIA-ISP2 \(rule 10, ACL FROM-VPC2\)/.test(s.t); }), b.steps.map(function (s) { return s.t; }).join(' | '));
   chk('VPC1 (не попал под ACL) — по-прежнему через ISP1', c.ok && via(c, i1) && !b.steps.some(function () { return false; }) && !c.steps.some(function (s) { return /политика/.test(s.t); }));
-  chk('running-config: route-map и ip policy', /route-map VIA-ISP2\n  rule 10\n    match ip access-group FROM-VPC2\n    action set ip next-hop 100\.2\.0\.1\n    enable\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')) &&
+  chk('running-config: route-map и ip policy', /route-map VIA-ISP2\n  rule 10\n    match ip access-group FROM-VPC2\n    action set ip next-hop 100\.2\.0\.1\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')) &&
       /ip policy route-map VIA-ISP2/.test(n.exec(r1.id, 'show running-config')));
   console.log('✓ PBR');
 })();
@@ -947,8 +947,9 @@ EL.labs.LABS.forEach(runLab);
   var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), r3 = n.add('vESR', 'R3'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
   n.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/2', r3.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', r3.id, 'gi1/0/2');
   function ifc(k, ip) { return ['interface ' + k, 'ip address ' + ip, 'ip firewall disable', 'exit']; }
-  function bgp(as, nets, nbrs) { var L = ['router bgp ' + as, 'address-family ipv4 unicast']; nets.forEach(function (x) { L.push('network ' + x); });
-    nbrs.forEach(function (x) { L.push('neighbor ' + x[0], 'remote-as ' + x[1], 'enable', 'exit'); }); return L.concat(['enable', 'exit', 'exit']); }
+  function bgp(as, nets, nbrs) { var L = ['router bgp ' + as];
+    nbrs.forEach(function (x) { L.push('neighbor ' + x[0], 'remote-as ' + x[1], 'address-family ipv4 unicast', 'enable', 'exit', 'enable', 'exit'); });
+    L.push('address-family ipv4 unicast'); nets.forEach(function (x) { L.push('network ' + x); }); return L.concat(['exit', 'enable', 'exit']); }
   var e = EL.labs.apply(n, {
     R1: ['configure'].concat(ifc('gi1/0/1', '10.12.0.1/30'), ifc('gi1/0/2', '192.168.1.1/24'), bgp(65001, ['192.168.1.0/24'], [['10.12.0.2', 65002]]), ['end', 'commit', 'confirm']),
     R2: ['configure'].concat(ifc('gi1/0/1', '10.12.0.2/30'), ifc('gi1/0/2', '10.23.0.2/30'), bgp(65002, [], [['10.12.0.1', 65001], ['10.23.0.3', 65003]]), ['end', 'commit', 'confirm']),
@@ -959,8 +960,8 @@ EL.labs.LABS.forEach(runLab);
   chk('R1: маршрут B 192.168.3.0/24 с AS_PATH 65002 65003', /192\.168\.3\.0\/24\s+10\.12\.0\.2\s+100\s+65002 65003 i/.test(n.exec(r1.id, 'show bgp ipv4 unicast')), n.exec(r1.id, 'show bgp ipv4 unicast'));
   chk('show ip route — B [20/0]', /^B\s+\* 192\.168\.3\.0\/24\s+\[20\/0\]/m.test(n.exec(r1.id, 'show ip route')), n.exec(r1.id, 'show ip route'));
   chk('PA → PB через три AS', n.ping(pa.id, '192.168.3.10').ok);
-  chk('running-config: router bgp', /router bgp 65001\n  address-family ipv4 unicast\n    network 192\.168\.1\.0\/24\n    neighbor 10\.12\.0\.2\n      remote-as 65002\n      enable\n    exit\n    enable\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')), n.exec(r1.id, 'show running-config'));
-  EL.labs.apply(n, { R3: ['configure', 'router bgp 65003', 'address-family ipv4 unicast', 'neighbor 10.23.0.2', 'remote-as 65009', 'end', 'commit', 'confirm'] });
+  chk('running-config: router bgp по иерархии ESR', /router bgp 65001\n  neighbor 10\.12\.0\.2\n    remote-as 65002\n    address-family ipv4 unicast\n      enable\n    exit\n    enable\n  exit\n  address-family ipv4 unicast\n    network 192\.168\.1\.0\/24\n  exit\n  enable\nexit/.test(n.exec(r1.id, 'show running-config')), n.exec(r1.id, 'show running-config'));
+  EL.labs.apply(n, { R3: ['configure', 'router bgp 65003', 'neighbor 10.23.0.2', 'remote-as 65009', 'end', 'commit', 'confirm'] });
   chk('неверный remote-as — сессия не поднимается, маршрута нет', !n.ping(pa.id, '192.168.3.10').ok && /remote-as 65009 не совпадает/.test(n.exec(r3.id, 'show bgp neighbors')), n.exec(r3.id, 'show bgp neighbors'));
   console.log('✓ BGP');
 })();
