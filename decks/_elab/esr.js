@@ -56,6 +56,11 @@
   }
   cmd('priv', 'commit', commit, 'Применить изменения кандидата');
   cmd('priv', 'confirm', confirm, 'Подтвердить применённую конфигурацию');
+  cmd('priv', 'copy system:default-config system:candidate-config', function (st) {
+    var h = st.cand.host; st.cand = freshCfg('vesr', st.nports); st.pending = true;
+    return 'Candidate configuration replaced with default. Apply: commit'; }, 'Сбросить кандидат к заводской конфигурации');
+  cmd('priv', 'reload system', function (st) { st.cand = EL.clone(st.run); st.pending = false; st.unconfirmed = false;
+    return 'System is going to reboot... Done. Загружена применённая конфигурация (неприменённые правки потеряны)'; }, 'Перезагрузить');
   cmd('priv', 'rollback', function (st) { st.cand = EL.clone(st.run); st.pending = false; return 'Configuration has been successfully rolled back'; },
       'Откатить неприменённые изменения');
 

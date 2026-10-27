@@ -212,6 +212,7 @@
     return !portShut(this.devs[id], port) && !portShut(this.devs[pr.dev], pr.port);
   };
   function portShut(d, p) {
+    if (d.off) return true;
     if (d.type === 'mes') return !!d.st.ports[p].shut;
     if (d.type === 'esr') return !!d.st.run.ifs[p].shut;
     if (d.type === 'deb') return !d.st.up;
@@ -417,6 +418,7 @@
       var it = q.shift(), key = it.dev + '|' + it.port + '|' + it.tag;
       if (seen[key]) continue; seen[key] = 1;
       var d = this.devs[it.dev], nm = d.name;
+      if (d.off) { notes.push(nm + ': устройство выключено'); continue; }
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
@@ -781,6 +783,22 @@
   };
 
   // ------------------------------------------------------------------ сохранение схемы
+  // питание и перезагрузка (как Start/Stop/Reload в pnetlab)
+  P.power = function (id, on) { this.devs[id].off = !on; this.gen++; };
+  P.reboot = function (id) {
+    var d = this.devs[id], st = d.st;
+    if (d.type === 'esr') { st.cand = EL.clone(st.run); st.pending = false; st.unconfirmed = false; st.mode = 'priv'; st.ctx = null; }
+    if (d.type === 'mes') { st.mode = 'priv'; EL.mes.exec(st, 'reload'); }
+    if (d.type === 'vpc') { st.ip = null; st.gw = null; st.dhcp = false; }
+    if (d.type === 'deb') { st.user = st.browser ? 'root' : null; st.login = 'user'; st.ssh = null; st.up = false; st.ip = null; st.gw = null; }
+    this.mac[id] = {}; this.arp[id] = {}; d.off = false; this.gen++;
+  };
+  P.rename = function (id, name) {
+    name = String(name || '').trim();
+    if (!/^[\w.-]{1,24}$/.test(name)) return 'Имя: латиница, цифры, - _ . (до 24 символов)';
+    var o = this.byName(name); if (o && o.id !== id) return 'Имя ' + name + ' уже занято';
+    var d = this.devs[id]; d.name = name; if (d.st.kind === 'vpc') d.st.name = name; return null;
+  };
   P.toJSON = function () {
     var s = this;
     return { v: 1, devs: this.list().map(function (d) { return { name: d.name, model: d.model, x: d.x, y: d.y, st: d.st }; }),
@@ -799,6 +817,7 @@
   P.exec = function (id, line, ui) {
     this.gen++;
     var d = this.devs[id], st = d.st;
+    if (d.off) return '';
     if (st.askPw) { var a = st.askPw; st.askPw = null; if (line === a.pw) { a.ok(); return ''; } return '% Access denied'; }
     if (/\?\s*$/.test(line) && (d.type === 'mes' || d.type === 'esr')) return this.help(id, line.replace(/\?\s*$/, ''));
     if (d.type === 'mes') return EL.mes.exec(st, line);
