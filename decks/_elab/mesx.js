@@ -9,9 +9,11 @@
     Object.defineProperty(st, 'dev', { value: dev, writable: true, configurable: true, enumerable: false });
   };
 
-  function fresh(n, host) {
+  function fresh(n, host, list, dialect) {
     var st = E.fresh(n);
-    st.kind = 'mes'; st.mode = 'user'; st.host = host || 'switch'; st.routes = []; st.startup = null;
+    if (list) { var tpl = st.ports['gi1/0/1']; st.ports = {}; list.forEach(function (k) { st.ports[k] = EL.clone(tpl); }); }
+    st.kind = 'mes'; st.mode = 'user'; st.host = host || 'switch'; st.routes = []; st.startup = null; st.dialect = dialect || '10';
+    st.stp = { on: true, mode: st.dialect === '6' ? 'rst' : 'mst', prio: 32768 };
     Object.keys(st.ports).forEach(function (k) { st.ports[k].shut = false; });
     return st;
   }
@@ -71,8 +73,8 @@
   cmd('priv', 'copy running-config startup-config', save);
   cmd('priv', 'show startup-config', function (st) { return st.startup ? E.showRun(st.startup) : '% Startup-config пуста — выполните write'; });
   cmd('priv', 'reload', function (st) {
-    var keep = st.startup, nports = Object.keys(st.ports).length, host = 'switch';
-    var src = keep ? EL.clone(keep) : fresh(nports, host);
+    var keep = st.startup, nports = Object.keys(st.ports).length, host = 'console';
+    var src = keep ? EL.clone(keep) : fresh(nports, host, Object.keys(st.ports), st.dialect);
     Object.keys(st).forEach(function (k) { delete st[k]; });
     Object.keys(src).forEach(function (k) { st[k] = src[k]; });
     st.startup = keep; st.mode = 'user';
@@ -131,5 +133,5 @@
     if (/^\s*ban/i.test(raw)) return E.exec(st, raw);       // баннеры с разделителем разбирает движок
     return EL.cli.runTable(E.CMDS, st, raw);
   }
-  EL.mes = { fresh: fresh, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };
+  EL.mes = { fresh: fresh, save: save, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };
 })(typeof window !== 'undefined' ? window : global);

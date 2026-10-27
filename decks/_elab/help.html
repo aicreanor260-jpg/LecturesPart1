@@ -27,6 +27,13 @@ vesr(config)#         do commit   — применить
 vesr(config)#         do confirm  — подтвердить</pre>
 <p>На ESR изменения <b>не действуют до commit</b>. Пакеты на интерфейс с включённым межсетевым экраном отбрасываются — нужна <code>ip firewall disable</code>.</p></div>
 </div>
+<h2>Ветки ПО коммутаторов</h2>
+<table>
+<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable</td></tr>
+<tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
+<tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
+</table>
+<p>Порты: fa 100M, gi 1G, tw 2.5G, te 10G, fo 40G, hu 100G (например te1/0/1). Ветка ПО видна в палитре рядом с моделью.</p>
 <h2>Команды MES (коммутатор)</h2>
 <table>
 <tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>

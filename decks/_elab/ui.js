@@ -18,18 +18,16 @@
   // ------------------------------------------------------------------ палитра
   function buildPalette() {
     var g = {}, h = '<input id="palQ" placeholder="Поиск модели…" spellcheck="false">';
-    var ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Маршрутизаторы ESR', 'Конечные узлы'];
+    var ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы ЦОД', 'Маршрутизаторы ESR', 'Конечные узлы'];
     Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
     Object.keys(g).sort(function (a, b) { return (ORD.indexOf(a) + 99) % 99 - (ORD.indexOf(b) + 99) % 99; }).forEach(function (gr) {
       g[gr].sort();
       h += '<h4>' + gr + '</h4>';
       g[gr].forEach(function (k) { var m = EL.MODELS[k];
-        h += '<button class="pi" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + icon(m.type) + '<span><b>' + k + '</b><small>' + m.note + '</small></span></button>'; });
+        h += '<button class="pi" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + icon(m.type) + '<span><b>' + k + (m.sw ? ' <em class="sw">' + m.sw.replace('ПО ', '') + '</em>' : '') + '</b><small>' + m.note + '</small></span></button>'; });
     });
-    var oth = EL.CATALOG_OTHER || {};
-    h += '<p class="note">Коммутаторы — все модели каталога eltex.ru с ПО 10.x (CLI MES14xx/24xx/3400/37xx). Порты нумеруются gi1/0/1–N. ' +
-      'Пока не эмулируются (другой CLI): ' + Object.keys(oth).map(function (k) { return k + ' — ' + oth[k].length + ' моделей'; }).join(', ') +
-      '. Маршрутизатор — CLI ESR. Это модель по документации, не прошивка.</p>';
+    h += '<p class="note">Все коммутаторы MES из каталога eltex.ru. CLI по ветке ПО модели: 10.x (MES14xx/24xx/3400/37xx), 6.x и 4.x (MES23xx/33xx/35xx/53xx/54xx–57xx), ' +
+      '8.x FASTPATH (MES5448/7048). Порты — как в CLI: gi/te/fo/hu 1/0/N или 1/0/N. Маршрутизатор — CLI ESR. Это модель по документации, не прошивка.</p>';
     $('pal').innerHTML = h;
   }
   $('pal').addEventListener('input', function (e) {

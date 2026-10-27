@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'hosts.js', 'catalog.js', 'net.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -59,6 +59,60 @@ EL.labs.LABS.forEach(runLab);
   total++; if (!/running-config/.test(net.help(s.id, 'show '))) { fail++; console.error('✗ ? после show'); }
   total++; if (net.prompt(r.id) !== 'vesr(config)#') { fail++; console.error('✗ приглашение ESR ' + net.prompt(r.id)); }
   console.log('✓ поведение CLI');
+})();
+
+// диалекты веток ПО: одни и те же задачи на моделях 6.x (MES3348) и 8.x (MES5448) их собственным синтаксисом
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function run(net, script) { var e = EL.labs.apply(net, script); return e; }
+  var D = {
+    '6': { model: 'MES3348', p: function (i) { return 'gi1/0/' + i; }, rng: function (a, b) { return 'interface range gigabitethernet 1/0/' + a + '-' + b; },
+           one: function (i) { return 'interface gigabitethernet 1/0/' + i; }, vlans: ['configure', 'vlan database', 'vlan 10,20', 'exit'],
+           lag: ['channel-group 1 mode auto'], lagPre: [], stp: ['spanning-tree mode rstp'], root: 'spanning-tree priority 4096',
+           mon: function (src, dst) { return ['interface gigabitethernet 1/0/' + dst, 'port monitor gigabitethernet 1/0/' + src, 'exit']; } },
+    '8': { model: 'MES5448', p: function (i) { return '1/0/' + i; }, rng: function (a, b) { return 'interface 1/0/' + a + '-1/0/' + b; },
+           one: function (i) { return 'interface 1/0/' + i; }, vlans: ['vlan database', 'vlan 10,20', 'exit', 'configure'],
+           lag: ['addport lag 1'], lagPre: ['port-channel uplink'], stp: ['spanning-tree', 'spanning-tree mode rstp'], root: 'spanning-tree mst priority 0 4096',
+           mon: function (src, dst) { return ['monitor session 1 source interface 1/0/' + src, 'monitor session 1 destination interface 1/0/' + dst, 'monitor session 1 mode']; } }
+  };
+  Object.keys(D).forEach(function (k) {
+    var d = D[k], tag = 'диалект ' + k + ' (' + d.model + ')';
+    // VLAN + маршрутизация на SVI
+    var n = new EL.Net(), s = n.add(d.model, 'SW1'); ['A', 'B', 'C'].forEach(function (x, i) { var v = n.add('VPC', x); n.connect(v.id, 'eth0', s.id, d.p(i + 1)); });
+    var e = run(n, { SW1: ['enable'].concat(d.vlans, [d.rng(1, 2), 'switchport mode access', 'switchport access vlan 10', 'exit',
+                       d.one(3), 'switchport mode access', 'switchport access vlan 20', 'exit',
+                       'interface vlan 10', 'ip address 10.0.10.1 255.255.255.0', 'exit', 'interface vlan 20', 'ip address 10.0.20.1 255.255.255.0', 'end']),
+                     A: ['ip 10.0.10.2/24 10.0.10.1'], B: ['ip 10.0.10.3/24 10.0.10.1'], C: ['ip 10.0.20.2/24 10.0.20.1'] });
+    chk(tag + ': VLAN и SVI', !e.length && n.reach('A', '10.0.10.3') && n.reach('A', '10.0.20.2'), e.join('; '));
+    var sv = n.exec(s.id, 'show vlan');
+    chk(tag + ': show vlan', k === '8' ? /VLAN ID[\s\S]*\n10\s/.test(sv) : sv.indexOf(d.p(1).replace(/\d+$/, '')) >= 0, sv.split('\n')[0]);
+    // LACP между двумя коммутаторами
+    var m = new EL.Net(), a = m.add(d.model, 'S1'), b = m.add(d.model, 'S2'), va = m.add('VPC', 'A'), vb = m.add('VPC', 'B');
+    for (var i = 1; i <= 4; i++) m.connect(a.id, d.p(i), b.id, d.p(i));
+    m.connect(va.id, 'eth0', a.id, d.p(10)); m.connect(vb.id, 'eth0', b.id, d.p(10));
+    var lag = ['enable', 'configure'].concat(d.lagPre, [d.rng(1, 4)], d.lag, ['end']);
+    e = run(m, { S1: lag, S2: lag, A: ['ip 10.1.1.1/24'], B: ['ip 10.1.1.2/24'] });
+    var L = m.lports(a.id).filter(function (l) { return l.name === 'po1'; })[0];
+    chk(tag + ': LACP', !e.length && L && L.members.length === 4 && m.reach('A', '10.1.1.2'), e.join('; '));
+    // кольцо из трёх с RSTP
+    var r = new EL.Net(), x = ['X1', 'X2', 'X3'].map(function (nm) { return r.add(d.model, nm); }), ra = r.add('VPC', 'A'), rb = r.add('VPC', 'B');
+    r.connect(x[0].id, d.p(1), x[1].id, d.p(2)); r.connect(x[1].id, d.p(1), x[2].id, d.p(2)); r.connect(x[2].id, d.p(1), x[0].id, d.p(2));
+    r.connect(ra.id, 'eth0', x[0].id, d.p(5)); r.connect(rb.id, 'eth0', x[2].id, d.p(5));
+    var sc = { A: ['ip 10.2.2.1/24'], B: ['ip 10.2.2.2/24'] };
+    ['X1', 'X2', 'X3'].forEach(function (nm, i) { sc[nm] = ['enable', 'configure'].concat(d.stp, i === 1 ? [d.root] : [], ['end']); });
+    e = run(r, sc); var t = r.stp(), blk = 0; Object.keys(t).forEach(function (id) { Object.keys(t[id]).forEach(function (q) { if (!t[id][q].fwd) blk++; }); });
+    chk(tag + ': RSTP', !e.length && blk === 1 && r._stp.root[x[1].id] === x[1].id && r.reach('A', '10.2.2.2'), e.join('; ') + ' blk=' + blk);
+    // зеркалирование
+    var w = new EL.Net(), sw = w.add(d.model, 'M'), p1 = w.add('VPC', 'A'), p2 = w.add('VPC', 'B'), sn = w.add('Debian', 'S');
+    w.connect(p1.id, 'eth0', sw.id, d.p(1)); w.connect(p2.id, 'eth0', sw.id, d.p(2)); w.connect(sn.id, 'ens3', sw.id, d.p(12));
+    e = run(w, { M: ['enable', 'configure'].concat(d.mon(1, 12), ['end']), A: ['ip 10.3.3.1/24'], B: ['ip 10.3.3.2/24', 'ping 10.3.3.1'] });
+    chk(tag + ': зеркалирование', !e.length && (sn.st.capN || 0) >= 2, e.join('; '));
+  });
+  var n8 = new EL.Net(), f = n8.add('MES5448', 'F'); n8.exec(f.id, 'enable'); n8.exec(f.id, 'configure'); n8.exec(f.id, 'interface 1/0/3');
+  chk('приглашение FASTPATH', n8.prompt(f.id) === '(switch) (Interface 1/0/3)#', n8.prompt(f.id));
+  var n6 = new EL.Net(), g = n6.add('MES3348', 'G'); n6.exec(g.id, 'enable'); n6.exec(g.id, 'configure');
+  chk('6.x: режим rst не из своей ветки', /Режим/.test(n6.exec(g.id, 'spanning-tree mode rst')));
+  console.log('✓ диалекты 6.x и 8.x');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

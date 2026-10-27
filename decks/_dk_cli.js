@@ -39,13 +39,22 @@
       r.push(j > i ? a[i] + '-' + a[j] : '' + a[i]); i = j + 1; }
     return r.join(',');
   }
-  function ifList(spec) {          // gi1/0/1 или gi1/0/1-4
-    var m = spec.match(/^gi(\d+)\/(\d+)\/(\d+)(?:-(\d+))?$/);
-    if (!m || m[1] !== '1' || m[2] !== '0') return null;
-    var a = +m[3], b = m[4] ? +m[4] : a, out = [];
-    if (a < 1 || b > 52 || b < a) return null;
-    for (var i = a; i <= b; i++) out.push('gi1/0/' + i);
+  // gi1/0/1, gi1/0/1-4, te1/0/1, fo1/0/2; без префикса — порты FASTPATH (MES5448/7048): 1/0/1, 1/0/1-1/0/4
+  var PFX = { gi: 'gigabitethernet', te: 'tengigabitethernet', fo: 'fortygigabitethernet', hu: 'hundredgigabitethernet',
+              tw: 'twopointfivegigabitethernet', fa: 'fastethernet' };
+  function ifList(spec) {
+    var m = spec.match(/^(gi|te|fo|hu|tw|fa)?(\d+)\/(\d+)\/(\d+)(?:-(?:(?:gi|te|fo|hu|tw|fa)?\d+\/\d+\/)?(\d+))?$/);
+    if (!m || m[2] !== '1' || m[3] !== '0') return null;
+    var pf = m[1] || '', a = +m[4], b = m[5] ? +m[5] : a, out = [];
+    if (a < 1 || b > 64 || b < a) return null;
+    for (var i = a; i <= b; i++) out.push(pf + '1/0/' + i);
     return out;
+  }
+  function longIf(k) { var m = k.match(/^([a-z]*)(\d.*)$/); return m[1] ? PFX[m[1]] + ' ' + m[2] : m[2]; }
+  function portGroups(names) {      // ['gi1/0/1','gi1/0/2','te1/0/1'] → 'gi1/0/1-2, te1/0/1'
+    var g = {}, order = [];
+    names.forEach(function (k) { var m = k.match(/^(.*\/)(\d+)$/); if (!g[m[1]]) { g[m[1]] = []; order.push(m[1]); } g[m[1]].push(+m[2]); });
+    return order.map(function (p) { return p + fmtList(g[p]); }).join(', ');
   }
   function hash(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     var x = (h >>> 0).toString(16); return (x + x + x + x + x).slice(0, 40); }
@@ -199,7 +208,7 @@
         if (p.gtag.length) d.push(' switchport general allowed vlan add ' + fmtList(p.gtag) + ' tagged');
         var u = p.guntag.filter(function (v) { return v !== 1; }); if (u.length) d.push(' switchport general allowed vlan add ' + fmtList(u) + ' untagged');
         if (p.pvid !== 1) d.push(' switchport general pvid ' + p.pvid); }
-      if (d.length) o.push('interface gigabitethernet' + k.slice(2), d.join('\n'), 'exit', '!');
+      if (d.length) o.push('interface ' + longIf(k).replace(' ', ''), d.join('\n'), 'exit', '!');
     });
     Object.keys(st.svi).forEach(function (v) { o.push('interface vlan ' + v, ' ip address ' + st.svi[v].replace('/', ' /'), 'exit', '!'); });
     if (st.gw) o.push('ip default-gateway ' + st.gw);
@@ -214,11 +223,11 @@
              '---- ----------------- ------------------ ------------------ ----------------'];
     Object.keys(st.vlans).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
       var tg = [], un = [];
-      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k], n = +k.split('/')[2];
+      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k], n = k;
         if (p.mode === 'access' && p.access === v) un.push(n);
         if (p.mode === 'trunk') { if (p.native === v) un.push(n); else if (p.allowed.indexOf(v) >= 0) tg.push(n); }
         if (p.mode === 'general') { if (p.gtag.indexOf(v) >= 0) tg.push(n); if (p.guntag.indexOf(v) >= 0) un.push(n); } });
-      var f = function (a) { return a.length ? 'gi1/0/' + fmtList(a) : ''; };
+      var f = function (a) { return a.length ? portGroups(a) : ''; };
       o.push((v + '    ').slice(0, 5) + ((st.vlans[v] === '-' ? '-' : st.vlans[v]) + '                  ').slice(0, 18) +
              (f(tg) + '                   ').slice(0, 19) + (f(un) + '                   ').slice(0, 19) + (v === 1 ? 'D' : 'S'));
     });
@@ -246,7 +255,10 @@
 
   // ------------------------------------------------------------------ выполнение строки
   function normLine(s) {
-    return s.replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
+    return s.replace(/\b(?:te|ten|tengig\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'te').replace(/\b(?:fo|for|forty\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fo')
+            .replace(/\b(?:hu|hun|hundred\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'hu').replace(/\b(?:tw|two\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'tw')
+            .replace(/\b(?:fa|fast\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fa')
+            .replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
   }
   function exec(st, raw) {
     var line = normLine(raw.trim());
@@ -479,7 +491,7 @@
     newTask();
   }
   // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
-  var api = { NPORTS: NPORTS, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
+  var api = { NPORTS: NPORTS, longIf: longIf, portGroups: portGroups, PFX: PFX, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
               normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
               showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
               pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };

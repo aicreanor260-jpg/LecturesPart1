@@ -28,7 +28,7 @@
     if (!line) return '';
     var toks = line.split(/\s+/), low = lower(toks);
     for (var i = 0; i < table.length; i++) {
-      var c = table[i]; if (c.modes.indexOf(st.mode) < 0) continue;
+      var c = table[i]; if (c.modes.indexOf(st.mode) < 0 || !dlOk(c, st)) continue;
       var args = E.match(c.pat, low);
       if (!args) continue;
       var ri = c.pat.indexOf('<rest>');
@@ -36,10 +36,12 @@
       var r = c.run(st, orig || args, line);
       return r === undefined || r === null ? '' : r;
     }
-    if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && partial(c.pat, low); })) return '% Incomplete command';
-    if (table.some(function (c) { return E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
+    if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && dlOk(c, st) && partial(c.pat, low); })) return '% Incomplete command';
+    if (table.some(function (c) { return dlOk(c, st) && E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
     return '% Unrecognized command';
   }
+  // диалект ветки ПО: команда с dl есть только в этих ветках, с xdl — во всех, кроме этих
+  function dlOk(c, st) { var d = st.dialect || '10'; return (!c.dl || c.dl.indexOf(d) >= 0) && (!c.xdl || c.xdl.indexOf(d) < 0); }
   // токены — строгое начало шаблона (команда не дописана)
   function partial(pat, toks) {
     if (toks.length >= pat.length) return false;
@@ -54,13 +56,13 @@
     return t === p || (t.length >= 2 && p.indexOf(t) === 0) || (p === 'terminal' && t === 't');
   }
   // варианты следующего слова: для строки «sh» → show…, для «show » → running-config, vlan…
-  function candidates(table, mode, raw) {
+  function candidates(table, mode, raw, st) {
     var line = E.normLine(String(raw)), ends = /\s$/.test(line) || !line.trim();
     var toks = line.trim() ? lower(line.trim().split(/\s+/)) : [];
     var part = ends ? '' : toks.pop();
     var out = [], seen = {}, cr = false;
     table.forEach(function (c) {
-      if (c.modes.indexOf(mode) < 0) return;
+      if (c.modes.indexOf(mode) < 0 || (st && !dlOk(c, st))) return;
       for (var k = 0; k < toks.length; k++) {
         if (c.pat[k] === '<rest>') return;
         if (k >= c.pat.length || !tokOk(c.pat[k], toks[k])) return;
@@ -74,18 +76,18 @@
     if (cr) out.push({ w: '<cr>', ph: true, d: 'выполнить команду' });
     return { list: out, part: part };
   }
-  function help(table, mode, raw) {
-    var c = candidates(table, mode, raw);
+  function help(table, mode, raw, st) {
+    var c = candidates(table, mode, raw, st);
     if (!c.list.length) return '% Unrecognized command';
     return c.list.map(function (x) { return '  ' + (x.w + '                        ').slice(0, 24) + x.d; }).join('\n');
   }
-  function tab(table, mode, raw) {
-    var c = candidates(table, mode, raw);
+  function tab(table, mode, raw, st) {
+    var c = candidates(table, mode, raw, st);
     var kw = c.list.filter(function (x) { return !x.ph; });
     if (!c.part || kw.length !== 1) return null;
     return raw.replace(/\S+$/, kw[0].w) + ' ';
   }
-  EL.cli = { runTable: runTable, help: help, tab: tab, candidates: candidates };
+  EL.cli = { dlOk: dlOk, runTable: runTable, help: help, tab: tab, candidates: candidates };
 
   // ------------------------------------------------------------------ мелочи
   EL.clone = function (o) { return JSON.parse(JSON.stringify(o)); };

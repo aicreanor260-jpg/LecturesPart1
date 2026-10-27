@@ -9,7 +9,7 @@
 ## Интерфейс
 | Где | Что |
 |---|---|
-| Палитра слева | 29 моделей MES ветки ПО 10.x (с поиском), vESR, VPC, Debian, Debian-server (веб + NTP), Docker-браузер — щелчок добавляет устройство |
+| Палитра слева | все 79 коммутаторов MES из каталога eltex.ru (с поиском, у каждой модели — ветка ПО), vESR, VPC, Debian, Debian-server (веб + NTP), Docker-браузер — щелчок добавляет устройство |
 | **Кабель** | щёлкните устройство → порт → второе устройство → порт |
 | **Удалить** / Delete | удалить выбранное устройство или кабель |
 | Щелчок по устройству | консоль справа; вкладки — открытые консоли |
@@ -20,6 +20,15 @@
 | **Сохранить / Открыть** | схема со всеми настройками в файл `.json` |
 
 В консоли: `?` — варианты следующего слова, `Tab` — дописать, `↑ ↓` — история. Сокращения: `conf t`, `int gi1/0/1`, `sh vl`.
+
+## Ветки ПО коммутаторов — свой CLI у каждой
+| Ветка | Модели | Отличия синтаксиса |
+|---|---|---|
+| 10.x | MES14xx, MES24xx, MES3400, MES37xx | `spanning-tree mode rst\|mst\|rapid-pvst`, `channel-group N mode active\|passive\|on`, `set lldp enable`, `monitor session` |
+| 6.x и 4.x | MES23xx, MES33xx, MES35xx, MES53xx, MES54xx–57xx | `spanning-tree mode stp\|rstp\|mstp`, `channel-group N mode auto\|on`, `lldp run`, `port monitor <порт>` на порту-получателе, `show interfaces channel-group` |
+| 8.x (FASTPATH) | MES5448, MES7048 | приглашения `(switch) #`, `(switch) (Config)#`, `(switch) (Interface 1/0/1)#`; порты `1/0/N`, диапазон `interface 1/0/1-1/0/4`; `vlan database` из `#`, `vlan name 10 IT`; LAG: `port-channel ИМЯ`, `addport lag 1`, `port-channel static`; `vlan participation include`, `vlan tagging`, `vlan pvid`; `spanning-tree mst priority 0 4096`; `monitor session 1 … mode`; `show port-channel brief` |
+
+Порты называются по типу, как на устройстве: `fa` 100M, `gi` 1G, `tw` 2.5G, `te` 10G, `fo` 40G, `hu` 100G — например, у MES2424 это gi1/0/1–24 и te1/0/1–4, у MES5324 te1/0/1–24 и fo1/0/1–4.
 
 ## Режимы
 **MES:** `switch>` → `enable` → `switch#` → `configure` → `switch(config)#` → `interface gi1/0/1` → `switch(config-if)#`; также `(config-if-range)#`, `(config-vlan)#` (`vlan database`/`vlan N`), `(config-line)#`. `exit` — на уровень выше, `end` — в `#`.

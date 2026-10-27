@@ -40,7 +40,7 @@ main{display:grid;grid-template-columns:220px minmax(0,1fr) minmax(380px,44%);mi
     padding:8px 10px;margin-bottom:6px;border-radius:3px;transition:transform .12s,box-shadow .12s}
 .pi:hover{transform:translateX(3px);box-shadow:-3px 0 0 var(--blue);border-color:var(--ink)}
 .pi svg{flex:0 0 38px;height:28px}
-.pi b{display:block;font-weight:800}.pi small{display:block;color:var(--ink2);font-size:.74em;line-height:1.25}
+.pi b{display:block;font-weight:800}.pi .sw{font-style:normal;font:700 .7em var(--m);color:var(--blue);border:1px solid var(--blue);padding:0 4px;border-radius:2px;margin-left:4px;vertical-align:1px}.pi small{display:block;color:var(--ink2);font-size:.74em;line-height:1.25}
 .pal .note{font-size:.76em;color:var(--ink2);margin:14px 4px;line-height:1.4}
 /* ---------- холст */
 .stage{position:relative;min-width:0;min-height:0;display:flex;flex-direction:column}
@@ -206,6 +206,13 @@ vesr(config)#         do commit   — применить
 vesr(config)#         do confirm  — подтвердить</pre>
 <p>На ESR изменения <b>не действуют до commit</b>. Пакеты на интерфейс с включённым межсетевым экраном отбрасываются — нужна <code>ip firewall disable</code>.</p></div>
 </div>
+<h2>Ветки ПО коммутаторов</h2>
+<table>
+<tr><td>10.x — MES14xx/24xx/3400/37xx</td><td>spanning-tree mode rst · channel-group N mode active|passive|on · set lldp enable</td></tr>
+<tr><td>6.x и 4.x — MES23xx/33xx/35xx/53xx/54xx–57xx</td><td>spanning-tree mode rstp · channel-group N mode auto|on · lldp run · port monitor ПОРТ</td></tr>
+<tr><td>8.x — MES5448/7048 (FASTPATH)</td><td>(switch) # · порты 1/0/N · vlan database из # · port-channel ИМЯ + addport lag N · vlan participation/tagging/pvid · spanning-tree mst priority 0 N</td></tr>
+</table>
+<p>Порты: fa 100M, gi 1G, tw 2.5G, te 10G, fo 40G, hu 100G (например te1/0/1). Ветка ПО видна в палитре рядом с моделью.</p>
 <h2>Команды MES (коммутатор)</h2>
 <table>
 <tr><td>hostname SW1</td><td>имя (с пробелами — в кавычках)</td></tr>
@@ -312,13 +319,22 @@ vesr(config)#         do confirm  — подтвердить</pre>
       r.push(j > i ? a[i] + '-' + a[j] : '' + a[i]); i = j + 1; }
     return r.join(',');
   }
-  function ifList(spec) {          // gi1/0/1 или gi1/0/1-4
-    var m = spec.match(/^gi(\d+)\/(\d+)\/(\d+)(?:-(\d+))?$/);
-    if (!m || m[1] !== '1' || m[2] !== '0') return null;
-    var a = +m[3], b = m[4] ? +m[4] : a, out = [];
-    if (a < 1 || b > 52 || b < a) return null;
-    for (var i = a; i <= b; i++) out.push('gi1/0/' + i);
+  // gi1/0/1, gi1/0/1-4, te1/0/1, fo1/0/2; без префикса — порты FASTPATH (MES5448/7048): 1/0/1, 1/0/1-1/0/4
+  var PFX = { gi: 'gigabitethernet', te: 'tengigabitethernet', fo: 'fortygigabitethernet', hu: 'hundredgigabitethernet',
+              tw: 'twopointfivegigabitethernet', fa: 'fastethernet' };
+  function ifList(spec) {
+    var m = spec.match(/^(gi|te|fo|hu|tw|fa)?(\d+)\/(\d+)\/(\d+)(?:-(?:(?:gi|te|fo|hu|tw|fa)?\d+\/\d+\/)?(\d+))?$/);
+    if (!m || m[2] !== '1' || m[3] !== '0') return null;
+    var pf = m[1] || '', a = +m[4], b = m[5] ? +m[5] : a, out = [];
+    if (a < 1 || b > 64 || b < a) return null;
+    for (var i = a; i <= b; i++) out.push(pf + '1/0/' + i);
     return out;
+  }
+  function longIf(k) { var m = k.match(/^([a-z]*)(\d.*)$/); return m[1] ? PFX[m[1]] + ' ' + m[2] : m[2]; }
+  function portGroups(names) {      // ['gi1/0/1','gi1/0/2','te1/0/1'] → 'gi1/0/1-2, te1/0/1'
+    var g = {}, order = [];
+    names.forEach(function (k) { var m = k.match(/^(.*\/)(\d+)$/); if (!g[m[1]]) { g[m[1]] = []; order.push(m[1]); } g[m[1]].push(+m[2]); });
+    return order.map(function (p) { return p + fmtList(g[p]); }).join(', ');
   }
   function hash(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     var x = (h >>> 0).toString(16); return (x + x + x + x + x).slice(0, 40); }
@@ -472,7 +488,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (p.gtag.length) d.push(' switchport general allowed vlan add ' + fmtList(p.gtag) + ' tagged');
         var u = p.guntag.filter(function (v) { return v !== 1; }); if (u.length) d.push(' switchport general allowed vlan add ' + fmtList(u) + ' untagged');
         if (p.pvid !== 1) d.push(' switchport general pvid ' + p.pvid); }
-      if (d.length) o.push('interface gigabitethernet' + k.slice(2), d.join('\n'), 'exit', '!');
+      if (d.length) o.push('interface ' + longIf(k).replace(' ', ''), d.join('\n'), 'exit', '!');
     });
     Object.keys(st.svi).forEach(function (v) { o.push('interface vlan ' + v, ' ip address ' + st.svi[v].replace('/', ' /'), 'exit', '!'); });
     if (st.gw) o.push('ip default-gateway ' + st.gw);
@@ -487,11 +503,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
              '---- ----------------- ------------------ ------------------ ----------------'];
     Object.keys(st.vlans).map(Number).sort(function (a, b) { return a - b; }).forEach(function (v) {
       var tg = [], un = [];
-      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k], n = +k.split('/')[2];
+      Object.keys(st.ports).forEach(function (k) { var p = st.ports[k], n = k;
         if (p.mode === 'access' && p.access === v) un.push(n);
         if (p.mode === 'trunk') { if (p.native === v) un.push(n); else if (p.allowed.indexOf(v) >= 0) tg.push(n); }
         if (p.mode === 'general') { if (p.gtag.indexOf(v) >= 0) tg.push(n); if (p.guntag.indexOf(v) >= 0) un.push(n); } });
-      var f = function (a) { return a.length ? 'gi1/0/' + fmtList(a) : ''; };
+      var f = function (a) { return a.length ? portGroups(a) : ''; };
       o.push((v + '    ').slice(0, 5) + ((st.vlans[v] === '-' ? '-' : st.vlans[v]) + '                  ').slice(0, 18) +
              (f(tg) + '                   ').slice(0, 19) + (f(un) + '                   ').slice(0, 19) + (v === 1 ? 'D' : 'S'));
     });
@@ -519,7 +535,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
   // ------------------------------------------------------------------ выполнение строки
   function normLine(s) {
-    return s.replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
+    return s.replace(/\b(?:te|ten|tengig\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'te').replace(/\b(?:fo|for|forty\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fo')
+            .replace(/\b(?:hu|hun|hundred\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'hu').replace(/\b(?:tw|two\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'tw')
+            .replace(/\b(?:fa|fast\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fa')
+            .replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
   }
   function exec(st, raw) {
     var line = normLine(raw.trim());
@@ -752,7 +771,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     newTask();
   }
   // движок открыт наружу — его переиспользует отдельный эмулятор eltex-cli.html
-  var api = { NPORTS: NPORTS, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
+  var api = { NPORTS: NPORTS, longIf: longIf, portGroups: portGroups, PFX: PFX, CMDS: CMDS, cmd: cmd, match: match, fresh: fresh, exec: exec, prompt: prompt, PROMPT: PROMPT,
               normLine: normLine, parseList: parseList, fmtList: fmtList, uniq: uniq, ifList: ifList, hash: hash,
               showRun: showRun, showVlan: showVlan, showSw: showSw, addShow: addShow, TASKS: TASKS, rnd: rnd, pick: pick,
               pv: pv, sendAccess: sendAccess, sendTrunk: sendTrunk, sendGeneral: sendGeneral, loginView: loginView, CFG: CFG };
@@ -791,7 +810,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (!line) return '';
     var toks = line.split(/\s+/), low = lower(toks);
     for (var i = 0; i < table.length; i++) {
-      var c = table[i]; if (c.modes.indexOf(st.mode) < 0) continue;
+      var c = table[i]; if (c.modes.indexOf(st.mode) < 0 || !dlOk(c, st)) continue;
       var args = E.match(c.pat, low);
       if (!args) continue;
       var ri = c.pat.indexOf('<rest>');
@@ -799,10 +818,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var r = c.run(st, orig || args, line);
       return r === undefined || r === null ? '' : r;
     }
-    if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && partial(c.pat, low); })) return '% Incomplete command';
-    if (table.some(function (c) { return E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
+    if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && dlOk(c, st) && partial(c.pat, low); })) return '% Incomplete command';
+    if (table.some(function (c) { return dlOk(c, st) && E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
     return '% Unrecognized command';
   }
+  // диалект ветки ПО: команда с dl есть только в этих ветках, с xdl — во всех, кроме этих
+  function dlOk(c, st) { var d = st.dialect || '10'; return (!c.dl || c.dl.indexOf(d) >= 0) && (!c.xdl || c.xdl.indexOf(d) < 0); }
   // токены — строгое начало шаблона (команда не дописана)
   function partial(pat, toks) {
     if (toks.length >= pat.length) return false;
@@ -817,13 +838,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return t === p || (t.length >= 2 && p.indexOf(t) === 0) || (p === 'terminal' && t === 't');
   }
   // варианты следующего слова: для строки «sh» → show…, для «show » → running-config, vlan…
-  function candidates(table, mode, raw) {
+  function candidates(table, mode, raw, st) {
     var line = E.normLine(String(raw)), ends = /\s$/.test(line) || !line.trim();
     var toks = line.trim() ? lower(line.trim().split(/\s+/)) : [];
     var part = ends ? '' : toks.pop();
     var out = [], seen = {}, cr = false;
     table.forEach(function (c) {
-      if (c.modes.indexOf(mode) < 0) return;
+      if (c.modes.indexOf(mode) < 0 || (st && !dlOk(c, st))) return;
       for (var k = 0; k < toks.length; k++) {
         if (c.pat[k] === '<rest>') return;
         if (k >= c.pat.length || !tokOk(c.pat[k], toks[k])) return;
@@ -837,18 +858,18 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (cr) out.push({ w: '<cr>', ph: true, d: 'выполнить команду' });
     return { list: out, part: part };
   }
-  function help(table, mode, raw) {
-    var c = candidates(table, mode, raw);
+  function help(table, mode, raw, st) {
+    var c = candidates(table, mode, raw, st);
     if (!c.list.length) return '% Unrecognized command';
     return c.list.map(function (x) { return '  ' + (x.w + '                        ').slice(0, 24) + x.d; }).join('\n');
   }
-  function tab(table, mode, raw) {
-    var c = candidates(table, mode, raw);
+  function tab(table, mode, raw, st) {
+    var c = candidates(table, mode, raw, st);
     var kw = c.list.filter(function (x) { return !x.ph; });
     if (!c.part || kw.length !== 1) return null;
     return raw.replace(/\S+$/, kw[0].w) + ' ';
   }
-  EL.cli = { runTable: runTable, help: help, tab: tab, candidates: candidates };
+  EL.cli = { dlOk: dlOk, runTable: runTable, help: help, tab: tab, candidates: candidates };
 
   // ------------------------------------------------------------------ мелочи
   EL.clone = function (o) { return JSON.parse(JSON.stringify(o)); };
@@ -1491,9 +1512,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
     Object.defineProperty(st, 'dev', { value: dev, writable: true, configurable: true, enumerable: false });
   };
 
-  function fresh(n, host) {
+  function fresh(n, host, list, dialect) {
     var st = E.fresh(n);
-    st.kind = 'mes'; st.mode = 'user'; st.host = host || 'switch'; st.routes = []; st.startup = null;
+    if (list) { var tpl = st.ports['gi1/0/1']; st.ports = {}; list.forEach(function (k) { st.ports[k] = EL.clone(tpl); }); }
+    st.kind = 'mes'; st.mode = 'user'; st.host = host || 'switch'; st.routes = []; st.startup = null; st.dialect = dialect || '10';
+    st.stp = { on: true, mode: st.dialect === '6' ? 'rst' : 'mst', prio: 32768 };
     Object.keys(st.ports).forEach(function (k) { st.ports[k].shut = false; });
     return st;
   }
@@ -1553,8 +1576,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   cmd('priv', 'copy running-config startup-config', save);
   cmd('priv', 'show startup-config', function (st) { return st.startup ? E.showRun(st.startup) : '% Startup-config пуста — выполните write'; });
   cmd('priv', 'reload', function (st) {
-    var keep = st.startup, nports = Object.keys(st.ports).length, host = 'switch';
-    var src = keep ? EL.clone(keep) : fresh(nports, host);
+    var keep = st.startup, nports = Object.keys(st.ports).length, host = 'console';
+    var src = keep ? EL.clone(keep) : fresh(nports, host, Object.keys(st.ports), st.dialect);
     Object.keys(st).forEach(function (k) { delete st[k]; });
     Object.keys(src).forEach(function (k) { st[k] = src[k]; });
     st.startup = keep; st.mode = 'user';
@@ -1613,7 +1636,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (/^\s*ban/i.test(raw)) return E.exec(st, raw);       // баннеры с разделителем разбирает движок
     return EL.cli.runTable(E.CMDS, st, raw);
   }
-  EL.mes = { fresh: fresh, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };
+  EL.mes = { fresh: fresh, save: save, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };
 })(typeof window !== 'undefined' ? window : global);
 
 /* MES для лаб 8.1 и 8.2: связующее дерево (spanning-tree, RSTP) и агрегация каналов (port-channel, LACP).
@@ -1659,6 +1682,129 @@ vesr(config)#         do confirm  — подтвердить</pre>
     cmd(modes, prefix + 'show lacp <n>', function (st) { return st.net ? st.net.lagText(st.dev) : ''; });
   }
   shows('', 'priv'); shows('do ', CFG);
+})(typeof window !== 'undefined' ? window : global);
+
+/* Диалекты CLI коммутаторов MES по веткам ПО (сверено с руководствами Eltex):
+   '10' — MES14xx/24xx/3400/37xx, ПО 10.4 (базовый синтаксис движка);
+   '6'  — MES23xx/33xx/35xx/53xx/5400/5500/5600/5700, ПО 6.6 и 4.0 (общий синтаксис):
+          spanning-tree mode stp|rstp|mstp, channel-group N mode on|auto, lldp run, port monitor, show interfaces channel-group;
+   '8'  — MES5448/MES7048, ПО 8.4 (FASTPATH): приглашения «(host) #», порты 1/0/N, vlan database из привилегированного режима,
+          port-channel + addport, vlan participation/tagging/pvid, spanning-tree mst priority, monitor session … mode. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, CMDS = E.CMDS;
+
+  function find(pat) { return CMDS.filter(function (c) { return c.pat.join(' ') === pat; }); }
+  function only(pat, dl) { find(pat).forEach(function (c) { c.dl = dl; }); }
+  function not(pat, dl) { find(pat).forEach(function (c) { c.xdl = (c.xdl || []).concat(dl); }); }
+  function cmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function ports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k] || (st.pos || {})[k]; }) : null; }
+  function stp(st) { return st.stp || (st.stp = { on: true, mode: 'mst', prio: 32768 }); }
+
+  // ---------------------------------------------------------------- ветка 10.x: только свои варианты
+  only('spanning-tree mode <w>', ['10']);
+  only('channel-group <n> mode <w>', ['10']);
+
+  // ---------------------------------------------------------------- ветки 6.x и 4.x
+  var STPM = ['stp', 'rstp', 'mstp', 'pvst', 'rapid-pvst'];
+  cmd(['6', '8'], 'config', 'spanning-tree mode <w>', function (st, a) { var m = a[0].toLowerCase();
+    if (STPM.indexOf(m) < 0) return '% Режим: ' + STPM.join(' | ');
+    stp(st).mode = { stp: 'stp', rstp: 'rst', mstp: 'mst', pvst: 'pvst', 'rapid-pvst': 'rapid-pvst' }[m]; }, 'Режим STP');
+  cmd(['6'], 'if range', 'channel-group <n> mode <w>', function (st, a) {
+    var m = a[1].toLowerCase(); if (m !== 'on' && m !== 'auto') return '% Режим: on (статическая группа) | auto (LACP)';
+    if (!st.ctx || !st.ctx.ports || st.ctx.ports.some(function (k) { return !st.ports[k]; })) return '% Команда для физического порта';
+    st.pos = st.pos || {}; if (!st.pos['po' + a[0]]) st.pos['po' + a[0]] = { mode: 'access', access: 1, allowed: [], native: 1, pvid: 1, gtag: [], guntag: [1], shut: false };
+    st.ctx.ports.forEach(function (k) { st.ports[k].cg = { id: a[0], mode: m === 'auto' ? 'active' : 'on' }; }); }, 'Добавить порт в группу (auto — LACP)');
+  cmd(['6'], 'config', 'lldp run', function (st) { st.lldp = true; }, 'Включить LLDP');
+  cmd(['6'], 'config', 'no lldp run', function (st) { st.lldp = false; });
+  cmd(['10'], 'config', 'set lldp enable', function (st) { st.lldp = true; }, 'Включить LLDP');
+  cmd(['10'], 'config', 'set lldp disable', function (st) { st.lldp = false; });
+  // 4.x: зеркалирование настраивается на порту-получателе
+  function portMon(st, src, dir) {
+    if (!st.ctx || !st.ctx.ports || st.ctx.ports.length !== 1) return '% Команда в настройке одного порта-получателя';
+    if (src.some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
+    var m = (st.mon = st.mon || {}), s = m[9] = m[9] || { src: {} }; s.dst = st.ctx.ports[0]; src.forEach(function (k) { s.src[k] = dir; });
+  }
+  cmd(['6'], 'if', 'port monitor <if>', function (st, a) { return portMon(st, a[0], 'both'); }, 'Зеркалировать порт сюда');
+  cmd(['6'], 'if', 'port monitor <if> <w>', function (st, a) { var d = a[1].toLowerCase(); if (d !== 'rx' && d !== 'tx') return '% rx | tx';
+    return portMon(st, a[0], d); });
+  cmd(['6'], 'if', 'no port monitor <if>', function (st, a) { var s = (st.mon || {})[9]; if (s) a[0].forEach(function (k) { delete s.src[k]; }); });
+  ['', 'do '].forEach(function (pre) {
+    cmd(['6'], pre ? E.CFG : 'priv', pre + 'show interfaces channel-group', function (st) { return st.net ? st.net.lagText(st.dev) : ''; });
+    cmd(['6', '10'], pre ? E.CFG : 'priv', pre + 'show ports monitor', function (st) { var s = (st.mon || {})[9];
+      return s ? 'Destination: ' + s.dst + '\n' + Object.keys(s.src).map(function (k) { return 'Source: ' + k + ' ' + s.src[k]; }).join('\n') : '% Зеркалирование не настроено'; });
+  });
+
+  // ---------------------------------------------------------------- ветка 8.x (FASTPATH)
+  not('vlan database', ['8']); not('vlan <n>', ['8']); not('vlan <list>', ['8']); not('vlan <n> name <w>', ['8']); not('interface <if>', ['8']);
+  not('channel-group <n> mode <w>', ['8']); not('spanning-tree priority <n>', ['8']);
+  cmd(['8'], 'priv', 'vlan database', function (st) { st.mode = 'vlan'; st.ctx = null; }, 'Режим базы VLAN');
+  cmd(['8'], 'vlan', 'vlan <list>', function (st, a) { if (a[0].some(function (v) { return v < 2 || v > 4093; })) return '% VLAN 2–4093';
+    a[0].forEach(function (v) { if (!st.vlans[v]) st.vlans[v] = '-'; }); }, 'Создать VLAN');
+  cmd(['8'], 'vlan', 'no vlan <list>', function (st, a) { a[0].forEach(function (v) { if (v === 1) return; delete st.vlans[v];
+    Object.keys(st.ports).forEach(function (k) { var p = st.ports[k]; if (p.access === v) p.access = 1; }); }); });
+  cmd(['8'], 'vlan', 'vlan name <n> <w>', function (st, a) { if (!st.vlans[a[0]]) return '% VLAN ' + a[0] + ' не существует'; st.vlans[a[0]] = a[1]; }, 'Имя VLAN');
+  cmd(['8'], 'vlan', 'exit', function (st) { st.mode = 'priv'; });
+  cmd(['8'], 'config', 'interface <if>', function (st, a) {
+    if (a[0].some(function (k) { return !st.ports[k]; })) return '% Такого порта нет на устройстве';
+    st.mode = a[0].length > 1 ? 'range' : 'if'; st.ctx = { ports: a[0] }; }, 'Настройка порта (диапазон: 1/0/1-1/0/4)');
+  cmd(['8'], 'config', 'interface lag <n>', function (st, a) { if (!(st.pos || {})['po' + a[0]]) return '% LAG ' + a[0] + ' не создан — port-channel ИМЯ';
+    st.mode = 'if'; st.ctx = { ports: ['po' + a[0]], lag: a[0] }; }, 'Настройка LAG');
+  cmd(['8'], 'config', 'port-channel <w>', function (st, a) { st.pos = st.pos || {};
+    var n = 1; while (st.pos['po' + n]) n++; if (n > 64) return '% Нет свободных LAG';
+    st.pos['po' + n] = { mode: 'general', access: 1, allowed: [], native: 1, pvid: 1, gtag: [], guntag: [1], shut: false, name: a[0], lacp: true };
+    return 'LAG ' + n + ' (' + a[0] + ') создан: interface lag ' + n; }, 'Создать LAG');
+  cmd(['8'], 'if', 'port-channel static', function (st) { if (!st.ctx || !st.ctx.lag) return '% Команда в настройке LAG'; st.pos['po' + st.ctx.lag].lacp = false;
+    Object.keys(st.ports).forEach(function (k) { var c = st.ports[k].cg; if (c && c.id === st.ctx.lag) c.mode = 'on'; }); }, 'Статический LAG без LACP');
+  cmd(['8'], 'if', 'no port-channel static', function (st) { if (!st.ctx || !st.ctx.lag) return; st.pos['po' + st.ctx.lag].lacp = true;
+    Object.keys(st.ports).forEach(function (k) { var c = st.ports[k].cg; if (c && c.id === st.ctx.lag) c.mode = 'active'; }); });
+  function addport(st, n) {
+    var po = (st.pos || {})['po' + n]; if (!po) return '% LAG ' + n + ' не создан';
+    if (!st.ctx || !st.ctx.ports || st.ctx.ports.some(function (k) { return !st.ports[k]; })) return '% Команда в настройке физического порта';
+    st.ctx.ports.forEach(function (k) { st.ports[k].cg = { id: n, mode: po.lacp ? 'active' : 'on' }; });
+  }
+  cmd(['8'], 'if range', 'addport lag <n>', function (st, a) { return addport(st, a[0]); }, 'Добавить порт в LAG');
+  cmd(['8'], 'if range', 'addport <w>', function (st, a) { var m = String(a[0]).match(/^(?:0\/)?3\/(\d+)$/); if (!m) return '% Формат: addport lag N или addport 3/N';
+    return addport(st, +m[1]); });
+  cmd(['8'], 'if range', 'deleteport lag <n>', function (st) { if (st.ctx && st.ctx.ports) st.ctx.ports.forEach(function (k) { if (st.ports[k]) delete st.ports[k].cg; }); });
+  cmd(['8'], 'if range', 'vlan participation include <list>', function (st, a) {
+    var bad = a[0].filter(function (v) { return !st.vlans[v]; }); if (bad.length) return '% VLAN ' + E.fmtList(bad) + ' не созданы';
+    ports(st).forEach(function (p) { p.mode = 'general'; a[0].forEach(function (v) { if (p.guntag.indexOf(v) < 0 && p.gtag.indexOf(v) < 0) p.guntag.push(v); }); }); }, 'Порт — член VLAN');
+  cmd(['8'], 'if range', 'vlan participation exclude <list>', function (st, a) {
+    ports(st).forEach(function (p) { p.guntag = p.guntag.filter(function (v) { return a[0].indexOf(v) < 0; }); p.gtag = p.gtag.filter(function (v) { return a[0].indexOf(v) < 0; }); }); });
+  cmd(['8'], 'if range', 'vlan tagging <list>', function (st, a) { ports(st).forEach(function (p) { p.mode = 'general';
+    a[0].forEach(function (v) { p.guntag = p.guntag.filter(function (x) { return x !== v; }); if (p.gtag.indexOf(v) < 0) p.gtag.push(v); }); }); }, 'Передавать VLAN с тегом');
+  cmd(['8'], 'if range', 'vlan pvid <n>', function (st, a) { if (!st.vlans[a[0]]) return '% VLAN ' + a[0] + ' не создана';
+    ports(st).forEach(function (p) { p.mode = 'general'; p.pvid = a[0]; }); }, 'VLAN для кадров без тега');
+  cmd(['8'], 'config', 'spanning-tree mst priority <n> <n>', function (st, a) { if (a[1] > 61440 || a[1] % 4096) return '% Приоритет 0–61440, кратный 4096';
+    stp(st).prio = a[1]; }, 'Приоритет моста (экземпляр 0 — CST)');
+  cmd(['8'], 'config', 'monitor session <n> mode', function (st, a) { var m = (st.mon = st.mon || {}); m[a[0]] = m[a[0]] || { src: {} }; m[a[0]].on = true; }, 'Включить сессию зеркалирования');
+  cmd(['8'], 'config', 'no monitor session <n> mode', function (st, a) { var m = (st.mon || {})[a[0]]; if (m) m.on = false; });
+  cmd(['8'], 'priv', 'copy system:running-config nvram:startup-config', function (st) { return EL.mes.save(st); }, 'Сохранить конфигурацию');
+  ['', 'do '].forEach(function (pre) {
+    cmd(['8'], pre ? E.CFG : 'priv', pre + 'show port-channel brief', function (st) { return st.net ? st.net.lagText(st.dev) : ''; });
+    cmd(['8'], pre ? E.CFG : 'priv', pre + 'show vlan brief', function (st) { return E.showVlan(st); });
+  });
+
+  function showVlan8(st) {
+    return ['VLAN ID VLAN Name                        VLAN Type', '------- -------------------------------- ---------']
+      .concat(Object.keys(st.vlans).map(Number).sort(function (x, y) { return x - y; }).map(function (v) {
+        var nm = v === 1 ? 'default' : (st.vlans[v] === '-' ? 'VLAN' + ('000' + v).slice(-4) : st.vlans[v]);
+        return (v + '        ').slice(0, 8) + (nm + '                                 ').slice(0, 33) + (v === 1 ? 'Default' : 'Static'); })).join('\n');
+  }
+  ['', 'do '].forEach(function (pre) { cmd(['8'], pre ? E.CFG : 'priv', pre + 'show vlan', function (st) { return showVlan8(st); }); });
+
+  // ---------------------------------------------------------------- приглашения
+  var P8 = { user: ' >', priv: ' #', config: ' (Config)#', vlan: ' (Vlan)#', line: ' (Config-line)#' };
+  var base = EL.mes.prompt;
+  EL.mes.prompt = function (st) {
+    if (st.dialect !== '8') return base(st);
+    if (st.mode === 'if' || st.mode === 'range') {
+      var c = st.ctx || {}, n = c.svi ? 'vlan ' + c.svi : c.lag ? 'lag ' + c.lag : c.ports.length > 1 ? c.ports[0] + '-' + c.ports[c.ports.length - 1] : c.ports[0];
+      return '(' + st.host + ') (Interface ' + n + ')#';
+    }
+    return '(' + st.host + ')' + (P8[st.mode] || '#');
+  };
 })(typeof window !== 'undefined' ? window : global);
 
 /* Конечные узлы: VPC (как в pnetlab/VPCS) и компьютер Debian (ip, ifup/ifdown, nano interfaces, ping, ssh). */
@@ -1897,241 +2043,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
 /* Сгенерировано gen_catalog.py из каталога eltex.ru — не править вручную. */
 (function (G) {
   'use strict';
-  G.EL.CATALOG = {
- "MES3400-24": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы агрегации",
-  "note": "24 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_agregatsii_mes3400-24/"
- },
- "MES3400-24F": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы агрегации",
-  "note": "24 × SFP + 4 × SFP/SFP+",
-  "full": "24 × 1000BASE-X/100BASE-FX (SFP) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_agregatsii_mes3400-24f/"
- },
- "MES3400-48": {
-  "type": "mes",
-  "ports": 52,
-  "group": "Коммутаторы агрегации",
-  "note": "48 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "48 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_agregatsii_mes3400-48/"
- },
- "MES3400-48F": {
-  "type": "mes",
-  "ports": 52,
-  "group": "Коммутаторы агрегации",
-  "note": "48 × SFP + 4 × SFP/SFP+",
-  "full": "48 × 1000BASE-X/100BASE-FX (SFP) + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/kommutator_agregatsii_mes3400-48f/"
- },
- "MES1428": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 100M + 4 × Combo",
-  "full": "24 × 10/100BASE-TX (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes1428/"
- },
- "MES2408": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа",
-  "note": "8 × RJ-45 1G + 2 × SFP",
-  "full": "8 × 10/100/1000BASE-T (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408/"
- },
- "MES2408B": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа",
-  "note": "8 × RJ-45 1G + 2 × SFP",
-  "full": "8 × 10/100/1000BASE-T (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408b/"
- },
- "MES2408C": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа",
-  "note": "8 × RJ-45 1G + 2 × Combo",
-  "full": "8 × 10/100/1000BASE-T (RJ-45) + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408c/"
- },
- "MES2411X": {
-  "type": "mes",
-  "ports": 19,
-  "group": "Коммутаторы доступа",
-  "note": "8 × RJ-45 1G + 11 × SFP/SFP+",
-  "full": "8 × 10/100/1000BASE-T (RJ-45) + 11 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2411x/"
- },
- "MES2424": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2424/"
- },
- "MES2424B": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2424b/"
- },
- "MES2424FB": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × SFP + 4 × SFP/SFP+",
-  "full": "24 × 100BASE-FX/1000BASE-X (SFP) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2424fb/"
- },
- "MES2428": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 1G + 4 × Combo",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2428/"
- },
- "MES2428B": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 1G + 4 × Combo",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2428b/"
- },
- "MES2448B": {
-  "type": "mes",
-  "ports": 52,
-  "group": "Коммутаторы доступа",
-  "note": "48 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "48 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2448b/"
- },
- "MES2420B-24D": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа",
-  "note": "24 × RJ-45 2.5G + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000/2500BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/mes2420b-24d/"
- },
- "MES2408CP": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа PoE",
-  "note": "8 × RJ-45 1G PoE + 2 × Combo",
-  "full": "8 × 10/100/1000BASE-T PoE/PoE+ + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408cp/"
- },
- "MES2408P": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа PoE",
-  "note": "8 × RJ-45 1G PoE + 2 × SFP",
-  "full": "8 × 10/100/1000BASE-T PoE/PoE+ + 2 × 100BASE-FX/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408p/"
- },
- "MES2408PL": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа PoE",
-  "note": "8 × RJ-45 1G PoE + 2 × SFP",
-  "full": "8 × 10/100/1000BASE-T PoE/PoE+ + 2 × 100BASE-FX/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2408pl/"
- },
- "MES2420-48P": {
-  "type": "mes",
-  "ports": 52,
-  "group": "Коммутаторы доступа PoE",
-  "note": "48 × RJ-45 1G PoE + 4 × SFP/SFP+",
-  "full": "48 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2420-48p/"
- },
- "MES2428P": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа PoE",
-  "note": "24 × RJ-45 1G PoE + 4 × Combo",
-  "full": "24 × 10/100/1000BASE-T PoE/PoE+ + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2428p/"
- },
- "MES2448P": {
-  "type": "mes",
-  "ports": 52,
-  "group": "Коммутаторы доступа PoE",
-  "note": "48 × RJ-45 1G PoE + 4 × SFP/SFP+",
-  "full": "48 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/kommutator_dostupa_mes2448p/"
- },
- "MES2424P": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа PoE",
-  "note": "24 × RJ-45 1G PoE + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/mes-2424p/"
- },
- "MES2410-08DP": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа PoE",
-  "note": "8 × RJ-45 2.5G PoE + 2 × SFP/SFP+",
-  "full": "8 × 10/100/1000/2500BASE-T PoE/PoE+ + 2 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/mes2410-08dp/"
- },
- "MES2410-08DU": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Коммутаторы доступа PoE",
-  "note": "8 × RJ-45 2.5G PoE + 2 × SFP/SFP+",
-  "full": "8 × 10/100/1000/2500BASE-T PoE++ + 2 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/mes2410-08du/"
- },
- "MES2420D-24DP": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Коммутаторы доступа PoE",
-  "note": "24 × RJ-45 2.5G PoE + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000/2500BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/mes2420d-24dp/"
- },
- "MES3400I-24": {
-  "type": "mes",
-  "ports": 28,
-  "group": "Промышленные коммутаторы",
-  "note": "24 × RJ-45 1G + 4 × SFP/SFP+",
-  "full": "24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)",
-  "url": "https://eltex.ru/product/promyshlennyy_kommutator_mes3400i-24/"
- },
- "MES3708P": {
-  "type": "mes",
-  "ports": 10,
-  "group": "Промышленные коммутаторы",
-  "note": "8 × RJ-45 1G PoE + 2 × SFP",
-  "full": "8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP)",
-  "url": "https://eltex.ru/product/promyshlennyy_kommutator_mes3708p/"
- },
- "MES3710P": {
-  "type": "mes",
-  "ports": 12,
-  "group": "Промышленные коммутаторы",
-  "note": "8 × RJ-45 1G PoE + 4 × SFP",
-  "full": "8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 4 × 1000BASE-X/100BASE-FX (SFP)",
-  "url": "https://eltex.ru/product/promyshlennyy_kommutator_mes3710p/"
- }
-};
-  G.EL.CATALOG_OTHER = {"ПО 6.x": ["MES5332A rev.C", "MES3300-08F", "MES3300-16F", "MES3300-24", "MES3300-24F", "MES3300-48", "MES3300-48F", "MES5300-24", "MES5400-24", "MES5400-48", "MES5300-48", "MES5305-48", "MES5310-48", "MES5410-48", "MES5500-32", "MES5320-24", "MES5600-24", "MES5700-32", "MES2300B-24F", "MES2300-24", "MES2300-24F", "MES2300B-24", "MES2300B-48", "MES2300-08", "MES2300-08P", "MES2300-24P", "MES2300-48P", "MES2300D-24P", "MES2310-12XU", "MES3500I-24F", "MES3500I-8P8F", "MES3510DS-24F", "MES3510S-08P", "MES2300DI-28", "MES3500I-08P", "MES3500I-10P"], "ПО 8.x": ["MES7048", "MES5448"], "ПО 4.x": ["MES3308F", "MES3316F", "MES3324F", "MES3348", "MES5324", "MES2308P", "MES2324P", "MES3508", "MES3508P", "MES2328I", "MES3510P"], "ПО не указано": ["MES2310-48DP"]};
+  G.EL.CATALOG = {"MES5332A rev.C":{"type":"mes","ports":32,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"32 × SFP+ 10G","full":"32 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_10g_mes5332a_rev-c/"},"MES7048":{"type":"mes","ports":54,"portList":["1/0/1","1/0/2","1/0/3","1/0/4","1/0/5","1/0/6","1/0/7","1/0/8","1/0/9","1/0/10","1/0/11","1/0/12","1/0/13","1/0/14","1/0/15","1/0/16","1/0/17","1/0/18","1/0/19","1/0/20","1/0/21","1/0/22","1/0/23","1/0/24","1/0/25","1/0/26","1/0/27","1/0/28","1/0/29","1/0/30","1/0/31","1/0/32","1/0/33","1/0/34","1/0/35","1/0/36","1/0/37","1/0/38","1/0/39","1/0/40","1/0/41","1/0/42","1/0/43","1/0/44","1/0/45","1/0/46","1/0/47","1/0/48","1/0/49","1/0/50","1/0/51","1/0/52","1/0/53","1/0/54"],"group":"Коммутаторы агрегации","dialect":"8","sw":"ПО 8.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 10GBASE-R (SFP+)/1000BASE-X (SFP) + 6 × 40GBASE-SR4/LR4 (QSFP+)/100GBASE-SR4/LR4 (QSFP28) · ПО 8.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes/"},"MES3300-08F":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"4 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"4 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-08f/"},"MES3300-16F":{"type":"mes","ports":20,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"12 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"12 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-16f/"},"MES3300-24":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-24/"},"MES3300-24F":{"type":"mes","ports":28,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"4 × SFP+ 10G + 20 × SFP + 4 × Combo","full":"4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) + 20 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-24f/"},"MES3300-48":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"48 × RJ-45 1G + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T (RJ-45) + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-48/"},"MES3300-48F":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 6.x","note":"48 × SFP + 4 × SFP+ 10G","full":"48 × 1000BASE-X/100BASE-FX (SFP) + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3300-48f/"},"MES3400-24":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3400-24/"},"MES3400-24F":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"10","sw":"ПО 10.x","note":"24 × SFP + 4 × SFP+ 10G","full":"24 × 1000BASE-X/100BASE-FX (SFP) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3400-24f/"},"MES3400-48":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"10","sw":"ПО 10.x","note":"48 × RJ-45 1G + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3400-48/"},"MES3400-48F":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"10","sw":"ПО 10.x","note":"48 × SFP + 4 × SFP+ 10G","full":"48 × 1000BASE-X/100BASE-FX (SFP) + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes3400-48f/"},"MES3308F":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 4.x","note":"4 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"4 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3308f/"},"MES3316F":{"type":"mes","ports":20,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 4.x","note":"12 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"12 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3316f/"},"MES3324F":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 4.x","note":"20 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"20 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3324f/"},"MES3348":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 4.x","note":"48 × RJ-45 1G + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T + 4 × 10GBASE-R/1000BASE-X (SFP+/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3348/"},"MES5324":{"type":"mes","ports":30,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","fo1/0/1","fo1/0/2","fo1/0/3","fo1/0/4","gi1/0/1","gi1/0/2"],"group":"Коммутаторы агрегации","dialect":"6","sw":"ПО 4.x","note":"24 × SFP+ 10G + 4 × 40G + 1 × RJ-45 1G + 1 × RJ-45 1G","full":"24 × 10GBASE-R (SFP+)/1000BASE-X (SFP) + 4 × 40GBASE-SR4/LR4 (QSFP+) + 1 × 10/100/1000BASE-T (ООВ) + 1 × 10/100/1000BASE-T (In-band management) · ПО 4.x","url":"https://eltex.ru/product/mes5324/"},"MES5448":{"type":"mes","ports":52,"portList":["1/0/1","1/0/2","1/0/3","1/0/4","1/0/5","1/0/6","1/0/7","1/0/8","1/0/9","1/0/10","1/0/11","1/0/12","1/0/13","1/0/14","1/0/15","1/0/16","1/0/17","1/0/18","1/0/19","1/0/20","1/0/21","1/0/22","1/0/23","1/0/24","1/0/25","1/0/26","1/0/27","1/0/28","1/0/29","1/0/30","1/0/31","1/0/32","1/0/33","1/0/34","1/0/35","1/0/36","1/0/37","1/0/38","1/0/39","1/0/40","1/0/41","1/0/42","1/0/43","1/0/44","1/0/45","1/0/46","1/0/47","1/0/48","1/0/49","1/0/50","1/0/51","1/0/52"],"group":"Коммутаторы агрегации","dialect":"8","sw":"ПО 8.x","note":"48 × SFP+ 10G + 4 × 40G","full":"48 × 10GBASE-R (SFP+)/1000BASE-X (SFP) + 4 × 40GBASE-SR4/LR4 (QSFP+) · ПО 8.x","url":"https://eltex.ru/product/mes5448/"},"MES5300-24":{"type":"mes","ports":30,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"24 × SFP+ 10G + 6 × 100G","full":"24 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator-mes5300-24/"},"MES5400-24":{"type":"mes","ports":30,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"24 × SFP+ 10G + 6 × 100G","full":"24 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_10g_mes5400-24/"},"MES5400-48":{"type":"mes","ports":54,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32","te1/0/33","te1/0/34","te1/0/35","te1/0/36","te1/0/37","te1/0/38","te1/0/39","te1/0/40","te1/0/41","te1/0/42","te1/0/43","te1/0/44","te1/0/45","te1/0/46","te1/0/47","te1/0/48","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_10g_mes5400-48/"},"MES5300-48":{"type":"mes","ports":54,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32","te1/0/33","te1/0/34","te1/0/35","te1/0/36","te1/0/37","te1/0/38","te1/0/39","te1/0/40","te1/0/41","te1/0/42","te1/0/43","te1/0/44","te1/0/45","te1/0/46","te1/0/47","te1/0/48","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_tcod_mes5300-48/"},"MES5305-48":{"type":"mes","ports":54,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32","te1/0/33","te1/0/34","te1/0/35","te1/0/36","te1/0/37","te1/0/38","te1/0/39","te1/0/40","te1/0/41","te1/0/42","te1/0/43","te1/0/44","te1/0/45","te1/0/46","te1/0/47","te1/0/48","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_tcod_mes5305-48/"},"MES5310-48":{"type":"mes","ports":54,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32","te1/0/33","te1/0/34","te1/0/35","te1/0/36","te1/0/37","te1/0/38","te1/0/39","te1/0/40","te1/0/41","te1/0/42","te1/0/43","te1/0/44","te1/0/45","te1/0/46","te1/0/47","te1/0/48","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 1000BASE-X (SFP)/10GBASE-R (SFP+) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_tsod_mes5310-48/"},"MES5410-48":{"type":"mes","ports":54,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","te1/0/25","te1/0/26","te1/0/27","te1/0/28","te1/0/29","te1/0/30","te1/0/31","te1/0/32","te1/0/33","te1/0/34","te1/0/35","te1/0/36","te1/0/37","te1/0/38","te1/0/39","te1/0/40","te1/0/41","te1/0/42","te1/0/43","te1/0/44","te1/0/45","te1/0/46","te1/0/47","te1/0/48","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"48 × SFP+ 10G + 6 × 100G","full":"48 × 1000BASE-X (SFP)/10GBASE-R (SFP+)/25GBASE-R (SFP28) + 6 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_tsod_mes5410-48/"},"MES5500-32":{"type":"mes","ports":34,"portList":["te1/0/1","te1/0/2","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6","hu1/0/7","hu1/0/8","hu1/0/9","hu1/0/10","hu1/0/11","hu1/0/12","hu1/0/13","hu1/0/14","hu1/0/15","hu1/0/16","hu1/0/17","hu1/0/18","hu1/0/19","hu1/0/20","hu1/0/21","hu1/0/22","hu1/0/23","hu1/0/24","hu1/0/25","hu1/0/26","hu1/0/27","hu1/0/28","hu1/0/29","hu1/0/30","hu1/0/31","hu1/0/32"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"2 × SFP+ 10G + 32 × 100G","full":"2 × 10GBASE-R (SFP+) + 32 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/kommutator_tsod_mes5500-32/"},"MES5320-24":{"type":"mes","ports":26,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16","te1/0/17","te1/0/18","te1/0/19","te1/0/20","te1/0/21","te1/0/22","te1/0/23","te1/0/24","hu1/0/1","hu1/0/2"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"24 × SFP+ 10G + 2 × 100G","full":"24 × 1000BASE-X (SFP)/10GBASE-R(SFP+)/25GBASE-R (SFP28) + 2 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) · ПО 6.x","url":"https://eltex.ru/product/mes5320-24/"},"MES5600-24":{"type":"mes","ports":34,"portList":["te1/0/1","te1/0/2","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6","hu1/0/7","hu1/0/8","hu1/0/9","hu1/0/10","hu1/0/11","hu1/0/12","hu1/0/13","hu1/0/14","hu1/0/15","hu1/0/16","hu1/0/17","hu1/0/18","hu1/0/19","hu1/0/20","hu1/0/21","hu1/0/22","hu1/0/23","hu1/0/24","hu1/0/25","hu1/0/26","hu1/0/27","hu1/0/28","hu1/0/29","hu1/0/30","hu1/0/31","hu1/0/32"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"2 × SFP+ 10G + 24 × 100G + 8 × 100G","full":"2 × 10GBASE-R (SFP+) + 24 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28) + 8 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28)/ 400GBASE-R8 (QSFP56-DD) · ПО 6.x","url":"https://eltex.ru/product/mes5600-24/"},"MES5700-32":{"type":"mes","ports":34,"portList":["te1/0/1","te1/0/2","hu1/0/1","hu1/0/2","hu1/0/3","hu1/0/4","hu1/0/5","hu1/0/6","hu1/0/7","hu1/0/8","hu1/0/9","hu1/0/10","hu1/0/11","hu1/0/12","hu1/0/13","hu1/0/14","hu1/0/15","hu1/0/16","hu1/0/17","hu1/0/18","hu1/0/19","hu1/0/20","hu1/0/21","hu1/0/22","hu1/0/23","hu1/0/24","hu1/0/25","hu1/0/26","hu1/0/27","hu1/0/28","hu1/0/29","hu1/0/30","hu1/0/31","hu1/0/32"],"group":"Коммутаторы для ЦОД","dialect":"6","sw":"ПО 6.x","note":"2 × SFP+ 10G + 32 × 100G","full":"2 × 10GBASE-R (SFP+) + 32 × 40GBASE-R4 (QSFP+)/100GBASE-R4 (QSFP28)/ 400GBASE-R8 (QSFP56-DD) · ПО 6.x","url":"https://eltex.ru/product/mes5700-32/"},"MES2300B-24F":{"type":"mes","ports":24,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"20 × SFP + 4 × Combo","full":"20 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX · ПО 6.x","url":"https://eltex.ru/product/kommutator_agregatsii_mes2300b-24f/"},"MES1428":{"type":"mes","ports":28,"portList":["fa1/0/1","fa1/0/2","fa1/0/3","fa1/0/4","fa1/0/5","fa1/0/6","fa1/0/7","fa1/0/8","fa1/0/9","fa1/0/10","fa1/0/11","fa1/0/12","fa1/0/13","fa1/0/14","fa1/0/15","fa1/0/16","fa1/0/17","fa1/0/18","fa1/0/19","fa1/0/20","fa1/0/21","fa1/0/22","fa1/0/23","fa1/0/24","gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 100M + 4 × Combo","full":"24 × 10/100BASE-TX (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes1428/"},"MES2300-24":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300-24/"},"MES2300-24F":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"20 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"20 × 1000BASE-X/100BASE-FX (SFP) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300-24f/"},"MES2300B-24":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300b-24/"},"MES2300B-48":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"48 × RJ-45 1G + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T (RJ-45) + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300b-48/"},"MES2408":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G + 2 × SFP","full":"8 × 10/100/1000BASE-T (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408/"},"MES2408B":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G + 2 × SFP","full":"8 × 10/100/1000BASE-T (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408b/"},"MES2408C":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G + 2 × Combo","full":"8 × 10/100/1000BASE-T (RJ-45) + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408c/"},"MES2411X":{"type":"mes","ports":19,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G + 11 × SFP+ 10G","full":"8 × 10/100/1000BASE-T (RJ-45) + 11 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2411x/"},"MES2424":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2424/"},"MES2424B":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2424b/"},"MES2424FB":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × SFP + 4 × SFP+ 10G","full":"24 × 100BASE-FX/1000BASE-X (SFP) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2424fb/"},"MES2428":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × Combo","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2428/"},"MES2428B":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × Combo","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2428b/"},"MES2448B":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"48 × RJ-45 1G + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2448b/"},"MES2300-08":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Коммутаторы доступа","dialect":"6","sw":"ПО 6.x","note":"10 × RJ-45 1G + 2 × SFP","full":"10 × 10/100/1000BASE-T (RJ-45) + 2 × 1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/mes2300-08/"},"MES2420B-24D":{"type":"mes","ports":28,"portList":["tw1/0/1","tw1/0/2","tw1/0/3","tw1/0/4","tw1/0/5","tw1/0/6","tw1/0/7","tw1/0/8","tw1/0/9","tw1/0/10","tw1/0/11","tw1/0/12","tw1/0/13","tw1/0/14","tw1/0/15","tw1/0/16","tw1/0/17","tw1/0/18","tw1/0/19","tw1/0/20","tw1/0/21","tw1/0/22","tw1/0/23","tw1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 2.5G + 4 × SFP+ 10G","full":"24 × 10/100/1000/2500BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/mes2420b-24d/"},"MES2300-08P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 6.x","note":"2 × RJ-45 1G + 8 × RJ-45 1G PoE + 2 × SFP","full":"2 × 10/100/1000BASE-T (RJ-45) + 8 × 10/100/1000BASE-T (RJ-45) PoE/PoE+ + 2 × 1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator-dostupa-mes2300-08p/"},"MES2300-24P":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T PoE/PoE+ + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300-24p/"},"MES2300-48P":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 6.x","note":"48 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T PoE/PoE+ + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300-48p/"},"MES2300D-24P":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) PoE/PoE+ + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2300d-24p/"},"MES2308P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 4.x","note":"8 × RJ-45 1G PoE + 2 × RJ-45 1G + 2 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ + 2 × 10/100/1000BASE-T (RJ-45) + 2 × 1000BASE-X (SFP) · ПО 4.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2308p/"},"MES2408CP":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G PoE + 2 × Combo","full":"8 × 10/100/1000BASE-T PoE/PoE+ + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408cp/"},"MES2408P":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G PoE + 2 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ + 2 × 100BASE-FX/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408p/"},"MES2408PL":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G PoE + 2 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ + 2 × 100BASE-FX/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2408pl/"},"MES2420-48P":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"48 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2420-48p/"},"MES2428P":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G PoE + 4 × Combo","full":"24 × 10/100/1000BASE-T PoE/PoE+ + 4 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2428p/"},"MES2448P":{"type":"mes","ports":52,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28","gi1/0/29","gi1/0/30","gi1/0/31","gi1/0/32","gi1/0/33","gi1/0/34","gi1/0/35","gi1/0/36","gi1/0/37","gi1/0/38","gi1/0/39","gi1/0/40","gi1/0/41","gi1/0/42","gi1/0/43","gi1/0/44","gi1/0/45","gi1/0/46","gi1/0/47","gi1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"48 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"48 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/kommutator_dostupa_mes2448p/"},"MES2424P":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/mes-2424p/"},"MES2310-12XU":{"type":"mes","ports":16,"portList":["te1/0/1","te1/0/2","te1/0/3","te1/0/4","te1/0/5","te1/0/6","te1/0/7","te1/0/8","te1/0/9","te1/0/10","te1/0/11","te1/0/12","te1/0/13","te1/0/14","te1/0/15","te1/0/16"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 6.x","note":"12 × SFP+ 10G PoE + 4 × SFP+ 10G","full":"12 × 10/100/1000/2500/10GBASE-T PoE/PoE+/PoE++ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)/25GBASE-R (SFP28) · ПО 6.x","url":"https://eltex.ru/product/mes2310-12xu/"},"MES2310-48DP":{"type":"mes","ports":52,"portList":["tw1/0/1","tw1/0/2","tw1/0/3","tw1/0/4","tw1/0/5","tw1/0/6","tw1/0/7","tw1/0/8","tw1/0/9","tw1/0/10","tw1/0/11","tw1/0/12","tw1/0/13","tw1/0/14","tw1/0/15","tw1/0/16","tw1/0/17","tw1/0/18","tw1/0/19","tw1/0/20","tw1/0/21","tw1/0/22","tw1/0/23","tw1/0/24","tw1/0/25","tw1/0/26","tw1/0/27","tw1/0/28","tw1/0/29","tw1/0/30","tw1/0/31","tw1/0/32","tw1/0/33","tw1/0/34","tw1/0/35","tw1/0/36","tw1/0/37","tw1/0/38","tw1/0/39","tw1/0/40","tw1/0/41","tw1/0/42","tw1/0/43","tw1/0/44","tw1/0/45","tw1/0/46","tw1/0/47","tw1/0/48","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО не указано","note":"48 × RJ-45 2.5G PoE + 4 × SFP+ 10G","full":"48 × 10/100/1000/2500BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+)/25GBASE-R (SFP28) · ПО ?","url":"https://eltex.ru/product/mes2310-48dp/"},"MES2324P":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"6","sw":"ПО 4.x","note":"24 × RJ-45 1G PoE + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T PoE/PoE+ + 4 × 10GBASE-R (SFP+)/1000BASE-X (SFP) · ПО 4.x","url":"https://eltex.ru/product/mes2324p/"},"MES2410-08DP":{"type":"mes","ports":10,"portList":["tw1/0/1","tw1/0/2","tw1/0/3","tw1/0/4","tw1/0/5","tw1/0/6","tw1/0/7","tw1/0/8","te1/0/1","te1/0/2"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 2.5G PoE + 2 × SFP+ 10G","full":"8 × 10/100/1000/2500BASE-T PoE/PoE+ + 2 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/mes2410-08dp/"},"MES2410-08DU":{"type":"mes","ports":10,"portList":["tw1/0/1","tw1/0/2","tw1/0/3","tw1/0/4","tw1/0/5","tw1/0/6","tw1/0/7","tw1/0/8","te1/0/1","te1/0/2"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 2.5G PoE + 2 × SFP+ 10G","full":"8 × 10/100/1000/2500BASE-T PoE++ + 2 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/mes2410-08du/"},"MES2420D-24DP":{"type":"mes","ports":28,"portList":["tw1/0/1","tw1/0/2","tw1/0/3","tw1/0/4","tw1/0/5","tw1/0/6","tw1/0/7","tw1/0/8","tw1/0/9","tw1/0/10","tw1/0/11","tw1/0/12","tw1/0/13","tw1/0/14","tw1/0/15","tw1/0/16","tw1/0/17","tw1/0/18","tw1/0/19","tw1/0/20","tw1/0/21","tw1/0/22","tw1/0/23","tw1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Коммутаторы доступа PoE","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 2.5G PoE + 4 × SFP+ 10G","full":"24 × 10/100/1000/2500BASE-T PoE/PoE+ + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/mes2420d-24dp/"},"MES3500I-24F":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"20 × SFP + 4 × Combo + 4 × SFP+ 10G","full":"20 × 100BASE-FX/1000BASE-X (SFP) + 4 × 10/100/1000BASE-T/100BASE-FX/1000BASE-X (RJ-45/SFP) Combo + 4 × 10GBASE-R (SFP+) · ПО 6.x","url":"https://eltex.ru/product/mes-3500i-24f/"},"MES3500I-8P8F":{"type":"mes","ports":18,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","te1/0/1","te1/0/2"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"8 × RJ-45 1G PoE + 8 × SFP + 2 × SFP+ 10G","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 8 × 100BASE-FX/1000BASE-X (SFP) + 2 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 6.x","url":"https://eltex.ru/product/mes3500i-8p8f/"},"MES3508":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 4.x","note":"8 × RJ-45 1G + 2 × Combo","full":"8 × 10/100/1000BASE-T (RJ-45) + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X (RJ-45/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3508/"},"MES3508P":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 4.x","note":"8 × RJ-45 1G PoE + 2 × Combo","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 2 × Combo 10/100/1000BASE-T/100BASE-FX/1000BASE-X (RJ-45/SFP) · ПО 4.x","url":"https://eltex.ru/product/mes3508p/"},"MES3510DS-24F":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"16 × SFP + 8 × Combo + 4 × SFP+ 10G","full":"16 × 100BASE-FX/1000BASE-X (SFP) + 8 × 10/100/1000BASE-T/100BASE-FX/1000BASE-X (RJ-45/SFP) Combo + 4 × 10GBASE-R (SFP+) · ПО 6.x","url":"https://eltex.ru/product/mes3510ds-24f/"},"MES3510S-08P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"8 × RJ-45 1G PoE + 4 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 4 × 100BASE-FX/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/mes3510s-08p/"},"MES2300DI-28":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"24 × RJ-45 1G + 4 × Combo","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX · ПО 6.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes2300di-28/"},"MES2328I":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","gi1/0/25","gi1/0/26","gi1/0/27","gi1/0/28"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 4.x","note":"24 × RJ-45 1G + 4 × Combo","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × Combo 10/100/1000BASE-T/1000BASE-X/100BASE-FX · ПО 4.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes2328i/"},"MES3400I-24":{"type":"mes","ports":28,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12","gi1/0/13","gi1/0/14","gi1/0/15","gi1/0/16","gi1/0/17","gi1/0/18","gi1/0/19","gi1/0/20","gi1/0/21","gi1/0/22","gi1/0/23","gi1/0/24","te1/0/1","te1/0/2","te1/0/3","te1/0/4"],"group":"Промышленные коммутаторы","dialect":"10","sw":"ПО 10.x","note":"24 × RJ-45 1G + 4 × SFP+ 10G","full":"24 × 10/100/1000BASE-T (RJ-45) + 4 × 1000BASE-X (SFP)/10GBASE-R (SFP+) · ПО 10.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3400i-24/"},"MES3500I-08P":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"8 × RJ-45 1G PoE + 2 × Combo","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 2 × 10/100/1000BASE-T/100BASE-FX/1000BASE-X (RJ-45/SFP) Combo · ПО 6.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3500i-08p/"},"MES3500I-10P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 6.x","note":"8 × RJ-45 1G PoE + 4 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 4 × 100BASE-FX/1000BASE-X (SFP) · ПО 6.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3500i-10p/"},"MES3510P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Промышленные коммутаторы","dialect":"6","sw":"ПО 4.x","note":"8 × RJ-45 1G PoE + 4 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 4 × 100BASE-FX/1000BASE-X (SFP) · ПО 4.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3510p/"},"MES3708P":{"type":"mes","ports":10,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10"],"group":"Промышленные коммутаторы","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G PoE + 2 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 2 × 100BASE-FX/1000BASE-X (SFP) · ПО 10.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3708p/"},"MES3710P":{"type":"mes","ports":12,"portList":["gi1/0/1","gi1/0/2","gi1/0/3","gi1/0/4","gi1/0/5","gi1/0/6","gi1/0/7","gi1/0/8","gi1/0/9","gi1/0/10","gi1/0/11","gi1/0/12"],"group":"Промышленные коммутаторы","dialect":"10","sw":"ПО 10.x","note":"8 × RJ-45 1G PoE + 4 × SFP","full":"8 × 10/100/1000BASE-T PoE/PoE+ (RJ-45) + 4 × 1000BASE-X/100BASE-FX (SFP) · ПО 10.x","url":"https://eltex.ru/product/promyshlennyy_kommutator_mes3710p/"}};
+  G.EL.CATALOG_OTHER = {};
 })(typeof window !== 'undefined' ? window : global);
 
 /* Модель сети: устройства, кабели, прохождение кадров по VLAN/trunk/general, ARP, маршрутизация, межсетевой экран ESR.
@@ -2157,6 +2070,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var m = MODELS[d.model];
     if (d.type === 'vpc') return ['eth0'];
     if (d.type === 'deb') return ['ens3'];
+    if (m.portList) return m.portList.slice();
     var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
   };
   P.add = function (model, name, x, y) {
@@ -2166,7 +2080,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
     var id = 'd' + (++Net.seq);
     var d = { id: id, name: name, model: model, type: m.type, x: x || 0, y: y || 0 };
-    if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, 'switch'); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
+    if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, m.dialect === '8' ? 'switch' : 'console', m.portList, m.dialect); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
     if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
     if (m.type === 'vpc') d.st = H.vpc(name);
     if (m.type === 'deb') d.st = H.deb(name, m.opts);
@@ -2395,7 +2309,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ------------------------------------------------------------------ RSTP: роли и состояния портов
   function bid(st) { var s = st.stp || { prio: 32768 }; return { prio: s.prio, mac: st.bmac }; }
   function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
-  function pnum(n) { return n.indexOf('po') === 0 ? 1000 + +n.slice(2) : +n.split('/')[2]; }
+  function pnum(n) { if (n.indexOf('po') === 0) return 1000 + +n.slice(2); var pf = { gi: 0, fa: 0, tw: 100, te: 200, fo: 300, hu: 400 }[n.replace(/[\d\/]+$/, '')] || 0;
+    return pf + +n.split('/')[2]; }
   P.stp = function () {
     if (this._stp && this._stp.gen === this.gen) return this._stp.t;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
@@ -2452,7 +2367,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var d = this.devs[id], st = d.st, s = this;
     if (st.stp && st.stp.on === false) return 'Spanning tree disabled';
     var t = this.stp()[id] || {}, R = this._stp.root[id], rb = bid(this.devs[R].st), me = bid(st);
-    var mode = { rst: 'RSTP', mst: 'MSTP', 'rapid-pvst': 'Rapid-PVST' }[(st.stp || {}).mode || 'mst'];
+    var mode = { stp: 'STP', rst: 'RSTP', mst: 'MSTP', pvst: 'PVST', 'rapid-pvst': 'Rapid-PVST' }[(st.stp || {}).mode || 'mst'];
     var o = ['Spanning tree enabled mode ' + mode, 'Default port cost method:  long', '',
       '  Root ID    Priority    ' + rb.prio, '             Address     ' + rb.mac];
     if (R === id) o.push('             This switch is the root'); else o.push('             Cost        ' + this._stp.dist[id]);
@@ -2903,7 +2818,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       [[sg.from, fromP, 'tx'], [sg.to, toP, 'rx']].forEach(function (x) {
         var d = s.devs[x[0]]; if (!d || d.type !== 'mes' || !d.st.mon) return;
         Object.keys(d.st.mon).forEach(function (n) { var m = d.st.mon[n], dir = m.src[x[1]];
-          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2])) return;
+          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2]) || (d.st.dialect === '8' && !m.on)) return;
           var pr = s.peer(x[0], m.dst); if (!pr) return; var cap = s.devs[pr.dev];
           if (cap.type !== 'deb') return;
           cap.st.capN = (cap.st.capN || 0) + 1;
@@ -2955,8 +2870,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (d.type === 'deb' && d.st.ssh) return null;
     return null;
   };
-  P.help = function (id, line) { var t = this.table(id, line); return t ? EL.cli.help(t.T, t.mode, t.raw) : ''; };
-  P.tab = function (id, line) { var t = this.table(id, line); if (!t) return null; var r = EL.cli.tab(t.T, t.mode, t.raw); return r === null ? null : (t.pre || '') + r; };
+  P.help = function (id, line) { var t = this.table(id, line); return t ? EL.cli.help(t.T, t.mode, t.raw, this.devs[id].st) : ''; };
+  P.tab = function (id, line) { var t = this.table(id, line); if (!t) return null; var r = EL.cli.tab(t.T, t.mode, t.raw, this.devs[id].st); return r === null ? null : (t.pre || '') + r; };
 
   EL.Net = Net; EL.MODELS = MODELS; EL.egress = egress;
 })(typeof window !== 'undefined' ? window : global);
@@ -3919,18 +3834,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ------------------------------------------------------------------ палитра
   function buildPalette() {
     var g = {}, h = '<input id="palQ" placeholder="Поиск модели…" spellcheck="false">';
-    var ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Маршрутизаторы ESR', 'Конечные узлы'];
+    var ORD = ['Коммутаторы доступа', 'Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы ЦОД', 'Маршрутизаторы ESR', 'Конечные узлы'];
     Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
     Object.keys(g).sort(function (a, b) { return (ORD.indexOf(a) + 99) % 99 - (ORD.indexOf(b) + 99) % 99; }).forEach(function (gr) {
       g[gr].sort();
       h += '<h4>' + gr + '</h4>';
       g[gr].forEach(function (k) { var m = EL.MODELS[k];
-        h += '<button class="pi" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + icon(m.type) + '<span><b>' + k + '</b><small>' + m.note + '</small></span></button>'; });
+        h += '<button class="pi" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + icon(m.type) + '<span><b>' + k + (m.sw ? ' <em class="sw">' + m.sw.replace('ПО ', '') + '</em>' : '') + '</b><small>' + m.note + '</small></span></button>'; });
     });
-    var oth = EL.CATALOG_OTHER || {};
-    h += '<p class="note">Коммутаторы — все модели каталога eltex.ru с ПО 10.x (CLI MES14xx/24xx/3400/37xx). Порты нумеруются gi1/0/1–N. ' +
-      'Пока не эмулируются (другой CLI): ' + Object.keys(oth).map(function (k) { return k + ' — ' + oth[k].length + ' моделей'; }).join(', ') +
-      '. Маршрутизатор — CLI ESR. Это модель по документации, не прошивка.</p>';
+    h += '<p class="note">Все коммутаторы MES из каталога eltex.ru. CLI по ветке ПО модели: 10.x (MES14xx/24xx/3400/37xx), 6.x и 4.x (MES23xx/33xx/35xx/53xx/54xx–57xx), ' +
+      '8.x FASTPATH (MES5448/7048). Порты — как в CLI: gi/te/fo/hu 1/0/N или 1/0/N. Маршрутизатор — CLI ESR. Это модель по документации, не прошивка.</p>';
     $('pal').innerHTML = h;
   }
   $('pal').addEventListener('input', function (e) {

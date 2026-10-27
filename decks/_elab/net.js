@@ -21,6 +21,7 @@
     var m = MODELS[d.model];
     if (d.type === 'vpc') return ['eth0'];
     if (d.type === 'deb') return ['ens3'];
+    if (m.portList) return m.portList.slice();
     var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
   };
   P.add = function (model, name, x, y) {
@@ -30,7 +31,7 @@
     if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
     var id = 'd' + (++Net.seq);
     var d = { id: id, name: name, model: model, type: m.type, x: x || 0, y: y || 0 };
-    if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, 'switch'); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
+    if (m.type === 'mes') { d.st = EL.mes.fresh(m.ports, m.dialect === '8' ? 'switch' : 'console', m.portList, m.dialect); d.st.bmac = 'e0:d9:e3:00:00:' + ('0' + (Net.seq + 1).toString(16)).slice(-2); }
     if (m.type === 'esr') d.st = EL.esr.fresh('vesr', m.ports);
     if (m.type === 'vpc') d.st = H.vpc(name);
     if (m.type === 'deb') d.st = H.deb(name, m.opts);
@@ -259,7 +260,8 @@
   // ------------------------------------------------------------------ RSTP: роли и состояния портов
   function bid(st) { var s = st.stp || { prio: 32768 }; return { prio: s.prio, mac: st.bmac }; }
   function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
-  function pnum(n) { return n.indexOf('po') === 0 ? 1000 + +n.slice(2) : +n.split('/')[2]; }
+  function pnum(n) { if (n.indexOf('po') === 0) return 1000 + +n.slice(2); var pf = { gi: 0, fa: 0, tw: 100, te: 200, fo: 300, hu: 400 }[n.replace(/[\d\/]+$/, '')] || 0;
+    return pf + +n.split('/')[2]; }
   P.stp = function () {
     if (this._stp && this._stp.gen === this.gen) return this._stp.t;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
@@ -316,7 +318,7 @@
     var d = this.devs[id], st = d.st, s = this;
     if (st.stp && st.stp.on === false) return 'Spanning tree disabled';
     var t = this.stp()[id] || {}, R = this._stp.root[id], rb = bid(this.devs[R].st), me = bid(st);
-    var mode = { rst: 'RSTP', mst: 'MSTP', 'rapid-pvst': 'Rapid-PVST' }[(st.stp || {}).mode || 'mst'];
+    var mode = { stp: 'STP', rst: 'RSTP', mst: 'MSTP', pvst: 'PVST', 'rapid-pvst': 'Rapid-PVST' }[(st.stp || {}).mode || 'mst'];
     var o = ['Spanning tree enabled mode ' + mode, 'Default port cost method:  long', '',
       '  Root ID    Priority    ' + rb.prio, '             Address     ' + rb.mac];
     if (R === id) o.push('             This switch is the root'); else o.push('             Cost        ' + this._stp.dist[id]);
@@ -767,7 +769,7 @@
       [[sg.from, fromP, 'tx'], [sg.to, toP, 'rx']].forEach(function (x) {
         var d = s.devs[x[0]]; if (!d || d.type !== 'mes' || !d.st.mon) return;
         Object.keys(d.st.mon).forEach(function (n) { var m = d.st.mon[n], dir = m.src[x[1]];
-          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2])) return;
+          if (!m.dst || !dir || (dir !== 'both' && dir !== x[2]) || (d.st.dialect === '8' && !m.on)) return;
           var pr = s.peer(x[0], m.dst); if (!pr) return; var cap = s.devs[pr.dev];
           if (cap.type !== 'deb') return;
           cap.st.capN = (cap.st.capN || 0) + 1;
@@ -819,8 +821,8 @@
     if (d.type === 'deb' && d.st.ssh) return null;
     return null;
   };
-  P.help = function (id, line) { var t = this.table(id, line); return t ? EL.cli.help(t.T, t.mode, t.raw) : ''; };
-  P.tab = function (id, line) { var t = this.table(id, line); if (!t) return null; var r = EL.cli.tab(t.T, t.mode, t.raw); return r === null ? null : (t.pre || '') + r; };
+  P.help = function (id, line) { var t = this.table(id, line); return t ? EL.cli.help(t.T, t.mode, t.raw, this.devs[id].st) : ''; };
+  P.tab = function (id, line) { var t = this.table(id, line); if (!t) return null; var r = EL.cli.tab(t.T, t.mode, t.raw, this.devs[id].st); return r === null ? null : (t.pre || '') + r; };
 
   EL.Net = Net; EL.MODELS = MODELS; EL.egress = egress;
 })(typeof window !== 'undefined' ? window : global);
