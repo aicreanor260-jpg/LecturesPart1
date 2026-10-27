@@ -138,6 +138,9 @@ button,input,select{font:inherit;color:inherit}
 .pad .sum{font:700 15px var(--m);margin-top:6px}.pad .sum.ok{color:var(--ok)}
 .pad .hint{border-left:3px solid var(--arp);padding:6px 10px;background:rgba(255,198,92,.08);margin:6px 0}
 .pad table{border-collapse:collapse;width:100%;font:500 13px var(--m)}
+.pad tr.hot td{background:rgba(255,198,92,.22);color:#ffd98a;animation:hotIn .6s ease-out}
+@keyframes hotIn{from{background:rgba(255,198,92,.6)}to{background:rgba(255,198,92,.22)}}
+.pad .gone{color:var(--bad);font:500 12px var(--m)}
 .pad td,.pad th{border-bottom:1px solid rgba(111,227,234,.15);padding:4px 6px;text-align:left;vertical-align:top}
 .pad th{color:var(--rd);font-weight:700}
 .pad label{display:block;margin:8px 0 3px;font:700 11px var(--m);color:var(--rd);letter-spacing:.12em;text-transform:uppercase}

@@ -550,7 +550,7 @@
   };
   // запрос и ответ: ICMP echo, либо TCP/UDP к службе (curl, NTP)
   P.request = function (src, dst, proto, dport) {
-    var steps = [], d = this.devs[src], ct = [];
+    var steps = this.stepLog(), d = this.devs[src], ct = [];
     this.ctLast = ct;
     if (IP.ip2n(dst) === null) return { ok: false, why: 'Bad address', steps: steps };
     if (!this.ifaces(src).length) { steps.push({ k: 'drop', t: d.name + ': нет ни одного IP-адреса' }); return { ok: false, why: 'No IP address', steps: steps }; }
@@ -583,7 +583,7 @@
 
   // ------------------------------------------------------------------ DHCP: DISCOVER широковещательно, сервер или ретранслятор
   P.dhcp = function (id) {
-    var s = this, d = this.devs[id], steps = [], ct = [];
+    var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
     var port = d.type === 'vpc' ? 'eth0' : 'ens3', cname = d.name;
     var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
     steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes });
@@ -811,6 +811,27 @@
       var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
       s.mac[sg.to][v + '|' + mac] = { vlan: v, mac: mac, port: L.name };
     });
+  };
+
+  // журнал шагов трассы: к каждому шагу прикладывается, что изменилось в ARP/MAC-таблицах с прошлого шага
+  P.tabSnap = function () {
+    var s = this, o = {};
+    Object.keys(s.arp).forEach(function (d) { Object.keys(s.arp[d]).forEach(function (k) { o['a|' + d + '|' + k] = JSON.stringify(s.arp[d][k]); }); });
+    Object.keys(s.mac).forEach(function (d) { Object.keys(s.mac[d]).forEach(function (k) { o['m|' + d + '|' + k] = JSON.stringify(s.mac[d][k]); }); });
+    return o;
+  };
+  function tabDiff(a, b) {
+    var out = [];
+    Object.keys(b).forEach(function (k) { if (a[k] !== b[k]) out.push({ k: k, o: a[k] || null, n: b[k] }); });
+    Object.keys(a).forEach(function (k) { if (!(k in b)) out.push({ k: k, o: a[k], n: null }); });
+    return out;
+  }
+  P.stepLog = function () {
+    var s = this, prev = s.tabSnap(), arr = [];
+    function take() { var now = s.tabSnap(), d = tabDiff(prev, now); prev = now; return d; }
+    arr.push = function (st) { st.tab = take(); return Array.prototype.push.call(this, st); };
+    arr.flush = function () { var d = take(); if (this.length && d.length) this[this.length - 1].tab = this[this.length - 1].tab.concat(d); };
+    return arr;
   };
   P.clearTables = function (id) { this.arp[id] = {}; this.mac[id] = {}; };
 

@@ -333,15 +333,17 @@
   // ================================================================== таблицы устройства (живые)
   function tbl(head, rows, empty) {
     return '<table><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>' +
-      (rows.length ? rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
+      (rows.length ? rows.map(function (r) { return '<tr' + (r.hot ? ' class="hot"' : '') + '>' + r.map(function (c) { return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('')
                    : '<tr><td colspan="' + head.length + '" style="color:var(--dim)">' + empty + '</td></tr>') + '</table>';
   }
   function tablesHtml(id) {
     var d = net.devs[id]; if (!d) return '';
     var h = '<div class="k">' + esc(d.model) + (d.off ? ' · выключено' : '') + '</div><h2>' + esc(d.name) + '</h2>';
-    var arp = net.arpRows(id).map(function (r) { return [r.ip, r.mac, r.ifn]; });
+    var hot = tview ? tview.hot : {};
+    function mark(row, key) { if (hot[key]) row.hot = true; return row; }
+    var arp = net.arpRows(id).map(function (r) { return mark([r.ip, r.mac, r.ifn], 'a|' + id + '|' + r.ip); });
     if (d.type === 'mes') {
-      h += '<h3>MAC-таблица (коммутация)</h3>' + tbl(['VLAN', 'MAC', 'Порт'], net.macRows(id).map(function (r) { return [r.vlan, r.mac, r.port]; }),
+      h += '<h3>MAC-таблица (коммутация)</h3>' + tbl(['VLAN', 'MAC', 'Порт'], net.macRows(id).map(function (r) { return mark([r.vlan, r.mac, r.port], 'm|' + id + '|' + r.vlan + '|' + r.mac); }),
         'пусто — коммутатор запоминает MAC отправителя каждого кадра, прошедшего через порт');
       var by = {}; Object.keys(d.st.vlans).forEach(function (v) { by[v] = []; });
       net.lports(id).forEach(function (L) { var c = L.cfg; if (c.mode === 'access') (by[c.access] = by[c.access] || []).push(L.name);
@@ -357,22 +359,50 @@
       var by2 = net.best(id), rows = Object.keys(by2).map(function (k) { var r = by2[k]; return [r.p, r.net, r.nh ? 'через ' + r.nh : 'подключена', r.ifn || '—', r.ad + '/' + r.m]; });
       h += '<h3>Таблица маршрутизации</h3>' + tbl(['Код', 'Сеть', 'Следующий узел', 'Интерфейс', 'AD/метрика'], rows, 'нет маршрутов — не задан адрес или интерфейс без линка');
     }
-    h += '<p style="margin-top:8px">Таблицы меняются от пакетов: запустите ping и смотрите, кто что запомнил.</p>';
+    if (tview && tview.gone[id]) h += '<p class="gone">На этом шаге удалено: ' + tview.gone[id].map(esc).join('; ') + '</p>';
+    h += '<p style="margin-top:8px">' + (tview ? 'Таблицы показаны на шаге ' + (trace.i + 1) + ' трассы — подсвечено то, что записалось этим шагом.'
+      : 'Таблицы меняются от пакетов: запустите ping и смотрите, кто что запомнил.') + '</p>';
     return h;
   }
   function openTables(id) {
     var body = document.createElement('div'); body.className = 'pad'; body.dataset.tid = id; body.innerHTML = tablesHtml(id);
     var d = net.devs[id]; makeWin('tb' + id, 'Таблицы', d.name, body, { w: 520, h: 480 });
   }
-  function refreshTables() { Object.keys(wins).forEach(function (k) { if (k.indexOf('tb') !== 0) return; var b = wins[k].el.querySelector('[data-tid]');
-    if (b) b.innerHTML = tablesHtml(b.dataset.tid); }); }
+  // во время трассы окно таблиц показывает состояние на текущем шаге: база (до пакета) + изменения шагов 0..i
+  var tview = null;
+  function setTab(key, val) { var p = key.split('|'), t = (p[0] === 'a' ? net.arp : net.mac)[p[1]]; if (!t) return;
+    var k = p.slice(2).join('|'); if (val === null) delete t[k]; else t[k] = JSON.parse(val); }
+  function stepView() {
+    if (!trace || !trace.base || trace.i >= trace.steps.length - 1) return null;
+    var live = { arp: net.arp, mac: net.mac }, hot = {}, gone = {};
+    net.arp = EL.clone(trace.base.arp); net.mac = EL.clone(trace.base.mac);
+    trace.steps.slice(0, trace.i + 1).forEach(function (st, j) { (st.tab || []).forEach(function (c) { setTab(c.k, c.n);
+      if (j !== trace.i) return; var p = c.k.split('|');
+      if (c.n !== null) hot[c.k] = 1;
+      else (gone[p[1]] = gone[p[1]] || []).push((p[0] === 'a' ? 'ARP ' : 'MAC ') + p.slice(2).join(' ')); }); });
+    return { live: live, hot: hot, gone: gone };
+  }
+  function refreshTables() {
+    var v = stepView(); tview = v;
+    try { Object.keys(wins).forEach(function (k) { if (k.indexOf('tb') !== 0) return; var b = wins[k].el.querySelector('[data-tid]');
+      if (b) b.innerHTML = tablesHtml(b.dataset.tid); }); }
+    finally { if (v) { net.arp = v.live.arp; net.mac = v.live.mac; } tview = null; }
+  }
+  function traceBase(steps) {   // откатываем изменения всех шагов назад — получаем таблицы до отправки пакета
+    var live = { arp: net.arp, mac: net.mac }, base;
+    net.arp = EL.clone(live.arp); net.mac = EL.clone(live.mac);
+    steps.slice().reverse().forEach(function (st) { (st.tab || []).forEach(function (c) { setTab(c.k, c.o); }); });
+    base = { arp: net.arp, mac: net.mac }; net.arp = live.arp; net.mac = live.mac; return base;
+  }
 
   // ================================================================== трасса пакета
   net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
   function showTrace(r, id, dst) {
     stopTrace();
+    if (r.steps.flush) r.steps.flush();
     trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };
-    $('trace').classList.add('on'); play(); setTimeout(refreshTables, 0);
+    trace.base = r.steps.length ? traceBase(r.steps) : null;
+    $('trace').classList.add('on'); play();
   }
   function stopTrace() { if (trace && trace.timer) { clearTimeout(trace.timer); trace.timer = null; } $('pk').innerHTML = ''; }
   function renderStep(anim) {
@@ -380,6 +410,7 @@
     $('trN').textContent = trace.title + ' · шаг ' + (trace.i + 1) + '/' + trace.steps.length + (trace.i === trace.steps.length - 1 ? (trace.ok ? ' · ДОСТАВЛЕНО' : ' · НЕ ДОСТАВЛЕНО') : '');
     $('trT').className = 't ' + cls; $('trT').textContent = s.t;
     $('trNotes').textContent = (s.notes || []).length && (s.k === 'drop' || s.k === 'arp') ? 'Отброшено по пути: ' + s.notes.join('; ') : '';
+    refreshTables();
     return anim && s.segs ? animSegs(s.segs, s.k === 'arp', { arp: '#ffc65c', arpr: '#ffc65c', ip: '#6fe3ea' }[s.k] || '#7dffb0') : 0;
   }
   function depth(segs, i) { var d = 0, cur = segs[i];
@@ -404,7 +435,7 @@
     if (trace.i < trace.steps.length - 1) trace.timer = setTimeout(function () { trace.i++; play(); }, Math.max(dur, 900) + 500); }
   $('trace').addEventListener('click', function (e) {
     var b = e.target.closest('[data-t]'); if (!b || !trace) return; var a = b.dataset.t; stopTrace();
-    if (a === 'close') { $('trace').classList.remove('on'); trace = null; return; }
+    if (a === 'close') { $('trace').classList.remove('on'); trace = null; refreshTables(); return; }
     if (a === 'first') trace.i = 0; if (a === 'prev') trace.i = Math.max(0, trace.i - 1);
     if (a === 'next') trace.i = Math.min(trace.steps.length - 1, trace.i + 1);
     if (a === 'play') { trace.i = 0; play(); return; } renderStep(true);

@@ -130,7 +130,13 @@ EL.labs.LABS.forEach(runLab);
   var mt = n.macRows(s.id);
   chk('таблицы: коммутатор выучил оба MAC в VLAN 10 на своих портах', mt.some(function (x) { return x.mac === m1 && x.port === 'gi1/0/1' && x.vlan === 10; }) &&
       mt.some(function (x) { return x.mac === m2 && x.port === 'gi1/0/2' && x.vlan === 10; }), JSON.stringify(mt));
+  r.steps.flush();
+  var sa = r.steps.filter(function (x) { return x.k === 'arp'; })[0], sr = r.steps.filter(function (x) { return x.k === 'arpr'; })[0];
+  function has(st, key) { return (st.tab || []).some(function (c) { return c.k === key && c.n; }); }
+  chk('таблицы по шагам: ARP-запрос — коммутатор выучил MAC VPC1', has(sa, 'm|' + s.id + '|10|' + m1));
+  chk('таблицы по шагам: ARP-ответ — записи ARP у обеих сторон', has(sr, 'a|' + v[0].id + '|10.0.0.2') && has(sr, 'a|' + v[1].id + '|10.0.0.1'));
   var r2 = n.ping(v[0].id, '10.0.0.2');
+  chk('таблицы по шагам: повторный ping ничего нового не пишет в ARP', !r2.steps.some(function (x) { return (x.tab || []).some(function (c) { return c.k[0] === 'a'; }); }));
   chk('таблицы: повторный ping без ARP-запроса', r2.ok && !r2.steps.some(function (x) { return x.k === 'arp'; }));
   var r3 = n.ping(v[0].id, '10.0.0.3');
   chk('таблицы: разные VLAN — не доходит', !r3.ok && r3.why === 'Host unreachable' && !n.macRows(s.id).some(function (x) { return x.mac === m3; }));
