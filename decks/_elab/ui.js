@@ -6,7 +6,7 @@
   var NS = 'http://www.w3.org/2000/svg';
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
-    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
   var terms = {}, wins = {}, z = 60;
@@ -515,6 +515,7 @@
   net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
   function showTrace(r, id, dst) {
     if (mode !== 'test') return;
+    if (X.onTrace(r, id, dst) === true) return;   // открыта «Симуляция пакетов» — события идут туда
     stopTrace();
     if (r.steps.flush) r.steps.flush();
     trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };

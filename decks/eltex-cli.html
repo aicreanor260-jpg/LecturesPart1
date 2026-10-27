@@ -187,6 +187,14 @@ body:not(.mtest) .t-only,body:not(.mtest) #trace{display:none!important}
 .cap .cbar button,.cfgw .row button,.trace .osi button{border:1px solid var(--cy2);background:transparent;color:var(--cy);cursor:pointer;font:700 12px var(--m);padding:4px 10px}
 .cap .cbar button:hover,.cfgw .row button:hover,.trace .osi button:hover{background:var(--cy);color:#0e1b1e}.cap .cbar .cnt{font:500 12px var(--m);color:var(--dim)}
 .cap .cbar input{flex:1;min-width:0;background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 13px var(--m);padding:4px 6px}
+.pt .flt{padding:4px 10px;font:500 12px var(--m);color:var(--dim);display:flex;gap:10px;flex-wrap:wrap;border-bottom:1px solid rgba(111,227,234,.2)}
+.pt .flt label{cursor:pointer;display:inline-flex;align-items:center;gap:4px;color:#d9f7f9}.pt i{display:inline-block;width:10px;height:10px;border-radius:2px}
+.pt tr.fut td{opacity:.45}.pt tr.on td{background:rgba(111,227,234,.18)}.pt tr[data-i]{cursor:pointer}.pt .clk{margin-left:auto;font:700 13px var(--m);color:var(--cy)}
+.pt .cbar select{background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 12px var(--m)}
+.pdu{flex:1;min-height:0;overflow:auto}
+.pdu .osi details{margin:3px 0;font:500 12px/1.45 var(--m)}.pdu .osi summary{cursor:pointer;color:#d9f7f9}.pdu .osi summary b{color:var(--cy);margin-right:6px}.pdu .osi div{padding-left:18px;color:var(--dim)}
+.pdu h3{margin:10px 0 2px;font:700 15px var(--f);color:var(--cy);text-transform:uppercase;letter-spacing:.06em}.pdu .wave{overflow-x:auto;background:#06090c;border:1px solid rgba(111,227,234,.2);padding:4px}
+.pdu .wave text{font:500 9px var(--m);fill:#9db7c0}.pdu .wave .sig{fill:none;stroke:#ffc65c;stroke-width:2}.pdu .wave .ax{stroke:rgba(111,227,234,.3);stroke-dasharray:3 3}
 .sim .cbar .cnt input{width:60px;background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 12px var(--m);padding:2px 4px}.sim .clk{margin-left:auto;font:700 13px var(--m);color:var(--cy)}
 .sim td input,.sim td select{background:#0a1416;border:1px solid var(--cy2);color:#fff;font:500 12px var(--m);padding:2px 4px;width:90px}.sim td input[type=number]{width:64px}.sim td input[type=checkbox]{width:auto}
 .sim td button{border:1px solid var(--cy2);background:transparent;color:var(--cy);cursor:pointer;font:700 12px var(--m)}.sim .det table{margin:4px 0 8px}.sim .det p{margin:6px 0;font:500 12px/1.5 var(--m)}
@@ -429,6 +437,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>aux1/0/1…32 ↔ console MES/ESR · кабель «Консольный RS-232»</td><td>консольный порт устройства через SCS</td></tr>
 <tr><td>line aux 1/0/1 · speed · databits · stopbits · parity · flowcontrol · transport input ssh|telnet|none · transport telnet port 3001 · modem inout</td><td>настройка порта; show line aux, clear line aux 1/0/1</td></tr>
 <tr><td>Debian: telnet 192.168.1.2 3001 · ssh admin:aux1@192.168.1.2</td><td>Reverse Telnet / SSH: вход на SCS, затем консоль устройства; выход — ~.</td></tr>
+</table>
+
+<h2>Симуляция пакетов (как Packet Tracer)</h2>
+<table>
+<tr><td>Файл → Список событий · ПКМ по полю → Симуляция пакетов</td><td>пока окно открыто, ping/curl/DHCP идут в список событий со временем модели</td></tr>
+<tr><td>▶ · шаг ◀ ▶| · скорость · фильтр протоколов</td><td>проигрывание, конверты по кабелям</td></tr>
+<tr><td>щелчок по событию</td><td>PDU по уровням OSI и L1: линейный код кабеля (Манчестер, MLT-3, PAM-5, 8b/10b, 64b/66b, RS-232) и рисунок сигнала</td></tr>
 </table>
 
 <h2>MTU и размер пакета</h2>
@@ -7764,6 +7779,74 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 })(typeof window !== 'undefined' ? window : global);
 
+/* Симуляция пакетов в стиле Packet Tracer поверх логики оборудования: трасса обмена (ARP, ICMP, DHCP, … — как её строит модель
+   сети с правилами MES/ESR/WLC/OLT/ME) превращается в список событий со временем модели. Время кадра на кабеле — как в OMNeT++:
+   передача = биты / скорость линка (согласование speed/duplex, тип кабеля), распространение = 100 м / 2·10⁸ м/с, обработка в устройстве 10 мкс.
+   L1: линейный код и модуляция по типу кабеля и скорости (стандарты IEEE 802.3, ITU-T G.984, EIA RS-232) и сигнал первых байт кадра.
+   Упрощения: сигнал 1000BASE-T показан условно (2 бита → уровень PAM-5, без скремблера и треллис-кода), 8b/10b и 64b/66b — исходные биты
+   без кодовых таблиц и скремблера (у 64b/66b — с синхрозаголовком 01); размер кадра — по типу PDU (ARP 60 байт, IP — 14 + IP-пакет). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype;
+  var PROC = 10e-6, PROP = 100 / 2e8;
+  // протокол PDU для списка событий
+  EL.ptProto = function (f) {
+    if (!f) return 'Info';
+    if (f.type === 'arp') return 'ARP';
+    if (f.type === 'stp') return 'STP';
+    if (f.icmp6) return 'ICMPv6';
+    if (f.proto === 'esp') return 'ESP'; if (f.proto === 'gre') return 'GRE'; if (f.proto === 'igmp') return 'IGMP';
+    if (f.dhcp || (f.proto === 'udp' && (f.dport === 67 || f.dport === 68))) return 'DHCP';
+    var port = f.reply ? f.sport : f.dport, M = { udp: { 53: 'DNS', 123: 'NTP', 69: 'TFTP', 514: 'Syslog', 500: 'ISAKMP', 1812: 'RADIUS' }, tcp: { 22: 'SSH', 23: 'Telnet', 80: 'HTTP', 443: 'HTTPS', 179: 'BGP', 8043: 'HTTPS' } };
+    if (f.proto === 'icmp') return 'ICMP';
+    return (M[f.proto] && M[f.proto][port]) || String(f.proto || 'IP').toUpperCase();
+  };
+  function bytesOf(f) { if (!f) return 64; if (f.type === 'arp') return 60; var ip = f.size || (f.proto === 'icmp' ? 84 : f.proto === 'tcp' ? 60 : 48); return Math.max(60, 14 + ip); }
+  // линейный код кабеля
+  EL.lineCode = function (net, li) {
+    var l = net.links[li]; if (!l) return null;
+    var ph = net.phys(l.a.dev, l.a.port), cab = ph.cab || l.cab || 'cu', sp = ph.speed || 1000;
+    if (cab === 'rs232') return { name: 'RS-232', code: 'uart', rate: 115200, bps: 115200, text: 'EIA RS-232, асинхронная передача: старт-бит 0, 8 бит данных младшим вперёд, стоп-бит 1; логическая 1 — отрицательное напряжение, 0 — положительное. 115200 бит/с, 8N1' };
+    if (cab === 'pon') return { name: 'GPON', code: 'nrz', bps: 2488.32e6, text: 'ITU-T G.984: вниз 2,488 Гбит/с (λ 1490 нм), вверх 1,244 Гбит/с (λ 1310 нм, TDMA по выделенным окнам); NRZ со скремблированием' };
+    if (cab === 'sfp10g' || sp >= 10000) return { name: '10GBASE-R', code: '64b66b', bps: 10.3125e9, text: 'IEEE 802.3 гл. 49: блоки 64b/66b (синхрозаголовок 01 — данные, 10 — управление), самосинхронизирующийся скремблер x⁵⁸+x³⁹+1, NRZ, 10,3125 Гбод' };
+    if (cab === 'sfp1g') return { name: '1000BASE-X', code: '8b10b', bps: 1.25e9, text: 'IEEE 802.3 гл. 36: код 8b/10b (каждый байт → 10 бит, баланс единиц и нулей), NRZ, 1,25 Гбод' };
+    if (sp <= 10) return { name: '10BASE-T', code: 'manchester', bps: 10e6, text: 'IEEE 802.3 гл. 14: манчестерский код — переход в середине каждого бита: 0 — сверху вниз, 1 — снизу вверх; 10 Мбит/с = 20 Мбод' };
+    if (sp <= 100) return { name: '100BASE-TX', code: 'mlt3', bps: 100e6, text: 'IEEE 802.3 гл. 24–25: 4B5B (4 бита → 5) + MLT-3 (1 — шаг по уровням 0, +1, 0, −1; 0 — уровень держится), 125 Мбод по одной паре' };
+    return { name: '1000BASE-T', code: 'pam5', bps: 1e9, text: 'IEEE 802.3 гл. 40: 4D-PAM5 — 4 пары одновременно в обе стороны, уровни −2, −1, 0, +1, +2, 125 Мбод на пару, скремблер и треллис-код; рисунок условный' };
+  };
+  // сигнал первых байт: массив [уровень] по равным интервалам; bits — для подписи
+  var B4B5 = ['11110', '01001', '10100', '10101', '01010', '01011', '01110', '01111', '10010', '10011', '10110', '10111', '11010', '11011', '11100', '11101'];
+  EL.waveform = function (code, bytes) {
+    var bits = []; bytes.forEach(function (b) { for (var i = 0; i < 8; i++) bits.push((b >> i) & 1); });   // Ethernet: младший бит байта первым
+    var L = [], lv = 0, seq = [0, 1, 0, -1], k = 0;
+    if (code === 'manchester') bits.forEach(function (b) { L.push(b ? -1 : 1, b ? 1 : -1); });
+    else if (code === 'mlt3') { var s = ''; bytes.forEach(function (b) { s += B4B5[b & 15] + B4B5[b >> 4]; }); s.split('').forEach(function (c) { if (c === '1') k = (k + 1) % 4; L.push(seq[k]); }); bits = s.split('').map(Number); }
+    else if (code === 'pam5') { var map = { '00': -2, '01': -1, '10': 1, '11': 2 }; for (var i = 0; i < bits.length; i += 2) L.push(map['' + bits[i] + bits[i + 1]] / 2); }
+    else if (code === '64b66b') { bits = [0, 1].concat(bits); bits.forEach(function (b) { L.push(b ? 1 : -1); }); }
+    else if (code === 'uart') { var u = []; bytes.forEach(function (b) { u.push(0); for (var j = 0; j < 8; j++) u.push((b >> j) & 1); u.push(1); }); bits = u; u.forEach(function (b) { L.push(b ? -1 : 1); }); }
+    else bits.forEach(function (b) { L.push(b ? 1 : -1); });
+    void lv; return { levels: L, bits: bits };
+  };
+  function macBytes(m) { return String(m || 'ff:ff:ff:ff:ff:ff').split(':').map(function (x) { return parseInt(x, 16) || 0; }); }
+  EL.ptBytes = function (f) { return macBytes(f && f.dmac).slice(0, 2); };
+  // события из трассы: {t, dur, kind:'pdu'|'info', proto, from, to, li, step, f, text, tag}
+  EL.ptEvents = function (net, steps, src) {
+    var out = [], t = 0, at = src;
+    steps.forEach(function (s, si) {
+      if (s.segs && s.segs.length) {
+        var bytes = bytesOf(s.f), end = {}, tEnd = t, proto = s.k === 'arp' || s.k === 'arpr' ? 'ARP' : EL.ptProto(s.f);
+        s.segs.forEach(function (sg) {
+          var start = end[sg.from] !== undefined ? end[sg.from] : t, lc = EL.lineCode(net, sg.li), bps = lc ? (lc.code === 'uart' ? lc.bps * 0.8 : lc.code === '8b10b' ? lc.bps * 0.8 : lc.code === '64b66b' ? lc.bps * 64 / 66 : lc.bps) : 1e9;
+          var dur = bytes * 8 / bps + PROP;
+          out.push({ t: start, dur: dur, kind: 'pdu', proto: proto, from: sg.from, to: sg.to, li: sg.li, step: si, f: s.f, text: s.t, tag: sg.tag, bytes: bytes });
+          end[sg.to] = start + dur + PROC; tEnd = Math.max(tEnd, end[sg.to]); at = sg.to; });
+        t = tEnd;
+      } else { out.push({ t: t, dur: 0, kind: 'info', proto: s.k === 'drop' ? 'Отброшен' : s.k === 'ok' ? 'Доставлен' : s.k === 'nat' ? 'NAT' : 'Решение', from: at, to: at, step: si, text: s.t }); t += PROC; }
+    });
+    return out;
+  };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
    Каждая лаба: gen() — случайный вариант (номера VLAN, адреса), build() — топология, tasks() — проверки, sol() — решение. */
 (function (G) {
@@ -8791,7 +8874,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   var NS = 'http://www.w3.org/2000/svg';
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
-    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
   var terms = {}, wins = {}, z = 60;
@@ -9300,6 +9383,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   net.onTrace = function (r, id, dst) { showTrace(r, id, dst); };
   function showTrace(r, id, dst) {
     if (mode !== 'test') return;
+    if (X.onTrace(r, id, dst) === true) return;   // открыта «Симуляция пакетов» — события идут туда
     stopTrace();
     if (r.steps.flush) r.steps.flush();
     trace = { steps: r.steps.length ? r.steps : [{ k: r.ok ? 'ok' : 'drop', t: r.ok ? 'Адрес принадлежит самому устройству' : (r.why || 'нет ответа') }], i: 0, title: net.devs[id].name + ' → ' + dst, ok: r.ok };
@@ -9851,6 +9935,115 @@ vesr(config)#         do confirm  — подтвердить</pre>
         o.d.setAttribute('opacity', 1); o.d.setAttribute('transform', 'translate(' + (o.a.x + (o.b.x - o.a.x) * p) + ',' + (o.a.y + (o.b.y - o.a.y) * p) + ')'); });
       if (mt !== null) clk.textContent = 't = ' + fmt(mt);
       if (t < end) anim.raf = requestAnimationFrame(step); else { clk.textContent = 't = ' + fmt(r.tEnd) + (r.events.length > MAX_ANIM ? ' · показаны первые ' + MAX_ANIM + ' кадров' : ''); g.innerHTML = ''; anim = null; } })(t0);
+  }
+})();
+
+/* Окно «Симуляция пакетов» (режим «Тест»), как Simulation в Packet Tracer: пока окно открыто, каждый обмен (ping, curl, DHCP,
+   telnet …) попадает в список событий со временем модели; ▶ — проигрывание, шаги вперёд/назад, фильтр протоколов; конверты
+   цвета протокола идут по кабелям в своём темпе (быстрый линк — короче). Щелчок по событию — карточка PDU по уровням OSI и L1:
+   линейный код кабеля и рисунок сигнала первых байт кадра (MAC назначения). */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  var COL = { ARP: '#ffc65c', ICMP: '#6fe3ea', ICMPv6: '#6fe3ea', DHCP: '#7dffb0', DNS: '#c99bff', TCP: '#ff9d6b', UDP: '#9db7ff', HTTP: '#ff9d6b', HTTPS: '#ff9d6b', SSH: '#ff9d6b',
+    Telnet: '#ff9d6b', NTP: '#9db7ff', BGP: '#ffd36b', ESP: '#ff7bd5', GRE: '#ff7bd5' };
+  var S = { ev: [], i: -1, playing: false, timer: 0, off: {}, speed: 1 };
+  function test() { return U.mode() === 'test'; }
+  function net() { return U.net(); }
+  function color(p) { return COL[p] || '#d9f7f9'; }
+  function fmt(t) { return t < 1e-3 ? (t * 1e6).toFixed(1) + ' мкс' : (t * 1e3).toFixed(3) + ' мс'; }
+
+  var items0 = X.items, run0 = X.run, side0 = X.side, click0 = X.sideClick, mode0 = X.onMode;
+  X.items = function (k) { return items0(k) + (k === 'field' && test() ? '<button data-a="pt"><span>✉</span>Симуляция пакетов</button>' : ''); };
+  X.run = function (k, a, arg) { run0(k, a, arg); if (k === 'field' && a === 'pt') open(); };
+  X.side = function (tab) { return side0(tab) + (tab === 'file' && test() ? '<h4>Симуляция пакетов</h4><button class="act" data-s="pt">Список событий (как Packet Tracer)</button>' +
+    '<p class="note">Пока окно открыто, ping, curl, DHCP и другие обмены идут сюда по шагам: время на кабеле, фильтр протоколов, PDU по уровням OSI и сигнал на L1.</p>' : ''); };
+  X.sideClick = function (a) { click0(a); if (a === 'pt') open(); };
+  X.onMode = function (m) { mode0(m); if (m === 'work') { stop(); U.closeWin('pt', true); U.closeWin('pdu', true); } };
+  X.onTrace = function (r, id, dst) {
+    if (!U.wins.pt) return false;
+    if (r.steps.flush) r.steps.flush();
+    var base = S.ev.length ? S.ev[S.ev.length - 1].t + S.ev[S.ev.length - 1].dur + 1e-3 : 0, n = net();
+    var title = (n.devs[id] ? n.devs[id].name : '?') + ' → ' + dst + (r.ok ? '' : ' · не доставлено');
+    EL.ptEvents(n, r.steps, id).forEach(function (e) { e.t += base; e.title = title; S.ev.push(e); });
+    render(); if (!S.playing) { S.playing = true; tick(); } return true;
+  };
+
+  // ---------------------------------------------------------------- окно
+  function open() {
+    if (!test()) return;
+    var body = document.createElement('div'); body.className = 'cap pt';
+    body.innerHTML = '<div class="cbar"><button data-p="first" title="К началу">⏮</button><button data-p="back" title="Шаг назад">◀</button><button data-p="play">▶ Проиграть</button>' +
+      '<button data-p="fwd" title="Шаг вперёд">▶|</button><button data-p="clear">Сброс</button><span class="cnt">Скорость <select data-p="spd"><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></span>' +
+      '<span class="clk">t = 0</span></div><div class="flt"></div><div class="list"><table><thead><tr><th></th><th>Время</th><th>Последнее устройство</th><th>На устройстве</th><th>Тип</th><th>Инфо</th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="det">Окно открыто — отправьте ping из консоли или «Ping отсюда…»: события появятся здесь. Щелчок по строке — PDU по уровням OSI и сигнал на кабеле.</div>';
+    U.makeWin('pt', 'Симуляция пакетов', 'список событий · время модели', body, { w: Math.min(860, innerWidth - 40), h: Math.min(420, innerHeight - 160), x: 20, y: Math.max(70, innerHeight - 490) });
+    body.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-p]'), row = e.target.closest('tr[data-i]'), f = e.target.closest('[data-f]');
+      if (f) { S.off[f.dataset.f] = !S.off[f.dataset.f]; render(); return; }
+      if (row) { stop(); S.i = +row.dataset.i; show(true); pdu(S.ev[S.i]); return; }
+      if (!b) return; var a = b.dataset.p;
+      if (a === 'play') { if (S.playing) stop(); else { if (S.i >= vis().length - 1) S.i = -1; S.playing = true; tick(); } }
+      if (a === 'fwd') { stop(); step(1); } if (a === 'back') { stop(); step(-1); } if (a === 'first') { stop(); S.i = -1; show(false); }
+      if (a === 'clear') { stop(); S.ev = []; S.i = -1; render(); document.getElementById('pk').innerHTML = ''; }
+      render(); });
+    body.querySelector('[data-p="spd"]').addEventListener('change', function () { S.speed = +this.value; });
+    render();
+  }
+  function vis() { return S.ev.map(function (e, i) { return i; }).filter(function (i) { return !S.off[S.ev[i].proto]; }); }
+  function render() {
+    var w = U.wins.pt; if (!w) return; var el = w.el, tb = el.querySelector('tbody'), n = net(), V = vis(), cur = V[S.i];
+    var P = []; S.ev.forEach(function (e) { if (P.indexOf(e.proto) < 0) P.push(e.proto); });
+    el.querySelector('.flt').innerHTML = 'Фильтр: ' + (P.map(function (p) { return '<label data-f="' + esc(p) + '"><i style="background:' + color(p) + '"></i>' + (S.off[p] ? '<s>' + esc(p) + '</s>' : esc(p)) + '</label>'; }).join('') || '—');
+    tb.innerHTML = V.map(function (k, i) { var e = S.ev[k], fd = n.devs[e.from], td = n.devs[e.to];
+      return '<tr data-i="' + i + '" class="' + (i === S.i ? 'on' : i > S.i ? 'fut' : '') + '"><td><i style="background:' + color(e.proto) + '"></i></td><td>' + fmt(e.t) + '</td><td>' + esc(fd ? fd.name : '') +
+        '</td><td>' + esc(e.kind === 'pdu' && td ? td.name : '—') + '</td><td>' + esc(e.proto) + '</td><td>' + esc(e.text.slice(0, 90)) + '</td></tr>'; }).join('');
+    el.querySelector('[data-p="play"]').textContent = S.playing ? '❚❚ Пауза' : '▶ Проиграть';
+    var c = S.ev[cur]; el.querySelector('.clk').textContent = 't = ' + (c ? fmt(c.t + c.dur) : '0');
+    var on = tb.querySelector('tr.on'); if (on && S.playing) on.scrollIntoView({ block: 'nearest' });
+  }
+  function stop() { S.playing = false; clearTimeout(S.timer); }
+  function step(d) { var V = vis(); S.i = Math.max(-1, Math.min(V.length - 1, S.i + d)); show(true); if (S.ev[V[S.i]]) pdu(S.ev[V[S.i]], true); }
+  function tick() { if (!S.playing || !U.wins.pt) { S.playing = false; render(); return; } var V = vis();
+    if (S.i >= V.length - 1) { S.playing = false; render(); return; }
+    S.i++; var ms = show(true); render(); S.timer = setTimeout(tick, Math.max(350, ms) / S.speed); }
+  // анимация события: конверт по кабелю; длительность — по времени кадра на линке (логарифмически, чтобы 10 Гбит/с и RS-232 были различимы)
+  function show(anim) {
+    var g = document.getElementById('pk'), n = net(); g.innerHTML = ''; var e = S.ev[vis()[S.i]]; render(); if (!e || e.kind !== 'pdu') return 300;
+    var a0 = n.devs[e.from], b0 = n.devs[e.to]; if (!a0 || !b0) return 300;
+    var of = U.linkOff ? U.linkOff(e.li) : { x: 0, y: 0 }, A = { x: a0.x + of.x, y: a0.y + of.y }, B = { x: b0.x + of.x, y: b0.y + of.y };
+    var dur = Math.max(450, Math.min(2600, 900 + 220 * Math.log10(e.dur / 1e-6 + 1))) / S.speed;
+    var env = U.el('g', { 'class': 'pkt' }, g); U.el('path', { d: 'M-12 -8h24v16h-24z', fill: color(e.proto) }, env); U.el('path', { d: 'M-12 -8l12 9 12-9', fill: 'none', stroke: '#0e1b1e', 'stroke-width': 1.6 }, env);
+    U.el('text', { x: 15, y: -11 }, env).textContent = e.proto + (e.tag !== null && e.tag !== undefined ? ' · VLAN ' + e.tag : '');
+    if (!anim) { env.setAttribute('transform', 'translate(' + B.x + ',' + B.y + ')'); return 300; }
+    var st = performance.now();
+    (function fr(now) { var k = Math.min(1, (now - st) / dur); env.setAttribute('transform', 'translate(' + (A.x + (B.x - A.x) * k) + ',' + (A.y + (B.y - A.y) * k) + ')'); if (k < 1 && g.contains(env)) requestAnimationFrame(fr); })(st);
+    return dur;
+  }
+
+  // ---------------------------------------------------------------- карточка PDU
+  function pdu(e, quiet) {
+    if (!e) return; var n = net();
+    var body = document.createElement('div'); body.className = 'pad pdu';
+    var h = '<div class="k">' + esc(e.title || '') + '</div><h2>' + esc(e.proto) + ' · ' + esc(n.devs[e.from] ? n.devs[e.from].name : '') + (e.kind === 'pdu' ? ' → ' + esc(n.devs[e.to] ? n.devs[e.to].name : '') : '') + '</h2><p>' + esc(e.text) + '</p>';
+    if (e.kind === 'pdu') {
+      var lc = EL.lineCode(n, e.li), L = e.f && EL.decode ? EL.decode(e.f, e.tag === undefined ? null : e.tag, e.bytes) : [];
+      if (lc) { var by = EL.ptBytes(e.f), wv = EL.waveform(lc.code, by);
+        h += '<h3>L1 — ' + esc(lc.name) + '</h3><p>' + esc(lc.text) + '</p><p>Кадр ' + e.bytes + ' байт на линке: ' + fmt(e.dur) + ' (передача + распространение 100 м). Сигнал первых байт MAC назначения ' +
+          by.map(function (b) { return ('0' + b.toString(16)).slice(-2); }).join(':') + ' (младший бит первым):</p>' + wave(wv, lc.code); }
+      h += '<h3>Уровни OSI</h3><div class="osi">' + L.map(function (x) { return '<details' + (x.osi !== 'L1' ? ' open' : '') + '><summary><b>' + x.osi + '</b> ' + esc(x.name) + '</summary>' +
+        x.fields.map(function (f) { return '<div>' + esc(f[0]) + ': ' + esc(String(f[1])) + '</div>'; }).join('') + '</details>'; }).join('') + '</div>';
+    }
+    U.closeWin('pdu', true); U.makeWin('pdu', 'PDU', e.proto + ' · уровни OSI', body, { w: 520, h: Math.min(560, innerHeight - 140), x: Math.max(20, innerWidth - 560), y: 70 });
+    body.innerHTML = h; void quiet;
+  }
+  function wave(w, code) {
+    var L = w.levels, n = L.length, W = Math.max(360, n * (code === 'pam5' ? 22 : 9)), H = 90, mid = 45, amp = 30, dx = W / n, d = 'M0 ' + (mid - L[0] * amp);
+    L.forEach(function (v, i) { var y = mid - v * amp; d += ' L' + (i * dx).toFixed(1) + ' ' + y + ' L' + ((i + 1) * dx).toFixed(1) + ' ' + y; });
+    var bits = code === 'manchester' ? w.bits : w.bits, bw = W / bits.length;
+    var lab = bits.map(function (b, i) { return '<text x="' + (i * bw + bw / 2).toFixed(1) + '" y="12" text-anchor="middle">' + b + '</text>'; }).join('');
+    return '<div class="wave"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '"><line x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '" class="ax" />' +
+      '<path d="' + d + '" class="sig" />' + lab + '</svg></div>';
   }
 })();
 

@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'mes10.js', 'sim.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1463,6 +1463,31 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { PE2: ['configure', 'vrf example', 'no import route-target 65535:100', 'no export route-target 65535:100', 'export route-target 65535:999', 'import route-target 65535:999', 'root', 'commit', 'end'] });
   chk('route-target не совпадают — VPN-маршрутов нет', !n.ping(h1.id, '100.100.2.10').ok);
   console.log('✓ ME: MPLS L3VPN');
+})();
+
+// симуляция пакетов как в Packet Tracer: события со временем, протоколы, линейный код L1
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('VPC', 'PC1'), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), b = n.add('VPC', 'PC2'), sw2 = n.add('MES2428', 'SW2');
+  n.connect(a.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/24', r.id, 'gi1/0/1'); n.connect(r.id, 'gi1/0/2', sw2.id, 'gi1/0/24'); n.connect(b.id, 'eth0', sw2.id, 'gi1/0/1');
+  EL.labs.apply(n, { PC1: ['ip 192.168.1.10/24 192.168.1.1'], PC2: ['ip 10.0.0.10/24 10.0.0.1'],
+    R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.0.0.1/24', 'ip firewall disable', 'end', 'commit', 'confirm'] });
+  var p = n.ping(a.id, '10.0.0.10'), E = EL.ptEvents(n, p.steps, a.id), pdu = E.filter(function (e) { return e.kind === 'pdu'; });
+  chk('события: ARP и ICMP по каждому кабелю, время растёт', p.ok && pdu.some(function (e) { return e.proto === 'ARP'; }) && pdu.some(function (e) { return e.proto === 'ICMP'; }) &&
+    E.every(function (e, i) { return !i || e.t >= E[i - 1].t || e.kind === 'pdu'; }) && E[E.length - 1].t > 0);
+  var ic = pdu.filter(function (e) { return e.proto === 'ICMP'; })[0];
+  chk('ICMP-кадр 98 байт на 1 Гбит/с — меньше мкс + 0,5 мкс распространения', ic.bytes === 98 && ic.dur > 0.7e-6 && ic.dur < 2e-6, ic.dur);
+  chk('L1 медь 1 Гбит/с — 1000BASE-T, PAM-5', EL.lineCode(n, ic.li).name === '1000BASE-T');
+  ['configure', 'interface gi1/0/24', 'no negotiation', 'speed 100', 'duplex full', 'end'].forEach(function (l) { sw.st.mode = 'priv'; n.exec(sw.id, l); });
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'speed 100M full-duplex', 'exit', 'end', 'commit', 'confirm'] });
+  chk('L1 100 Мбит/с — 100BASE-TX: 4B5B + MLT-3', EL.lineCode(n, 1).name === '100BASE-TX' && EL.lineCode(n, 1).code === 'mlt3');
+  var m = EL.waveform('manchester', [0x01]);
+  chk('манчестерский код: бит 1 — снизу вверх, 0 — сверху вниз', m.levels.slice(0, 4).join(',') === '-1,1,1,-1');
+  var t3 = EL.waveform('mlt3', [0x00]);
+  chk('MLT-3 от 4B5B: 0x0 → 11110 → уровни 1,0,-1,0,0', t3.levels.slice(0, 5).join(',') === '1,0,-1,0,0', t3.levels.join(','));
+  chk('RS-232: старт-бит 0 (положительный уровень), стоп-бит 1', EL.waveform('uart', [0xff]).levels[0] === 1 && EL.waveform('uart', [0xff]).levels[9] === -1);
+  chk('протоколы по портам: DHCP, DNS, HTTP, BGP', EL.ptProto({ proto: 'udp', dport: 67 }) === 'DHCP' && EL.ptProto({ proto: 'udp', dport: 53 }) === 'DNS' && EL.ptProto({ proto: 'tcp', dport: 80 }) === 'HTTP' && EL.ptProto({ proto: 'tcp', dport: 179 }) === 'BGP');
+  console.log('✓ симуляция пакетов (Packet Tracer)');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
