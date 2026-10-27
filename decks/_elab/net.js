@@ -124,9 +124,10 @@
   // ------------------------------------------------------------------ RIP и OSPF: расчёт по соседствам
   P.gen = 0;
   P.dyn = function () {
-    if (this._dyn && this._dyn.gen === this.gen) return this._dyn.t;
+    if (this._dyn && this._dyn.gen === this.gen && this._dyn.now === this.now) return this._dyn.t;
     var s = this, t = {};
-    this._dyn = { gen: this.gen, t: t };     // защита от повторного входа: flood не зависит от динамических маршрутов
+    this._dyn = { gen: this.gen, now: this.now, t: t };
+    s._ospfMis = {};     // защита от повторного входа: flood не зависит от динамических маршрутов
     ['R', 'O'].forEach(function (proto) {
       var rs = s.order.filter(function (id) { var d = s.devs[id]; if (d.type !== 'esr') return false;
         var c = d.st.run; return proto === 'R' ? c.rip && c.rip.on : c.ospf && c.ospf.on; });
@@ -142,7 +143,8 @@
           } else {
             var x = c.ifs[f.name], o = x && x.ospf;
             if (!o || !o.on || o.inst !== c.ospf.id || !o.area || !c.ospf.areas[o.area] || !c.ospf.areas[o.area].on) return;
-            part.push({ f: f, passive: !!o.passive, area: o.area, cost: o.cost || 1 }); orig.push(IP.netOf(f.ip, f.len));
+            var hello = o.hello || 10;
+            part.push({ f: f, passive: !!o.passive, area: o.area, cost: o.cost || 1, hello: hello, dead: o.dead || hello * 4 }); orig.push(IP.netOf(f.ip, f.len));
           }
         });
         if (proto === 'R' && c.rip.redist.indexOf('static') >= 0) c.routes.forEach(function (r) { orig.push(r.net); });
@@ -157,19 +159,23 @@
             var op = oi.part.filter(function (q) { return q.f.name === e.iface.name && !q.passive; })[0];
             if (!op || !IP.sameNet(pp.f.ip, e.iface.ip, pp.f.len)) return;
             if (proto === 'O' && op.area !== pp.area) return;
+            if (proto === 'O' && (op.hello !== pp.hello || op.dead !== pp.dead)) {   // hello с другими таймерами отбрасывается
+              s._ospfMis[id + '|' + pp.f.name] = { peer: s.devs[e.dev].name, mine: [pp.hello, pp.dead], his: [op.hello, op.dead] }; return; }
             info[id].nb.push({ dev: e.dev, nh: e.iface.ip, ifn: pp.f.name, cost: proto === 'R' ? 1 : pp.cost });
           });
         });
       });
+      if (s.timeLayer) s.timeLayer(proto, rs, info, tab);   // таймеры протоколов: какие соседства уже/ещё действуют
       for (var round = 0; round < 20; round++) {
         var ch = false;
         rs.forEach(function (id) {
           info[id].nb.forEach(function (nb) {
-            Object.keys(tab[nb.dev]).forEach(function (n) {
-              var m2 = tab[nb.dev][n].m + nb.cost, cur = tab[id][n];
+            var nt = nb.frozen || tab[nb.dev]; if (!nt) return;
+            Object.keys(nt).forEach(function (n) {
+              var m2 = nt[n].m + nb.cost, cur = tab[id][n];
               if (proto === 'R' && m2 > 15) return;
               if (cur && (cur.own || cur.m <= m2)) return;
-              tab[id][n] = { m: m2, nh: nb.nh, ifn: nb.ifn }; ch = true;
+              tab[id][n] = { m: m2, nh: nb.nh, ifn: nb.ifn, via: nb.dev, stale: !!nb.frozen }; ch = true;
             });
           });
         });
@@ -177,9 +183,11 @@
       }
       rs.forEach(function (id) {
         t[id] = (t[id] || []).concat(Object.keys(tab[id]).filter(function (n) { return !tab[id][n].own; }).map(function (n) {
-          var x = tab[id][n]; return { p: proto, net: n, len: +n.split('/')[1], nh: x.nh, ifn: x.ifn, ad: proto === 'R' ? 120 : 110, m: x.m }; }));
+          var x = tab[id][n]; return { p: proto, net: n, len: +n.split('/')[1], nh: x.nh, ifn: x.ifn, ad: proto === 'R' ? 120 : 110, m: x.m, via: x.via, stale: x.stale }; }));
         if (proto === 'O') s.devs[id]._ospfNb = info[id].nb;
       });
+      s._lastTab = s._lastTab || {}; s._lastTab[proto] = s._lastTab[proto] || {};
+      rs.forEach(function (id) { s._lastTab[proto][id] = tab[id]; });   // таблицы для «замороженных» соседей, пока не истёк таймер
     });
     return t;
   };

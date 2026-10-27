@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -18,6 +18,7 @@ function runLab(L) {
       if (tasks[0].ok(net)) { fail++; console.error('✗ ' + L.id + ' неисправность ' + p.fault + ' не ломает сеть'); continue; }
     }
     var errs = EL.labs.apply(net, L.sol(p));
+    net.tick(60);                                 // протоколам нужно время: OSPF ждёт выбора DR (wait timer 40 с)
     var bad = tasks.filter(function (t) { return !t.ok(net); });
     if (errs.length || bad.length) {
       fail++;
@@ -307,6 +308,70 @@ EL.labs.LABS.forEach(runLab);
   chk('сессии: ip firewall sessions icmp-timeout 5', !sess('icmp') && /icmp-timeout\s+5\s+30/.test(n.exec(r.id, 'show ip firewall sessions timeouts')) &&
       /ip firewall sessions icmp-timeout 5/.test(n.exec(r.id, 'show running-config')));
   console.log('✓ сессии межсетевого экрана по протоколам');
+})();
+
+// RIP и OSPF по таймерам: ожидание DR, hello/dead, потеря соседа за коммутатором, invalid/flush
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  // R1 —gi1/0/1— SW —gi1/0/1— R2; у каждого LAN на gi1/0/2 с ПК
+  function build(proto, extra) {
+    var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), sw = n.add('MES2428', 'SW'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B');
+    n.connect(r1.id, 'gi1/0/1', sw.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/1', sw.id, 'gi1/0/2');
+    n.connect(a.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(b.id, 'eth0', r2.id, 'gi1/0/2');
+    function cfg(i) {
+      var c = ['configure', 'interface gi1/0/1', 'ip address 10.0.0.' + i + '/24', 'ip firewall disable', 'exit',
+               'interface gi1/0/2', 'ip address 192.168.' + i + '.1/24', 'ip firewall disable', 'exit'];
+      if (proto === 'rip') c = c.concat(['router rip', 'network 10.0.0.0/24', 'network 192.168.' + i + '.0/24', 'enable', 'exit']);
+      else c = c.concat(['router ospf 1', 'router-id ' + i + '.' + i + '.' + i + '.' + i, 'area 0.0.0.0', 'enable', 'exit', 'enable', 'exit',
+                         'interface gi1/0/1-2', 'ip ospf instance 1', 'ip ospf area 0.0.0.0', 'ip ospf'].concat((extra || {})[i] || [], ['exit']));
+      return c.concat(['do commit', 'do confirm', 'end']);
+    }
+    EL.labs.apply(n, { R1: cfg(1), R2: cfg(2), A: ['ip 192.168.1.2/24 192.168.1.1'], B: ['ip 192.168.2.2/24 192.168.2.1'] });
+    return { n: n, r1: r1, r2: r2, a: a, b: b };
+  }
+  function has(n, id, p, net) { return (n.dyn()[id] || []).some(function (r) { return r.p === p && r.net === net; }); }
+  // OSPF на broadcast-сегменте: 2way и ожидание DR 40 с, потом full
+  var o = build('ospf'); o.n.dyn();
+  o.n.tick(5);
+  var t5 = o.n.exec(o.r1.id, 'show ip ospf neighbors');
+  chk('OSPF: через 5 с — 2way, ждём выбора DR, маршрутов нет', /2way/.test(t5) && /ожидание выбора DR/.test(t5) && !has(o.n, o.r1.id, 'O', '192.168.2.0/24') && !o.n.ping(o.a.id, '192.168.2.2').ok, t5);
+  o.n.tick(40);
+  var t45 = o.n.exec(o.r1.id, 'show ip ospf neighbors');
+  chk('OSPF: через 45 с — full/dr, маршрут O и связь есть', /full\/(dr|bdr)/.test(t45) && has(o.n, o.r1.id, 'O', '192.168.2.0/24') && o.n.ping(o.a.id, '192.168.2.2').ok, t45);
+  chk('OSPF: show ip ospf interface — hello 10, dead 40, priority 128', /Hello timer:\s+10/.test(o.n.exec(o.r1.id, 'show ip ospf interface gi1/0/1')) &&
+      /Dead timer:\s+40/.test(o.n.exec(o.r1.id, 'show ip ospf interface gi1/0/1')) && /Priority:\s+128/.test(o.n.exec(o.r1.id, 'show ip ospf interface gi1/0/1')));
+  // сосед выключился за коммутатором — линк у R1 жив, ждём dead-interval
+  o.n.power(o.r2.id, false); o.n.tick(15);
+  var tl = o.n.exec(o.r1.id, 'show ip ospf neighbors');
+  chk('OSPF: R2 выключен — 15 с сосед ещё full, маршрут висит (чёрная дыра)', /hello не приходят/.test(tl) && has(o.n, o.r1.id, 'O', '192.168.2.0/24'), tl);
+  o.n.tick(26);
+  chk('OSPF: после dead-interval 40 с сосед и маршрут удалены', !has(o.n, o.r1.id, 'O', '192.168.2.0/24') && /Соседей OSPF нет/.test(o.n.exec(o.r1.id, 'show ip ospf neighbors')));
+  // point-to-point: без ожидания DR
+  var p = build('ospf', { 1: ['ip ospf network point-to-point'], 2: ['ip ospf network point-to-point'] }); p.n.dyn(); p.n.tick(3);
+  chk('OSPF point-to-point: full/ptp через 3 с', /full\/ptp/.test(p.n.exec(p.r1.id, 'show ip ospf neighbors')) && has(p.n, p.r1.id, 'O', '192.168.2.0/24'));
+  // несовпадение hello
+  var m = build('ospf', { 2: ['ip ospf hello-interval 5'] }); m.n.dyn(); m.n.tick(60);
+  var tm = m.n.exec(m.r1.id, 'show ip ospf neighbors');
+  chk('OSPF: hello 10/40 против 5/20 — соседства нет, причина видна', !has(m.n, m.r1.id, 'O', '192.168.2.0/24') && /таймеры hello\/dead 5\/20, а у нас 10\/40/.test(tm), tm);
+  // RIP: маршруты сразу, сосед пропал — invalid 180, possibly down до flush 240
+  var r = build('rip');
+  chk('RIP: маршрут появляется сразу (request/response)', has(r.n, r.r1.id, 'R', '192.168.2.0/24') && r.n.ping(r.a.id, '192.168.2.2').ok);
+  r.n.power(r.r2.id, false); r.n.tick(100);
+  var rl = r.n.exec(r.r1.id, 'show ip rip');
+  chk('RIP: R2 выключен — 100 с маршрут ещё в таблице (invalid 180)', has(r.n, r.r1.id, 'R', '192.168.2.0/24') && /invalid через 80 с/.test(rl), rl);
+  r.n.tick(90);
+  var rp = r.n.exec(r.r1.id, 'show ip rip');
+  chk('RIP: после invalid — possibly down (метрика 16), не используется', !has(r.n, r.r1.id, 'R', '192.168.2.0/24') && /\(120\/16\) possibly down — удаление через 50 с/.test(rp), rp);
+  r.n.tick(60);
+  chk('RIP: после flush 240 с — удалён', !/possibly down/.test(r.n.exec(r.r1.id, 'show ip rip')));
+  // свой интерфейс выключили — маршруты через него уходят сразу
+  var q = build('rip'); EL.labs.apply(q.n, { R1: ['configure', 'interface gi1/0/1', 'shutdown', 'exit', 'do commit', 'do confirm', 'end'] });
+  chk('RIP: свой интерфейс shutdown — маршрут удалён сразу', !has(q.n, q.r1.id, 'R', '192.168.2.0/24'));
+  // timers invalid
+  var v = build('rip'); EL.labs.apply(v.n, { R1: ['configure', 'router rip', 'timers invalid 60', 'exit', 'do commit', 'do confirm', 'end'] });
+  v.n.dyn(); v.n.power(v.r2.id, false); v.n.tick(61);
+  chk('RIP: timers invalid 60 — маршрут недействителен через 60 с', !has(v.n, v.r1.id, 'R', '192.168.2.0/24') && /timers invalid 60/.test(v.n.exec(v.r1.id, 'show running-config')));
+  console.log('✓ RIP и OSPF по таймерам');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
