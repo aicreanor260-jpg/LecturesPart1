@@ -139,7 +139,7 @@
     var s = this;
     (steps || []).forEach(function (st) {
       if (!st.segs || st.counted) return; st.counted = true;
-      var cast = st.k === 'arp' ? 'b' : 'u', size = st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
+      var v6 = st.f && st.f.type === 'ip6', cast = st.k === 'arp' ? (v6 ? 'm' : 'b') : 'u', size = v6 ? (st.k === 'ip' ? 118 : 86) : st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
       st.segs.forEach(function (sg) { s.countSeg(sg, cast, size, st.f); });
     });
   };

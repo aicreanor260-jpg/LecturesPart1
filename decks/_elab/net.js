@@ -395,7 +395,7 @@
   }
   // рассылка кадра из L3-интерфейса: список достигнутых интерфейсов + все пройденные отрезки + причины отбрасывания
   P.flood = function (id, f, srcMac) {
-    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false;
+    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false, reach = [];   // reach — куда дошёл кадр (для IPv6)
     function send(dev, port, tag, path) {
       var pr = s.peer(dev, port); if (!pr) return;
       var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag };
@@ -429,6 +429,7 @@
       if (seen[key]) continue; seen[key] = 1;
       var d = this.devs[it.dev], nm = d.name;
       if (d.off) { notes.push(nm + ': устройство выключено'); continue; }
+      if (d.type !== 'mes') reach.push({ dev: it.dev, port: it.port, tag: it.tag, path: it.path });
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
@@ -456,7 +457,7 @@
         eps.push({ dev: it.dev, iface: hf, path: it.path });
       }
     }
-    return { eps: eps, segs: segs, notes: notes, storm: storm };
+    return { eps: eps, segs: segs, notes: notes, storm: storm, reach: reach };
   };
 
   // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону) с NAT
@@ -530,7 +531,7 @@
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -593,7 +594,7 @@
   function listens(d, proto, port) {
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
-                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) ||
+                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) || (proto === 'udp' && port === 53 && s.svc && s.svc.bind9) ||
                                  (proto === 'tcp' && port === 22);
     if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
     return false;

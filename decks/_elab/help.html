@@ -117,6 +117,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ПКМ по устройству → Конфигурация текстом · Файл → Экспорт/Импорт</td><td>running-config MES и ESR текстом, применить как вставку в консоль</td></tr>
 </table>
 
+<h2>IPv6 и DNS</h2>
+<table>
+<tr><td>ESR: ipv6 address 2001:db8::1/64 · ipv6 route ::/0 fc00::1 · show ipv6 interfaces|route|neighbors · ping 2001:db8::10</td><td>IPv6-адреса, ND, статические маршруты</td></tr>
+<tr><td>ipv6 router rip → network 2001::/16, enable · ipv6 router ospf 1 → router-id, area 0.0.0.0 → enable; ipv6 ospf instance 1 / area / ipv6 ospf</td><td>RIPng и OSPFv3 (show ipv6 rip, show ipv6 ospf neighbors)</td></tr>
+<tr><td>VPC: ip 2001:db8::10/64 2001:db8::1 · show ipv6 · Debian: ip -6 addr add … dev ens3 · ip -6 route add default via … · ping -6</td><td>IPv6 на узлах</td></tr>
+<tr><td>Debian-server: /etc/bind/named.conf.local + db.зона · systemctl restart bind9 · nslookup имя</td><td>DNS-сервер BIND9 (A, CNAME)</td></tr>
+<tr><td>resolv.conf nameserver · VPC ip dns · ESR domain lookup enable / domain name-server · MES ip name-server</td><td>клиенты DNS, ping по имени</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

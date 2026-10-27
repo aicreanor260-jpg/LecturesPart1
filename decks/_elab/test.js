@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -502,6 +502,126 @@ EL.labs.LABS.forEach(runLab);
   chk('импорт: тот же running-config ESR (применён commit)', EL.cfgText(r2) === EL.cfgText(r), EL.cfgText(r2));
   chk('импорт: неизвестное устройство', EL.importConfigs(m, '! ==== NOPE (x) ====\nhostname a').some(function (e) { return /нет устройства NOPE/.test(e); }));
   console.log('✓ учебные инструменты: захват, разбор, конфигурации');
+})();
+
+// IPv6: адреса, ND, статические маршруты, ping через ESR (справочник 1.23)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var A = EL.ip6;
+  chk('ip6: сжатие и разбор', A.norm('2001:0db8:0000:0000:0000:0000:0000:0001') === '2001:db8::1' && A.norm('fe80::1:0:0:1') === 'fe80::1:0:0:1' && A.parse('1::2::3') === null && A.norm('::') === '::');
+  chk('ip6: EUI-64 и solicited-node', A.eui64('e0:d9:e3:00:00:01') === 'fe80::e2d9:e3ff:fe00:1' && A.snm('2001:db8::abcd:1234') === 'ff02::1:ffcd:1234' && A.mmac('2001:db8::abcd:1234') === '33:33:ff:cd:12:34');
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), p1 = n.add('VPC', 'PC1'), deb = n.add('Debian', 'D1');
+  n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', p1.id, 'eth0'); n.connect(deb.id, 'ens3', r.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:db8:1::1/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:db8:2::1/64', 'end', 'commit', 'confirm'],
+                             PC1: ['ip 2001:db8:1::10/64 2001:db8:1::1'] });
+  chk('ESR ipv6 address без ошибок', !e.length, e.join('; '));
+  chk('show ipv6 interfaces: адрес и link-local', /2001:db8:1::1\/64\s+gi1\/0\/1/.test(n.exec(r.id, 'show ipv6 interfaces')) && /fe80::\S+\/64\s+gi1\/0\/1/.test(n.exec(r.id, 'show ipv6 interfaces')));
+  chk('show running-config: ipv6 address', /ipv6 address 2001:db8:1::1\/64/.test(n.exec(r.id, 'show running-config')));
+  chk('VPC → ESR ping IPv6', /icmp6_seq=1 ttl=64/.test(n.exec(p1.id, 'ping 2001:db8:1::1')), n.exec(p1.id, 'ping 2001:db8:1::1'));
+  chk('ESR: таблица соседей IPv6', /2001:db8:1::10\s+\S+/.test(n.exec(r.id, 'show ipv6 neighbors')) || /fe80/.test(n.exec(r.id, 'show ipv6 neighbors')), n.exec(r.id, 'show ipv6 neighbors'));
+  chk('MES выучил MAC VPC по IPv6-кадру', Object.keys(n.mac[sw.id]).some(function (k) { return k.indexOf(EL.mac('PC1eth0')) > 0; }));
+  // Debian: вход и адрес
+  ['root', 'toor', 'ip link set ens3 up', 'ip -6 addr add 2001:db8:2::20/64 dev ens3', 'ip -6 route add default via 2001:db8:2::1'].forEach(function (l) { n.exec(deb.id, l); });
+  chk('Debian ip -6 addr', /inet6 2001:db8:2::20\/64 scope global/.test(n.exec(deb.id, 'ip -6 addr')), n.exec(deb.id, 'ip -6 addr'));
+  var pp = n.ping6(p1.id, '2001:db8:2::20');
+  chk('VPC → Debian через ESR (маршрутизация IPv6)', pp.ok && pp.hops.length === 2, pp.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('Debian ping -6 → VPC', /64 bytes from 2001:db8:1::10: icmp_seq=1 ttl=63/.test(n.exec(deb.id, 'ping -6 2001:db8:1::10')), n.exec(deb.id, 'ping -6 2001:db8:1::10'));
+  chk('шаги трассы: NS на solicited-node, NA, Hop Limit', pp.steps.some(function (s) { return s.f && s.f.icmp6 === 'ns' && /^ff02::1:ff/.test(s.f.dst); }) || n.ping6(p1.id, '2001:db8:2::21').steps.some(function (s) { return s.f && s.f.icmp6 === 'ns'; }));
+  // без шлюза — нет маршрута; другой сети нет — ND без ответа
+  n.exec(p1.id, 'ip 2001:db8:1::10/64');
+  chk('VPC без шлюза IPv6 — нет маршрута', !n.ping6(p1.id, '2001:db8:2::20').ok);
+  chk('ND без ответа — Address unreachable', n.ping6(p1.id, '2001:db8:1::99').why === 'Address unreachable');
+  // статический маршрут на ESR и show ipv6 route
+  var n2 = new EL.Net(), ra = n2.add('vESR', 'RA'), rb = n2.add('vESR', 'RB'), pa = n2.add('VPC', 'PA'), pb = n2.add('VPC', 'PB');
+  n2.connect(ra.id, 'gi1/0/1', rb.id, 'gi1/0/1'); n2.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n2.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
+  EL.labs.apply(n2, { RA: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::1/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:a::1/64', 'exit', 'end', 'commit', 'confirm'],
+                      RB: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::2/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:b::1/64', 'exit', 'ipv6 route ::/0 fc00::1', 'end', 'commit', 'confirm'],
+                      PA: ['ip 2001:a::10/64 2001:a::1'], PB: ['ip 2001:b::10/64 2001:b::1'] });
+  chk('без маршрута на RA — нет связи', !n2.ping6(pa.id, '2001:b::10').ok);
+  EL.labs.apply(n2, { RA: ['configure', 'ipv6 route 2001:b::/64 fc00::2', 'end', 'commit', 'confirm'] });
+  chk('ipv6 route — связь есть', n2.ping6(pa.id, '2001:b::10').ok);
+  chk('show ipv6 route: S и C', /S\s+\* 2001:b::\/64\s+\[1\/0\]\s+via fc00::2 on gi1\/0\/1/.test(n2.exec(ra.id, 'show ipv6 route')) && /C\s+\* fc00::\/64/.test(n2.exec(ra.id, 'show ipv6 route')), n2.exec(ra.id, 'show ipv6 route'));
+  chk('ESR ping IPv6 !!!!!', /!!!!!/.test(n2.exec(rb.id, 'ping 2001:a::10')));
+  chk('ESR: неверный IPv6', n2.exec(ra.id, 'configure') === '' && /Illegal/.test(n2.exec(ra.id, 'ipv6 route 2001:zz::/64 fc00::2')));
+  var st = n2.ping6(pa.id, '2001:b::10').steps.filter(function (s) { return s.k === 'ip' && s.f; })[0];
+  var L = EL.decode(st.f, null, 118);
+  chk('разбор IPv6: Ethernet 0x86dd → IPv6 → ICMPv6', /0x86dd/.test(JSON.stringify(L[1])) && /Internet Protocol Version 6/.test(L[2].name) && /Message Protocol v6/.test(L[3].name), L.map(function (x) { return x.name; }).join(' / '));
+  console.log('✓ IPv6');
+})();
+
+// RIPng и OSPFv3 на ESR: три маршрутизатора в цепочку, ПК по краям
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function chain(proto) {
+    var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), r3 = n.add('vESR', 'R3'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+    n.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/2', r3.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', r3.id, 'gi1/0/2');
+    var A = { R1: [['gi1/0/1', '2001:12::1/64'], ['gi1/0/2', '2001:a::1/64']], R2: [['gi1/0/1', '2001:12::2/64'], ['gi1/0/2', '2001:23::2/64']], R3: [['gi1/0/1', '2001:23::3/64'], ['gi1/0/2', '2001:b::1/64']] };
+    var sc = {};
+    Object.keys(A).forEach(function (r, i) { var L = ['configure'];
+      A[r].forEach(function (x) { L.push('interface ' + x[0], 'ipv6 address ' + x[1]); if (proto === 'O') L.push('ipv6 ospf instance 1', 'ipv6 ospf area 0.0.0.0', 'ipv6 ospf'); L.push('exit'); });
+      if (proto === 'R') L.push('ipv6 router rip', 'network 2001::/16', 'enable', 'exit');
+      else L.push('ipv6 router ospf 1', 'router-id ' + (i + 1) + '.' + (i + 1) + '.' + (i + 1) + '.' + (i + 1), 'area 0.0.0.0', 'enable', 'exit', 'enable', 'exit');
+      L.push('end', 'commit', 'confirm'); sc[r] = L; });
+    sc.PA = ['ip 2001:a::10/64 2001:a::1']; sc.PB = ['ip 2001:b::10/64 2001:b::1'];
+    return { n: n, errs: EL.labs.apply(n, sc), r1: r1, r2: r2, pa: pa, pb: pb };
+  }
+  var v = chain('R');
+  chk('RIPng: конфигурация без ошибок', !v.errs.length, v.errs.join('; '));
+  chk('RIPng: PA → PB через три ESR', v.n.ping6(v.pa.id, '2001:b::10').ok);
+  chk('RIPng: show ipv6 rip — via link-local, метрика 3', /2001:b::\/64\s+via fe80::\S+ on gi1\/0\/1 \[rip 00:00:00\] \* \(120\/3\)/.test(v.n.exec(v.r1.id, 'show ipv6 rip')), v.n.exec(v.r1.id, 'show ipv6 rip'));
+  chk('RIPng: show ipv6 route — R', /^R\s+\* 2001:b::\/64/m.test(v.n.exec(v.r1.id, 'show ipv6 route')));
+  chk('RIPng: running-config', /ipv6 router rip\n  network 2001::\/16\n  enable\nexit/.test(v.n.exec(v.r1.id, 'show running-config')));
+  EL.labs.apply(v.n, { R2: ['configure', 'ipv6 router rip', 'no enable', 'exit', 'end', 'commit', 'confirm'] });
+  chk('RIPng выключен на R2 — связи нет', !v.n.ping6(v.pa.id, '2001:b::10').ok);
+  var o = chain('O');
+  chk('OSPFv3: конфигурация без ошибок', !o.errs.length, o.errs.join('; '));
+  chk('OSPFv3: PA → PB', o.n.ping6(o.pa.id, '2001:b::10').ok);
+  chk('OSPFv3: соседи R2 — R1 и R3', (o.n.exec(o.r2.id, 'show ipv6 ospf neighbors').match(/full/g) || []).length === 2, o.n.exec(o.r2.id, 'show ipv6 ospf neighbors'));
+  chk('OSPFv3: маршрут O', /^O\s+\* 2001:b::\/64\s+\[110\/0\]/m.test(o.n.exec(o.r1.id, 'show ipv6 route')), o.n.exec(o.r1.id, 'show ipv6 route'));
+  EL.labs.apply(o.n, { R1: ['configure', 'ipv6 router ospf 1', 'area 0.0.0.0', 'no enable', 'end', 'commit', 'confirm'] });
+  chk('OSPFv3: область выключена — связи нет', !o.n.ping6(o.pa.id, '2001:b::10').ok);
+  console.log('✓ RIPng и OSPFv3');
+})();
+
+// DNS: BIND9 на Debian-server, клиенты Debian, VPC, ESR, MES
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), srv = n.add('Debian-server', 'SRV'), pc = n.add('VPC', 'PC1'), cl = n.add('Debian', 'CL'), m6 = n.add('MES3300-24', 'SW6');
+  n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', srv.id, 'ens3'); n.connect(sw.id, 'gi1/0/3', pc.id, 'eth0'); n.connect(sw.id, 'gi1/0/4', cl.id, 'ens3'); n.connect(sw.id, 'gi1/0/5', m6.id, 'gi1/0/1');
+  var ex = function (d, L) { return L.map(function (l) { return n.exec(d.id, l); }); };
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'domain lookup enable', 'domain name-server 10.0.0.53', 'domain name lab.local',
+                          'domain ip host gw.lab.local 10.0.0.1', 'end', 'commit', 'confirm'], PC1: ['ip 10.0.0.20/24 10.0.0.1', 'ip dns 10.0.0.53'],
+                     SW1: ['enable', 'configure', 'interface vlan 1', 'ip address 10.0.0.2 255.255.255.0', 'exit', 'ip name-server ipv4 10.0.0.53', 'end'],
+                     SW6: ['enable', 'configure', 'interface vlan 1', 'ip address 10.0.0.6 255.255.255.0', 'exit', 'ip name-server 10.0.0.53', 'ip host printer 10.0.0.77', 'end'] });
+  ex(srv, ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.53/24 dev ens3']);
+  srv.st.files['/etc/bind/named.conf.local'] += 'zone "lab.local" {\n\ttype master;\n\tfile "/etc/bind/db.lab.local";\n};\n';
+  srv.st.files['/etc/bind/db.lab.local'] = '$TTL 604800\n@ IN SOA ns.lab.local. root.lab.local. (\n 2 ; Serial\n 604800 )\n@ IN NS ns.lab.local.\nns IN A 10.0.0.53\nwww IN A 10.0.0.53\nftp IN CNAME www\npc1 IN A 10.0.0.20\n';
+  ex(cl, ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.30/24 dev ens3']);
+  cl.st.files['/etc/resolv.conf'] = 'search lab.local\nnameserver 10.0.0.53\n';
+  chk('до restart bind9 зона не загружена: NXDOMAIN', /NXDOMAIN/.test(n.exec(cl.id, 'nslookup www.lab.local')), n.exec(cl.id, 'nslookup www.lab.local'));
+  n.exec(srv.id, 'systemctl restart bind9');
+  var o = n.exec(cl.id, 'nslookup www.lab.local');
+  chk('nslookup: ответ A', /Server:\t\t10\.0\.0\.53[\s\S]*Name:\twww\.lab\.local\nAddress: 10\.0\.0\.53/.test(o), o);
+  chk('nslookup: CNAME → A', /Address: 10\.0\.0\.53/.test(n.exec(cl.id, 'nslookup ftp.lab.local')));
+  chk('nslookup: короткое имя + search', /Name:\tpc1\.lab\.local\nAddress: 10\.0\.0\.20/.test(n.exec(cl.id, 'nslookup pc1')));
+  chk('nslookup: нет имени — NXDOMAIN', /can't find nope\.lab\.local: NXDOMAIN/.test(n.exec(cl.id, 'nslookup nope.lab.local')));
+  chk('Debian ping по имени', /^PING www\.lab\.local \(10\.0\.0\.53\)[\s\S]*64 bytes from 10\.0\.0\.53/.test(n.exec(cl.id, 'ping www.lab.local')), n.exec(cl.id, 'ping www.lab.local'));
+  chk('Debian curl по имени — Apache', /It works/.test(n.exec(cl.id, 'curl http://www.lab.local/')));
+  chk('Debian /etc/hosts раньше DNS', (cl.st.files['/etc/hosts'] += '10.0.0.53 local-only\n', /PING local-only \(10\.0\.0\.53\)/.test(n.exec(cl.id, 'ping local-only'))));
+  chk('VPC ping по имени', /www\.lab\.local resolved to 10\.0\.0\.53[\s\S]*84 bytes from 10\.0\.0\.53/.test(n.exec(pc.id, 'ping www.lab.local')), n.exec(pc.id, 'ping www.lab.local'));
+  chk('VPC show — DNS', /DNS\s+: 10\.0\.0\.53/.test(n.exec(pc.id, 'show')));
+  chk('ESR ping по имени и domain name', /PING www\.lab\.local \(10\.0\.0\.53\)[\s\S]*!!!!!/.test(n.exec(r.id, 'ping www.lab.local')) && /!!!!!/.test(n.exec(r.id, 'ping pc1')), n.exec(r.id, 'ping pc1'));
+  chk('ESR domain ip host без сервера', /PING gw\.lab\.local \(10\.0\.0\.1\)/.test(n.exec(r.id, 'ping gw.lab.local')));
+  chk('ESR running-config: domain', /domain lookup enable[\s\S]*domain name-server 10\.0\.0\.53/.test(n.exec(r.id, 'show running-config')));
+  chk('MES 10 ping по имени', /Reply Received From :10\.0\.0\.53/.test(n.exec(sw.id, 'ping www.lab.local')), n.exec(sw.id, 'ping www.lab.local'));
+  chk('MES 10 running-config: ip name-server ipv4', /ip name-server ipv4 10\.0\.0\.53/.test(n.exec(sw.id, 'show running-config')));
+  chk('MES 6 ip host', /10\.0\.0\.77/.test(n.exec(m6.id, 'ping printer')) || /Unknown/.test(n.exec(m6.id, 'ping printer')) === false);
+  n.exec(srv.id, 'systemctl stop bind9');
+  chk('bind9 остановлен — timeout', /no servers could be reached/.test(n.exec(cl.id, 'nslookup www.lab.local')) && /Temporary failure/.test(n.exec(cl.id, 'ping www.lab.local')));
+  var cap = n.capStart(1); n.exec(srv.id, 'systemctl start bind9'); n.exec(cl.id, 'nslookup www.lab.local');
+  chk('захват: DNS-запрос и ответ', cap.frames.some(function (f) { return f.proto === 'DNS' && /Standard query A www\.lab\.local/.test(f.info); }) &&
+      cap.frames.some(function (f) { return /Standard query response A www\.lab\.local A 10\.0\.0\.53/.test(f.info); }), cap.frames.map(function (f) { return f.info; }).join(' | '));
+  console.log('✓ DNS');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

@@ -243,6 +243,34 @@ security zone-pair trusted self        ← трафик самому маршр�
 
 Сдача работ на сервер net-cat — спроектирована и ждёт согласования с автором (нужен бэкенд), не реализована.
 
+### IPv6 (справочник ESR-Series CLI 1.23)
+
+| Устройство | Команды |
+|---|---|
+| ESR | `interface gi1/0/1` → `ipv6 address 2001:db8:1::1/64` (до 8 адресов, через запятую), `ipv6 enable` (только link-local), `no ipv6 address X/len\|all`; `ipv6 route ::/0 fc00::1`, `ipv6 route 2001:b::/64 fc00::2 [метрика]`; `show ipv6 interfaces`, `show ipv6 route`, `show ipv6 neighbors`, `clear ipv6 neighbors`, `ping 2001:db8::10` |
+| ESR, RIPng | `ipv6 router rip` → `(config-ripng)#` `network 2001::/16`, `redistribute connected`, `enable`; `show ipv6 rip` |
+| ESR, OSPFv3 | `ipv6 router ospf 1` → `router-id 1.1.1.1`, `area 0.0.0.0` → `enable`, `exit`, `enable`; на интерфейсе `ipv6 ospf instance 1`, `ipv6 ospf area 0.0.0.0`, `ipv6 ospf`; `show ipv6 ospf neighbors` |
+| VPC | `ip 2001:db8:1::10/64 2001:db8:1::1` (адрес и шлюз), `show ipv6`, `clear ipv6`, `ping 2001:db8:1::1` |
+| Debian | `ip -6 addr add 2001:db8:2::20/64 dev ens3`, `ip -6 route add default via 2001:db8:2::1`, `ip -6 addr`, `ip -6 route`, `ip -6 neigh`, `ping -6 X` / `ping6 X` / `ping X::Y` |
+| MES | IPv6-кадры коммутируются как обычные (L2), MAC-таблица учится |
+
+Как работает: у каждого IPv6-интерфейса есть link-local fe80::/64 из MAC (EUI-64). Перед отправкой — Neighbor Solicitation на solicited-node адрес `ff02::1:ffXX:XXXX` (MAC `33:33:ff:XX:XX:XX`, кадр multicast), ответ — Neighbor Advertisement; запись появляется в `show ipv6 neighbors`. В трассе и захвате — шаги NS/NA/ICMPv6 Echo с Hop Limit, разбор IPv6 (Next Header 58) и ICMPv6 (типы 128/129/135/136). RIPng и OSPFv3: соседи — ESR в одном сегменте с адресами из одной IPv6-сети, next-hop — link-local соседа.
+
+Упрощения: межсетевой экран ESR к IPv6 не применяется; нет RA/SLAAC и DHCPv6 (адреса и шлюз задаются вручную); записи ND не стареют; RIPng и OSPFv3 сходятся сразу (таймеры не моделируются), одна область, стоимость интерфейса 10; IPv6 на SVI MES не поддерживается.
+
+### DNS
+
+| Где | Команды |
+|---|---|
+| Сервер — Debian-server (BIND9) | зона в `/etc/bind/named.conf.local`: `zone "lab.local" { type master; file "/etc/bind/db.lab.local"; };`, файл зоны с записями `www IN A 10.0.0.53`, `ftp IN CNAME www` (SOA/NS/$TTL/$ORIGIN понимаются); `nano` для правки, `systemctl restart bind9` — загрузить зоны, `named-checkzone lab.local /etc/bind/db.lab.local` |
+| Debian-клиент | `/etc/resolv.conf`: `nameserver 10.0.0.53`, `search lab.local`; `/etc/hosts` проверяется раньше DNS; `nslookup www.lab.local [сервер]`, `ping www.lab.local`, `curl http://www.lab.local/` |
+| VPC | `ip dns 10.0.0.53`, `ping www.lab.local` («… resolved to …»), DNS в `show` |
+| ESR | `domain lookup enable`, `domain name-server 10.0.0.53`, `domain name lab.local`, `domain ip host gw.lab.local 10.0.0.1`; `ping www.lab.local` |
+| MES 10.x | `ip name-server ipv4 10.0.0.53` (руководство 10.4.6), `ping имя` |
+| MES 6.x | `ip domain lookup`, `ip name-server 10.0.0.53`, `ip domain name lab.local`, `ip host printer 10.0.0.77` (6.6.8.8), `ping имя` |
+
+Запрос — UDP 53 по сети к серверу (виден в трассе: ARP, запрос, ответ; в захвате — `Standard query A …` / `Standard query response …`). Ответы — `NXDOMAIN`, если имени нет в зоне, и «no servers could be reached», если сервер недоступен или bind9 остановлен. Поддерживаются записи A и CNAME; AAAA, PTR и рекурсия во внешний интернет не моделируются.
+
 ## Типовые ошибки
 | Сообщение | Что делать |
 |---|---|

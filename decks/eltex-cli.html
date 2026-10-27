@@ -355,6 +355,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>ПКМ по устройству → Конфигурация текстом · Файл → Экспорт/Импорт</td><td>running-config MES и ESR текстом, применить как вставку в консоль</td></tr>
 </table>
 
+<h2>IPv6 и DNS</h2>
+<table>
+<tr><td>ESR: ipv6 address 2001:db8::1/64 · ipv6 route ::/0 fc00::1 · show ipv6 interfaces|route|neighbors · ping 2001:db8::10</td><td>IPv6-адреса, ND, статические маршруты</td></tr>
+<tr><td>ipv6 router rip → network 2001::/16, enable · ipv6 router ospf 1 → router-id, area 0.0.0.0 → enable; ipv6 ospf instance 1 / area / ipv6 ospf</td><td>RIPng и OSPFv3 (show ipv6 rip, show ipv6 ospf neighbors)</td></tr>
+<tr><td>VPC: ip 2001:db8::10/64 2001:db8::1 · show ipv6 · Debian: ip -6 addr add … dev ens3 · ip -6 route add default via … · ping -6</td><td>IPv6 на узлах</td></tr>
+<tr><td>Debian-server: /etc/bind/named.conf.local + db.зона · systemctl restart bind9 · nslookup имя</td><td>DNS-сервер BIND9 (A, CNAME)</td></tr>
+<tr><td>resolv.conf nameserver · VPC ip dns · ESR domain lookup enable / domain name-server · MES ip name-server</td><td>клиенты DNS, ping по имени</td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>
@@ -2577,7 +2586,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
   // рассылка кадра из L3-интерфейса: список достигнутых интерфейсов + все пройденные отрезки + причины отбрасывания
   P.flood = function (id, f, srcMac) {
-    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false;
+    var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false, reach = [];   // reach — куда дошёл кадр (для IPv6)
     function send(dev, port, tag, path) {
       var pr = s.peer(dev, port); if (!pr) return;
       var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag };
@@ -2611,6 +2620,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (seen[key]) continue; seen[key] = 1;
       var d = this.devs[it.dev], nm = d.name;
       if (d.off) { notes.push(nm + ': устройство выключено'); continue; }
+      if (d.type !== 'mes') reach.push({ dev: it.dev, port: it.port, tag: it.tag, path: it.path });
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
@@ -2638,7 +2648,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         eps.push({ dev: it.dev, iface: hf, path: it.path });
       }
     }
-    return { eps: eps, segs: segs, notes: notes, storm: storm };
+    return { eps: eps, segs: segs, notes: notes, storm: storm, reach: reach };
   };
 
   // ------------------------------------------------------------------ отправка IP-пакета (в одну сторону) с NAT
@@ -2712,7 +2722,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd.name + ': ' + (pk.proto === 'icmp' ? 'ICMP' : pk.proto.toUpperCase() + ':' + pk.dport) + ' ' +
         pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + this.arp[cur][r.nh].mac +
         ep.path.filter(function (s) { return s.tag !== null; }).map(function (s) { return ' · тег 802.1Q ' + s.tag; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(''),
-        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, ttl: 64 - hops.length } });
+        f: { type: 'ip', smac: srcMac, dmac: this.arp[cur][r.nh].mac, src: pk.src, dst: pk.dst, proto: pk.proto, dport: pk.reply ? pk.rport : pk.dport, sport: pk.sport, reply: !!pk.reply, dns: this.dnsQ || undefined, ttl: 64 - hops.length } });
       this.mirror(ep.path, pk);
       if (nd.type === 'esr' && !ep.iface.fw) {         // входящий список доступа на интерфейсе
         var ax = nd.st.run.ifs[ep.iface.name.split(':')[0]], ar = ax && ax.acl ? EL.aclPass((nd.st.run.acls || {})[ax.acl], pk) : { ok: true };
@@ -2775,7 +2785,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function listens(d, proto, port) {
     var s = d.st;
     if (d.type === 'deb') return (proto === 'tcp' && port === 80 && s.svc && s.svc.apache2) || (proto === 'udp' && port === 123 && s.svc && s.svc.chronyd) ||
-                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) ||
+                                 (proto === 'udp' && port === 514 && s.svc && s.svc.rsyslog) || (proto === 'udp' && port === 69 && s.svc && s.svc['tftpd-hpa']) || (proto === 'udp' && port === 53 && s.svc && s.svc.bind9) ||
                                  (proto === 'tcp' && port === 22);
     if (d.type === 'esr') return proto === 'tcp' && ((port === 22 && s.run.ssh) || (port === 23 && s.run.telnet));
     return false;
@@ -4120,7 +4130,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var s = this;
     (steps || []).forEach(function (st) {
       if (!st.segs || st.counted) return; st.counted = true;
-      var cast = st.k === 'arp' ? 'b' : 'u', size = st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
+      var v6 = st.f && st.f.type === 'ip6', cast = st.k === 'arp' ? (v6 ? 'm' : 'b') : 'u', size = v6 ? (st.k === 'ip' ? 118 : 86) : st.f && st.f.dhcp ? 346 : st.k === 'ip' ? FSZ[(st.f && st.f.proto) || proto] || FSZ.icmp : FSZ.arp;
       st.segs.forEach(function (sg) { s.countSeg(sg, cast, size, st.f); });
     });
   };
@@ -4312,13 +4322,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function row(s, c, sg, f, size) {
     var tag = sg.tag !== null && sg.tag !== undefined ? sg.tag : null;
     return { no: ++c.n, t: Math.max(0, s.now - c.t0), from: s.devs[sg.from] ? s.devs[sg.from].name : '', to: s.devs[sg.to] ? s.devs[sg.to].name : '',
-             vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : 'IPv4',
+             vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
              sip: f.type === 'arp' ? f.sip : f.src || '', dip: f.type === 'arp' ? f.tip : f.dst || '', proto: proto(f), info: info(f) };
   }
   function proto(f) {
     if (f.type === 'arp') return 'ARP'; if (f.type === 'stp') return 'STP';
     if (f.dhcp) return 'DHCP';
     if (f.proto === 'icmp') return 'ICMP';
+    if (f.proto === 'icmp6') return 'ICMPv6';
     var p = SVC[f.dport] || SVC[f.sport];
     return f.proto === 'udp' && p ? p : f.proto.toUpperCase();
   }
@@ -4326,6 +4337,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (f.type === 'arp') return f.op === 1 ? 'Who has ' + f.tip + '? Tell ' + f.sip : f.sip + ' is at ' + f.smac;
     if (f.type === 'stp') return (f.ver === 0 ? 'Conf.' : f.ver === 3 ? 'MST.' : 'RST.') + ' Root = ' + f.rprio + '/0/' + f.rmac + '  Cost = ' + f.cost + '  Port = 0x' + f.port.toString(16);
     if (f.dhcp) return 'DHCP ' + f.dhcp;
+    if (f.dns) return 'Standard query' + (f.reply ? ' response' : '') + ' A ' + f.dns.q + (f.reply && f.dns.a ? ' A ' + f.dns.a : f.reply ? ' No such name' : '');
+    if (f.icmp6 === 'ns') return 'Neighbor Solicitation for ' + f.target + ' from ' + f.smac;
+    if (f.icmp6 === 'na') return 'Neighbor Advertisement ' + f.target + ' (sol, ovr) is at ' + f.smac;
+    if (f.proto === 'icmp6') return 'Echo (ping) ' + (f.reply ? 'reply' : 'request') + '  hlim=' + f.hlim;
     if (f.proto === 'icmp') return 'Echo (ping) ' + (f.reply ? 'reply' : 'request') + '  ttl=' + f.ttl;
     var ports = (f.sport || '?') + ' → ' + (f.dport || '?');
     if (f.proto === 'tcp') return ports + (f.reply ? ' [SYN, ACK]' : ' [SYN]') + ' Seq=0' + (f.reply ? ' Ack=1' : '') + ' Win=64240';
@@ -4334,7 +4349,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   EL.frameRow = function (f, tag, size) { return row({ now: 0, devs: {} }, { t0: 0, n: 0 }, { tag: tag }, f, size || 0); };
 
   // ---------------------------------------------------------------- разбор по уровням
-  function hexType(t) { return t === 'arp' ? 'ARP (0x0806)' : 'IPv4 (0x0800)'; }
+  function hexType(t) { return t === 'arp' ? 'ARP (0x0806)' : t === 'ip6' ? 'IPv6 (0x86dd)' : 'IPv4 (0x0800)'; }
   EL.decode = function (f, tag, size) {
     var L = [], len = size || 0, tagged = tag !== null && tag !== undefined;
     L.push({ osi: 'L1', name: 'Frame: ' + len + ' bytes on wire', fields: [['Длина кадра', len + ' байт (с FCS)']] });
@@ -4355,6 +4370,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
       L.push({ osi: 'L2/3', name: 'Address Resolution Protocol (' + (f.op === 1 ? 'request' : 'reply') + ')', fields: [['Hardware type', 'Ethernet (1)'],
         ['Protocol type', 'IPv4 (0x0800)'], ['Hardware size', 6], ['Protocol size', 4], ['Opcode', f.op === 1 ? 'request (1)' : 'reply (2)'],
         ['Sender MAC address', f.smac], ['Sender IP address', f.sip], ['Target MAC address', f.op === 1 ? '00:00:00:00:00:00' : f.dmac], ['Target IP address', f.tip]] });
+      return L;
+    }
+    if (f.type === 'ip6') {
+      var pl = Math.max(8, len - 18 - (tagged ? 4 : 0) - 40), ty = f.icmp6 === 'ns' ? '135 (Neighbor Solicitation)' : f.icmp6 === 'na' ? '136 (Neighbor Advertisement)' : f.reply ? '129 (Echo (ping) reply)' : '128 (Echo (ping) request)';
+      L.push({ osi: 'L3', name: 'Internet Protocol Version 6, Src: ' + f.src + ', Dst: ' + f.dst, fields: [['Version', 6], ['Traffic Class', '0x00'], ['Flow Label', '0x00000'],
+        ['Payload Length', pl], ['Next Header', 'ICMPv6 (58)'], ['Hop Limit', f.hlim], ['Source Address', f.src], ['Destination Address', f.dst]] });
+      var fl = [['Type', ty], ['Code', 0]];
+      if (f.icmp6 === 'ns') fl.push(['Target Address', f.target], ['ICMPv6 Option', 'Source link-layer address : ' + f.smac]);
+      else if (f.icmp6 === 'na') fl.push(['Flags', '0x60000000, Solicited, Override'], ['Target Address', f.target], ['ICMPv6 Option', 'Target link-layer address : ' + f.smac]);
+      else fl.push(['Identifier', '0x0001'], ['Sequence', 1], ['Data', (pl - 8) + ' bytes']);
+      L.push({ osi: 'L3', name: 'Internet Control Message Protocol v6', fields: fl });
       return L;
     }
     var ipLen = Math.max(20, len - 18 - (tagged ? 4 : 0));
@@ -4404,6 +4430,561 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (parts.length < 3) errs.push('в тексте нет заголовков «! ==== ИМЯ (модель) ====»');
     return errs;
   };
+})(typeof window !== 'undefined' ? window : global);
+
+/* IPv6: адресация, Neighbor Discovery, статическая маршрутизация, ping (справочник ESR-Series CLI 1.23: ipv6 address, ipv6 enable,
+   ipv6 route, show ipv6 interfaces | route | neighbors; VPCS: ip X::Y/64 [шлюз], show ipv6; Debian: ip -6 addr | route | neigh, ping -6).
+   Link-local адрес — fe80::/64 из MAC (EUI-64). Разрешение адреса — Neighbor Solicitation на solicited-node multicast ff02::1:ffXX:XXXX
+   (MAC 33:33:ff:XX:XX:XX), ответ — Neighbor Advertisement. Коммутаторы MES передают IPv6-кадры как обычные (L2).
+   Упрощения: межсетевой экран ESR к IPv6 не применяется, RA/SLAAC и DHCPv6 нет, записи ND не стареют. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype, H = EL.hosts;
+
+  // ================================================================ адреса
+  function parse(s) {
+    s = String(s || '').toLowerCase(); if (!/^[0-9a-f:]+$/.test(s) || s.indexOf(':::') >= 0) return null;
+    var dc = s.split('::'); if (dc.length > 2) return null;
+    var a = dc[0] ? dc[0].split(':') : [], b = dc.length === 2 && dc[1] ? dc[1].split(':') : [];
+    if (dc.length === 1 && a.length !== 8) return null;
+    if (dc.length === 2 && a.length + b.length > 7) return null;
+    var g = a.concat(new Array(8 - a.length - b.length).fill('0'), b), n = BigInt(0);
+    for (var i = 0; i < 8; i++) { if (!/^[0-9a-f]{1,4}$/.test(g[i])) return null; n = (n << BigInt(16)) + BigInt(parseInt(g[i], 16)); }
+    return n;
+  }
+  function fmt(n) {
+    var g = []; for (var i = 7; i >= 0; i--) g.push(Number((n >> BigInt(i * 16)) & BigInt(0xffff)).toString(16));
+    var bs = -1, bl = 0;
+    for (var j = 0; j < 8;) { if (g[j] !== '0') { j++; continue; } var k = j; while (k < 8 && g[k] === '0') k++; if (k - j > bl && k - j >= 2) { bs = j; bl = k - j; } j = k; }
+    if (bs < 0) return g.join(':');
+    return g.slice(0, bs).join(':') + '::' + g.slice(bs + bl).join(':');
+  }
+  function mask(len) { return len === 0 ? BigInt(0) : ((BigInt(1) << BigInt(128)) - BigInt(1)) ^ ((BigInt(1) << BigInt(128 - len)) - BigInt(1)); }
+  function cidr(s) { var m = String(s).match(/^([0-9a-fA-F:]+)\/(\d{1,3})$/); if (!m || +m[2] > 128 || +m[2] < 1) return null;
+    var n = parse(m[1]); return n === null ? null : { ip: fmt(n), len: +m[2], n: n }; }
+  function same(a, b, len) { var x = parse(a), y = parse(b); return x !== null && y !== null && (x & mask(len)) === (y & mask(len)); }
+  function netOf(ip, len) { return fmt(parse(ip) & mask(len)) + '/' + len; }
+  function eui64(mac) { var b = mac.split(':').map(function (x) { return parseInt(x, 16); }); b[0] ^= 2;
+    var h = [b[0] << 8 | b[1], b[2] << 8 | 0xff, 0xfe << 8 | b[3], b[4] << 8 | b[5]].map(function (x) { return x.toString(16); });
+    return fmt(parse('fe80::' + h.join(':'))); }
+  function snm(ip) { var n = parse(ip) & BigInt(0xffffff); return fmt(parse('ff02::1:ff00:0') | n); }
+  function mmac(ip) { var n = Number(parse(ip) & BigInt(0xffffff)), p = function (x) { return ('0' + x.toString(16)).slice(-2); };
+    return '33:33:ff:' + p(n >> 16) + ':' + p((n >> 8) & 255) + ':' + p(n & 255); }
+  function isLL(ip) { var n = parse(ip); return n !== null && (n >> BigInt(118)) === BigInt(0x3fa); }
+  EL.ip6 = { parse: parse, fmt: fmt, cidr: cidr, same: same, netOf: netOf, eui64: eui64, snm: snm, mmac: mmac, isLL: isLL, norm: function (s) { var n = parse(s); return n === null ? null : fmt(n); } };
+
+  // ================================================================ интерфейсы, маршруты, ND
+  P.ifaces6 = function (id) {
+    var s = this, d = this.devs[id], st = d.st, o = [];
+    function add(name, port, tag, list, on) { if (!on && !(list || []).length) return;
+      var mac = s.ifMac(id, { name: name, port: port });
+      o.push({ name: name, ip: eui64(mac), len: 64, ll: true, port: port, tag: tag });
+      (list || []).forEach(function (c) { var x = cidr(c); if (x) o.push({ name: name, ip: x.ip, len: x.len, port: port, tag: tag }); }); }
+    if (d.off) return o;
+    if (d.type === 'vpc') add('eth0', 'eth0', null, st.ip6 ? [st.ip6] : [], true);
+    if (d.type === 'deb' && st.up) add('ens3', 'ens3', null, st.ip6 || [], true);
+    if (d.type === 'esr') Object.keys(st.run.ifs).forEach(function (k) {
+      var x = st.run.ifs[k]; if (x.shut || x.sw) return;
+      var ph = k.split('.')[0], lo = k.charAt(0) === 'l'; if (!lo && (st.run.ifs[ph].shut || !s.linkUp(id, ph))) return;
+      add(k, lo ? null : ph, k.indexOf('.') > 0 ? +k.split('.')[1] : null, x.ip6, x.v6); });
+    return o;
+  };
+  P.owns6 = function (id, ip) { return this.ifaces6(id).some(function (f) { return f.ip === ip; }); };
+  P.routes6 = function (id) {
+    var d = this.devs[id], st = d.st, fs = this.ifaces6(id), o = [];
+    fs.forEach(function (f) { if (!f.ll) o.push({ p: 'C', net: netOf(f.ip, f.len), len: f.len, nh: null, ifn: f.name }); });
+    var stat = d.type === 'esr' ? st.run.routes6 || [] : st.gw6 ? [{ net: '::/0', nh: st.gw6 }] : [];
+    stat.forEach(function (r) { var c = r.net === '::/0' ? { ip: '::', len: 0 } : cidr(r.net), out = fs.filter(function (f) { return !f.ll && f.port !== null && same(r.nh, f.ip, f.len); })[0];
+      if (!out && isLL(r.nh)) out = fs.filter(function (f) { return f.ll && f.port !== null && (!r.ifn || f.name === r.ifn); })[0];
+      if (c) o.push({ p: 'S', net: netOf(c.ip, c.len), len: c.len, nh: r.nh, ifn: out ? out.name : null, ad: r.m === undefined ? 1 : r.m, dead: !out }); });
+    return o;
+  };
+  P.lookup6 = function (id, dst) {
+    var fs = this.ifaces6(id), best = null;
+    if (isLL(dst)) { var l = fs.filter(function (f) { return f.ll && f.port !== null; })[0]; return l ? { iface: l, nh: dst } : null; }
+    this.routes6(id).forEach(function (r) { if (r.dead || !same(dst, r.net.split('/')[0], r.len)) return; if (!best || r.len > best.len) best = r; });
+    if (!best) return null;
+    var out = fs.filter(function (f) { return f.name === best.ifn && (!f.ll || isLL(best.nh || '')); })[0] || fs.filter(function (f) { return f.name === best.ifn; })[0];
+    return out ? { iface: out, nh: best.nh || dst, r: best } : null;
+  };
+  // заметки flood про IPv4-адреса к IPv6 не относятся
+  function n6(L) { return (L || []).filter(function (x) { return !/IP-адрес/.test(x); }); }
+  function nd(s, id) { var t = (s.nd = s.nd || {}); return t[id] || (t[id] = {}); }
+  P.ndTable = function (id) { return nd(this, id); };
+  function srcFor(s, id, ifn, dst) { var fs = s.ifaces6(id).filter(function (f) { return f.name === ifn; });
+    return (isLL(dst) ? fs.filter(function (f) { return f.ll; })[0] : fs.filter(function (f) { return !f.ll; })[0] || fs[0]) || {}; }
+
+  // ================================================================ отправка IPv6-пакета в одну сторону
+  P.send6 = function (src, pk, steps) {
+    var cur = src, hops = [], ttl = 16;
+    while (ttl-- > 0) {
+      var cd = this.devs[cur];
+      if (this.owns6(cur, pk.dst)) return { ok: true, dev: cur, pk: pk, hops: hops };
+      var r = this.lookup6(cur, pk.dst);
+      if (!r) { steps.push({ k: 'drop', t: cd.name + ': нет IPv6-маршрута до ' + pk.dst + (cd.type !== 'esr' ? ' (не задан шлюз или адрес IPv6)' : '') });
+        return { ok: false, why: 'Network is unreachable', pk: pk }; }
+      if (!pk.src) pk.src = srcFor(this, cur, r.iface.name, pk.dst).ip || r.iface.ip;
+      var srcMac = this.ifMac(cur, r.iface), fl = this.flood(cur, r.iface, srcMac), s = this, nh = r.nh;
+      var ll = srcFor(this, cur, r.iface.name, 'fe80::1').ip || pk.src;
+      var ep = fl.reach.filter(function (e) { return s.ifaces6(e.dev).some(function (f) { return f.ip === nh && f.port === e.port && f.tag === e.tag; }); })[0];
+      var dmac = ep ? this.ifMac(ep.dev, { name: ep.tag !== null ? ep.port + '.' + ep.tag : ep.port, port: ep.port }) : null, cached = nd(this, cur)[nh];
+      if (fl.storm) { steps.push({ k: 'drop', segs: fl.segs, t: 'Широковещательный шторм: петля без STP — Neighbor Solicitation размножается', notes: n6(fl.notes) }); return { ok: false, why: 'Request timed out', pk: pk }; }
+      if (cached && cached.mac === dmac) steps.push({ k: 'route', t: cd.name + ': ' + nh + ' уже есть в таблице соседей (' + cached.mac + ') — Neighbor Solicitation не нужен' });
+      else {
+        steps.push({ k: 'arp', segs: fl.segs, notes: n6(fl.notes), t: cd.name + ' (' + r.iface.name + ', ' + srcMac + '): Neighbor Solicitation «кто ' + nh + '?» на ' + snm(nh) +
+          ' (multicast ' + mmac(nh) + ')' + (nh !== pk.dst ? ' — это шлюз к ' + pk.dst : ''),
+          f: { type: 'ip6', icmp6: 'ns', smac: srcMac, dmac: mmac(nh), src: ll, dst: snm(nh), target: nh, hlim: 255, proto: 'icmp6' } });
+        if (!ep) { steps.push({ k: 'drop', t: 'Нет Neighbor Advertisement: ' + nh + ' не найден в этом сегменте (другая VLAN, нет адреса, кабель или порт выключен)', notes: n6(fl.notes) });
+          return { ok: false, why: 'Address unreachable', pk: pk }; }
+      }
+      var nd2 = this.devs[ep.dev], back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      var viol = this.learn(back, dmac);
+      if (viol) { steps.push({ k: 'drop', segs: back, t: nd2.name + ': Neighbor Advertisement отброшен — ' + viol }); return { ok: false, why: 'Address unreachable', pk: pk }; }
+      var epIf = s.ifaces6(ep.dev).filter(function (f) { return f.ip === nh; })[0];
+      nd(this, cur)[nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
+      nd(this, ep.dev)[ll] = { mac: srcMac, ifn: epIf.name, t: this.now };
+      this.learn(ep.path, srcMac);
+      if (!cached || cached.mac !== dmac) steps.push({ k: 'arpr', segs: back, t: nd2.name + ' (' + epIf.name + '): Neighbor Advertisement «' + nh + ' — это я, MAC ' + dmac + '» (unicast)',
+        f: { type: 'ip6', icmp6: 'na', smac: dmac, dmac: srcMac, src: nh, dst: ll, target: nh, hlim: 255, proto: 'icmp6' } });
+      steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd2.name + ': ICMPv6 ' + pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + dmac,
+        f: { type: 'ip6', smac: srcMac, dmac: dmac, src: pk.src, dst: pk.dst, proto: 'icmp6', reply: !!pk.reply, hlim: 64 - hops.length } });
+      hops.push({ dev: ep.dev, ip: epIf.ip });
+      cur = ep.dev;
+      if (!this.owns6(cur, pk.dst) && nd2.type !== 'esr') { steps.push({ k: 'drop', t: nd2.name + ' получил чужой пакет и не маршрутизирует его' }); return { ok: false, why: 'Request timed out', pk: pk }; }
+      if (!this.owns6(cur, pk.dst)) steps.push({ k: 'route', t: nd2.name + ': адрес ' + pk.dst + ' не мой — ищу IPv6-маршрут дальше' });
+    }
+    steps.push({ k: 'drop', t: 'Hop Limit истёк — петля маршрутизации' });
+    return { ok: false, why: 'Time exceeded', pk: pk };
+  };
+  P.ping6 = function (src, dst) {
+    var steps = this.stepLog(), d = this.devs[src], n = parse(dst);
+    if (n === null) return { ok: false, why: 'Bad address', steps: steps };
+    dst = fmt(n);
+    if (!this.ifaces6(src).length) { steps.push({ k: 'drop', t: d.name + ': IPv6 не включён ни на одном интерфейсе' }); return { ok: false, why: 'No IPv6 address', steps: steps }; }
+    var f = this.send6(src, { src: null, dst: dst }, steps);
+    if (!f.ok) return { ok: false, why: f.why, steps: steps };
+    if (f.dev === src) return { ok: true, steps: steps, hops: [] };
+    steps.push({ k: 'ok', t: this.devs[f.dev].name + ' получил ICMPv6 Echo Request и отвечает Echo Reply' });
+    var b = this.send6(f.dev, { src: dst, dst: f.pk.src, reply: true }, steps);
+    if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте IPv6-маршрут в обратную сторону' }); return { ok: false, why: 'Request timed out', steps: steps }; }
+    steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
+    return { ok: true, steps: steps, hops: f.hops, dev: f.dev };
+  };
+  P.ping6Text = function (id, dst, style) {
+    var r = this.ping6(id, dst), o = [], hl = function (i) { return 64 - (r.hops || []).length + 1; };
+    if (this.countSteps) this.countSteps(r.steps, 'icmp6');
+    if (this.onTrace) this.onTrace(r, id, dst);
+    if (r.why === 'Bad address') return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : style === 'esr' ? 'Syntax error: Illegal parameter' : 'Invalid address';
+    dst = fmt(parse(dst));
+    if (style === 'vpc') { for (var i = 1; i <= 5; i++) o.push(r.ok ? dst + ' icmp6_seq=' + i + ' ttl=' + hl() + ' time=' + (0.6 + i * 0.11).toFixed(3) + ' ms' : dst + ' icmp6_seq=' + i + ' timeout'); return o.join('\n'); }
+    if (style === 'linux') {
+      if (r.why === 'No IPv6 address' || r.why === 'Network is unreachable') return 'ping: connect: Network is unreachable';
+      o.push('PING ' + dst + '(' + dst + ') 56 data bytes');
+      for (var j = 1; j <= 4; j++) if (r.ok) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + hl() + ' time=0.' + (640 + j * 31) + ' ms');
+      if (!r.ok && /Address unreachable/.test(r.why || '')) o.push('From ' + ((this.ifaces6(id).filter(function (f) { return !f.ll; })[0] || this.ifaces6(id)[0] || {}).ip || dst) + ' icmp_seq=1 Destination unreachable: Address unreachable');
+      o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + (r.ok ? 4 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 3004ms');
+      return o.join('\n');
+    }
+    o.push('PING ' + dst + '(' + dst + ') 56 data bytes', r.ok ? '!!!!!' : '.....', '--- ' + dst + ' ping statistics ---',
+           '5 packets transmitted, ' + (r.ok ? 5 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 4005ms');
+    return o.join('\n');
+  };
+  var reboot0 = P.reboot; P.reboot = function (id) { var r = reboot0.apply(this, arguments); if (this.nd) delete this.nd[id]; return r; };
+
+  // ================================================================ ESR
+  function touch(st) { st.pending = true; }
+  function each(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
+  S.cmd('gi sub lo', 'ipv6 address <w>', function (st, a) {
+    var L = a[0].split(','), C = L.map(cidr); if (C.some(function (x) { return !x; })) return 'Syntax error: Illegal parameter';
+    var bad = null; each(st, function (x) { var cur = (x.ip6 || []).concat(C.map(function (c) { return c.ip + '/' + c.len; })).filter(function (v, i, A) { return A.indexOf(v) === i; });
+      if (cur.length > 8) bad = '% Может быть назначено до 8 IPv6-адресов'; else x.ip6 = cur; });
+    return bad;
+  }, 'IPv6-адрес интерфейса');
+  S.cmd('gi sub lo', 'no ipv6 address <w>', function (st, a) { each(st, function (x) {
+    if (a[0] === 'all') x.ip6 = []; else { var c = cidr(a[0]); x.ip6 = (x.ip6 || []).filter(function (v) { return !c || v !== c.ip + '/' + c.len; }); } }); });
+  S.cmd('gi sub lo', 'ipv6 enable', function (st) { each(st, function (x) { x.v6 = true; }); }, 'Включить IPv6 (link-local)');
+  S.cmd('gi sub lo', 'no ipv6 enable', function (st) { each(st, function (x) { x.v6 = false; }); });
+  S.cmd('config', 'ipv6 route <w> <w>', function (st, a) { return route6(st, a[0], a[1]); }, 'Статический IPv6-маршрут');
+  S.cmd('config', 'ipv6 route <w> <w> <n>', function (st, a) { return route6(st, a[0], a[1], a[2]); });
+  S.cmd('config', 'no ipv6 route <w>', function (st, a) { var c = a[0] === '::/0' ? { ip: '::', len: 0 } : cidr(a[0]);
+    st.cand.routes6 = (st.cand.routes6 || []).filter(function (r) { return !c || r.net !== c.ip + '/' + c.len; }); touch(st); });
+  function route6(st, net, nh, m) {
+    var c = net === '::/0' ? { ip: '::', len: 0 } : /\//.test(net) ? cidr(net) : cidr(net + '/128'), h = parse(nh);
+    if (!c || h === null || (m !== undefined && m > 255)) return 'Syntax error: Illegal parameter';
+    var R = st.cand.routes6 = (st.cand.routes6 || []).filter(function (r) { return r.net !== c.ip + '/' + c.len; });
+    R.push({ net: c.ip + '/' + c.len, nh: fmt(h), m: m }); touch(st);
+  }
+  function ifs6Text(st) { var s = st.net; if (!s) return '';
+    var o = ['IPv6 address                                          Interface       Type', '---------------------------------------------------   -------------   -------'];
+    s.ifaces6(st.dev).forEach(function (f) { o.push(rp(f.ip + '/' + f.len, 54) + rp(f.name, 16) + 'static'); });
+    return o.join('\n'); }
+  function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
+  function route6Text(st) { var s = st.net; if (!s) return '';
+    var o = [' Codes: C – connected, S – static, R – RIP derived,', '        O – OSPF derived, IA – OSPF inter area route,', '        E1 – OSPF external type 1 route, E2 – OSPF external type 2 route',
+      '        B – BGP derived, D – DHCP derived, K – kernel route,', '        * – FIB route', ''];
+    s.routes6(st.dev).filter(function (r) { return !r.dead; }).sort(function (a, b) { return a.net < b.net ? -1 : 1; }).forEach(function (r) {
+      o.push(rp(r.p, 6) + '* ' + rp(r.net, 18) + rp('[' + (r.p === 'C' ? '0/0' : r.ad + '/0') + ']', 8) + rp(r.nh ? 'via ' + r.nh + ' on ' + r.ifn : 'dev ' + r.ifn, 34) + (r.p === 'C' ? '[direct 00:00:00]' : '[static 00:00:00]')); });
+    return o.join('\n'); }
+  function nd6Text(st) { var s = st.net; if (!s) return ''; var t = nd(s, st.dev);
+    var o = ['Interface         IPv6 address                MAC address         State             Age(min)', '---------------   -------------------------   -----------------   ---------------   ----------'];
+    Object.keys(t).forEach(function (ip) { var e = t[ip]; o.push(rp(e.ifn, 18) + rp(ip, 28) + rp(e.mac, 20) + rp(s.now - e.t < 30 ? 'reachable' : 'stale', 18) + Math.floor((s.now - e.t) / 60)); });
+    return o.join('\n'); }
+  S.cmd('priv', 'show ipv6 interfaces', ifs6Text, 'IPv6-интерфейсы');
+  S.cmd('priv', 'show ipv6 route', route6Text, 'Таблица IPv6-маршрутов');
+  S.cmd('priv', 'show ipv6 neighbors', nd6Text, 'Таблица соседей IPv6 (ND)');
+  S.cmd('priv', 'clear ipv6 neighbors', function (st) { if (st.net && st.net.nd) st.net.nd[st.dev] = {}; }, 'Очистить таблицу соседей');
+  S.cmd('priv', 'ping <w>', function (st, a) { return st.net && parse(a[0]) !== null ? st.net.ping6Text(st.dev, a[0], 'esr') : 'Syntax error: Illegal parameter'; });
+  S.RUNX.push(function (c, o) {
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k], d = [];
+      if (x.v6) d.push('  ipv6 enable'); if (x.ip6 && x.ip6.length) d.push('  ipv6 address ' + x.ip6.join(','));
+      if (d.length) o.push('interface ' + S.longIf(k), d.join('\n'), 'exit'); });
+    (c.routes6 || []).forEach(function (r) { o.push('ipv6 route ' + r.net + ' ' + r.nh + (r.m !== undefined ? ' ' + r.m : '')); });
+  });
+
+  // ================================================================ VPC и Debian
+  var vpc0 = H.vpcExec;
+  H.vpcExec = function (st, raw) {
+    var t = String(raw).trim().split(/\s+/), c = (t[0] || '').toLowerCase();
+    if (c === 'ip' && t[1] && t[1].indexOf(':') >= 0) {
+      var x = cidr(t[1].indexOf('/') > 0 ? t[1] : t[1] + '/64'); if (!x) return 'Invalid address';
+      var gw = t[2] ? parse(t[2]) : null; if (t[2] && gw === null) return 'Invalid gateway';
+      st.ip6 = x.ip + '/' + x.len; st.gw6 = gw !== null ? fmt(gw) : null;
+      return st.name + ' : ' + x.ip + '/' + x.len + (st.gw6 ? ' gateway ' + st.gw6 : '');
+    }
+    if (c === 'show' && (t[1] || '').toLowerCase() === 'ipv6') { var fs = st.net ? st.net.ifaces6(st.dev) : [];
+      return ['NAME              : ' + st.name, 'LINK-LOCAL SCOPE  : ' + ((fs.filter(function (f) { return f.ll; })[0] || {}).ip || '') + '/64',
+        'GLOBAL SCOPE      : ' + (st.ip6 || ''), 'ROUTER LINK-LAYER : ' + (st.gw6 || ''), 'MAC               : ' + EL.mac(st.name + 'eth0')].join('\n'); }
+    if (c === 'clear' && (t[1] || '').toLowerCase() === 'ipv6') { st.ip6 = null; st.gw6 = null; return 'IPv6 address/mask and router link-layer address cleared'; }
+    if (c === 'ping' && t[1] && t[1].indexOf(':') >= 0) return st.net ? st.net.ping6Text(st.dev, t[1], 'vpc') : '';
+    return vpc0.apply(this, arguments);
+  };
+  var deb0 = H.debExec;
+  H.debExec = function (st, raw, ui) {
+    var line = String(raw).trim(), t = line.split(/\s+/);
+    if (!st.user || st.ssh) return deb0.apply(this, arguments);
+    if (st.user !== 'root' && /^ip\s+-6\s+\S+\s+(add|del)/.test(line)) return 'RTNETLINK answers: Operation not permitted';
+    var m = line.match(/^ip\s+-6\s+(?:address|addr|a)\s+(add|del)\s+(\S+)\s+dev\s+(\S+)$/);
+    if (m) { if (m[3] !== 'ens3') return 'Cannot find device "' + m[3] + '"'; var x = cidr(m[2]); if (!x) return 'Error: inet6 prefix is expected rather than "' + m[2] + '".';
+      var L = st.ip6 || [], v = x.ip + '/' + x.len;
+      if (m[1] === 'add') { if (L.indexOf(v) >= 0) return 'RTNETLINK answers: File exists'; st.ip6 = L.concat([v]); }
+      else { if (L.indexOf(v) < 0) return 'RTNETLINK answers: Cannot assign requested address'; st.ip6 = L.filter(function (y) { return y !== v; }); }
+      return ''; }
+    m = line.match(/^ip\s+-6\s+(?:route|r)\s+(add|del)\s+(default|::\/0)\s+via\s+(\S+)/);
+    if (m) { var g = parse(m[3]); if (g === null) return 'Error: inet6 address is expected rather than "' + m[3] + '".'; st.gw6 = m[1] === 'add' ? fmt(g) : null; return ''; }
+    if (/^ip\s+-6\s+(address|addr|a)(\s+show)?$/.test(line)) { var fs = st.net ? st.net.ifaces6(st.dev) : [];
+      if (!fs.length) return ''; return ['2: ens3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP qlen 1000'].concat(fs.slice().reverse().map(function (f) {
+        return '    inet6 ' + f.ip + '/' + f.len + ' scope ' + (f.ll ? 'link' : 'global') + '\n       valid_lft forever preferred_lft forever'; })).join('\n'); }
+    if (/^ip\s+-6\s+(route|r)(\s+show)?$/.test(line)) { var rs = st.net ? st.net.routes6(st.dev) : [];
+      return rs.filter(function (r) { return !r.dead; }).map(function (r) { return r.p === 'C' ? r.net + ' dev ens3 proto kernel metric 256 pref medium' : 'default via ' + r.nh + ' dev ens3 metric 1024 pref medium'; })
+        .concat(st.net && st.net.ifaces6(st.dev).length ? ['fe80::/64 dev ens3 proto kernel metric 256 pref medium'] : []).join('\n'); }
+    if (/^ip\s+-6\s+(neigh|neighbour|n)(\s+show)?$/.test(line)) { var T = st.net ? nd(st.net, st.dev) : {};
+      return Object.keys(T).map(function (ip) { return ip + ' dev ens3 lladdr ' + T[ip].mac + ' REACHABLE'; }).join('\n'); }
+    var p = line.match(/^(ping6|ping)\s+(.*)$/);
+    if (p) { var dst = p[2].split(/\s+/).filter(function (x) { return x.indexOf(':') >= 0 && parse(x) !== null; })[0];
+      if (dst || p[1] === 'ping6' || /(^|\s)-6(\s|$)/.test(p[2])) { if (!dst) return 'ping: ' + (p[2].split(/\s+/).pop()) + ': Name or service not known';
+        return st.net ? st.net.ping6Text(st.dev, dst, 'linux') : ''; } }
+    return deb0.apply(this, arguments);
+  };
+})(typeof window !== 'undefined' ? window : global);
+
+/* RIPng и OSPFv3 на ESR (справочник ESR-Series CLI 1.23):
+   RIPng — ipv6 router rip → (config-ripng)#: network X::/len, redistribute connected, enable; show ipv6 rip.
+   OSPFv3 — ipv6 router ospf <ID> → (config-ipv6-ospf)#: router-id, area <ID> → (config-ipv6-ospf-area)#: enable; enable;
+            на интерфейсе: ipv6 ospf instance <ID>, ipv6 ospf area <ID>, ipv6 ospf; show ipv6 ospf neighbors.
+   Соседи — ESR в одном сегменте с адресами из одной IPv6-сети; next-hop — link-local соседа (как в RIPng/OSPFv3).
+   Упрощение: маршруты сходятся сразу (таймеры RIPng/OSPFv3 не моделируются), одна область OSPFv3, стоимость интерфейса 10. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, P = EL.Net.prototype, A = EL.ip6, IP = EL.ip;
+  S.PROMPT.ripng = '(config-ripng)#'; S.PROMPT.o6 = '(config-ipv6-ospf)#'; S.PROMPT.o6a = '(config-ipv6-ospf-area)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('ripng', 'o6', 'o6a'); });
+  function touch(st) { st.pending = true; }
+  function each(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
+
+  // ---------------------------------------------------------------- RIPng
+  function rng(st) { return st.cand.ripng || (st.cand.ripng = { on: false, nets: [], redist: [] }); }
+  S.cmd('config', 'ipv6 router rip', function (st) { rng(st); touch(st); st.mode = 'ripng'; st.ctx = null; }, 'Настройка RIPng');
+  S.cmd('config', 'no ipv6 router rip', function (st) { st.cand.ripng = null; touch(st); });
+  S.cmd('ripng', 'network <w>', function (st, a) { var c = A.cidr(a[0]); if (!c) return 'Syntax error: Illegal parameter';
+    var r = rng(st), v = A.netOf(c.ip, c.len); if (r.nets.indexOf(v) < 0) r.nets.push(v); touch(st); }, 'Анонсировать подсеть');
+  S.cmd('ripng', 'no network <w>', function (st, a) { var c = A.cidr(a[0]), r = rng(st); if (c) r.nets = r.nets.filter(function (x) { return x !== A.netOf(c.ip, c.len); }); touch(st); });
+  S.cmd('ripng', 'redistribute connected', function (st) { var r = rng(st); if (r.redist.indexOf('connected') < 0) r.redist.push('connected'); touch(st); }, 'Анонсировать подключённые');
+  S.cmd('ripng', 'no redistribute connected', function (st) { var r = rng(st); r.redist = r.redist.filter(function (x) { return x !== 'connected'; }); touch(st); });
+  S.cmd('ripng', 'enable', function (st) { rng(st).on = true; touch(st); }, 'Запустить RIPng');
+  S.cmd('ripng', 'no enable', function (st) { rng(st).on = false; touch(st); });
+  S.cmd('ripng o6 o6a', 'exit', function (st) { st.mode = st.mode === 'o6a' ? 'o6' : 'config'; if (st.mode === 'config') st.ctx = null; });
+
+  // ---------------------------------------------------------------- OSPFv3
+  function o6(st) { return st.cand.ospf6; }
+  S.cmd('config', 'ipv6 router ospf <n>', function (st, a) {
+    if (!st.cand.ospf6 || st.cand.ospf6.id !== a[0]) st.cand.ospf6 = { id: a[0], on: false, rid: null, areas: {} };
+    touch(st); st.mode = 'o6'; st.ctx = null; }, 'Настройка OSPFv3');
+  S.cmd('config', 'no ipv6 router ospf <n>', function (st, a) { if (st.cand.ospf6 && st.cand.ospf6.id === a[0]) st.cand.ospf6 = null; touch(st); });
+  S.cmd('o6', 'router-id <ip>', function (st, a) { o6(st).rid = a[0]; touch(st); }, 'Идентификатор маршрутизатора');
+  S.cmd('o6', 'area <ip>', function (st, a) { var o = o6(st); o.areas[a[0]] = o.areas[a[0]] || { on: false }; st.mode = 'o6a'; st.ctx = a[0]; touch(st); }, 'Область OSPFv3');
+  S.cmd('o6a', 'enable', function (st) { o6(st).areas[st.ctx].on = true; touch(st); }, 'Активировать область');
+  S.cmd('o6a', 'no enable', function (st) { o6(st).areas[st.ctx].on = false; touch(st); });
+  S.cmd('o6', 'enable', function (st) { o6(st).on = true; touch(st); }, 'Запустить OSPFv3');
+  S.cmd('o6', 'no enable', function (st) { o6(st).on = false; touch(st); });
+  S.cmd('gi sub lo', 'ipv6 ospf instance <n>', function (st, a) { each(st, function (x) { (x.ospf6 = x.ospf6 || {}).inst = a[0]; }); }, 'Процесс OSPFv3 на интерфейсе');
+  S.cmd('gi sub lo', 'ipv6 ospf area <ip>', function (st, a) { each(st, function (x) { (x.ospf6 = x.ospf6 || {}).area = a[0]; }); }, 'Область OSPFv3 интерфейса');
+  S.cmd('gi sub lo', 'ipv6 ospf', function (st) { each(st, function (x) { (x.ospf6 = x.ospf6 || {}).on = true; }); }, 'Включить OSPFv3 на интерфейсе');
+  S.cmd('gi sub lo', 'no ipv6 ospf', function (st) { each(st, function (x) { if (x.ospf6) x.ospf6.on = false; }); });
+
+  S.RUNX.push(function (c, o) {
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k].ospf6; if (!x) return; var d = [];
+      if (x.inst) d.push('  ipv6 ospf instance ' + x.inst); if (x.area) d.push('  ipv6 ospf area ' + x.area); if (x.on) d.push('  ipv6 ospf');
+      if (d.length) o.push('interface ' + S.longIf(k), d.join('\n'), 'exit'); });
+    if (c.ripng) { o.push('ipv6 router rip'); c.ripng.nets.forEach(function (n) { o.push('  network ' + n); });
+      c.ripng.redist.forEach(function (n) { o.push('  redistribute ' + n); }); if (c.ripng.on) o.push('  enable'); o.push('exit'); }
+    if (c.ospf6) { o.push('ipv6 router ospf ' + c.ospf6.id); if (c.ospf6.rid) o.push('  router-id ' + c.ospf6.rid);
+      Object.keys(c.ospf6.areas).forEach(function (k) { o.push('  area ' + k); if (c.ospf6.areas[k].on) o.push('    enable'); o.push('  exit'); });
+      if (c.ospf6.on) o.push('  enable'); o.push('exit'); }
+  });
+
+  // ---------------------------------------------------------------- расчёт
+  // интерфейсы, на которых работает протокол: RIPng — адрес попадает в network; OSPFv3 — ipv6 ospf + instance = процесс + активная область
+  function active(s, id, proto) {
+    var d = s.devs[id]; if (d.type !== 'esr' || d.off) return [];
+    var c = d.st.run, fs = s.ifaces6(id).filter(function (f) { return !f.ll; });
+    if (proto === 'R') { var r = c.ripng; if (!r || !r.on) return [];
+      return fs.filter(function (f) { return r.nets.some(function (n) { var q = n.split('/'); return +q[1] <= f.len && A.same(f.ip, q[0], +q[1]); }); }); }
+    var o = c.ospf6; if (!o || !o.on || !rid(s, id)) return [];
+    return fs.filter(function (f) { var x = (c.ifs[f.name] || {}).ospf6; return x && x.on && (!x.inst || x.inst === o.id) && o.areas[x.area || '0.0.0.0'] && o.areas[x.area || '0.0.0.0'].on; });
+  }
+  function rid(s, id) { var c = s.devs[id].st.run; return (c.ospf6 && c.ospf6.rid) || (s.ifaces(id).map(function (f) { return f.ip; }).sort(function (a, b) { return IP.ip2n(b) - IP.ip2n(a); })[0] || null); }
+  // соседи по сегменту: кадр с интерфейса доходит до интерфейса другого ESR с адресом из той же сети
+  function nbrs(s, id, proto, act) {
+    var out = [];
+    act.forEach(function (f) { if (f.port === null) return;
+      var fl = s.flood(id, f, s.ifMac(id, f));
+      fl.reach.forEach(function (e) { if (e.dev === id) return;
+        var mine = active(s, e.dev, proto).filter(function (g) { return g.port === e.port && g.tag === e.tag && g.len === f.len && A.same(g.ip, f.ip, f.len); })[0];
+        if (!mine) return; var ll = s.ifaces6(e.dev).filter(function (g) { return g.ll && g.name === mine.name; })[0];
+        if (ll && !out.some(function (x) { return x.dev === e.dev && x.ifn === f.name; })) out.push({ dev: e.dev, ifn: f.name, nh: ll.ip, his: mine.name }); }); });
+    return out;
+  }
+  function originated(s, id, proto) {
+    var act = active(s, id, proto), o = act.map(function (f) { return A.netOf(f.ip, f.len); });
+    if (proto === 'R' && s.devs[id].st.run.ripng.redist.indexOf('connected') >= 0) s.ifaces6(id).forEach(function (f) { if (!f.ll) o.push(A.netOf(f.ip, f.len)); });
+    return o.filter(function (v, i, a) { return a.indexOf(v) === i; });
+  }
+  P.dyn6 = function () {
+    if (this._dyn6 && this._dyn6.gen === this.gen) return this._dyn6.t;
+    var s = this, t = {}, N = {};
+    s.gen0 = s.gen;
+    ['R', 'O'].forEach(function (proto) {
+      var rs = s.order.filter(function (id) { return active(s, id, proto).length; });
+      var info = {}; rs.forEach(function (id) { info[id] = { nb: nbrs(s, id, proto, active(s, id, proto)), own: originated(s, id, proto) }; N[proto + id] = info[id].nb; });
+      // RIPng — вектор расстояний (метрика = переходы, 16 — недостижимо); OSPFv3 — кратчайший путь, стоимость интерфейса 10
+      var step = proto === 'R' ? 1 : 10, lim = proto === 'R' ? 15 : 1e9, ad = proto === 'R' ? 120 : 110;
+      rs.forEach(function (id) {
+        var dist = {}, first = {}, q = [{ id: id, m: 0, via: null }], seen = {};
+        while (q.length) { q.sort(function (a, b) { return a.m - b.m; }); var u = q.shift(); if (seen[u.id]) continue; seen[u.id] = true;
+          if (u.id !== id) info[u.id].own.forEach(function (n) { if (dist[n] === undefined || u.m < dist[n]) { dist[n] = u.m; first[n] = u.via; } });
+          info[u.id].nb.forEach(function (nb) { if (!info[nb.dev] || seen[nb.dev]) return;
+            var back = info[nb.dev].nb.some(function (x) { return x.dev === u.id; }); if (!back) return;
+            if (u.m + step <= lim) q.push({ id: nb.dev, m: u.m + step, via: u.via || nb }); }); }
+        var mine = s.ifaces6(id).filter(function (f) { return !f.ll; }).map(function (f) { return A.netOf(f.ip, f.len); });
+        Object.keys(dist).forEach(function (n) { if (mine.indexOf(n) >= 0 || !first[n]) return;
+          (t[id] = t[id] || []).push({ p: proto, net: n, len: +n.split('/')[1], nh: first[n].nh, ifn: first[n].ifn, ad: ad, m: proto === 'R' ? dist[n] + 1 : dist[n] + 10 }); });
+      });
+    });
+    this._dyn6 = { gen: this.gen, t: t, nb: N };
+    return t;
+  };
+  var routes0 = P.routes6;
+  P.routes6 = function (id) { return routes0.call(this, id).concat(this.devs[id].type === 'esr' ? this.dyn6()[id] || [] : []); };
+  P.lookup6 = (function (lk0) { return function (id, dst) {
+    var s = this; if (A.isLL(dst)) return lk0.call(this, id, dst);
+    var fs = this.ifaces6(id), best = null;
+    this.routes6(id).forEach(function (r) { if (r.dead || !A.same(dst, r.net.split('/')[0], r.len)) return;
+      if (!best || r.len > best.len || (r.len === best.len && (r.ad || 0) < (best.ad || 0))) best = r; });
+    if (!best) return null; void s;
+    var out = fs.filter(function (f) { return f.name === best.ifn && (best.nh && A.isLL(best.nh) ? f.ll : !f.ll); })[0] || fs.filter(function (f) { return f.name === best.ifn; })[0];
+    return out ? { iface: out, nh: best.nh || dst, r: best } : null; }; })(P.lookup6);
+
+  // ---------------------------------------------------------------- show
+  function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
+  S.cmd('priv', 'show ipv6 rip', function (st) { var s = st.net; if (!s) return '';
+    return (s.dyn6()[st.dev] || []).filter(function (r) { return r.p === 'R'; }).map(function (r) {
+      return rp(r.net, 16) + 'via ' + r.nh + ' on ' + r.ifn + ' [rip 00:00:00] * (120/' + r.m + ')'; }).join('\n'); }, 'Таблица маршрутов RIPng');
+  S.cmd('priv', 'show ipv6 ospf neighbors', function (st) { var s = st.net; if (!s) return ''; s.dyn6();
+    var L = (s._dyn6.nb['O' + st.dev] || []); if (!L.length) return '';
+    return ['Router ID        Pri  State           DTime  Interface  Router IP'].concat(L.map(function (nb) {
+      return rp(rid(s, nb.dev), 17) + '1    ' + rp('full/ptp', 16) + '00:40  ' + rp(nb.ifn, 11) + nb.nh; })).join('\n'); }, 'Соседи OSPFv3');
+})(typeof window !== 'undefined' ? window : global);
+
+/* DNS: сервер BIND9 на Debian (зоны в /etc/bind/named.conf.local и файлах зон, systemctl restart bind9), клиенты:
+   Debian — /etc/resolv.conf (nameserver, search), /etc/hosts, nslookup ИМЯ [СЕРВЕР], ping/curl по имени;
+   VPC — ip dns A.B.C.D, ping ИМЯ;
+   ESR — domain lookup enable, domain name-server, domain name, domain ip host (справочник ESR-Series CLI 1.23), ping ИМЯ;
+   MES — 10.x: ip name-server ipv4 A.B.C.D (руководство 10.4.6); 6.x: ip domain lookup, ip name-server, ip domain name, ip host (6.6.8.8).
+   Запрос — UDP 53 к серверу по сети (виден в трассе и захвате), ответ — из зоны BIND. Поддерживаются записи A и CNAME. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, E = EL.E, P = EL.Net.prototype, H = EL.hosts, IP = EL.ip, CMDS = E.CMDS, CFG = E.CFG;
+  function isIp(x) { return IP.ip2n(x) !== null; }
+
+  // ================================================================ сервер BIND9
+  function zones(st) {
+    var conf = (st.files || {})['/etc/bind/named.conf.local'] || '', out = {}, re = /zone\s+"([^"]+)"\s*(?:IN\s*)?\{([^}]*)\}/gi, m;
+    while ((m = re.exec(conf))) { var f = m[2].match(/file\s+"([^"]+)"/i), z = m[1].replace(/\.$/, '').toLowerCase();
+      if (f && /type\s+(master|primary)/i.test(m[2])) out[z] = parseZone(z, (st.files || {})[f[1]] || ''); }
+    return out;
+  }
+  function parseZone(z, text) {
+    var origin = z, recs = {}, last = z, body = String(text).replace(/;.*$/gm, '').replace(/\(([^)]*)\)/g, function (x, y) { return y.replace(/\n/g, ' '); });
+    body.split('\n').forEach(function (line) {
+      if (!line.trim()) return;
+      var o = line.match(/^\$ORIGIN\s+(\S+)/i); if (o) { origin = o[1].replace(/\.$/, '').toLowerCase(); return; }
+      if (/^\$/.test(line)) return;
+      var t = line.trim().split(/\s+/), name = /^\s/.test(line) ? last : t.shift();
+      var fq = name === '@' ? origin : /\.$/.test(name) ? name.slice(0, -1).toLowerCase() : (name + '.' + origin).toLowerCase(); last = name;
+      while (t.length && (/^\d+$/.test(t[0]) || /^IN$/i.test(t[0]))) t.shift();
+      var type = (t.shift() || '').toUpperCase(), data = t[0];
+      if (type === 'A' && isIp(data)) (recs[fq] = recs[fq] || {}).a = data;
+      if (type === 'CNAME' && data) (recs[fq] = recs[fq] || {}).cname = /\.$/.test(data) ? data.slice(0, -1).toLowerCase() : (data + '.' + origin).toLowerCase();
+    });
+    return recs;
+  }
+  // ответ сервера: адрес, null — нет такого имени, false — нет зоны (сервер не авторитетен)
+  P.dnsAnswer = function (id, q) {
+    var d = this.devs[id]; if (!d || d.type !== 'deb' || !d.st.svc || !d.st.svc.bind9) return false;
+    var Z = d.st.bindZones || zones(d.st), name = q.toLowerCase(), hops = 0;
+    while (hops++ < 8) {
+      var z = Object.keys(Z).filter(function (k) { return name === k || name.slice(-k.length - 1) === '.' + k; }).sort(function (a, b) { return b.length - a.length; })[0];
+      if (!z) return hops === 1 ? false : null;
+      var r = Z[z][name]; if (!r) return null; if (r.a) return r.a; name = r.cname;
+    }
+    return null;
+  };
+
+  // ================================================================ резолвер
+  function hostsFile(text, name) { var ip = null;
+    String(text || '').split('\n').forEach(function (l) { var t = l.replace(/#.*$/, '').trim().split(/\s+/); if (isIp(t[0]) && t.slice(1).map(function (x) { return x.toLowerCase(); }).indexOf(name) >= 0 && !ip) ip = t[0]; });
+    return ip; }
+  function cfg(s, id) {
+    var d = s.devs[id], st = d.st;
+    if (d.type === 'deb') { var rc = (st.files || {})['/etc/resolv.conf'] || '', sv = [], dom = null;
+      rc.split('\n').forEach(function (l) { var m = l.match(/^\s*nameserver\s+(\S+)/); if (m && isIp(m[1])) sv.push(m[1]); var q = l.match(/^\s*(?:search|domain)\s+(\S+)/); if (q) dom = q[1]; });
+      return { on: true, servers: sv, dom: dom, local: function (n) { return hostsFile((st.files || {})['/etc/hosts'], n) || (n === 'localhost' ? '127.0.0.1' : null); } }; }
+    if (d.type === 'vpc') return { on: true, servers: st.dns ? [st.dns] : [], dom: null, local: function () { return null; } };
+    if (d.type === 'esr') { var c = st.run.dns || {}; return { on: !!c.on, servers: c.servers || [], dom: c.dom || null, local: function (n) { return (c.hosts || {})[n] || null; } }; }
+    var m2 = st.dns || {}; return { on: m2.lookup !== false, servers: m2.servers || [], dom: m2.dom || null, local: function (n) { return ((m2.hosts || {})[n] || [])[0] || null; } };
+  }
+  // разрешить имя: {ip} или {err: 'nx' | 'timeout' | 'noserver' | 'off', server}
+  P.resolve = function (id, name, server, noLocal) {
+    name = String(name).toLowerCase().replace(/\.$/, '');
+    if (isIp(name)) return { ip: name };
+    var c = cfg(this, id), loc = !noLocal && c.local(name); if (loc) return { ip: loc, local: true };
+    if (!c.on && !noLocal) return { err: 'off' };
+    var q = name.indexOf('.') < 0 && c.dom ? name + '.' + c.dom : name, L = server ? [server] : c.servers, s = this;
+    if (!L.length) return { err: 'noserver', q: q };
+    for (var i = 0; i < L.length; i++) {
+      var o = s.owner(L[i]), ans = o ? s.dnsAnswer(o.id || o, q) : false;
+      s.dnsQ = { q: q, a: ans || null };
+      var r; try { r = s.request(id, L[i], 'udp', 53); } finally { s.dnsQ = null; }
+      if (s.onTrace) s.onTrace(r, id, 'DNS ' + q);
+      if (!r.ok) continue;
+      ans = s.dnsAnswer(r.dev, q);
+      return ans ? { ip: ans, server: L[i], q: q } : { err: 'nx', server: L[i], q: q };
+    }
+    return { err: 'timeout', server: L[0], q: q };
+  };
+
+  // ================================================================ Debian
+  var deb0 = H.debExec;
+  H.debExec = function (st, raw, ui) {
+    var line = String(raw).trim(), t = line.split(/\s+/), c = t[0];
+    if (!st.user || st.ssh || !st.net) return deb0.apply(this, arguments);
+    if (c === 'systemctl' && /^(re)?start$|^reload$/.test(t[1] || '') && /^(bind9|named)(\.service)?$/.test(t[2] || '') && st.svc && 'bind9' in st.svc) {
+      if (st.user !== 'root') return 'Failed to ' + t[1] + ' bind9.service: Access denied';
+      st.svc.bind9 = true; st.bindZones = zones(st); return ''; }
+    if (c === 'named-checkzone' && t[1] && t[2]) { var recs = parseZone(t[1].replace(/\.$/, '').toLowerCase(), (st.files || {})[t[2]]);
+      if ((st.files || {})[t[2]] === undefined) return 'zone ' + t[1] + '/IN: loading from master file ' + t[2] + ' failed: file not found';
+      return 'zone ' + t[1] + '/IN: loaded serial 1\nOK'; void recs; }
+    if (c === 'nslookup') { var nm = t[1]; if (!nm) return 'Usage: nslookup NAME [SERVER]';
+      var r = st.net.resolve(st.dev, nm, t[2], true), sv = r.server || t[2] || (cfg(st.net, st.dev).servers[0]) || '127.0.0.1';
+      if (r.err === 'timeout' || r.err === 'noserver') return ';; connection timed out; no servers could be reached';
+      var head = 'Server:\t\t' + sv + '\nAddress:\t' + sv + '#53\n';
+      if (r.err === 'nx') return head + '\n** server can\'t find ' + r.q + ': NXDOMAIN';
+      return head + '\nName:\t' + (r.q || nm) + '\nAddress: ' + r.ip; }
+    if ((c === 'ping' || c === 'curl' || c === 'wget') && t.length > 1) {
+      var arg = t.filter(function (x, i) { return i > 0 && !/^-/.test(x); }).pop() || '', host = arg.replace(/^https?:\/\//, '').split(/[/:]/)[0];
+      if (host && EL.ip6.parse(arg) === null && !isIp(host) && /^[a-z0-9][a-z0-9.-]*$/i.test(host) && host.indexOf(':') < 0) {
+        var rr = st.net.resolve(st.dev, host);
+        if (!rr.ip) return c === 'ping' ? 'ping: ' + host + ': ' + (rr.err === 'nx' ? 'Name or service not known' : 'Temporary failure in name resolution')
+                                        : 'curl: (6) Could not resolve host: ' + host;
+        var out = deb0.call(this, st, line.replace(host, rr.ip), ui);
+        return c === 'ping' ? String(out).replace('PING ' + rr.ip + ' (' + rr.ip + ')', 'PING ' + host + ' (' + rr.ip + ')') : out;
+      }
+    }
+    return deb0.apply(this, arguments);
+  };
+  var debNew = H.deb;
+  H.deb = function (name, o) { var st = debNew.apply(this, arguments);
+    st.files['/etc/resolv.conf'] = '';
+    st.files['/etc/hosts'] = '127.0.0.1\tlocalhost\n127.0.1.1\t' + st.host + '\n';
+    if (o && o.web) { st.svc.bind9 = true;
+      st.files['/etc/bind/named.conf.local'] = '//\n// Do any local configuration here\n//\n\n// Consider adding the 1918 zones here, if they are not used in your\n// organization\n//include "/etc/bind/zones.rfc1918";\n';
+      st.files['/etc/bind/db.local'] = ';\n; BIND data file for local loopback interface\n;\n$TTL\t604800\n@\tIN\tSOA\tlocalhost. root.localhost. (\n\t\t\t      2\t\t; Serial\n\t\t\t 604800\t\t; Refresh\n\t\t\t  86400\t\t; Retry\n\t\t\t2419200\t\t; Expire\n\t\t\t 604800 )\t; Negative Cache TTL\n;\n@\tIN\tNS\tlocalhost.\n@\tIN\tA\t127.0.0.1\n@\tIN\tAAAA\t::1\n'; st.bindZones = zones(st); }
+    return st; };
+
+  // ================================================================ VPC
+  var vpc0 = H.vpcExec;
+  H.vpcExec = function (st, raw) {
+    var t = String(raw).trim().split(/\s+/), c = (t[0] || '').toLowerCase();
+    if (c === 'ip' && (t[1] || '').toLowerCase() === 'dns') { if (!t[2] || !isIp(t[2])) return 'Invalid address'; st.dns = t[2]; return ''; }
+    if (c === 'show' && (!t[1] || t[1] === 'ip')) { var o = vpc0.apply(this, arguments); return st.dns ? o.replace(/(GATEWAY[^\n]*\n)/, '$1DNS         : ' + st.dns + '\n') : o; }
+    if (c === 'ping' && t[1] && !isIp(t[1]) && t[1].indexOf(':') < 0 && st.net) {
+      var r = st.net.resolve(st.dev, t[1]); if (!r.ip) return 'Cannot resolve ' + t[1];
+      return t[1] + ' resolved to ' + r.ip + '\n\n' + vpc0.call(this, st, 'ping ' + r.ip); }
+    return vpc0.apply(this, arguments);
+  };
+
+  // ================================================================ ESR
+  function touch(st) { st.pending = true; }
+  function dn(st) { return st.cand.dns || (st.cand.dns = { on: false, servers: [], dom: null, hosts: {} }); }
+  S.cmd('config', 'domain lookup enable', function (st) { dn(st).on = true; touch(st); }, 'Включить разрешение DNS-имён');
+  S.cmd('config', 'no domain lookup enable', function (st) { dn(st).on = false; touch(st); });
+  S.cmd('config', 'domain name-server <ip>', function (st, a) { var d = dn(st); if (d.servers.indexOf(a[0]) < 0) d.servers.push(a[0]); touch(st); }, 'DNS-сервер');
+  S.cmd('config', 'no domain name-server <ip>', function (st, a) { var d = dn(st); d.servers = d.servers.filter(function (x) { return x !== a[0]; }); touch(st); });
+  S.cmd('config', 'domain name <w>', function (st, a) { dn(st).dom = a[0]; touch(st); }, 'Имя домена');
+  S.cmd('config', 'no domain name', function (st) { dn(st).dom = null; touch(st); });
+  S.cmd('config', 'domain ip host <w> <ip>', function (st, a) { dn(st).hosts[a[0].toLowerCase()] = a[1]; touch(st); }, 'Статическая DNS-запись');
+  S.cmd('config', 'no domain ip host <w> <ip>', function (st, a) { delete dn(st).hosts[a[0].toLowerCase()]; touch(st); });
+  S.RUNX.push(function (c, o) { var d = c.dns; if (!d) return;
+    Object.keys(d.hosts).forEach(function (h) { o.push('domain ip host ' + h + ' ' + d.hosts[h]); });
+    if (d.on) o.push('domain lookup enable'); if (d.dom) o.push('domain name ' + d.dom);
+    d.servers.forEach(function (x) { o.push('domain name-server ' + x); }); });
+  // ping по имени: команда «ping <w>» (IPv6) расширяется именами
+  S.T.forEach(function (c) { if (c.modes.indexOf('priv') >= 0 && c.pat.join(' ') === 'ping <w>') { var run = c.run;
+    c.run = function (st, a) { if (a[0].indexOf(':') >= 0 || !st.net) return run(st, a);
+      var r = st.net.resolve(st.dev, a[0]); if (!r.ip) return 'ping: unknown host ' + a[0];
+      return st.net.pingText(st.dev, r.ip, 'esr').replace('PING ' + r.ip + ' (' + r.ip + ')', 'PING ' + a[0] + ' (' + r.ip + ')'); }; } });
+
+  // ================================================================ MES
+  function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function md(st) { return st.dns || (st.dns = { lookup: true, servers: [], dom: null, hosts: {} }); }
+  mcmd(['10'], 'config', 'ip name-server ipv4 <ip>', function (st, a) { var d = md(st); if (d.servers.indexOf(a[0]) < 0) d.servers.push(a[0]); }, 'DNS-сервер');
+  mcmd(['10'], 'config', 'no ip name-server ipv4 <ip>', function (st, a) { var d = md(st); d.servers = d.servers.filter(function (x) { return x !== a[0]; }); });
+  mcmd(['6'], 'config', 'ip name-server <ip>', function (st, a) { var d = md(st); if (d.servers.indexOf(a[0]) < 0) d.servers.push(a[0]); }, 'DNS-сервер');
+  mcmd(['6'], 'config', 'no ip name-server <ip>', function (st, a) { var d = md(st); d.servers = d.servers.filter(function (x) { return x !== a[0]; }); });
+  mcmd(['6'], 'config', 'ip domain lookup', function (st) { md(st).lookup = true; }, 'Разрешить DNS');
+  mcmd(['6'], 'config', 'no ip domain lookup', function (st) { md(st).lookup = false; });
+  mcmd(['6'], 'config', 'ip domain name <w>', function (st, a) { md(st).dom = a[0]; }, 'Домен по умолчанию');
+  mcmd(['6'], 'config', 'no ip domain name', function (st) { md(st).dom = null; });
+  mcmd(['6'], 'config', 'ip host <w> <ip>', function (st, a) { md(st).hosts[a[0].toLowerCase()] = [a[1]]; }, 'Статическое имя узла');
+  mcmd(['6'], 'config', 'no ip host <w>', function (st, a) { delete md(st).hosts[a[0].toLowerCase()]; });
+  E.RUNX.push(function (st, o) { var d = st.dns; if (!d) return;
+    if (st.dialect === '6') { if (d.lookup === false) o.push('no ip domain lookup'); if (d.dom) o.push('ip domain name ' + d.dom);
+      Object.keys(d.hosts).forEach(function (h) { o.push('ip host ' + h + ' ' + d.hosts[h].join(' ')); }); }
+    d.servers.forEach(function (x) { o.push(st.dialect === '10' ? 'ip name-server ipv4 ' + x : 'ip name-server ' + x); }); });
+  ['', 'do '].forEach(function (pre) { [['priv', ''], ['user', '']].forEach(function (m) { if (pre && m[0] === 'user') return;
+    mcmd(['10', '6'], pre ? CFG : m[0], pre + 'ping <w>', function (st, a) { if (!st.net) return '';
+      var r = st.net.resolve(st.dev, a[0]); if (!r.ip) return '% Unknown host ' + a[0];
+      return st.net.pingText(st.dev, r.ip, 'mes'); }); }); });
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).
