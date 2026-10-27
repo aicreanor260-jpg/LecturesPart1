@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -397,6 +397,71 @@ EL.labs.LABS.forEach(runLab);
       (c.exec(x.id, 'exit'), !c.exec(x.id, 'interface hundredgigabitethernet 1/0/1')) && c.prompt(x.id) === 'esr(config-if-hu)#', c.prompt(x.id));
   chk('ESR: диапазон и список interface gi1/0/1-2,te1/0/1', (n.exec(a.id, 'exit'), !n.exec(a.id, 'interface gi1/0/1-2,te1/0/1')) && Array.isArray(a.st.ctx) && a.st.ctx.length === 3);
   console.log('✓ линейка ESR (' + esrs.length + ' моделей)');
+})();
+
+// живая консоль: фильтры «|», постраничный вывод, системные сообщения, счётчики кадров
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), pc = n.add('VPC', 'PC1');
+  n.events();
+  n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', pc.id, 'eth0');
+  var ev = n.events();
+  chk('событие: CFA-6 link status UP на MES 10', ev.some(function (e) { return e.id === sw.id && e.msg === 'CFA-6-Interface gi 1/0/1 link status UP'; }), JSON.stringify(ev));
+  chk('событие: ESR тоже видит линк', ev.some(function (e) { return e.id === r.id && /Up:\s+gi1\/0\/1/.test(e.msg); }));
+  sw.st.mode = 'priv';
+  chk('show logging — запись в буфере', /link status UP/.test(n.exec(sw.id, 'show logging')));
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'end', 'commit', 'confirm'],
+                     PC1: ['ip 192.168.1.10/24 192.168.1.1'] });
+  chk('ping через коммутатор', n.ping(pc.id, '192.168.1.1').ok);
+  var c1 = n.ctrOf(sw.id, 'gi1/0/2'), c2 = n.ctrOf(sw.id, 'gi1/0/1');
+  chk('счётчики: ARP-широковещание и unicast приняты на gi1/0/2', c1.ib >= 1 && c1.iu >= 1 && c1.io > 0, JSON.stringify(c1));
+  chk('счётчики: отправлено на gi1/0/1', c2.ou >= 1 && c2.ob >= 1, JSON.stringify(c2));
+  var cg = n.exec(sw.id, 'show interfaces counters gi1/0/2');
+  chk('show interfaces counters gi1/0/2', /InUcastPkts/.test(cg) && /gi1\/0\/2\s+[1-9]/.test(cg) && /FCS Errors: 0/.test(cg), cg);
+  chk('show interfaces gi1/0/1 — up', /is up \(connected\)[\s\S]*packets input/.test(n.exec(sw.id, 'show interfaces gigabitethernet 1/0/1')));
+  n.exec(sw.id, 'clear counters gi1/0/2');
+  chk('clear counters <if>', n.ctrOf(sw.id, 'gi1/0/2').io === 0 && n.ctrOf(sw.id, 'gi1/0/1').oo > 0);
+  chk('ESR show interfaces counters gi1/0/1', /Packets received:\s+[1-9]/.test(n.exec(r.id, 'show interfaces counters gigabitethernet 1/0/1')));
+  chk('ESR таблица счётчиков', /UC recv[\s\S]*UC sent/.test(n.exec(r.id, 'show interfaces counters')));
+  n.exec(r.id, 'clear interfaces counters');
+  chk('ESR clear interfaces counters', /Packets received:\s+0/.test(n.exec(r.id, 'show interfaces counters gi1/0/1')));
+  var b0 = n.ctrOf(pc.id, 'eth0').im; n.tick(10);
+  chk('BPDU раз в 2 с: VPC получает multicast', n.ctrOf(pc.id, 'eth0').im - b0 === 5, n.ctrOf(pc.id, 'eth0').im - b0);
+  // фильтры
+  var st = n.exec(sw.id, 'show interfaces status | include GI1/0/1');
+  chk('MES | include без учёта регистра', st && st.split('\n').every(function (x) { return /gi1\/0\/1/i.test(x); }), st);
+  chk('MES | exclude', n.exec(sw.id, 'show interfaces status | exclude gi1/0/1').indexOf('gi1/0/1 ') < 0);
+  chk('MES | begin', /^gi1\/0\/5/.test(n.exec(sw.id, 'show interfaces status | begin gi1/0/5')), n.exec(sw.id, 'show interfaces status | begin gi1/0/5').slice(0, 40));
+  n.exec(sw.id, 'configure'); n.exec(sw.id, 'interface gi1/0/3'); n.exec(sw.id, 'description UPLINK'); n.exec(sw.id, 'end');
+  var sec = n.exec(sw.id, 'show running-config | section 1/0/3');
+  chk('MES | section — блок interface до exit', /1\/0\/3[\s\S]*UPLINK[\s\S]*exit$/.test(sec), sec);
+  chk('MES | ? — список фильтров', /include[\s\S]*section/.test(n.exec(sw.id, 'show running-config | ?')));
+  var ei = n.exec(r.id, 'show interfaces status | include "^gi1/0/1 "');
+  chk('ESR | include — регулярное выражение', /^gi1\/0\/1\s/.test(ei) && ei.split('\n').length === 1, ei);
+  chk('ESR | count', /^\d+$/.test(n.exec(r.id, 'show running-config | count')));
+  chk('ESR | until', n.exec(r.id, 'show running-config | until interface').indexOf('interface') < 0);
+  chk('ESR | неизвестный фильтр', n.exec(r.id, 'show running-config | grep x') === 'Syntax error: Unknown command');
+  chk('ESR: «|» в кавычках — не фильтр', !n.exec(r.id, 'configure') && !n.exec(r.id, 'interface gi1/0/2') && !n.exec(r.id, 'description "a|b"') && (n.exec(r.id, 'end'), true));
+  // постраничный вывод
+  chk('страница 24 строки, строки More по руководствам', n.pageLen(sw.id) === 24 && /More: <space>/.test(n.moreText(sw.id)) && /More\? Enter/.test(n.moreText(r.id)));
+  n.exec(sw.id, 'terminal datadump'); chk('MES terminal datadump', n.pageLen(sw.id) === 0);
+  n.exec(sw.id, 'terminal no datadump'); n.exec(r.id, 'terminal datadump'); chk('ESR terminal datadump', n.pageLen(sw.id) === 24 && n.pageLen(r.id) === 0);
+  n.exec(sw.id, 'show running-config | no-more'); chk('| no-more — без страниц', n.pageLen(sw.id) === 0);
+  // события: shutdown, logging console
+  n.events(true);
+  n.exec(sw.id, 'configure'); n.exec(sw.id, 'interface gi1/0/2'); n.exec(sw.id, 'shutdown'); n.exec(sw.id, 'end');
+  ev = n.events();
+  chk('shutdown → link DOWN', ev.some(function (e) { return e.id === sw.id && e.msg === 'CFA-4-Interface gi 1/0/2 link status DOWN'; }), JSON.stringify(ev));
+  n.exec(sw.id, 'configure'); n.exec(sw.id, 'no logging console'); n.exec(sw.id, 'interface gi1/0/2'); n.exec(sw.id, 'no shutdown'); n.exec(sw.id, 'end');
+  ev = n.events();
+  chk('no logging console — в консоль нет, в буфер есть', !ev.some(function (e) { return e.id === sw.id; }) && /gi 1\/0\/2 link status UP/.test(n.exec(sw.id, 'show logging')) &&
+      /no logging console/.test(n.exec(sw.id, 'show running-config')));
+  var m6 = n.add('MES3300-24', 'SW6'); n.events(true); n.connect(m6.id, 'gi1/0/1', sw.id, 'gi1/0/3'); ev = n.events();
+  chk('MES 6.x: %LINK-I-Up', ev.some(function (e) { return e.id === m6.id && /^%LINK-I-Up:\s+gi1\/0\/1$/.test(e.msg); }), JSON.stringify(ev));
+  chk('STP: сообщения о корне/состоянии порта', ev.some(function (e) { return /%STP-W|AST-6-/.test(e.msg); }), JSON.stringify(ev));
+  n.power(r.id, false); ev = n.events();
+  chk('ESR выключен → у соседа link DOWN', ev.some(function (e) { return e.id === sw.id && /gi 1\/0\/1 link status DOWN/.test(e.msg); }) || /gi 1\/0\/1 link status DOWN/.test(n.exec(sw.id, 'show logging')));
+  console.log('✓ живая консоль');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

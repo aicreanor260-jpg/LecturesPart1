@@ -98,6 +98,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>commit · confirm · rollback · show candidate-config</td><td>применение изменений</td></tr>
 <tr><td>show running-config | ip interfaces | ip route [all] | ip rip | ip ospf neighbors | interfaces status | users · ping · traceroute</td><td>просмотр и проверка</td></tr>
 </table>
+<h2>Консоль: фильтры, страницы, сообщения</h2>
+<table>
+<tr><td>show running-config | include vlan · | exclude · | begin · | section 1/0/3</td><td>MES: фильтр вывода (без учёта регистра), <code>| no-more</code> — без страниц</td></tr>
+<tr><td>show interfaces status | include "^gi1/0/1 " · | until · | count · | counter</td><td>ESR: шаблон — регулярное выражение</td></tr>
+<tr><td>пробел · Enter · q (ESR: R)</td><td>длинный вывод по 24 строки: страница, строка, выход, всё остальное; <code>terminal datadump</code> — без страниц</td></tr>
+<tr><td>show interfaces counters [gi1/0/1] · show interfaces gi1/0/1 · clear counters</td><td>MES: кадры unicast/multicast/broadcast и байты на портах</td></tr>
+<tr><td>show interfaces counters [gi1/0/1] · clear interfaces counters</td><td>ESR: счётчики интерфейсов</td></tr>
+<tr><td>show logging · no logging console</td><td>MES: журнал сообщений (линк, STP); ESR: <code>no syslog console</code></td></tr>
+</table>
+
 <h2>VPC и Debian</h2>
 <table>
 <tr><td>VPC: ip 10.0.0.2/24 10.0.0.1 · ip dhcp · show · ping · trace · arp · clear ip</td><td>как VPCS в pnetlab</td></tr>

@@ -213,6 +213,21 @@ security zone-pair trusted self        ← трафик самому маршр�
 | Время | `clock set 10:20:30 5 Mar 2026`, `clock timezone MSK +3`, `show clock` | то же | |
 | Сведения | `show version`, `show system`, `show users`, `show interfaces description`, `show running-config interface gi1/0/1`, `show lldp neighbors`, `traceroute A.B.C.D` | то же, `traceroute ip A.B.C.D` | LLDP: MES видит соседей-MES и ESR, ESR видит MES |
 
+### Живая консоль: фильтры, страницы, сообщения, счётчики
+Работает в обоих режимах — это поведение устройства.
+
+| Что | MES | ESR | Откуда |
+|---|---|---|---|
+| Фильтр вывода | `show running-config \| include vlan`, `\| exclude`, `\| begin`, `\| section 1/0/3` (до `exit`), `\| section "s" "конец"`, `\| section "s" include "s2"`, `\| no-more`; регистр не учитывается | `\| include "^gi1/0/1 "`, `\| exclude`, `\| begin`, `\| until`, `\| count`, `\| counter`; шаблон — регулярное выражение | ESR: справочник 1.23 «фильтрация»; MES: руководство 8.4.0.7 гл. 6.2. В руководствах 10.4.6 и 6.6.8.8 фильтры не описаны — ветки 10 и 6 работают как 8.4 |
+| Постраничный вывод | 24 строки, строка `More: <space>,  Quit: q or CTRL+Z, One line: <return>` (10, 6), `--More-- or (q)uit` (8); `terminal datadump` / `terminal no datadump` (10, 6), `terminal length N` (8) | 24 строки, `More? Enter – next line; Space – next page; Q – quit; R – show the rest.`; `terminal datadump` / `no terminal datadump` | строки «More» — дословно из руководств; для ветки 10 команд нет в 10.4.6 — сделано как в 6.6.8.8 |
+| Сообщения в консоль | 10.x: `CFA-6-Interface gi 1/0/1 link status UP`, `CFA-4-… DOWN`, `AST-6-[Instance 0] Interface gi 1/0/2 is moved to state Forwarding`, `AST-6-… This is the root bridge`, `AST-6-BPDU received on Bpdu Guard enabled edge …`; 6.x: `%LINK-I-Up:  gi1/0/1`, `%LINK-W-Down:  gi1/0/1`, `%STP-W-PORTSTATUS: …` | `%LINK-I-Up:  gi1/0/1`, `%LINK-W-Down:  …`, `%OSPF-I-NEIGHBOR: Neighbor 2.2.2.2 on gi1/0/1 changed state to Full`, `%VRRP-I-STATE: gi1/0/1 VRID 1 changed state to Master` | 10.x — «Руководство по сообщениям Syslog MES14xx/24xx/3400/37xx»; **6.x и ESR — формат условный** (в руководствах не приведён) |
+| Журнал | `show logging` (буфер 200 строк, новые сверху), `logging console` / `no logging console` | `syslog console` / `no syslog console`; сообщения уходят и на удалённый syslog-сервер (`syslog host`) | |
+| Счётчики | `show interfaces counters [gi1/0/1]` (таблицы In/Out Ucast/Mcast/Bcast/Octets, у одного порта — список ошибок), `show interfaces gi1/0/1`, `clear counters [gi1/0/1]` | `show interfaces counters [gi1/0/1]`, `clear interfaces counters [gi1/0/1]` | форматы таблиц — из 6.6.8.8 и ESR 1.23; сводка `show interfaces gi1/0/1` в руководствах не приведена — упрощена |
+
+События: включили/выключили кабель, `shutdown`/`no shutdown`, выключили или перезагрузили соседа, сменилась роль порта STP, соседство OSPF дошло до Full или пропало, сменился мастер VRRP. Сообщение появляется в консоли устройства сразу (OSPF — по таймерам). Счётчики считают каждый кадр модели: ARP-запрос — broadcast на каждом сегменте, ARP-ответ и IP — unicast по пути, BPDU — multicast раз в 2 с с назначенного порта STP. Размеры кадров условные (ARP 64, ICMP 102, TCP 78, UDP 110 байт, +4 с тегом 802.1Q). Перезагрузка обнуляет счётчики, журнал и настройки сессии (`terminal datadump`).
+
+Не сделано: `terminal monitor` (нет в руководствах MES 10.4.6/6.6.8.8 и ESR 1.23), `dir`/`boot system` (вывод в руководствах не приведён).
+
 ## Типовые ошибки
 | Сообщение | Что делать |
 |---|---|

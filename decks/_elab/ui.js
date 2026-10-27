@@ -103,6 +103,7 @@
     if (gone.length && mode === 'test') { toast('Истёк таймер: ' + gone.slice(0, 3).map(function (g) { return g.dev + ' ' + g.kind + ' ' + g.what; }).join('; ') + (gone.length > 3 ? ' и ещё ' + (gone.length - 3) : ''));
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
+    pollEv();
     return gone.length;
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
@@ -295,6 +296,7 @@
     out.innerHTML = t.html; out.scrollTop = out.scrollHeight; setPr(id);
     out.addEventListener('mouseup', function () { if (!getSelection().toString()) inp.focus(); });
     inp.addEventListener('keydown', function (e) {
+      if (t.more) { e.preventDefault(); e.stopPropagation(); moreKey(id, e); return; }
       if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(id, v); e.preventDefault(); }
       else if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); var dz = net.devs[id];   // Ctrl+Z — выход в привилегированный режим
         if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
@@ -313,7 +315,8 @@
     var w = wins['t' + id]; if (w) { var out = w.el.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight; }
   }
   function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
-    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; }
+    if (t.more && !d.off) p = net.moreText(id);
+    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
@@ -333,8 +336,33 @@
     if (d.type === 'mes' && /^\s*rel(o(a(d)?)?)?\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
     if (d.type === 'esr' && /^\s*reload\s+system\s*$/i.test(line) && d.st.mode === 'priv') { boot(id, true); return; }
     var r = realOut(d, line, net.exec(id, line, hooks));
-    if (r) tlog(id, r, /^%|Unrecognized|Bad command|command not found|Permission denied|Error|not reachable|timeout|100% packet loss|Login incorrect|Unable|refused/i.test(r) ? 'e' : '');
+    if (r) outPaged(id, r, /^%|Unrecognized|Bad command|command not found|Permission denied|\bError\b|not reachable|timeout|100% packet loss|Login incorrect|Unable|refused/i.test(r) ? 'e' : '');
     setPr(id); draw(); refresh();
+  }
+  // постраничный вывод длинных show: пробел — страница, Enter — строка, q — выход (ESR: R — всё остальное)
+  function outPaged(id, r, cls) {
+    var n = net.pageLen(id), L = String(r).split('\n');
+    if (!n || L.length < n) { tlog(id, r, cls); return; }
+    tlog(id, L.slice(0, n - 1).join('\n'), cls); term(id).more = { L: L, i: n - 1, n: n, cls: cls };
+  }
+  function moreKey(id, e) {
+    var t = term(id), m = t.more, d = net.devs[id], k = e.key, step = 0;
+    if (!m || !d) { t.more = null; return; }
+    if (k === 'Enter') step = 1;
+    else if (k === ' ') step = m.n - 1;
+    else if (/^[qQйЙ]$/.test(k) || (e.ctrlKey && /^[zZя]$/.test(k))) step = -1;
+    else if (d.type === 'esr' && /^[rRкК]$/.test(k)) step = m.L.length;
+    else if (d.type === 'mes' && d.st.dialect === '8' && k.length === 1) step = m.n - 1;
+    else return;
+    if (step > 0) { tlog(id, m.L.slice(m.i, m.i + step).join('\n'), m.cls); m.i += step; }
+    if (step < 0 || m.i >= m.L.length) t.more = null;
+    setPr(id);
+  }
+  // системные сообщения устройств (линк, STP, OSPF, VRRP) — в их консоли
+  function pollEv() {
+    net.events().forEach(function (e) { var d = net.devs[e.id], t = term(e.id); if (!d) return;
+      if (!t.html) t.html = '<div class="s">' + esc(banner(d)) + '</div>';
+      tlog(e.id, e.msg, 's'); });
   }
   function boot(id, reload) {
     var d = net.devs[id]; tlog(id, reload ? 'System is going to reboot…' : 'Power on…', 's');
@@ -605,7 +633,7 @@
         '</div><div class="sum ' + (ok === cs.length ? 'ok' : '') + '">' + (ok === cs.length ? 'ВЫПОЛНЕНО ✓' : ok + ' из ' + cs.length) + '</div>'; }
     if (a === 'send') { var r = task.T.send(task.P, st); task.res = '<div class="send">' + r.map(function (x) { return '<div class="' + (x.ok ? 'ok' : x.exp ? 'exp' : 'no') + '">✉ ' + esc(x.t) + '</div>'; }).join('') + '</div>'; }
     renderTask(); }
-  function refresh() { renderLab(false); refreshTables(); }
+  function refresh() { renderLab(false); refreshTables(); pollEv(); }
 
   // ================================================================== справка, файл, клавиши
   function openHelp() {
