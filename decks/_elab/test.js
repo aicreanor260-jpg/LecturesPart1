@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -793,6 +793,30 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { PB: ['configure', 'vlan database', 'vlan 200', 'exit', 'interface gi1/0/1', 'switchport customer vlan 200', 'end'] });
   chk('разные S-VLAN у провайдера — связи нет', !n.ping(va.id, '10.0.10.2').ok);
   console.log('✓ QinQ');
+})();
+
+// MSTP: два экземпляра делят VLAN 10 и 20 по двум параллельным линкам
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('MES2428', 'SW1'), b = n.add('MES2428', 'SW2'), p1 = n.add('VPC', 'P10a'), p2 = n.add('VPC', 'P10b'), p3 = n.add('VPC', 'P20a'), p4 = n.add('VPC', 'P20b');
+  n.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); n.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2');
+  n.connect(p1.id, 'eth0', a.id, 'gi1/0/10'); n.connect(p2.id, 'eth0', b.id, 'gi1/0/10'); n.connect(p3.id, 'eth0', a.id, 'gi1/0/20'); n.connect(p4.id, 'eth0', b.id, 'gi1/0/20');
+  var sw = function (extra) { return ['enable', 'configure', 'vlan database', 'vlan 10,20', 'exit', 'spanning-tree mode mst', 'interface range gi1/0/1-2', 'switchport mode trunk', 'switchport trunk allowed vlan add 10,20', 'exit',
+    'interface gi1/0/10', 'switchport access vlan 10', 'exit', 'interface gi1/0/20', 'switchport access vlan 20', 'exit',
+    'spanning-tree mst configuration', 'instance 1 vlan 10', 'instance 2 vlan 20', 'name LAB', 'revision 1', 'exit'].concat(extra || [], ['end']); };
+  var e = EL.labs.apply(n, { SW1: sw(['spanning-tree mst 1 priority 4096', 'spanning-tree mst 2 priority 4096']), SW2: sw(['interface gi1/0/1', 'spanning-tree mst 2 cost 200000', 'exit']),
+    P10a: ['ip 10.0.10.1/24'], P10b: ['ip 10.0.10.2/24'], P20a: ['ip 10.0.20.1/24'], P20b: ['ip 10.0.20.2/24'] });
+  chk('MSTP: команды без ошибок', !e.length, e.join('; '));
+  var t1 = n.stp(1)[b.id], t2 = n.stp(2)[b.id];
+  chk('MSTI 1: на SW2 заблокирован gi1/0/2, MSTI 2: заблокирован gi1/0/1', t1['gi1/0/2'] && !t1['gi1/0/2'].fwd && t1['gi1/0/1'].fwd && t2['gi1/0/1'] && !t2['gi1/0/1'].fwd && t2['gi1/0/2'].fwd, JSON.stringify([t1, t2]));
+  var r10 = n.ping(p1.id, '10.0.10.2'), r20 = n.ping(p3.id, '10.0.20.2');
+  chk('VLAN 10 и VLAN 20 работают', r10.ok && r20.ok);
+  function used(r, port) { return r.steps.some(function (s) { return s.k === 'ip' && (s.segs || []).some(function (g) { var l = n.links[g.li]; return l.a.port === port && l.a.dev === a.id; }); }); }
+  chk('балансировка: VLAN 10 идёт по gi1/0/1, VLAN 20 — по gi1/0/2', used(r10, 'gi1/0/1') && !used(r10, 'gi1/0/2') && used(r20, 'gi1/0/2') && !used(r20, 'gi1/0/1'));
+  chk('show spanning-tree mst 2', /MST 2 Vlans Mapped: 20[\s\S]*gi1\/0\/1\s+enabled[\s\S]*Dsc/.test(n.exec(b.id, 'show spanning-tree mst 2')), n.exec(b.id, 'show spanning-tree mst 2'));
+  chk('running-config: spanning-tree mst configuration', /spanning-tree mst configuration\n instance 1 vlan 10\n instance 2 vlan 20\n name LAB\n revision 1\nexit/.test(n.exec(b.id, 'show running-config')) && /spanning-tree mst 2 cost 200000/.test(n.exec(b.id, 'show running-config')));
+  chk('приглашение (config-mst)#', (n.exec(a.id, 'configure'), n.exec(a.id, 'spanning-tree mst configuration'), /\(config-mst\)#$/.test(n.prompt(a.id))), n.prompt(a.id)); n.exec(a.id, 'end');
+  console.log('✓ MSTP-экземпляры');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

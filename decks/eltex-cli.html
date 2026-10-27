@@ -2489,13 +2489,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 
   // ------------------------------------------------------------------ RSTP: роли и состояния портов
-  function bid(st) { var s = st.stp || { prio: 32768 }; return { prio: s.prio, mac: st.bmac }; }
+  // k — экземпляр MSTP (0 — CIST/обычное STP): приоритет моста и стоимость порта свои для каждого экземпляра
+  function bid(st, k) { var s = st.stp || { prio: 32768 }, m = k && st.mst && st.mst.inst[k]; return { prio: m && m.prio !== undefined ? m.prio : s.prio, mac: st.bmac }; }
+  function pcost(L, k) { var c = k && L.cfg.mstCost && L.cfg.mstCost[k]; return c || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000); }
   function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
   function pnum(n) { if (n.indexOf('po') === 0) return 1000 + +n.slice(2); var pf = { gi: 0, fa: 0, tw: 100, te: 200, fo: 300, hu: 400 }[n.replace(/[\d\/]+$/, '')] || 0;
     return pf + +n.split('/')[2]; }
-  P.stp = function () {
-    if (this._stp && this._stp.gen === this.gen) return this._stp.t;
-    if (this.bpduGuard && this.bpduGuard()) this.gen++;
+  P.stp = function (k) {
+    k = k || 0; var K = (this._stpK = this._stpK || {});
+    if (!k && this._stp && this._stp.gen === this.gen) return this._stp.t;
+    if (k && K[k] && K[k].gen === this.gen) return K[k].t;
+    if (!k && this.bpduGuard && this.bpduGuard()) this.gen++;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
     var on = {}; br.forEach(function (id) { on[id] = true; });
     var edges = [];
@@ -2505,13 +2509,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
         if (L.cfg.stpOff || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
-        edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000) });
+        edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
     });
     var dist = {}, root = {}, done = {};
     br.forEach(function (id) { dist[id] = Infinity; });
     // корень компоненты — минимальный Bridge ID; расстояние — Дейкстра по стоимости принимающего порта
-    br.slice().sort(function (a, b) { return bidLess(bid(s.devs[a].st), bid(s.devs[b].st)) ? -1 : 1; }).forEach(function (r) {
+    br.slice().sort(function (a, b) { return bidLess(bid(s.devs[a].st, k), bid(s.devs[b].st, k)) ? -1 : 1; }).forEach(function (r) {
       if (dist[r] !== Infinity) return;
       dist[r] = 0; root[r] = r; var q = [r];
       while (q.length) {
@@ -2521,14 +2525,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
           if (c < dist[e.v]) { dist[e.v] = c; root[e.v] = r; q.push(e.v); } });
       }
     });
-    function key(id, port) { var b = bid(s.devs[id].st); return [dist[id], b.prio, b.mac, pnum(port)]; }
+    function key(id, port) { var b = bid(s.devs[id].st, k); return [dist[id], b.prio, b.mac, pnum(port)]; }
     function less(a, b) { for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; }
     var rootPort = {};
     br.forEach(function (id) {
       if (root[id] === id) return;
       var best = null;
       edges.forEach(function (e) { if (e.u !== id) return;
-        var cand = [dist[e.v] + e.cu, bid(s.devs[e.v].st).prio, bid(s.devs[e.v].st).mac, pnum(e.b), pnum(e.a)];
+        var cand = [dist[e.v] + e.cu, bid(s.devs[e.v].st, k).prio, bid(s.devs[e.v].st, k).mac, pnum(e.b), pnum(e.a)];
         if (!best || less(cand, best.k)) best = { k: cand, port: e.a }; });
       if (best) rootPort[id] = best.port;
     });
@@ -2539,12 +2543,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (less(mine, his)) t[e.u][e.a] = { role: 'Desg', fwd: true };
       else t[e.u][e.a] = { role: e.v === e.u ? 'Back' : 'Altn', fwd: false };
     });
-    this._stp = { gen: this.gen, t: t, root: root, dist: dist };
+    var res = { gen: this.gen, t: t, root: root, dist: dist };
+    if (k) K[k] = res; else this._stp = res;
     return t;
   };
-  P.stpFwd = function (id, lname) {
+  P.stpInst = function (id, v) {             // экземпляр MSTP для VLAN на коммутаторе (0 — CIST)
+    var st = this.devs[id].st, m = st.mst; if (!m || v === undefined || (st.stp || {}).mode !== 'mst') return 0;
+    var k = Object.keys(m.inst).filter(function (q) { return m.inst[q].vlans.indexOf(v) >= 0; })[0]; return k ? +k : 0;
+  };
+  P.stpFwd = function (id, lname, v) {
     var d = this.devs[id]; if (d.st.stp && d.st.stp.on === false) return true;
-    var r = (this.stp()[id] || {})[lname]; return !r || r.fwd;
+    var r = (this.stp(this.stpInst(id, v))[id] || {})[lname]; return !r || r.fwd;
   };
   P.stpText = function (id) {
     var d = this.devs[id], st = d.st, s = this;
@@ -2633,7 +2642,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
         var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
       s.lports(dev).forEach(function (L) {           // логические порты: обычный порт или собранный port-channel
-        if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name)) return;
+        if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name, v)) return;
         var e = egress(L.cfg, v), q2 = inner === undefined ? null : inner;
         if (e === 'c') send(dev, L.members[0], q2, path, null);            // клиентский порт QinQ: S-VLAN снимается, тег клиента остаётся
         else if (e) send(dev, L.members[0], e === 't' ? v : q2, path, e === 't' ? q2 : null);
@@ -2659,9 +2668,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
-        if (!this.stpFwd(it.dev, LP.name)) { notes.push(nm + ': ' + LP.name + ' заблокирован STP (роль ' + this.stp()[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
+        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v);
+          notes.push(nm + ': ' + LP.name + ' заблокирован STP' + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         inMes(it.dev, LP.name, r.v, it.path, r.inner !== undefined ? r.inner : it.inner);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
@@ -5482,6 +5492,71 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return each(st, function (p) { p.cvlan = a[0]; }); }, 'S-VLAN клиентского порта');
   mcmd(['6'], 'if range', 'no switchport customer vlan', function (st) { return each(st, function (p) { p.cvlan = 1; }); });
   E.PORTX.push(function (st, k, p, d) { if (p.mode === 'customer') { d.push(' switchport mode customer'); if (p.cvlan !== 1) d.push(' switchport customer vlan ' + p.cvlan); } });
+})(typeof window !== 'undefined' ? window : global);
+
+/* MSTP-экземпляры на MES (руководства 10.4.6 и 6.6.8.8, режим spanning-tree mode mst):
+   spanning-tree mst configuration → (config-mst)#: instance N vlan СПИСОК, name, revision;
+   spanning-tree mst N priority P (кратно 4096); на порту spanning-tree mst N cost C; show spanning-tree mst N.
+   У каждого экземпляра своё дерево: свой корень по приоритету экземпляра и своя стоимость портов — разные VLAN могут
+   блокироваться на разных портах (балансировка). VLAN без экземпляра идут по CIST (экземпляр 0, обычные настройки STP).
+   Упрощение: совпадение имени/ревизии/привязок региона не проверяется — все коммутаторы считаются одним регионом. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, P = EL.Net.prototype, CMDS = E.CMDS;
+  E.PROMPT.mst = '(config-mst)#';
+  function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function ports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k] || (st.pos || {})[k]; }).filter(Boolean) : null; }
+  function each(st, f) { var p = ports(st); if (!p) return '% Команда доступна в настройке порта'; p.forEach(f); }
+  function M(st) { return st.mst || (st.mst = { inst: {}, name: null, rev: 0 }); }
+  function inst(st, k) { var m = M(st); return m.inst[k] || (m.inst[k] = { vlans: [] }); }
+  var D = ['10', '6'];
+  mcmd(D, 'config', 'spanning-tree mst configuration', function (st) { M(st); st.mode = 'mst'; st.ctx = null; }, 'Настройка MSTP: экземпляры и VLAN');
+  mcmd(D, 'mst', 'instance <n> vlan <list>', function (st, a) { if (a[0] < 1 || a[0] > 63) return '% Invalid input';
+    var m = M(st); Object.keys(m.inst).forEach(function (k) { m.inst[k].vlans = m.inst[k].vlans.filter(function (v) { return a[1].indexOf(v) < 0; }); });
+    var I = inst(st, a[0]); a[1].forEach(function (v) { if (I.vlans.indexOf(v) < 0) I.vlans.push(v); }); I.vlans.sort(function (x, y) { return x - y; }); }, 'Привязать VLAN к экземпляру');
+  mcmd(D, 'mst', 'no instance <n> vlan <list>', function (st, a) { var I = M(st).inst[a[0]]; if (I) I.vlans = I.vlans.filter(function (v) { return a[1].indexOf(v) < 0; }); });
+  mcmd(D, 'mst', 'name <w>', function (st, a) { M(st).name = a[0]; }, 'Имя конфигурации MST');
+  mcmd(D, 'mst', 'no name', function (st) { M(st).name = null; });
+  mcmd(D, 'mst', 'revision <n>', function (st, a) { if (a[0] > 65535) return '% Invalid input'; M(st).rev = a[0]; }, 'Номер ревизии');
+  mcmd(D, 'mst', 'no revision', function (st) { M(st).rev = 0; });
+  mcmd(D, 'mst', 'exit', function (st) { st.mode = 'config'; });
+  mcmd(D, 'mst', 'end', function (st) { st.mode = 'priv'; });
+  mcmd(D, 'config', 'spanning-tree mst <n> priority <n>', function (st, a) { if (a[0] < 1 || a[0] > 63 || a[1] > 61440 || a[1] % 4096) return '% Приоритет 0–61440, кратный 4096';
+    inst(st, a[0]).prio = a[1]; }, 'Приоритет моста в экземпляре');
+  mcmd(D, 'config', 'no spanning-tree mst <n> priority', function (st, a) { var I = M(st).inst[a[0]]; if (I) delete I.prio; });
+  mcmd(D, 'if range', 'spanning-tree mst <n> cost <n>', function (st, a) { if (a[0] < 1 || a[0] > 63 || a[1] < 1 || a[1] > 200000000) return '% Invalid input';
+    return each(st, function (p) { (p.mstCost = p.mstCost || {})[a[0]] = a[1]; }); }, 'Стоимость порта в экземпляре');
+  mcmd(D, 'if range', 'no spanning-tree mst <n> cost', function (st, a) { return each(st, function (p) { if (p.mstCost) delete p.mstCost[a[0]]; }); });
+  mcmd(D, 'if range', 'spanning-tree mst <n> port-priority <n>', function (st, a) { if (a[1] > 240 || a[1] % 16) return '% Приоритет 0–240, кратный 16';
+    return each(st, function (p) { (p.mstPrio = p.mstPrio || {})[a[0]] = a[1]; }); }, 'Приоритет порта в экземпляре');
+  E.RUNX.push(function (st, o) { var m = st.mst; if (!m) return;
+    var ks = Object.keys(m.inst).filter(function (k) { return m.inst[k].vlans.length; });
+    if (ks.length || m.name || m.rev) { o.push('spanning-tree mst configuration'); ks.forEach(function (k) { o.push(' instance ' + k + ' vlan ' + E.fmtList(m.inst[k].vlans)); });
+      if (m.name) o.push(' name ' + m.name); if (m.rev) o.push(' revision ' + m.rev); o.push('exit'); }
+    Object.keys(m.inst).forEach(function (k) { if (m.inst[k].prio !== undefined) o.push('spanning-tree mst ' + k + ' priority ' + m.inst[k].prio); }); });
+  E.PORTX.push(function (st, k, p, d) { Object.keys(p.mstCost || {}).forEach(function (i) { d.push(' spanning-tree mst ' + i + ' cost ' + p.mstCost[i]); });
+    Object.keys(p.mstPrio || {}).forEach(function (i) { d.push(' spanning-tree mst ' + i + ' port-priority ' + p.mstPrio[i]); }); });
+
+  // show spanning-tree mst N
+  function rp(x, n) { x = String(x); while (x.length < n) x += ' '; return x; }
+  P.mstText = function (id, k) {
+    var d = this.devs[id], st = d.st, m = st.mst || { inst: {} }, I = m.inst[k];
+    if ((st.stp || {}).mode !== 'mst') return '% Режим STP не MSTP (spanning-tree mode mst)';
+    if (!I || !I.vlans.length) return '% Экземпляр ' + k + ' не создан (spanning-tree mst configuration → instance ' + k + ' vlan …)';
+    var t = this.stp(k)[id] || {}, R = this._stpK[k].root[id], rd = this.devs[R].st, rb = (rd.mst && rd.mst.inst[k] && rd.mst.inst[k].prio !== undefined) ? rd.mst.inst[k].prio : (rd.stp || {}).prio;
+    var me = I.prio !== undefined ? I.prio : (st.stp || {}).prio, s = this;
+    var o = ['###### MST ' + k + ' Vlans Mapped: ' + E.fmtList(I.vlans), 'CST Root ID      Priority    ' + rb, '                 Address     ' + rd.bmac];
+    o.push(R === id ? '                 This switch is root for this instance' : '                 Cost        ' + this._stpK[k].dist[id]);
+    o.push('Bridge ID        Priority    ' + me, '                 Address     ' + st.bmac, '', 'Interfaces', ' Name       State   Prio.Nbr  Cost      Sts   Role   Type', ' ---------- ------- --------- --------- ----- ------ ----------');
+    this.lports(id).forEach(function (L) { var r = t[L.name]; if (!r) return;
+      var c = (L.cfg.mstCost && L.cfg.mstCost[k]) || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000), pr = (L.cfg.mstPrio && L.cfg.mstPrio[k]) || 128;
+      o.push(' ' + rp(L.name, 11) + 'enabled ' + rp(pr + '.' + L.name.split('/').pop(), 10) + rp(c, 10) + (r.fwd ? 'Frw   ' : 'Dsc   ') + rp(r.role, 7) + 'P2p'); });
+    void s; return o.join('\n');
+  };
+  ['', 'do '].forEach(function (pre) { mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst <n>', function (st, a) { return st.net ? st.net.mstText(st.dev, a[0]) : ''; }, 'Состояние экземпляра MSTP');
+    mcmd(D, pre ? E.CFG : 'priv', pre + 'show spanning-tree mst configuration', function (st) { var m = st.mst || { inst: {} };
+      return ['Name      ' + (m.name || ''), 'Revision  ' + (m.rev || 0), 'Instance  Vlans mapped', '--------  ------------------'].concat(
+        Object.keys(m.inst).filter(function (k) { return m.inst[k].vlans.length; }).map(function (k) { return rp(k, 10) + E.fmtList(m.inst[k].vlans); })).join('\n'); }, 'Конфигурация MSTP'); });
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).

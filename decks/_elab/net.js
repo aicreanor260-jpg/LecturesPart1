@@ -269,13 +269,17 @@
   };
 
   // ------------------------------------------------------------------ RSTP: роли и состояния портов
-  function bid(st) { var s = st.stp || { prio: 32768 }; return { prio: s.prio, mac: st.bmac }; }
+  // k — экземпляр MSTP (0 — CIST/обычное STP): приоритет моста и стоимость порта свои для каждого экземпляра
+  function bid(st, k) { var s = st.stp || { prio: 32768 }, m = k && st.mst && st.mst.inst[k]; return { prio: m && m.prio !== undefined ? m.prio : s.prio, mac: st.bmac }; }
+  function pcost(L, k) { var c = k && L.cfg.mstCost && L.cfg.mstCost[k]; return c || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000); }
   function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
   function pnum(n) { if (n.indexOf('po') === 0) return 1000 + +n.slice(2); var pf = { gi: 0, fa: 0, tw: 100, te: 200, fo: 300, hu: 400 }[n.replace(/[\d\/]+$/, '')] || 0;
     return pf + +n.split('/')[2]; }
-  P.stp = function () {
-    if (this._stp && this._stp.gen === this.gen) return this._stp.t;
-    if (this.bpduGuard && this.bpduGuard()) this.gen++;
+  P.stp = function (k) {
+    k = k || 0; var K = (this._stpK = this._stpK || {});
+    if (!k && this._stp && this._stp.gen === this.gen) return this._stp.t;
+    if (k && K[k] && K[k].gen === this.gen) return K[k].t;
+    if (!k && this.bpduGuard && this.bpduGuard()) this.gen++;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
     var on = {}; br.forEach(function (id) { on[id] = true; });
     var edges = [];
@@ -285,13 +289,13 @@
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
         if (L.cfg.stpOff || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
-        edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000) });
+        edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
     });
     var dist = {}, root = {}, done = {};
     br.forEach(function (id) { dist[id] = Infinity; });
     // корень компоненты — минимальный Bridge ID; расстояние — Дейкстра по стоимости принимающего порта
-    br.slice().sort(function (a, b) { return bidLess(bid(s.devs[a].st), bid(s.devs[b].st)) ? -1 : 1; }).forEach(function (r) {
+    br.slice().sort(function (a, b) { return bidLess(bid(s.devs[a].st, k), bid(s.devs[b].st, k)) ? -1 : 1; }).forEach(function (r) {
       if (dist[r] !== Infinity) return;
       dist[r] = 0; root[r] = r; var q = [r];
       while (q.length) {
@@ -301,14 +305,14 @@
           if (c < dist[e.v]) { dist[e.v] = c; root[e.v] = r; q.push(e.v); } });
       }
     });
-    function key(id, port) { var b = bid(s.devs[id].st); return [dist[id], b.prio, b.mac, pnum(port)]; }
+    function key(id, port) { var b = bid(s.devs[id].st, k); return [dist[id], b.prio, b.mac, pnum(port)]; }
     function less(a, b) { for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false; }
     var rootPort = {};
     br.forEach(function (id) {
       if (root[id] === id) return;
       var best = null;
       edges.forEach(function (e) { if (e.u !== id) return;
-        var cand = [dist[e.v] + e.cu, bid(s.devs[e.v].st).prio, bid(s.devs[e.v].st).mac, pnum(e.b), pnum(e.a)];
+        var cand = [dist[e.v] + e.cu, bid(s.devs[e.v].st, k).prio, bid(s.devs[e.v].st, k).mac, pnum(e.b), pnum(e.a)];
         if (!best || less(cand, best.k)) best = { k: cand, port: e.a }; });
       if (best) rootPort[id] = best.port;
     });
@@ -319,12 +323,17 @@
       if (less(mine, his)) t[e.u][e.a] = { role: 'Desg', fwd: true };
       else t[e.u][e.a] = { role: e.v === e.u ? 'Back' : 'Altn', fwd: false };
     });
-    this._stp = { gen: this.gen, t: t, root: root, dist: dist };
+    var res = { gen: this.gen, t: t, root: root, dist: dist };
+    if (k) K[k] = res; else this._stp = res;
     return t;
   };
-  P.stpFwd = function (id, lname) {
+  P.stpInst = function (id, v) {             // экземпляр MSTP для VLAN на коммутаторе (0 — CIST)
+    var st = this.devs[id].st, m = st.mst; if (!m || v === undefined || (st.stp || {}).mode !== 'mst') return 0;
+    var k = Object.keys(m.inst).filter(function (q) { return m.inst[q].vlans.indexOf(v) >= 0; })[0]; return k ? +k : 0;
+  };
+  P.stpFwd = function (id, lname, v) {
     var d = this.devs[id]; if (d.st.stp && d.st.stp.on === false) return true;
-    var r = (this.stp()[id] || {})[lname]; return !r || r.fwd;
+    var r = (this.stp(this.stpInst(id, v))[id] || {})[lname]; return !r || r.fwd;
   };
   P.stpText = function (id) {
     var d = this.devs[id], st = d.st, s = this;
@@ -413,7 +422,7 @@
       Object.keys(st.svi).forEach(function (sv) { if (+sv === v && EL.mes.sviUp(st, v) && !(dev === id && f.vlan === v)) {
         var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
       s.lports(dev).forEach(function (L) {           // логические порты: обычный порт или собранный port-channel
-        if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name)) return;
+        if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name, v)) return;
         var e = egress(L.cfg, v), q2 = inner === undefined ? null : inner;
         if (e === 'c') send(dev, L.members[0], q2, path, null);            // клиентский порт QinQ: S-VLAN снимается, тег клиента остаётся
         else if (e) send(dev, L.members[0], e === 't' ? v : q2, path, e === 't' ? q2 : null);
@@ -439,9 +448,10 @@
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
-        if (!this.stpFwd(it.dev, LP.name)) { notes.push(nm + ': ' + LP.name + ' заблокирован STP (роль ' + this.stp()[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
+        if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v);
+          notes.push(nm + ': ' + LP.name + ' заблокирован STP' + (ki ? ' в MSTI ' + ki : '') + ' (роль ' + this.stp(ki)[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         inMes(it.dev, LP.name, r.v, it.path, r.inner !== undefined ? r.inner : it.inner);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
