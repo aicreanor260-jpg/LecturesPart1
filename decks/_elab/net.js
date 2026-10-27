@@ -462,6 +462,7 @@
       if (d.type === 'mes') {
         var LP = this.lportOf(it.dev, it.port);
         if (!LP) { notes.push(nm + ': ' + it.port + ' в channel-group, но агрегат не собран (LACP) — порт не передаёт'); continue; }
+        var dx = this.dot1xBlock ? this.dot1xBlock(it.dev, it.port) : null; if (dx) { notes.push(nm + ': ' + dx); continue; }   // 802.1X
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
         if (!this.stpFwd(it.dev, LP.name, r.v)) { var ki = this.stpInst(it.dev, r.v);

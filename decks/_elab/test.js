@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -978,6 +978,36 @@ EL.labs.LABS.forEach(runLab);
   chk('bridge-group на интерфейсе с IP — ошибка', /has IP address/.test((n.exec(ra.id, 'configure'), n.exec(ra.id, 'interface gi1/0/1'), n.exec(ra.id, 'bridge-group 1'))));
   n.exec(ra.id, 'end');
   console.log('✓ L2TPv3');
+})();
+
+// 802.1X: клиент Debian за портом MES, проверка локально и через RADIUS (freeradius на Debian-server)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), cl = n.add('Debian', 'CL'), srv = n.add('Debian-server', 'RAD'), pc = n.add('VPC', 'PC');
+  n.connect(sw.id, 'gi1/0/1', cl.id, 'ens3'); n.connect(sw.id, 'gi1/0/2', srv.id, 'ens3'); n.connect(sw.id, 'gi1/0/3', pc.id, 'eth0');
+  ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.10/24 dev ens3'].forEach(function (l) { n.exec(cl.id, l); });
+  ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.2/24 dev ens3'].forEach(function (l) { n.exec(srv.id, l); });
+  EL.labs.apply(n, { PC: ['ip 10.0.0.20/24'] });
+  var e = EL.labs.apply(n, { SW1: ['enable', 'configure', 'interface vlan 1', 'ip address 10.0.0.1 255.255.255.0', 'exit', 'username student password Pass1234 privilege 1',
+    'dot1x system-auth-control', 'aaa authentication dot1x default local', 'interface gi1/0/1', 'dot1x port-control auto', 'exit', 'interface gi1/0/3', 'dot1x port-control auto', 'end'] });
+  chk('802.1X: команды MES 10 без ошибок', !e.length, e.join('; '));
+  var r = n.ping(cl.id, '10.0.0.1');
+  chk('без wpa_supplicant порт не авторизован — кадры отброшены', !r.ok && JSON.stringify(r.steps).indexOf('802.1X: порт gi1/0/1 не авторизован') >= 0);
+  cl.st.files['/etc/wpa_supplicant/wired.conf'] = cl.st.files['/etc/wpa_supplicant/wired.conf'].replace('identity="user"', 'identity="student"').replace('password="password"', 'password="Pass1234"');
+  n.exec(cl.id, 'wpa_supplicant -B -D wired -i ens3 -c /etc/wpa_supplicant/wired.conf');
+  chk('локальная проверка: student/Pass1234 — порт авторизован', n.ping(cl.id, '10.0.0.1').ok && /Port Operational Status: authorized\n User Name: student/.test(n.exec(sw.id, 'show dot1x interface gi1/0/1')), n.exec(sw.id, 'show dot1x interface gi1/0/1'));
+  chk('VPC без 802.1X на порту auto — не проходит', !n.ping(pc.id, '10.0.0.1').ok);
+  // RADIUS
+  EL.labs.apply(n, { SW1: ['configure', 'aaa authentication dot1x default group radius', 'radius-server host 10.0.0.2 key Sw1tchKey', 'end'] });
+  chk('RADIUS: сервер не знает коммутатор — не авторизован', !n.ping(cl.id, '10.0.0.1').ok && /unauthorized/.test(n.exec(sw.id, 'show dot1x interface gi1/0/1')));
+  srv.st.files['/etc/freeradius/3.0/clients.conf'] += 'client sw1 {\n\tipaddr = 10.0.0.1\n\tsecret = Sw1tchKey\n}\n';
+  srv.st.files['/etc/freeradius/3.0/users'] += 'student Cleartext-Password := "Pass1234"\n';
+  n.gen++;                                    // файлы правились мимо консоли
+  chk('RADIUS: clients.conf + users — порт авторизован', n.ping(cl.id, '10.0.0.1').ok, n.exec(sw.id, 'show dot1x interface gi1/0/1'));
+  n.exec(srv.id, 'systemctl stop freeradius');
+  chk('freeradius остановлен — не авторизован', !n.ping(cl.id, '10.0.0.1').ok);
+  chk('running-config: dot1x', /aaa authentication dot1x default group radius[\s\S]*dot1x system-auth-control/.test(n.exec(sw.id, 'show running-config')) && /dot1x port-control auto/.test(n.exec(sw.id, 'show running-config')));
+  console.log('✓ 802.1X');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

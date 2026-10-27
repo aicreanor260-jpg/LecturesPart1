@@ -403,6 +403,13 @@ tunnel l2tpv3 1
 Кадры между членами одного bridge-group коммутируются; через туннель L2TPv3 они переносятся на мост удалённого ESR, и два офиса оказываются в одной L2-сети (ARP и ping идут как в одном сегменте; в трассе — «кадр перенесён через L2TPv3»). Туннель работает, если у пары зеркальные адреса и session-id, одинаковая инкапсуляция, туннель другой стороны тоже в bridge-group и между концами есть IP-связь; иначе причина видна в трассе.
 Упрощения: cookie, UDP-порты, MTU туннеля, MAC-таблица моста ESR и L2TP для удалённого доступа (PPP) не моделируются.
 
+### 802.1X на MES (руководства 10.4.6 и 6.6.8.8)
+- **Коммутатор:** `dot1x system-auth-control`; база — 10.x: `aaa authentication dot1x default local` (по умолчанию, пользователи `username … password …`) или `… default group radius`; 6.x: `aaa authentication dot1x default radius | none` (по умолчанию radius); `radius-server host 10.0.0.2 key Sw1tchKey`; на порту `dot1x port-control auto` (по умолчанию force-authorized; force-unauthorized — закрыт всегда), `dot1x host-mode multi-host | multi-session`; `show dot1x interface gi1/0/1` (Port Operational Status, User Name).
+- **Клиент — Debian:** конфиг `/etc/wpa_supplicant/wired.conf` (`identity="…"`, `password="…"`), запуск `wpa_supplicant -B -D wired -i ens3 -c /etc/wpa_supplicant/wired.conf`, остановка `pkill wpa_supplicant`. VPC 802.1X не умеет — на порту auto не пройдёт.
+- **RADIUS-сервер — Debian-server (freeradius):** `/etc/freeradius/3.0/clients.conf` — `client sw1 { ipaddr = 10.0.0.1  secret = Sw1tchKey }` (адрес коммутатора, с которого он обращается к серверу, и тот же ключ), `/etc/freeradius/3.0/users` — `student Cleartext-Password := "Pass1234"`; `systemctl restart freeradius`.
+- Неавторизованный порт пропускает только EAPOL: остальные кадры отбрасываются, в трассе — причина (нет wpa_supplicant, неверный пароль, коммутатор не описан в clients.conf, сервер недоступен или остановлен).
+Упрощения: EAP-методы, повторная аутентификация, guest VLAN, MAC-аутентификация не моделируются.
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:
@@ -412,7 +419,7 @@ tunnel l2tpv3 1
 - **Потерь нет.** Перегрузка канала не моделируется; несовпадение дуплекса даёт ошибки в счётчиках, но кадры доходят.
 - **Протоколы маршрутизации IPv4 (RIP, OSPF)** идут по реальным таймерам; **RIPng, OSPFv3** сходятся сразу; через туннели GRE/VTI соседства не строятся.
 - **Межсетевой экран ESR** к IPv6 не применяется; NAT-T, DPD, rekey IPsec нет.
-- **Не моделируются:** L2TP для удалённого доступа (PPP); на MES — 802.1X, IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
+- **Не моделируются:** L2TP для удалённого доступа (PPP); на MES — IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
 
 ## Типовые ошибки
 | Сообщение | Что делать |
