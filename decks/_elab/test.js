@@ -512,7 +512,7 @@ EL.labs.LABS.forEach(runLab);
   chk('ip6: EUI-64 и solicited-node', A.eui64('e0:d9:e3:00:00:01') === 'fe80::e2d9:e3ff:fe00:1' && A.snm('2001:db8::abcd:1234') === 'ff02::1:ffcd:1234' && A.mmac('2001:db8::abcd:1234') === '33:33:ff:cd:12:34');
   var n = new EL.Net(), sw = n.add('MES2428', 'SW1'), r = n.add('vESR', 'R1'), p1 = n.add('VPC', 'PC1'), deb = n.add('Debian', 'D1');
   n.connect(sw.id, 'gi1/0/1', r.id, 'gi1/0/1'); n.connect(sw.id, 'gi1/0/2', p1.id, 'eth0'); n.connect(deb.id, 'ens3', r.id, 'gi1/0/2');
-  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:db8:1::1/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:db8:2::1/64', 'end', 'commit', 'confirm'],
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:db8:1::1/64', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:db8:2::1/64', 'ip firewall disable', 'end', 'commit', 'confirm'],
                              PC1: ['ip 2001:db8:1::10/64 2001:db8:1::1'] });
   chk('ESR ipv6 address без ошибок', !e.length, e.join('; '));
   chk('show ipv6 interfaces: адрес и link-local', /2001:db8:1::1\/64\s+gi1\/0\/1/.test(n.exec(r.id, 'show ipv6 interfaces')) && /fe80::\S+\/64\s+gi1\/0\/1/.test(n.exec(r.id, 'show ipv6 interfaces')));
@@ -534,8 +534,8 @@ EL.labs.LABS.forEach(runLab);
   // статический маршрут на ESR и show ipv6 route
   var n2 = new EL.Net(), ra = n2.add('vESR', 'RA'), rb = n2.add('vESR', 'RB'), pa = n2.add('VPC', 'PA'), pb = n2.add('VPC', 'PB');
   n2.connect(ra.id, 'gi1/0/1', rb.id, 'gi1/0/1'); n2.connect(pa.id, 'eth0', ra.id, 'gi1/0/2'); n2.connect(pb.id, 'eth0', rb.id, 'gi1/0/2');
-  EL.labs.apply(n2, { RA: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::1/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:a::1/64', 'exit', 'end', 'commit', 'confirm'],
-                      RB: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::2/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:b::1/64', 'exit', 'ipv6 route ::/0 fc00::1', 'end', 'commit', 'confirm'],
+  EL.labs.apply(n2, { RA: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::1/64', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:a::1/64', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+                      RB: ['configure', 'interface gi1/0/1', 'ipv6 address fc00::2/64', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:b::1/64', 'ip firewall disable', 'exit', 'ipv6 route ::/0 fc00::1', 'end', 'commit', 'confirm'],
                       PA: ['ip 2001:a::10/64 2001:a::1'], PB: ['ip 2001:b::10/64 2001:b::1'] });
   chk('без маршрута на RA — нет связи', !n2.ping6(pa.id, '2001:b::10').ok);
   EL.labs.apply(n2, { RA: ['configure', 'ipv6 route 2001:b::/64 fc00::2', 'end', 'commit', 'confirm'] });
@@ -558,7 +558,7 @@ EL.labs.LABS.forEach(runLab);
     var A = { R1: [['gi1/0/1', '2001:12::1/64'], ['gi1/0/2', '2001:a::1/64']], R2: [['gi1/0/1', '2001:12::2/64'], ['gi1/0/2', '2001:23::2/64']], R3: [['gi1/0/1', '2001:23::3/64'], ['gi1/0/2', '2001:b::1/64']] };
     var sc = {};
     Object.keys(A).forEach(function (r, i) { var L = ['configure'];
-      A[r].forEach(function (x) { L.push('interface ' + x[0], 'ipv6 address ' + x[1]); if (proto === 'O') L.push('ipv6 ospf instance 1', 'ipv6 ospf area 0.0.0.0', 'ipv6 ospf'); L.push('exit'); });
+      A[r].forEach(function (x) { L.push('interface ' + x[0], 'ipv6 address ' + x[1], 'ip firewall disable'); if (proto === 'O') L.push('ipv6 ospf instance 1', 'ipv6 ospf area 0.0.0.0', 'ipv6 ospf'); L.push('exit'); });
       if (proto === 'R') L.push('ipv6 router rip', 'network 2001::/16', 'enable', 'exit');
       else L.push('ipv6 router ospf 1', 'router-id ' + (i + 1) + '.' + (i + 1) + '.' + (i + 1) + '.' + (i + 1), 'area 0.0.0.0', 'enable', 'exit', 'enable', 'exit');
       L.push('end', 'commit', 'confirm'); sc[r] = L; });
@@ -1059,6 +1059,25 @@ EL.labs.LABS.forEach(runLab);
   m.reboot(c.id); m.reboot(d2.id); c.st.mode = 'priv';
   chk('одинаковые unit-id — стек не собирается', /Stack is not formed/.test(m.exec(c.id, 'show stack')));
   console.log('✓ стек MES');
+})();
+
+// межсетевой экран ESR для IPv6: без ip firewall disable — нужны зоны и правило для icmp6
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B');
+  n.connect(a.id, 'eth0', r.id, 'gi1/0/1'); n.connect(b.id, 'eth0', r.id, 'gi1/0/2');
+  EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:a::1/64', 'exit', 'interface gi1/0/2', 'ipv6 address 2001:b::1/64', 'exit', 'end', 'commit', 'confirm'],
+                     A: ['ip 2001:a::10/64 2001:a::1'], B: ['ip 2001:b::10/64 2001:b::1'] });
+  var x = n.ping6(a.id, '2001:b::10');
+  chk('IPv6: межсетевой экран включён, интерфейс не в зоне — отброшено', !x.ok && x.steps.some(function (s) { return /включён и для IPv6, а интерфейс не в зоне/.test(s.t); }), x.steps.map(function (s) { return s.t; }).join(' | '));
+  var e = EL.labs.apply(n, { R1: ['configure', 'security zone LAN', 'exit', 'security zone DMZ', 'exit', 'interface gi1/0/1', 'security-zone LAN', 'exit', 'interface gi1/0/2', 'security-zone DMZ', 'exit',
+    'security zone-pair LAN DMZ', 'rule 10', 'action permit', 'match protocol icmp6', 'enable', 'exit', 'exit', 'end', 'commit', 'confirm'] });
+  chk('зоны и правило icmp6 без ошибок', !e.length, e.join('; '));
+  var y = n.ping6(a.id, '2001:b::10');
+  chk('LAN → DMZ: правило icmp6 permit, ответ — в рамках сессии', y.ok && y.steps.some(function (s) { return /rule 10 — permit \(ICMPv6/.test(s.t); }) && y.steps.some(function (s) { return /в рамках разрешённой сессии \(ICMPv6\)/.test(s.t); }),
+      y.steps.map(function (s) { return s.t; }).join(' | '));
+  chk('DMZ → LAN: нет zone-pair — запрещено', !n.ping6(b.id, '2001:a::10').ok);
+  console.log('✓ межсетевой экран ESR для IPv6');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

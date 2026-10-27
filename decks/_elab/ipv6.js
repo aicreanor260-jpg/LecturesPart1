@@ -81,7 +81,8 @@
     return (isLL(dst) ? fs.filter(function (f) { return f.ll; })[0] : fs.filter(function (f) { return !f.ll; })[0] || fs[0]) || {}; }
 
   // ================================================================ отправка IPv6-пакета в одну сторону
-  P.send6 = function (src, pk, steps) {
+  P.send6 = function (src, pk, steps, ct) {
+    ct = ct || []; if (this.devs[src].type === 'esr') ct.push({ kind: 'fw6', dev: src, a: [], b: [pk.dst], self: true });
     var cur = src, hops = [], ttl = 16;
     while (ttl-- > 0) {
       var cd = this.devs[cur];
@@ -114,6 +115,8 @@
         f: { type: 'ip6', icmp6: 'na', smac: dmac, dmac: srcMac, src: nh, dst: ll, target: nh, hlim: 255, proto: 'icmp6' } });
       steps.push({ k: 'ip', segs: ep.path, t: cd.name + ' → ' + nd2.name + ': ICMPv6 ' + pk.src + ' → ' + pk.dst + ' в кадре до MAC ' + dmac,
         f: { type: 'ip6', smac: srcMac, dmac: dmac, src: pk.src, dst: pk.dst, proto: 'icmp6', reply: !!pk.reply, hlim: 64 - hops.length } });
+      if (nd2.type === 'esr') { var fw = this.fw6(ep.dev, epIf.name, pk, ct); if (fw.t) steps.push({ k: fw.ok ? 'route' : 'drop', t: fw.t });
+        if (!fw.ok) return { ok: false, why: 'Request timed out', pk: pk }; }
       hops.push({ dev: ep.dev, ip: epIf.ip });
       cur = ep.dev;
       if (!this.owns6(cur, pk.dst) && nd2.type !== 'esr') { steps.push({ k: 'drop', t: nd2.name + ' получил чужой пакет и не маршрутизирует его' }); return { ok: false, why: 'Request timed out', pk: pk }; }
@@ -127,11 +130,11 @@
     if (n === null) return { ok: false, why: 'Bad address', steps: steps };
     dst = fmt(n);
     if (!this.ifaces6(src).length) { steps.push({ k: 'drop', t: d.name + ': IPv6 не включён ни на одном интерфейсе' }); return { ok: false, why: 'No IPv6 address', steps: steps }; }
-    var f = this.send6(src, { src: null, dst: dst }, steps);
+    var ct = [], f = this.send6(src, { src: null, dst: dst }, steps, ct);
     if (!f.ok) return { ok: false, why: f.why, steps: steps };
     if (f.dev === src) return { ok: true, steps: steps, hops: [] };
     steps.push({ k: 'ok', t: this.devs[f.dev].name + ' получил ICMPv6 Echo Request и отвечает Echo Reply' });
-    var b = this.send6(f.dev, { src: dst, dst: f.pk.src, reply: true }, steps);
+    var b = this.send6(f.dev, { src: dst, dst: f.pk.src, reply: true }, steps, ct);
     if (!b.ok || b.dev !== src) { steps.push({ k: 'drop', t: 'Ответ не вернулся к ' + d.name + ' — проверьте IPv6-маршрут в обратную сторону' }); return { ok: false, why: 'Request timed out', steps: steps }; }
     steps.push({ k: 'ok', t: d.name + ' получил ответ от ' + dst });
     return { ok: true, steps: steps, hops: f.hops, dev: f.dev };
@@ -154,6 +157,24 @@
     o.push('PING ' + dst + '(' + dst + ') 56 data bytes', r.ok ? '!!!!!' : '.....', '--- ' + dst + ' ping statistics ---',
            '5 packets transmitted, ' + (r.ok ? 5 : 0) + ' received, ' + (r.ok ? '0' : '100') + '% packet loss, time 4005ms');
     return o.join('\n');
+  };
+  // межсетевой экран ESR для IPv6 — те же зоны и zone-pair (протокол icmp6); адресные правила (IPv4 object-group) к IPv6 не подходят
+  P.fw6 = function (dev, ifn, pk, ct) {
+    var s = this, d = s.devs[dev], c = d.st.run, nm = d.name, x = c.ifs[ifn] || {}, pk2 = { src: pk.src, dst: pk.dst, proto: 'icmp6', dport: null, sport: null };
+    if (ct.some(function (e) { return e.kind === 'fw6' && e.dev === dev && e.b.indexOf(pk.src) >= 0 && (e.self || e.a.indexOf(pk.dst) >= 0); }))
+      return { ok: true, t: ct.some(function (e) { return e.kind === 'fw6' && e.dev === dev && !e.self; }) ? nm + ': ответ в рамках разрешённой сессии (ICMPv6)' : null };
+    if (x.fw === false) return { ok: true };
+    var inz = EL.fwZoneOf(c, ifn); if (!inz) return { ok: false, t: nm + ': межсетевой экран на ' + ifn + ' включён и для IPv6, а интерфейс не в зоне — пакет отброшен (security-zone или ip firewall disable)' };
+    var outz = 'self';
+    if (!s.owns6(dev, pk.dst)) { var r = s.lookup6(dev, pk.dst); if (!r) return { ok: true }; var y = c.ifs[r.iface.name] || {}; if (y.fw === false) return { ok: true };
+      outz = EL.fwZoneOf(c, r.iface.name); if (!outz) return { ok: false, t: nm + ': выходной интерфейс ' + r.iface.name + ' не в зоне безопасности — пакет отброшен' }; }
+    var pair = (c.zp || {})[inz + '|' + outz]; if (!pair) return { ok: false, t: nm + ': нет security zone-pair ' + inz + ' ' + outz + ' — ICMPv6 ' + pk.src + ' → ' + pk.dst + ' запрещён' };
+    var ks = Object.keys(pair.rules).map(Number).sort(function (a, b) { return a - b; });
+    for (var i = 0; i < ks.length; i++) { var rl = pair.rules[ks[i]]; if (!rl.on || !rl.act || !EL.fwRuleMatch(c, rl, pk2)) continue;
+      if (rl.act !== 'permit') return { ok: false, t: nm + ': zone-pair ' + inz + ' → ' + outz + ', rule ' + ks[i] + ' — ' + rl.act + ' (ICMPv6)' };
+      ct.push({ kind: 'fw6', dev: dev, a: [pk.src], b: [pk.dst] });
+      return { ok: true, t: nm + ': zone-pair ' + inz + ' → ' + outz + ', rule ' + ks[i] + ' — permit (ICMPv6 ' + pk.src + ' → ' + pk.dst + ')' }; }
+    return { ok: false, t: nm + ': zone-pair ' + inz + ' → ' + outz + ' — ни одно правило не подошло для ICMPv6, неявный запрет' };
   };
   var reboot0 = P.reboot; P.reboot = function (id) { var r = reboot0.apply(this, arguments); if (this.nd) delete this.nd[id]; return r; };
 

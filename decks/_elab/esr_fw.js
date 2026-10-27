@@ -111,7 +111,7 @@
   cmd('zrule', 'no enable', function (st) { zr(st).on = false; touch(st); });
 
   // match [not] … — разбор хвоста команды
-  var PROTO = ['any', 'icmp', 'tcp', 'udp', 'gre', 'esp', 'ah', 'ospf', 'vrrp', 'igmp', 'pim'];
+  var PROTO = ['any', 'icmp', 'icmp6', 'tcp', 'udp', 'gre', 'esp', 'ah', 'ospf', 'vrrp', 'igmp', 'pim'];
   function parseAddr(st, w) {
     var t = w.trim().split(/\s+/), not = t[0] === 'not'; if (not) t.shift();
     var k = t[0], v = t[1], og1 = og(st.cand).net;
@@ -166,6 +166,7 @@
     var hit = !!port && (m.kind === 'og' ? EL.ogSvc(c, m.v, port) : m.r.some(function (x) { return port >= x[0] && port <= x[1]; }));
     return m.not ? !hit : hit;
   }
+  EL.fwRuleMatch = function (c, r, pk) { return ruleMatch(c, r, pk); };
   function ruleMatch(c, r, pk) {
     if (r.proto && r.proto.v !== 'any') { var h = r.proto.v === pk.proto; if (r.proto.not ? h : !h) return false; }
     return addrHit(c, r.src, pk.src) && addrHit(c, r.dst, pk.dst) && portHit(c, r.dport, pk.dport) && portHit(c, r.sport, pk.sport);
