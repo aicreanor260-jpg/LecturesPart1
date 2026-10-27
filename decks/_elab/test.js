@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -772,6 +772,27 @@ EL.labs.LABS.forEach(runLab);
   chk('storm-control: шторм выключил порт B gi1/0/2', !s1.ok && s1.steps.some(function (s) { return /Storm-control/.test(s.t); }) && b.st.ports['gi1/0/2'].shut, s1.steps.map(function (s) { return s.t; }).join(' | '));
   chk('после storm-control петля разорвана — ping проходит', k.ping(pa.id, '10.0.0.2').ok);
   console.log('✓ защита L2: DHCP snooping, ARP inspection, storm-control');
+})();
+
+// QinQ: клиентские VLAN 10 двух офисов идут через провайдера в S-VLAN 100
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), ca = n.add('MES2428', 'CA'), cb = n.add('MES2428', 'CB'), pa = n.add('MES3300-24', 'PA'), pb = n.add('MES3300-24', 'PB'), va = n.add('VPC', 'VA'), vb = n.add('VPC', 'VB');
+  n.connect(va.id, 'eth0', ca.id, 'gi1/0/1'); n.connect(vb.id, 'eth0', cb.id, 'gi1/0/1'); n.connect(ca.id, 'gi1/0/24', pa.id, 'gi1/0/1'); n.connect(cb.id, 'gi1/0/24', pb.id, 'gi1/0/1'); n.connect(pa.id, 'gi1/0/24', pb.id, 'gi1/0/24');
+  var cust = ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 10', 'end'];
+  var prov = function (sv) { return ['enable', 'configure', 'vlan database', 'vlan 100', 'exit', 'interface gi1/0/1', 'switchport mode customer', 'switchport customer vlan ' + sv, 'exit',
+    'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 100', 'end']; };
+  var e = EL.labs.apply(n, { CA: cust, CB: cust, PA: prov(100), PB: prov(100), VA: ['ip 10.0.10.1/24'], VB: ['ip 10.0.10.2/24'] });
+  chk('QinQ: команды без ошибок', !e.length, e.join('; '));
+  var cap = n.capStart(4), r = n.ping(va.id, '10.0.10.2');
+  chk('QinQ: клиентская VLAN 10 проходит через S-VLAN 100', r.ok, r.steps.map(function (s) { return s.t + ' ' + JSON.stringify(s.notes || []); }).join(' | '));
+  chk('захват на trunk провайдера: двойной тег 100/10', cap.frames.length && cap.frames.every(function (f) { return f.vlan === '100/10'; }), cap.frames.map(function (f) { return f.vlan; }).join(','));
+  var L = EL.decode(cap.frames[0].f, cap.frames[0].vlan, cap.frames[0].len);
+  chk('разбор: S-VLAN 100 и C-VLAN 10', L.some(function (x) { return /S-VLAN, QinQ\), ID: 100/.test(x.name); }) && L.some(function (x) { return /802\.1Q Virtual LAN, PRI: 0, DEI: 0, ID: 10$/.test(x.name); }), L.map(function (x) { return x.name; }).join(' / '));
+  chk('running-config: switchport mode customer', /switchport mode customer\n switchport customer vlan 100/.test(n.exec(pa.id, 'show running-config')));
+  EL.labs.apply(n, { PB: ['configure', 'vlan database', 'vlan 200', 'exit', 'interface gi1/0/1', 'switchport customer vlan 200', 'end'] });
+  chk('разные S-VLAN у провайдера — связи нет', !n.ping(va.id, '10.0.10.2').ok);
+  console.log('✓ QinQ');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);

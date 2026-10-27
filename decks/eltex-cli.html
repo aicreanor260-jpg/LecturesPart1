@@ -2595,6 +2595,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function egress(p, v) {
     if (p.shut) return null;
     if (p.mode === 'access') return p.access === v ? 'u' : null;
+    if (p.mode === 'customer') return p.cvlan === v ? 'c' : null;
     if (p.mode === 'trunk') return p.native === v ? 'u' : (p.allowed.indexOf(v) >= 0 ? 't' : null);
     if (p.guntag.indexOf(v) >= 0) return 'u';
     return p.gtag.indexOf(v) >= 0 ? 't' : null;
@@ -2604,6 +2605,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     p = p || st.ports[port];
     if (p.shut) return { drop: 'порт ' + port + ' выключен (shutdown)' };
     var v;
+    if (p.mode === 'customer') { if (!st.vlans[p.cvlan]) return { drop: 'VLAN ' + p.cvlan + ' не создана на коммутаторе' }; return { v: p.cvlan, inner: tag }; }   // QinQ: любой кадр клиента — в S-VLAN
     if (tag === null) v = p.mode === 'access' ? p.access : p.mode === 'trunk' ? p.native : p.pvid;
     else {
       if (p.mode === 'access') return { drop: port + ' в режиме access принимает только кадры без тега, пришёл тег ' + tag };
@@ -2617,13 +2619,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // рассылка кадра из L3-интерфейса: список достигнутых интерфейсов + все пройденные отрезки + причины отбрасывания
   P.flood = function (id, f, srcMac) {
     var s = this, seen = {}, eps = [], segs = [], notes = [], q = [], got = {}, storm = false, reach = [];   // reach — куда дошёл кадр (для IPv6)
-    function send(dev, port, tag, path) {
+    function send(dev, port, tag, path, inner) {             // inner — тег клиента внутри S-VLAN (QinQ), переносится прозрачно
       var pr = s.peer(dev, port); if (!pr) return;
       if (s.phys && !s.phys(dev, port).up) { notes.push(s.devs[dev].name + ' ' + port + ': нет линка (' + s.phys(dev, port).why + ')'); return; }   // физика: кабель, скорость
-      var seg ={ li: pr.li, from: dev, to: pr.dev, tag: tag };
-      segs.push(seg); q.push({ dev: pr.dev, port: pr.port, tag: tag, path: path.concat([seg]) });
+      var seg = { li: pr.li, from: dev, to: pr.dev, tag: tag }; if (inner !== null && inner !== undefined) seg.qtag = inner;
+      segs.push(seg); q.push({ dev: pr.dev, port: pr.port, tag: tag, inner: inner === undefined ? null : inner, path: path.concat([seg]) });
     }
-    function inMes(dev, inPort, v, path) {
+    function inMes(dev, inPort, v, path, inner) {
       var st = s.devs[dev].st;
       if (inPort && srcMac) { var pv = s.macIn(dev, inPort, v, srcMac); if (pv) { notes.push(pv); return; } }
       var gk = dev + '|' + v; got[gk] = (got[gk] || 0) + 1;
@@ -2632,7 +2634,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var p = st.svi[sv].split('/'); eps.push({ dev: dev, iface: { name: 'vlan' + v, ip: p[0], len: +p[1], vlan: v }, path: path }); } });
       s.lports(dev).forEach(function (L) {           // логические порты: обычный порт или собранный port-channel
         if (L.name === inPort || !s.linked(dev, L.members[0]) || !s.stpFwd(dev, L.name)) return;
-        var e = egress(L.cfg, v); if (e) send(dev, L.members[0], e === 't' ? v : null, path);
+        var e = egress(L.cfg, v), q2 = inner === undefined ? null : inner;
+        if (e === 'c') send(dev, L.members[0], q2, path, null);            // клиентский порт QinQ: S-VLAN снимается, тег клиента остаётся
+        else if (e) send(dev, L.members[0], e === 't' ? v : q2, path, e === 't' ? q2 : null);
       });
     }
     function inEsrSw(dev, inPort, v, path) {      // коммутация на ESR: порты switchport одной VLAN + Bridge этой VLAN
@@ -2647,7 +2651,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     else if (f.vlan) inMes(id, null, f.vlan, []);
     else if (f.port) send(id, f.port, f.tag, []);
     while (q.length) {
-      var it = q.shift(), key = it.dev + '|' + it.port + '|' + it.tag;
+      var it = q.shift(), key = it.dev + '|' + it.port + '|' + it.tag + '|' + it.inner;
       if (seen[key]) continue; seen[key] = 1;
       var d = this.devs[it.dev], nm = d.name;
       if (d.off) { notes.push(nm + ': устройство выключено'); continue; }
@@ -2658,7 +2662,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (!this.stpFwd(it.dev, LP.name)) { notes.push(nm + ': ' + LP.name + ' заблокирован STP (роль ' + this.stp()[it.dev][LP.name].role + ') — кадр отброшен'); continue; }
         var r = ingress(d.st, LP.name, it.tag, LP.cfg);
         if (r.drop) { notes.push(nm + ': ' + r.drop); continue; }
-        inMes(it.dev, LP.name, r.v, it.path);
+        inMes(it.dev, LP.name, r.v, it.path, r.inner !== undefined ? r.inner : it.inner);
       } else if (d.type === 'esr') {
         var phys = d.st.run.ifs[it.port];
         if (phys.shut) { notes.push(nm + ': интерфейс ' + it.port + ' выключен'); continue; }
@@ -2752,7 +2756,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
           return { ok: false, why: 'Host unreachable', pk: pk }; }
       }
       var nd = this.devs[ep.dev];
-      var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      var back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag, qtag: sg.qtag }; });
       this._arpSip = r.nh; var viol; try { viol = this.learn(back, dmac); } finally { this._arpSip = null; }
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd.name + ': ARP-ответ отброшен — ' + viol }); return { ok: false, why: 'Host unreachable', pk: pk }; }
       this.arp[cur][r.nh] = { mac: dmac, ifn: r.iface.name, t: this.now };
@@ -3071,7 +3075,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var d = s.devs[sg.to]; if (!d || d.type !== 'mes' || viol) return;
       var l = s.links[sg.li]; if (!l) return;
       var port = l.a.dev === sg.to ? l.a.port : l.b.port, L = s.lportOf(sg.to, port); if (!L) return;
-      var c = L.cfg, v = sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
+      var c = L.cfg, v = c.mode === 'customer' ? c.cvlan : sg.tag !== null ? sg.tag : (c.mode === 'access' ? c.access : c.mode === 'trunk' ? c.native : c.pvid);
       viol = s.macIn(sg.to, L.name, v, mac);
     });
     return viol;
@@ -4368,7 +4372,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function row(s, c, sg, f, size) {
     var tag = sg.tag !== null && sg.tag !== undefined ? sg.tag : null;
     return { no: ++c.n, t: Math.max(0, s.now - c.t0), from: s.devs[sg.from] ? s.devs[sg.from].name : '', to: s.devs[sg.to] ? s.devs[sg.to].name : '',
-             vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
+             vlan: tag !== null && sg.qtag !== undefined && sg.qtag !== null ? tag + '/' + sg.qtag : tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
              sip: f.type === 'arp' ? f.sip : f.src || '', dip: f.type === 'arp' ? f.tip : f.dst || '', proto: proto(f), info: info(f) };
   }
   function gin(f) { var i = f.inner; return { type: 'ip', src: i.src, dst: i.dst, proto: i.proto, reply: i.reply, dport: i.dport, sport: i.sport, ttl: (f.ttl || 64) }; }
@@ -4402,6 +4406,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ---------------------------------------------------------------- разбор по уровням
   function hexType(t) { return t === 'arp' ? 'ARP (0x0806)' : t === 'ip6' ? 'IPv6 (0x86dd)' : 'IPv4 (0x0800)'; }
   EL.decode = function (f, tag, size) {
+    var qin = null; if (typeof tag === 'string' && tag.indexOf('/') > 0) { qin = +tag.split('/')[1]; tag = +tag.split('/')[0]; }   // QinQ: S-VLAN/C-VLAN
     var L = [], len = size || 0, tagged = tag !== null && tag !== undefined;
     L.push({ osi: 'L1', name: 'Frame: ' + len + ' bytes on wire', fields: [['Длина кадра', len + ' байт (с FCS)']] });
     if (f.type === 'stp') {
@@ -4416,7 +4421,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var eth = [['Destination', f.dmac + (f.dmac === 'ff:ff:ff:ff:ff:ff' ? ' (Broadcast)' : '')], ['Source', f.smac]];
     if (!tagged) eth.push(['Type', hexType(f.type)]); else eth.push(['Type', '802.1Q Virtual LAN (0x8100)']);
     L.push({ osi: 'L2', name: 'Ethernet II, Src: ' + f.smac + ', Dst: ' + f.dmac, fields: eth });
-    if (tagged) L.push({ osi: 'L2', name: '802.1Q Virtual LAN, PRI: 0, DEI: 0, ID: ' + tag, fields: [['Priority (PCP)', 0], ['DEI', 0], ['VLAN ID', tag], ['Type', hexType(f.type)]] });
+    if (tagged && qin !== null) L.push({ osi: 'L2', name: '802.1Q Virtual LAN (S-VLAN, QinQ), ID: ' + tag, fields: [['VLAN ID', tag], ['Type', '802.1Q Virtual LAN (0x8100)']] });
+    if (tagged) L.push({ osi: 'L2', name: '802.1Q Virtual LAN, PRI: 0, DEI: 0, ID: ' + (qin !== null ? qin : tag), fields: [['Priority (PCP)', 0], ['DEI', 0], ['VLAN ID', qin !== null ? qin : tag], ['Type', hexType(f.type)]] });
     if (f.type === 'arp') {
       L.push({ osi: 'L2/3', name: 'Address Resolution Protocol (' + (f.op === 1 ? 'request' : 'reply') + ')', fields: [['Hardware type', 'Ethernet (1)'],
         ['Protocol type', 'IPv4 (0x0800)'], ['Hardware size', 6], ['Protocol size', 4], ['Opcode', f.op === 1 ? 'request (1)' : 'reply (2)'],
@@ -4592,7 +4598,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         if (!ep) { steps.push({ k: 'drop', t: 'Нет Neighbor Advertisement: ' + nh + ' не найден в этом сегменте (другая VLAN, нет адреса, кабель или порт выключен)', notes: n6(fl.notes) });
           return { ok: false, why: 'Address unreachable', pk: pk }; }
       }
-      var nd2 = this.devs[ep.dev], back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      var nd2 = this.devs[ep.dev], back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag, qtag: sg.qtag }; });
       var viol = this.learn(back, dmac);
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd2.name + ': Neighbor Advertisement отброшен — ' + viol }); return { ok: false, why: 'Address unreachable', pk: pk }; }
       var epIf = s.ifaces6(ep.dev).filter(function (f) { return f.ip === nh; })[0];
@@ -5459,6 +5465,23 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (hit.length) this.gen++;
     return hit;
   };
+})(typeof window !== 'undefined' ? window : global);
+
+/* QinQ на MES 6.x (руководство 6.6.8.8): switchport mode customer, switchport customer vlan N.
+   Клиентский порт принимает любой кадр (с тегом или без) и помещает его в S-VLAN N — тег клиента сохраняется внутри (двойной тег);
+   по trunk провайдера кадр идёт с внешним тегом N и внутренним тегом клиента, на клиентском порту другой стороны S-тег снимается.
+   В захвате на trunk видно VLAN «S/C» и два заголовка 802.1Q. В руководстве 10.4.6 есть только Selective Q-in-Q — для ветки 10 не моделируется. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, E = EL.E, CMDS = E.CMDS;
+  function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
+  function ports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k]; }).filter(Boolean) : null; }
+  function each(st, f) { var p = ports(st); if (!p) return '% Команда доступна в настройке порта'; p.forEach(f); }
+  mcmd(['6'], 'if range', 'switchport mode customer', function (st) { return each(st, function (p) { p.mode = 'customer'; if (!p.cvlan) p.cvlan = 1; }); }, 'Клиентский порт QinQ');
+  mcmd(['6'], 'if range', 'switchport customer vlan <n>', function (st, a) { if (a[0] < 1 || a[0] > 4094) return '% Invalid input';
+    return each(st, function (p) { p.cvlan = a[0]; }); }, 'S-VLAN клиентского порта');
+  mcmd(['6'], 'if range', 'no switchport customer vlan', function (st) { return each(st, function (p) { p.cvlan = 1; }); });
+  E.PORTX.push(function (st, k, p, d) { if (p.mode === 'customer') { d.push(' switchport mode customer'); if (p.cvlan !== 1) d.push(' switchport customer vlan ' + p.cvlan); } });
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные NTF2v2, перенесённые на настоящий синтаксис MES (коммутатор) и ESR (маршрутизатор).

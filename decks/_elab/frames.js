@@ -23,7 +23,7 @@
   function row(s, c, sg, f, size) {
     var tag = sg.tag !== null && sg.tag !== undefined ? sg.tag : null;
     return { no: ++c.n, t: Math.max(0, s.now - c.t0), from: s.devs[sg.from] ? s.devs[sg.from].name : '', to: s.devs[sg.to] ? s.devs[sg.to].name : '',
-             vlan: tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
+             vlan: tag !== null && sg.qtag !== undefined && sg.qtag !== null ? tag + '/' + sg.qtag : tag, len: size, f: f, smac: f.smac, dmac: f.dmac, type: f.type === 'arp' ? 'ARP' : f.type === 'stp' ? 'STP' : f.type === 'ip6' ? 'IPv6' : 'IPv4',
              sip: f.type === 'arp' ? f.sip : f.src || '', dip: f.type === 'arp' ? f.tip : f.dst || '', proto: proto(f), info: info(f) };
   }
   function gin(f) { var i = f.inner; return { type: 'ip', src: i.src, dst: i.dst, proto: i.proto, reply: i.reply, dport: i.dport, sport: i.sport, ttl: (f.ttl || 64) }; }
@@ -57,6 +57,7 @@
   // ---------------------------------------------------------------- разбор по уровням
   function hexType(t) { return t === 'arp' ? 'ARP (0x0806)' : t === 'ip6' ? 'IPv6 (0x86dd)' : 'IPv4 (0x0800)'; }
   EL.decode = function (f, tag, size) {
+    var qin = null; if (typeof tag === 'string' && tag.indexOf('/') > 0) { qin = +tag.split('/')[1]; tag = +tag.split('/')[0]; }   // QinQ: S-VLAN/C-VLAN
     var L = [], len = size || 0, tagged = tag !== null && tag !== undefined;
     L.push({ osi: 'L1', name: 'Frame: ' + len + ' bytes on wire', fields: [['Длина кадра', len + ' байт (с FCS)']] });
     if (f.type === 'stp') {
@@ -71,7 +72,8 @@
     var eth = [['Destination', f.dmac + (f.dmac === 'ff:ff:ff:ff:ff:ff' ? ' (Broadcast)' : '')], ['Source', f.smac]];
     if (!tagged) eth.push(['Type', hexType(f.type)]); else eth.push(['Type', '802.1Q Virtual LAN (0x8100)']);
     L.push({ osi: 'L2', name: 'Ethernet II, Src: ' + f.smac + ', Dst: ' + f.dmac, fields: eth });
-    if (tagged) L.push({ osi: 'L2', name: '802.1Q Virtual LAN, PRI: 0, DEI: 0, ID: ' + tag, fields: [['Priority (PCP)', 0], ['DEI', 0], ['VLAN ID', tag], ['Type', hexType(f.type)]] });
+    if (tagged && qin !== null) L.push({ osi: 'L2', name: '802.1Q Virtual LAN (S-VLAN, QinQ), ID: ' + tag, fields: [['VLAN ID', tag], ['Type', '802.1Q Virtual LAN (0x8100)']] });
+    if (tagged) L.push({ osi: 'L2', name: '802.1Q Virtual LAN, PRI: 0, DEI: 0, ID: ' + (qin !== null ? qin : tag), fields: [['Priority (PCP)', 0], ['DEI', 0], ['VLAN ID', qin !== null ? qin : tag], ['Type', hexType(f.type)]] });
     if (f.type === 'arp') {
       L.push({ osi: 'L2/3', name: 'Address Resolution Protocol (' + (f.op === 1 ? 'request' : 'reply') + ')', fields: [['Hardware type', 'Ethernet (1)'],
         ['Protocol type', 'IPv4 (0x0800)'], ['Hardware size', 6], ['Protocol size', 4], ['Opcode', f.op === 1 ? 'request (1)' : 'reply (2)'],

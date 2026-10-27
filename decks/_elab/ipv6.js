@@ -103,7 +103,7 @@
         if (!ep) { steps.push({ k: 'drop', t: 'Нет Neighbor Advertisement: ' + nh + ' не найден в этом сегменте (другая VLAN, нет адреса, кабель или порт выключен)', notes: n6(fl.notes) });
           return { ok: false, why: 'Address unreachable', pk: pk }; }
       }
-      var nd2 = this.devs[ep.dev], back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag }; });
+      var nd2 = this.devs[ep.dev], back = ep.path.slice().reverse().map(function (sg) { return { li: sg.li, from: sg.to, to: sg.from, tag: sg.tag, qtag: sg.qtag }; });
       var viol = this.learn(back, dmac);
       if (viol) { steps.push({ k: 'drop', segs: back, t: nd2.name + ': Neighbor Advertisement отброшен — ' + viol }); return { ok: false, why: 'Address unreachable', pk: pk }; }
       var epIf = s.ifaces6(ep.dev).filter(function (f) { return f.ip === nh; })[0];
