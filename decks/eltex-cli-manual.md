@@ -370,6 +370,24 @@ interface gi1/0/3 → ip policy route-map VIA-ISP2
 Параметры: `ip bfd min-rx-interval`, `min-tx-interval`, `idle-tx-interval`, `multiplier` (по умолчанию 200 мс на ESR-1000/1200/1500/1511/1700/3100/3200/3300, 300 мс на остальных, multiplier 5); `show ip bfd`, `show bfd neighbors [A.B.C.D]` (Neighbor/Local address, Interface, discriminators, State), `clear bfd`. Падение сессии — сообщение `%BFD-W-NEIG: Session to 10.0.0.2 Down` (формат из справочника).
 Упрощения: сессия поднимается с любым ESR, достижимым в подключённой сети (команда `ip bfd neighbor` не требуется); время обнаружения считается мгновенным; `ip ospf bfd-enable` не моделируется.
 
+### BGP на ESR (справочник 1.23)
+```
+router bgp 65001
+  router-id 1.1.1.1
+  address-family ipv4 unicast
+    network 192.168.1.0/24          (или redistribute connected | static)
+    neighbor 10.12.0.2
+      remote-as 65002               (update-source, ebgp-multihop, next-hop-self, description)
+      enable
+    exit
+    enable
+  exit
+exit
+```
+Показ: `show bgp summary` (сосед, AS, Up/Down, состояние или число префиксов), `show bgp ipv4 unicast` (сеть, next-hop, AS_PATH), `show bgp neighbors` (состояние и причина в «Тесте»), в `show ip route` — код B с AD 20 (eBGP) / 200 (iBGP).
+Сессия поднимается, когда соседи настроены друг на друга (адрес соседа — адрес интерфейса или update-source другой стороны), remote-as совпадает с AS соседа и TCP 179 доступен по маршрутам (eBGP не в подключённой сети — только с ebgp-multihop). Маршруты распространяются вектором путей: AS_PATH растёт на каждой eBGP-границе, маршрут со своей AS в пути отбрасывается, выбирается самый короткий AS_PATH; от iBGP-соседа к iBGP-соседу маршрут не передаётся; next-hop iBGP сохраняется (next-hop-self — адрес соседа) и разрешается через таблицу маршрутов.
+Упрощения: LOCAL_PREF/MED/community, route-map, peer-group, таймеры keepalive/hold и межсетевой экран для TCP 179 не моделируются; BGP только в глобальной таблице (не в VRF).
+
 ## Известные ограничения модели
 
 Эмулятор моделирует **логику** сети (кто кому ответит и почему), а не поток битов. Отсюда:
@@ -379,7 +397,7 @@ interface gi1/0/3 → ip policy route-map VIA-ISP2
 - **Потерь нет.** Перегрузка канала не моделируется; несовпадение дуплекса даёт ошибки в счётчиках, но кадры доходят.
 - **Протоколы маршрутизации IPv4 (RIP, OSPF)** идут по реальным таймерам; **RIPng, OSPFv3** сходятся сразу; через туннели GRE/VTI соседства не строятся.
 - **Межсетевой экран ESR** к IPv6 не применяется; NAT-T, DPD, rekey IPsec нет.
-- **Не моделируются:** L2TP, BGP; на MES — 802.1X, IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
+- **Не моделируются:** L2TP; на MES — 802.1X, IGMP snooping, стек, Selective Q-in-Q, MSTP-регионы; IPv6 на SVI MES; RA/SLAAC, DHCPv6.
 
 ## Типовые ошибки
 | Сообщение | Что делать |

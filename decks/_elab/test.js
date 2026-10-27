@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -929,6 +929,30 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { R1: ['configure', 'ip bfd multiplier 10', 'end', 'commit', 'confirm'] });
   chk('show ip bfd: multiplier 10, min-rx 300 (vESR)', /Minimum RX interval: 300 ms[\s\S]*Multiplier:\s+10 packets/.test(n.exec(r1.id, 'show ip bfd')), n.exec(r1.id, 'show ip bfd'));
   console.log('✓ BFD');
+})();
+
+// BGP: три AS в цепочку, сети за R1 и R3 узнаются по eBGP
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), r3 = n.add('vESR', 'R3'), pa = n.add('VPC', 'PA'), pb = n.add('VPC', 'PB');
+  n.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/2', r3.id, 'gi1/0/1'); n.connect(pa.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(pb.id, 'eth0', r3.id, 'gi1/0/2');
+  function ifc(k, ip) { return ['interface ' + k, 'ip address ' + ip, 'ip firewall disable', 'exit']; }
+  function bgp(as, nets, nbrs) { var L = ['router bgp ' + as, 'address-family ipv4 unicast']; nets.forEach(function (x) { L.push('network ' + x); });
+    nbrs.forEach(function (x) { L.push('neighbor ' + x[0], 'remote-as ' + x[1], 'enable', 'exit'); }); return L.concat(['enable', 'exit', 'exit']); }
+  var e = EL.labs.apply(n, {
+    R1: ['configure'].concat(ifc('gi1/0/1', '10.12.0.1/30'), ifc('gi1/0/2', '192.168.1.1/24'), bgp(65001, ['192.168.1.0/24'], [['10.12.0.2', 65002]]), ['end', 'commit', 'confirm']),
+    R2: ['configure'].concat(ifc('gi1/0/1', '10.12.0.2/30'), ifc('gi1/0/2', '10.23.0.2/30'), bgp(65002, [], [['10.12.0.1', 65001], ['10.23.0.3', 65003]]), ['end', 'commit', 'confirm']),
+    R3: ['configure'].concat(ifc('gi1/0/1', '10.23.0.3/30'), ifc('gi1/0/2', '192.168.3.1/24'), bgp(65003, ['192.168.3.0/24'], [['10.23.0.2', 65002]]), ['end', 'commit', 'confirm']),
+    PA: ['ip 192.168.1.10/24 192.168.1.1'], PB: ['ip 192.168.3.10/24 192.168.3.1'] });
+  chk('BGP: конфигурация без ошибок', !e.length, e.join('; '));
+  chk('сессии Established', /10\.12\.0\.1\s+65001\s+\d+\s+\d+\s+\S+\s+\d+/.test(n.exec(r2.id, 'show bgp summary')) && /10\.23\.0\.3\s+65003/.test(n.exec(r2.id, 'show bgp summary')), n.exec(r2.id, 'show bgp summary'));
+  chk('R1: маршрут B 192.168.3.0/24 с AS_PATH 65002 65003', /192\.168\.3\.0\/24\s+10\.12\.0\.2\s+100\s+65002 65003 i/.test(n.exec(r1.id, 'show bgp ipv4 unicast')), n.exec(r1.id, 'show bgp ipv4 unicast'));
+  chk('show ip route — B [20/0]', /^B\s+\* 192\.168\.3\.0\/24\s+\[20\/0\]/m.test(n.exec(r1.id, 'show ip route')), n.exec(r1.id, 'show ip route'));
+  chk('PA → PB через три AS', n.ping(pa.id, '192.168.3.10').ok);
+  chk('running-config: router bgp', /router bgp 65001\n  address-family ipv4 unicast\n    network 192\.168\.1\.0\/24\n    neighbor 10\.12\.0\.2\n      remote-as 65002\n      enable\n    exit\n    enable\n  exit\nexit/.test(n.exec(r1.id, 'show running-config')), n.exec(r1.id, 'show running-config'));
+  EL.labs.apply(n, { R3: ['configure', 'router bgp 65003', 'address-family ipv4 unicast', 'neighbor 10.23.0.2', 'remote-as 65009', 'end', 'commit', 'confirm'] });
+  chk('неверный remote-as — сессия не поднимается, маршрута нет', !n.ping(pa.id, '192.168.3.10').ok && /remote-as 65009 не совпадает/.test(n.exec(r3.id, 'show bgp neighbors')), n.exec(r3.id, 'show bgp neighbors'));
+  console.log('✓ BGP');
 })();
 
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
