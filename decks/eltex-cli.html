@@ -404,6 +404,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>router static → address-family ipv4 unicast → destination P/L NH</td><td>статический маршрут</td></tr>
 <tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
 <tr><td>router bgp 65535 → bgp router-id · neighbor A → remote-as · update-source · address-family ipv4 unicast · address-family ipv4 unicast → network P/L</td><td>BGP (enable не нужен); show bgp summary</td></tr>
+<tr><td>vrf X → rd · import/export route-target · mpls → ldp → discovery interface · neighbor → address-family vpnv4 unicast</td><td>MPLS L3VPN между PE</td></tr>
 <tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
 </table>
 
@@ -2840,7 +2841,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (this.mtuCheck) { var mc = this.mtuCheck(cur, r.iface, inIf, pk, steps, src); if (mc) return mc; }   // MTU выходного интерфейса (mtu.js)
       if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
         var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
-        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;
+        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev; if (tr.inIf) inIf = tr.inIf;   // L3VPN: дальше — таблица VRF удалённого PE
         if (!owns(this, cur, pk.dst)) steps.push({ k: 'route', t: this.devs[cur].name + ': адрес ' + pk.dst + ' не мой — ищу маршрут дальше' });
         continue;
       }
@@ -7390,7 +7391,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
    address-family ipv4 unicast → destination P/L NH и router static → vrf NAME → … (решение автора, вариант А);
    router ospfv2 NAME → router-id, area → interface (passive, metric — по умолчанию 1, вариант А). Межсетевого экрана нет.
    router bgp ASN → bgp router-id, neighbor (remote-as, update-source, ebgp-multihop, address-family ipv4 unicast, next-hop-self), network,
-   redistribution — компилируется в BGP-модель ESR. Хранятся, но трафик не меняют (упрощение): IS-IS, VPNv4, MPLS/LDP, L2VPN,
+   redistribution — компилируется в BGP-модель ESR. MPLS L3VPN: vrf (rd, route-target) + iBGP с address-family vpnv4 unicast + mpls → ldp —
+   маршруты VRF передаются на другой PE по совпадению route-target, пакет идёт до loopback PE как через туннель (метки не моделируются).
+   Хранятся, но трафик не меняют (упрощение): IS-IS, детали MPLS/LDP, L2VPN,
    prefix-list, route-map, admin-distance, redistribution. Выводы show route / ospfv2 / ping — в формате ESR-модели (упрощение);
    диалог при exit с неприменёнными правками не моделируется; ввод проверяется по шаблонам справочника. */
 (function (G) {
@@ -7514,8 +7517,43 @@ vesr(config)#         do confirm  — подтвердить</pre>
       Object.keys(n.K).forEach(function (h2) { var nm = h2.match(/^neighbor (\S+)$/); if (!nm) return; var x = n.K[h2], naf = x.K['address-family ipv4 unicast'];
         b.nbr[nm[1]] = { as: +(val(x, 'remote-as') || 0) || null, src: val(x, 'update-source'), on: true, af: !!naf, multihop: x.L.some(function (l) { return /^ebgp-multihop/.test(l); }),
           nhs: !!(naf && naf.L.indexOf('next-hop-self') >= 0), desc: val(x, 'description') }; }); });
+    // L3VPN (РН гл. MPLS L3VPN): vrf → rd, import/export route-target; соседи с address-family vpnv4 unicast; транспорт — mpls → ldp
+    var mp = t.K.mpls, vv = {}, v4 = [];
+    Object.keys(t.K).forEach(function (h) { var m = h.match(/^vrf (\S+)$/); if (!m) return; var n = t.K[h];
+      vv[m[1]] = { rd: val(n, 'rd'), imp: n.L.filter(function (l) { return /^import route-target /.test(l); }).map(function (l) { return l.split(' ')[2]; }),
+        exp: n.L.filter(function (l) { return /^export route-target /.test(l); }).map(function (l) { return l.split(' ')[2]; }) }; });
+    Object.keys(t.K).forEach(function (h) { if (!/^router bgp /.test(h)) return; Object.keys(t.K[h].K).forEach(function (h2) { var nm = h2.match(/^neighbor (\S+)$/);
+      if (nm && t.K[h].K[h2].K['address-family vpnv4 unicast']) v4.push(nm[1]); }); });
+    c.vpn = { vrfs: vv, ldp: !!(mp && mp.K.ldp), v4: v4 };
     st.cand = EL.clone(c);
   }
+  // ---------------------------------------------------------------- L3VPN: маршрут в VRF через MP-BGP VPNv4 до удалённого PE
+  function vpnRoute(net, id, V, dst) {
+    var c = net.devs[id].st.run, my = c.vpn && c.vpn.vrfs[V]; if (!my || !c.vpn.ldp || !c.vpn.v4.length) return null;
+    var ses = net.bgpSessions()[id] || {}, hit = null;
+    c.vpn.v4.some(function (ip) { var x = ses[ip]; if (!x || x.state !== 'Established' || !x.peer) return false; var pd = net.devs[x.peer.dev]; if (!isMe(pd)) return false;
+      var pc = pd.st.run; if (!pc.vpn || !pc.vpn.ldp || pc.vpn.v4.indexOf(x.peer.ip) < 0) return false;
+      return Object.keys(pc.vpn.vrfs).some(function (V2) { var rv = pc.vpn.vrfs[V2]; if (!rv.exp.some(function (r) { return my.imp.indexOf(r) >= 0; })) return false;
+        var nets = net.ifaces(pd.id).filter(function (f) { return f.vrf === V2; }).map(function (f) { return IP.netOf(f.ip, f.len); })
+          .concat(pc.routes.filter(function (r) { return r.vrf === V2; }).map(function (r) { return r.net; }));
+        var n0 = nets.filter(function (n) { return IP.sameNet(dst, n.split('/')[0], +n.split('/')[1]); })[0]; if (!n0) return false;
+        hit = { iface: { tun: 'l3vpn', name: 'vpnv4', ip: x.peer.ip, vrf: V, port: null }, nh: ip, r: { p: 'B', net: n0 }, vpn: { dev: pd.id, vrf: V2, peer: ip, net: n0 } }; return true; }); });
+    return hit;
+  }
+  var look0 = P.lookup;
+  P.lookup = function (id, dst) { var r = look0.apply(this, arguments); if (r || !isMe(this.devs[id]) || !this._vrfCtx || this._vpnBusy) return r;
+    var v = this._vrfCtx; this._vpnBusy = true; try { return vpnRoute(this, id, v, dst); } finally { this._vpnBusy = false; } };   // BGP-сессии сами ищут маршруты — без повторного входа
+  var tun0 = P.tunnel;
+  P.tunnel = function (cur, r, pk, steps, ct) {
+    if (!r.iface || r.iface.tun !== 'l3vpn') return tun0.apply(this, arguments);
+    var v = r.vpn, d = this.devs[cur], pd = this.devs[v.dev];
+    steps.push({ k: 'route', t: d.name + ': ' + pk.dst + ' — VPN-маршрут ' + v.net + ' (VRF ' + r.iface.vrf + ' → ' + pd.name + ', VRF ' + v.vrf + ', MP-BGP VPNv4): метка VPN + транспортная метка LDP до ' + v.peer });
+    var vs = this._vrfSrc; this._vrfSrc = null; var f;
+    try { f = this.send(cur, { src: null, dst: v.peer, proto: 'icmp' }, steps, ct); } finally { this._vrfSrc = vs; }
+    if (!f.ok || f.dev !== v.dev) { steps.push({ k: 'drop', t: 'Транспорт до ' + v.peer + ' не построен — нет маршрута к loopback удалённого PE' }); return { ok: false }; }
+    steps.push({ k: 'route', t: pd.name + ': метки сняты — пакет ищется в таблице VRF ' + v.vrf });
+    return { ok: true, dev: v.dev, ip: v.peer, inIf: { vrf: v.vrf, name: 'vpnv4', ip: v.peer } };
+  };
   function commit(st) { var me = M(st); me.run = EL.clone(me.cand); compile(st); me.dirty = false; if (st.net) st.net.gen++;
     var host = st.run.host; return EL.clock.fmt(EL.clock.now()) + '\nCommit successfully completed in 0.031951 sec' + (host ? '' : ''); }
 

@@ -535,7 +535,7 @@
       if (this.mtuCheck) { var mc = this.mtuCheck(cur, r.iface, inIf, pk, steps, src); if (mc) return mc; }   // MTU выходного интерфейса (mtu.js)
       if (r.iface.tun) {                           // туннель: пакет инкапсулируется и уходит к удалённому концу как обычный IP
         var tr = this.tunnel(cur, r, pk, steps, ct); if (!tr.ok) return { ok: false, why: 'Request timed out', pk: pk };
-        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev;
+        hops.push({ dev: tr.dev, ip: tr.ip }); cur = tr.dev; if (tr.inIf) inIf = tr.inIf;   // L3VPN: дальше — таблица VRF удалённого PE
         if (!owns(this, cur, pk.dst)) steps.push({ k: 'route', t: this.devs[cur].name + ': адрес ' + pk.dst + ' не мой — ищу маршрут дальше' });
         continue;
       }

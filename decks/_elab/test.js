@@ -1436,5 +1436,33 @@ EL.labs.LABS.forEach(runLab);
   chk('running-config ME: router bgp 65535 / neighbor / address-family', /router bgp 65535\n   bgp router-id 1\.1\.1\.1[\s\S]*neighbor 2\.2\.2\.2\n      remote-as 65535/.test(n.exec(a.id, 'show running-config')));
   console.log('✓ ME: BGP');
 })();
+
+// ME: MPLS L3VPN — VRF с rd/route-target, MP-BGP VPNv4 между PE, транспорт LDP
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('ME5100S', 'PE1'), p = n.add('ME5100S', 'P'), b = n.add('ME5100S', 'PE2'), h1 = n.add('VPC', 'H1'), h2 = n.add('VPC', 'H2');
+  n.connect(a.id, 'te0/0/12', p.id, 'te0/0/11'); n.connect(p.id, 'te0/0/12', b.id, 'te0/0/12'); n.connect(h1.id, 'eth0', a.id, 'te0/0/17'); n.connect(h2.id, 'eth0', b.id, 'te0/0/17');
+  function run(d, L) { return L.map(function (l) { var x = n.exec(d.id, l); return /^%/.test(x) ? l + ' → ' + x : null; }).filter(Boolean); }
+  function igp(lo, ifs) { var c = ['configure', 'interface loopback 1', 'ipv4 address ' + lo + '/32', 'exit'];
+    ifs.forEach(function (x) { c.push('interface ' + x[0], 'ipv4 address ' + x[1], 'exit'); });
+    c.push('router ospfv2 core', 'router-id ' + lo, 'area 0.0.0.0', 'interface loopback 1', 'passive', 'exit');
+    ifs.forEach(function (x) { c.push('interface ' + x[0], 'network point-to-point', 'exit'); });
+    c.push('root', 'mpls', 'ldp'); ifs.forEach(function (x) { c.push('discovery interface ' + x[0], 'exit'); }); c.push('root'); return c; }
+  function pe(lo, peer, ifs, ce) { return igp(lo, ifs).concat(['vrf example', 'rd ' + lo + ':100', 'import route-target 65535:100', 'export route-target 65535:100', 'exit',
+    'interface te 0/0/17', 'vrf example', 'ipv4 address ' + ce, 'exit',
+    'router bgp 65535', 'bgp router-id ' + lo, 'neighbor ' + peer, 'remote-as 65535', 'update-source ' + lo, 'send-community', 'send-community-ext', 'address-family vpnv4 unicast', 'exit', 'exit', 'root', 'commit', 'end']); }
+  var e = run(a, pe('1.1.1.1', '2.2.2.2', [['te 0/0/12', '10.0.1.1/30']], '100.100.1.1/24'))
+    .concat(run(p, igp('9.9.9.9', [['te 0/0/11', '10.0.1.2/30'], ['te 0/0/12', '10.0.2.1/30']]).concat(['commit', 'end'])))
+    .concat(run(b, pe('2.2.2.2', '1.1.1.1', [['te 0/0/12', '10.0.2.2/30']], '100.100.2.1/24')));
+  chk('L3VPN по РН гл. MPLS L3VPN: конфигурация без ошибок', !e.length, e.join('; '));
+  n.exec(h1.id, 'ip 100.100.1.10/24 100.100.1.1'); n.exec(h2.id, 'ip 100.100.2.10/24 100.100.2.1'); n.tick(60); n.tick(60);
+  chk('ядро: PE1 видит loopback PE2 по OSPF через P', n.ping(a.id, '2.2.2.2').ok, n.exec(a.id, 'show route'));
+  var r = n.ping(h1.id, '100.100.2.10');
+  chk('клиент VRF example на PE1 пингует клиента на PE2 через P (метки VPN + LDP)', r.ok && r.steps.some(function (s) { return /VPN-маршрут 100\.100\.2\.0\/24/.test(s.t); }), r.steps.map(function (s) { return s.t; }).slice(-4).join(' | '));
+  chk('P не знает сети клиентов (маршрута 100.100.2.0/24 в GRT нет)', !n.ping(p.id, '100.100.2.10').ok);
+  EL.labs.apply(n, { PE2: ['configure', 'vrf example', 'no import route-target 65535:100', 'no export route-target 65535:100', 'export route-target 65535:999', 'import route-target 65535:999', 'root', 'commit', 'end'] });
+  chk('route-target не совпадают — VPN-маршрутов нет', !n.ping(h1.id, '100.100.2.10').ok);
+  console.log('✓ ME: MPLS L3VPN');
+})();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

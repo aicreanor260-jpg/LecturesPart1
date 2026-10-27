@@ -161,6 +161,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>router static → address-family ipv4 unicast → destination P/L NH</td><td>статический маршрут</td></tr>
 <tr><td>router ospfv2 N → router-id · area 0.0.0.0 → interface … → passive · network point-to-point · metric</td><td>OSPFv2: интерфейсы — внутри area</td></tr>
 <tr><td>router bgp 65535 → bgp router-id · neighbor A → remote-as · update-source · address-family ipv4 unicast · address-family ipv4 unicast → network P/L</td><td>BGP (enable не нужен); show bgp summary</td></tr>
+<tr><td>vrf X → rd · import/export route-target · mpls → ldp → discovery interface · neighbor → address-family vpnv4 unicast</td><td>MPLS L3VPN между PE</td></tr>
 <tr><td>exit · root · end · do … · show configuration changes · show route · show ospfv2 neighbors</td><td>навигация и проверка</td></tr>
 </table>
 
