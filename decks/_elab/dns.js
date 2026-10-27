@@ -87,6 +87,11 @@
     if (c === 'named-checkzone' && t[1] && t[2]) { var recs = parseZone(t[1].replace(/\.$/, '').toLowerCase(), (st.files || {})[t[2]]);
       if ((st.files || {})[t[2]] === undefined) return 'zone ' + t[1] + '/IN: loading from master file ' + t[2] + ' failed: file not found';
       return 'zone ' + t[1] + '/IN: loaded serial 1\nOK'; void recs; }
+    var sd = line.match(/^sed\s+-i\s+['"]?s\/([^/]*)\/([^/]*)\/(g?)['"]?\s+(\S+)$/);   // sed -i s/было/стало/[g] файл
+    if (sd) { var fn = sd[4]; if ((st.files || {})[fn] === undefined) return "sed: can't read " + fn + ': No such file or directory';
+      if (st.user !== 'root' && /^\/etc\//.test(fn)) return 'sed: couldn\'t open temporary file: Permission denied';
+      var re; try { re = new RegExp(sd[1], sd[3]); } catch (x) { return 'sed: -e expression #1: unterminated `s\' command'; }
+      st.files[fn] = st.files[fn].split('\n').map(function (l) { return l.replace(re, sd[2]); }).join('\n'); return ''; }
     if (c === 'nslookup') { var nm = t[1]; if (!nm) return 'Usage: nslookup NAME [SERVER]';
       var r = st.net.resolve(st.dev, nm, t[2], true), sv = r.server || t[2] || (cfg(st.net, st.dev).servers[0]) || '127.0.0.1';
       if (r.err === 'timeout' || r.err === 'noserver') return ';; connection timed out; no servers could be reached';
