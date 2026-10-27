@@ -57,7 +57,7 @@ def ldp_scene():
     msg.append(t(300, 278, "199", 22, RED, 900, extra=' data-ph="6"'))
     msg.append(box(170, 220, 170, 30, "Label Mapping 199", "#ffe0e0", RED, 14, only=6))
     msg.append(box(30, 470, 0.1, 0.1, "", "#fff", INK, 1, ph=7))
-    msg.append(t(600, 30, "LSP2: LSR1 → LSR2 → LSR3 проложен", 20, RED, 900, extra=' data-ph="7"'))
+    msg.append(t(600, 548, "LSP2: LSR1 → LSR2 → LSR3 проложен", 20, RED, 900, extra=' data-ph="7"'))
     msg.append(pkt(250, 255, [199], only=7))
     return sc(ldp_net("".join(msg)), [
         "Исходно: от LSR1 проложен LSP1 к сетям 105.0.0.0 и 192.201.103.0",

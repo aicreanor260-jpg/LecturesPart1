@@ -55,4 +55,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # дека переделана в подаче v2: собирается _mp2_build.py (этот сборщик — прежняя подача, оставлен как библиотека сцен)
+    import runpy
+    runpy.run_path(os.path.join(HERE, "_mp2_build.py"), run_name="__main__")
