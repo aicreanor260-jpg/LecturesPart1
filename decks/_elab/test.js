@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -415,7 +415,7 @@ EL.labs.LABS.forEach(runLab);
   var a5 = n.aaaLogin(r.id, 'console', 'admin', 'password', loc(r));
   chk('ESR: TACACS+ недоступен — даже при break вход по local', a5.ok && a5.method === 'local' && /tac_plus|недоступен/.test(a5.log.join(' ')), JSON.stringify(a5));
   n.exec(srv.id, 'systemctl start tac_plus');
-  var s1 = n.exec(srv.id, 'ssh alice@10.5.5.1'), s2 = n.exec(srv.id, 'pa55');
+  var s1 = n.exec(srv.id, 'ssh alice@10.5.5.1'); n.exec(srv.id, 'yes'); var s2 = n.exec(srv.id, 'pa55');
   chk('SSH на ESR пользователем TACACS+', /authenticity/.test(s1) && !/Permission denied/.test(s2) && !!srv.st.ssh, s1 + ' / ' + s2);
   n.exec(srv.id, 'exit'); n.exec(srv.id, 'ssh alice@10.5.5.1');
   chk('SSH: неверный пароль TACACS+ — Permission denied', /Permission denied/.test(n.exec(srv.id, 'wrong')));
@@ -500,17 +500,36 @@ EL.labs.LABS.forEach(runLab);
       'outside-address ip-address 100.0.0.2', 'authentication method mschap-v2', 'username ivan', 'password ascii-text Pa55word', 'enable', 'exit', 'enable', 'exit', 'end', 'commit', 'confirm'],
     ISP: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.1.1/30', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
     R2: ['configure', 'interface gi1/0/2', 'ip address 100.0.1.2/30', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.1.1',
-      'tunnel pptp 1', 'remote address 100.0.0.2', 'username ivan password ascii-text Pa55word', 'enable', 'exit', 'end', 'commit', 'confirm'],
+      'tunnel pptp 1', 'remote address 100.0.0.2', 'username ivan password ascii-text Pa55word', 'ip firewall disable', 'enable', 'exit', 'end', 'commit', 'confirm'],
     A: ['ip 192.168.1.10/24 192.168.1.1'] });
   chk('конфигурация без ошибок', !e.length, e.join('; '));
   var st = n.exec(r1.id, 'show remote-access status');
   chk('сервер: ivan получил 10.10.10.20', /ivan\s+10\.10\.10\.20\s+pptp\(office\)/.test(st) && /Count sessions: 1/.test(st), st);
+  var p0 = n.ping(r2.id, '192.168.1.10');
+  chk('сервер без security-zone: межсетевой экран отбрасывает трафик из туннеля', !p0.ok && p0.steps.some(function (x) { return /не в зоне/.test(x.t); }), p0.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { R1: ['configure', 'security zone trusted', 'exit', 'remote-access pptp office', 'security-zone trusted', 'exit', 'end', 'commit', 'confirm'] });
   var p = n.ping(r2.id, '192.168.1.10');
   chk('клиент через PPTP достаёт офисную сеть', p.ok && p.steps.some(function (x) { return /PPP в GRE/.test(x.t); }), p.steps.map(function (x) { return x.t; }).join(' | '));
   chk('show tunnels status на клиенте: pptp 1 Up', /pptp 1\s+Up\s+\d+\s+10\.10\.10\.20/.test(n.exec(r2.id, 'show tunnels status')), n.exec(r2.id, 'show tunnels status'));
   chk('интернет-адрес провайдера доступен мимо туннеля', n.ping(r2.id, '100.0.1.1').ok);
-  chk('running-config сервера и клиента', /remote-access pptp office\n  local-address ip-address 10\.10\.10\.1\n  remote-address address-range 10\.10\.10\.20-10\.10\.10\.40\n  outside-address ip-address 100\.0\.0\.2\n  authentication method mschap-v2\n  username ivan\n    password ascii-text Pa55word\n    enable\n  exit\n  enable/.test(n.exec(r1.id, 'show running-config')) &&
-      /tunnel pptp 1\n  remote address 100\.0\.0\.2\n  username ivan password ascii-text Pa55word\n  enable/.test(n.exec(r2.id, 'show running-config')));
+  var lg = n.raSess()[r2.id]['pptp 1'].log.map(function (x) { return x.t; }).join(' | ');
+  chk('журнал установления PPTP: TCP 1723, SCCRQ, LCP, MS-CHAPv2, IPCP', /TCP SYN на порт 1723/.test(lg) && /Start-Control-Connection-Request/.test(lg) && /LCP: Configure-Request/.test(lg) && /MS-CHAPv2 Success/.test(lg) && /IPCP: .*10\.10\.10\.20/.test(lg), lg);
+  var cn = n.exec(r1.id, 'show remote-access counters pptp');
+  chk('show remote-access counters: пакеты ivan', /PPTP Server: office\nUser: ivan\(10\.10\.10\.20\)\nPackets received:\s+[1-9]/.test(cn) && /Packets transmitted:\s+[1-9]/.test(cn), cn);
+  n.exec(r1.id, 'clear remote-access counters'); chk('clear remote-access counters', /Packets received:\s+0\n/.test(n.exec(r1.id, 'show remote-access counters')));
+  EL.labs.apply(n, { R1: ['configure', 'remote-access pptp office', 'encryption mppe', 'authentication method chap', 'exit', 'end', 'commit', 'confirm'] });
+  chk('MPPE с CHAP — CCP отказ', /pptp 1\s+Down.*MPPE требует MS-CHAP/.test(n.exec(r2.id, 'show tunnels status')), n.exec(r2.id, 'show tunnels status'));
+  EL.labs.apply(n, { R1: ['configure', 'remote-access pptp office', 'authentication method mschap-v2', 'exit', 'end', 'commit', 'confirm'] });
+  var pm = n.ping(r2.id, '192.168.1.10');
+  chk('MPPE с MS-CHAPv2 — работает, в трассе MPPE', pm.ok && pm.steps.some(function (x) { return /MPPE расшифрован/.test(x.t); }));
+  n.events(true); n.exec(r1.id, 'clear remote-access session pptp username ivan'); var ev = n.events();
+  chk('clear remote-access session — сессия разорвана, сообщение в консоль', /Count sessions: 0/.test(n.exec(r1.id, 'show remote-access status')) &&
+      ev.some(function (x) { return x.id === r2.id && /tunnel pptp 1: соединение разорвано/.test(x.msg); }), JSON.stringify(ev));
+  n.tick(31); chk('через 30 с клиент подключился снова', /Count sessions: 1/.test(n.exec(r1.id, 'show remote-access status')));
+  EL.labs.apply(n, { R2: ['configure', 'security zone wan', 'exit', 'tunnel pptp 1', 'security-zone wan', 'end', 'commit', 'confirm'] });
+  chk('клиент: security-zone на туннеле — в running-config', /tunnel pptp 1\n(.*\n)*  security-zone wan/.test(n.exec(r2.id, 'show running-config')));
+  chk('running-config сервера и клиента', /remote-access pptp office\n  local-address ip-address 10\.10\.10\.1\n  remote-address address-range 10\.10\.10\.20-10\.10\.10\.40\n  outside-address ip-address 100\.0\.0\.2\n  authentication method mschap-v2\n  encryption mppe\n  security-zone trusted\n  username ivan\n    password ascii-text Pa55word\n    enable\n  exit\n  enable/.test(n.exec(r1.id, 'show running-config')) &&
+      /tunnel pptp 1\n  remote address 100\.0\.0\.2\n  username ivan password ascii-text Pa55word\n  ip firewall disable\n  security-zone wan\n  enable/.test(n.exec(r2.id, 'show running-config')));
   EL.labs.apply(n, { R2: ['configure', 'tunnel pptp 1', 'username ivan password ascii-text wrong', 'end', 'commit', 'confirm'] });
   chk('неверный пароль — сессии нет, туннель Down с причиной', /Count sessions: 0/.test(n.exec(r1.id, 'show remote-access status')) && /pptp 1\s+Down.*неверный пароль/.test(n.exec(r2.id, 'show tunnels status')) && !n.ping(r2.id, '192.168.1.10').ok);
   // L2TP over IPsec с проверкой через RADIUS
@@ -519,21 +538,95 @@ EL.labs.LABS.forEach(runLab);
     RAD: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.3.10/24 dev ens3', 'ip route add default via 192.168.3.1'],
     R1: ['configure', 'interface gi1/0/3', 'ip address 192.168.3.1/24', 'ip firewall disable', 'exit', 'radius-server host 192.168.3.10', 'key ascii-text testing123', 'exit',
       'remote-access l2tp home', 'local-address ip-address 10.20.20.1', 'remote-address address-range 10.20.20.5-10.20.20.9', 'outside-address ip-address 100.0.0.2',
-      'authentication mode radius', 'ipsec authentication method pre-shared-key', 'ipsec authentication pre-shared-key ascii-text K3y12345', 'enable', 'exit', 'end', 'commit', 'confirm'],
+      'authentication mode radius', 'security-zone trusted', 'ipsec authentication method pre-shared-key', 'ipsec authentication pre-shared-key ascii-text K3y12345', 'enable', 'exit', 'end', 'commit', 'confirm'],
     R2: ['configure', 'no tunnel pptp 1', 'tunnel l2tp 1', 'remote address 100.0.0.2', 'username fedor password ascii-text secret1', 'ipsec authentication method pre-shared-key',
-      'ipsec authentication pre-shared-key ascii-text K3y12345', 'ignore-default-route', 'enable', 'exit', 'ip route 192.168.1.0/24 10.20.20.1', 'end', 'commit', 'confirm'] });
+      'ipsec authentication pre-shared-key ascii-text K3y12345', 'ignore-default-route', 'ip firewall disable', 'enable', 'exit', 'ip route 192.168.1.0/24 10.20.20.1', 'end', 'commit', 'confirm'] });
   chk('L2TP: конфигурация без ошибок', !e.length, e.join('; '));
   chk('RADIUS не запущен — L2TP не поднимается', /l2tp 1\s+Down.*RADIUS/.test(n.exec(r2.id, 'show tunnels status')), n.exec(r2.id, 'show tunnels status'));
   srv.st.files['/etc/freeradius/3.0/clients.conf'] = 'client r1 {\n  ipaddr = 192.168.3.1\n  secret = testing123\n}\n';
   srv.st.files['/etc/freeradius/3.0/users'] = 'fedor Cleartext-Password := "secret1"\n';
   n.exec(srv.id, 'systemctl start freeradius');
   var p2 = n.ping(r2.id, '192.168.1.10');
+  var l3 = n.raSess()[r2.id]['l2tp 1'].log.map(function (x) { return x.t; }).join(' | ');
+  chk('журнал L2TP: Quick Mode ESP, SCCRQ, RADIUS Access-Accept', /Quick Mode/.test(l3) && /SCCRQ/.test(l3) && /Access-Accept/.test(l3), l3);
   chk('L2TP + RADIUS: fedor подключён, офис доступен', /fedor\s+10\.20\.20\.5\s+l2tp\(home\)/.test(n.exec(r1.id, 'show remote-access status l2tp')) && p2.ok && p2.steps.some(function (x) { return /L2TP\/UDP 1701 внутри IPsec/.test(x.t); }),
       n.exec(r2.id, 'show tunnels status') + ' | ' + p2.steps.map(function (x) { return x.t; }).join(' | '));
   EL.labs.apply(n, { R2: ['configure', 'tunnel l2tp 1', 'ipsec authentication pre-shared-key ascii-text Other999', 'end', 'commit', 'confirm'] });
+  var l2 = (n.raSess()[r2.id]['l2tp 1'].log || []).map(function (x) { return x.t; }).join(' | ');
+  chk('журнал L2TP: IKE Main Mode', /IKE Main Mode/.test(l2), l2);
   chk('L2TP: несовпадение ключа IPsec', /l2tp 1\s+Down.*ключи IPsec/.test(n.exec(r2.id, 'show tunnels status')));
   chk('show remote-access configuration l2tp home', /Authentication mode:  radius/.test(n.exec(r1.id, 'show remote-access configuration l2tp home')) && /Remote address:       10\.20\.20\.5-10\.20\.20\.9/.test(n.exec(r1.id, 'show remote-access configuration l2tp home')));
   console.log('✓ Удалённый доступ PPTP / L2TP');
+})();
+// SSH: known_hosts, смена ключа хоста и сброс записи, ssh-keygen, ssh-copy-id, вход по ключу, root, ESR как клиент
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ SSH: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES2428', 'SW'), pc = n.add('Debian', 'PC'), sv = n.add('Debian', 'SRV');
+  n.connect(pc.id, 'ens3', sw.id, 'gi1/0/1'); n.connect(sv.id, 'ens3', sw.id, 'gi1/0/2'); n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/3');
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'ip ssh server', 'end', 'commit', 'confirm'],
+    PC: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.10/24 dev ens3'], SRV: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.20/24 dev ens3', 'exit'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  function x(l) { return n.exec(pc.id, l); }
+  var a = x('ssh admin@10.0.0.1');
+  chk('новый хост: вопрос о ключе ECDSA', /authenticity of host '10\.0\.0\.1/.test(a) && /ECDSA key fingerprint is SHA256:/.test(a) && /yes\/no/.test(n.prompt(pc.id)), a);
+  var b = x('yes');
+  chk('yes — ключ добавлен в known_hosts, запрос пароля', /Permanently added '10\.0\.0\.1' \(ECDSA\)/.test(b) && /admin@10\.0\.0\.1's password: /.test(n.prompt(pc.id)) && /^10\.0\.0\.1 ecdsa-sha2-nistp256 AAAA/.test(pc.st.files['/root/.ssh/known_hosts']), b);
+  x('password'); chk('вход на ESR', /#\s*$/.test(n.prompt(pc.id)), n.prompt(pc.id));
+  chk('выход', /closed/.test(x('exit')));
+  EL.labs.apply(n, { R1: ['configure', 'update ssh-host-key ecdsa', 'end'] });
+  var c = x('ssh admin@10.0.0.1');
+  chk('новый ключ хоста — предупреждение и отказ', /REMOTE HOST IDENTIFICATION HAS CHANGED/.test(c) && /Offending ECDSA key in \/root\/\.ssh\/known_hosts:1/.test(c) && /Host key verification failed/.test(c) && !pc.st.ssh, c);
+  var d = x('ssh-keygen -f "/root/.ssh/known_hosts" -R "10.0.0.1"');
+  chk('ssh-keygen -R — запись удалена, копия .old', /# Host 10\.0\.0\.1 found: line 1/.test(d) && /known_hosts updated/.test(d) && pc.st.files['/root/.ssh/known_hosts.old'] !== undefined, d);
+  chk('после сброса — снова вопрос о ключе', /authenticity/.test(x('ssh admin@10.0.0.1')));
+  x('no');
+  chk('no — Host key verification failed', !pc.st.ssh);
+  // ключи пользователя
+  var g = x('ssh-keygen');
+  chk('ssh-keygen: вопрос о файле', /Generating public\/private rsa key pair/.test(g) && /Enter file in which to save the key \(\/root\/\.ssh\/id_rsa\)/.test(n.prompt(pc.id)), g);
+  x(''); chk('вопрос о фразе', /Enter passphrase/.test(n.prompt(pc.id))); x('');
+  var g2 = x('');
+  chk('ключ создан: id_rsa и id_rsa.pub, отпечаток и randomart', /Your public key has been saved in \/root\/\.ssh\/id_rsa\.pub/.test(g2) && /\+---\[RSA 3072\]----\+/.test(g2) && /^ssh-rsa AAAA\S+ root@/.test(pc.st.files['/root/.ssh/id_rsa.pub']), g2);
+  chk('ls ~/.ssh', /id_rsa  id_rsa\.pub  known_hosts/.test(x('ls ~/.ssh')), x('ls ~/.ssh'));
+  chk('ssh-keygen -l -f', /^3072 SHA256:\S+ root@\S+ \(RSA\)$/.test(x('ssh-keygen -l -f ~/.ssh/id_rsa.pub')));
+  // root по паролю на Debian запрещён по умолчанию
+  x('ssh root@10.0.0.20'); x('yes'); var rp = x('toor');
+  chk('root по паролю: PermitRootLogin prohibit-password', /Permission denied, please try again/.test(rp), rp);
+  x('toor'); x('toor'); chk('после трёх попыток — отказ', !pc.st.ssh);
+  // ssh-copy-id для user
+  var cp = x('ssh-copy-id user@10.0.0.20');
+  chk('ssh-copy-id: просит пароль user', /Source of key\(s\) to be installed: "\/root\/\.ssh\/id_rsa\.pub"/.test(cp) && /user@10\.0\.0\.20's password/.test(n.prompt(pc.id)), cp);
+  var cp2 = x('user');
+  chk('ключ добавлен в authorized_keys', /Number of key\(s\) added: 1/.test(cp2) && /ssh-rsa/.test(sv.st.files['/home/user/.ssh/authorized_keys'] || ''), cp2);
+  var k = x('ssh user@10.0.0.20');
+  chk('вход по ключу без пароля, команды на удалённом', /Linux SRV|Linux/.test(k) && /user@\S+:~\$ $/.test(n.prompt(pc.id)) && /10\.0\.0\.20/.test(x('ip addr')), k + ' / ' + n.prompt(pc.id));
+  chk('logout', /Connection to 10\.0\.0\.20 closed/.test(x('logout')) && !pc.st.ssh);
+  chk('повторный ssh-copy-id — ключ уже есть', (x('ssh-copy-id user@10.0.0.20'), /already exist/.test(x('user'))));
+  // ключ с фразой
+  x('ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N S3cret'); x('ssh-copy-id -i ~/.ssh/id_ed25519.pub user@10.0.0.20'); x('user');
+  x('ssh user@10.0.0.20'); chk('ключ с фразой — вопрос фразы', /Enter passphrase for key '\/root\/\.ssh\/id_ed25519'/.test(n.prompt(pc.id)), n.prompt(pc.id));
+  x('S3cret'); chk('фраза верна — вход', /user@/.test(n.prompt(pc.id))); x('exit');
+  // смена ключей хоста Debian
+  n.exec(sv.id, 'root'); n.exec(sv.id, 'toor'); n.exec(sv.id, 'dpkg-reconfigure openssh-server');
+  chk('dpkg-reconfigure openssh-server — у клиента ключ не совпал', /HAS CHANGED/.test(x('ssh user@10.0.0.20')));
+  x('rm ~/.ssh/known_hosts'); chk('rm known_hosts — снова вопрос', /authenticity/.test(x('ssh user@10.0.0.20'))); x('no');
+  chk('PasswordAuthentication no: без ключа — сразу отказ', (sv.st.files['/etc/ssh/sshd_config'] += '\nPasswordAuthentication no\n', /Permission denied \(publickey\)/.test(x('ssh -o StrictHostKeyChecking=no -i /root/nokey user@10.0.0.20'))));
+  // ESR как клиент
+  n.exec(r.id, 'ssh user 10.0.0.20'); var ey = n.exec(r.id, 'yes');
+  chk('ESR → Debian: known hosts ESR, пароль запрещён настройкой', /Permanently added/.test(ey) && /Permission denied \(publickey\)/.test(ey) && !r.st.sshc, ey);
+  sv.st.files['/etc/ssh/sshd_config'] = sv.st.files['/etc/ssh/sshd_config'].replace('PasswordAuthentication no', '');
+  n.exec(r.id, 'ssh user 10.0.0.20'); n.exec(r.id, 'user');
+  chk('ESR → Debian: вход, команды Debian из консоли ESR', /user@/.test(n.prompt(r.id)) && /10\.0\.0\.20/.test(n.exec(r.id, 'ip addr')));
+  n.exec(r.id, 'exit'); n.exec(sv.id, 'dpkg-reconfigure openssh-server');
+  chk('ESR: смена ключа — clear ssh host', /HAS CHANGED/.test(n.exec(r.id, 'ssh user 10.0.0.20')) && /clear ssh host 10\.0\.0\.20/.test(n.exec(r.id, 'ssh user 10.0.0.20')));
+  n.exec(r.id, 'clear ssh host 10.0.0.20'); chk('после clear ssh host — вопрос о ключе', /authenticity/.test(n.exec(r.id, 'ssh user 10.0.0.20'))); n.exec(r.id, 'no');
+  // порт и show crypto key
+  EL.labs.apply(n, { R1: ['configure', 'ip ssh port 2222', 'end', 'commit', 'confirm'] });
+  chk('ip ssh port 2222: 22 закрыт, 2222 открыт', /Connection refused/.test(x('ssh admin@10.0.0.1')) && /authenticity of host '\[10\.0\.0\.1\]:2222/.test(x('ssh -p 2222 admin@10.0.0.1')));
+  x('no');
+  chk('show crypto key mypubkey rsa', /Key data\n-+\nssh-rsa\nAAAA/.test(n.exec(r.id, 'show crypto key mypubkey rsa')));
+  chk('running-config: ip ssh port', /ip ssh port 2222/.test(n.exec(r.id, 'show running-config')));
+  console.log('✓ SSH: ключи и known_hosts');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN

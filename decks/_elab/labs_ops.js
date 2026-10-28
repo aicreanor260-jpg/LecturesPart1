@@ -56,7 +56,7 @@
         vESR: ['configure', 'hostname vESR'].concat(ifs([[1, '192.168.1.1/24']]), ['ip ssh server', 'ntp enable', 'ntp server 192.168.1.10', 'minpoll 1', 'maxpoll 4', 'exit',
           'clock timezone gmt +7', 'syslog host ' + p.h, 'source-address 192.168.1.1', 'remote-address 192.168.1.10', 'transport udp', 'port 514', 'severity ' + p.sev, 'exit',
           'do commit', 'do confirm', 'end', 'show ntp peers']),
-        'Server #2': ['ls /var/log/rsyslog/', 'ssh admin@192.168.1.1', 'password', 'show date', 'exit', 'ls /var/log/rsyslog/vESR', 'cat /var/log/rsyslog/vESR/login.log'] }; } },
+        'Server #2': ['ls /var/log/rsyslog/', 'ssh admin@192.168.1.1', 'yes', 'password', 'show date', 'exit', 'ls /var/log/rsyslog/vESR', 'cat /var/log/rsyslog/vESR/login.log'] }; } },
 
     // ------------------------------------------------------------ 10.3
     { id: '10.3', title: 'Локальное зеркалирование портов (SPAN)',

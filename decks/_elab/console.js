@@ -236,6 +236,7 @@
   // ================================================================ системные сообщения
   // MES 10.x: CFA/AST по руководству Syslog; MES 6.x/4.x и ESR — формат %МОДУЛЬ-У-СОБЫТИЕ (в руководствах не приведён, условный)
   function sp(p) { return p.replace(/^([a-z]+)/, '$1 '); }
+  EL.evX = EL.evX || [];                       // [{snap(s, o), ev(q, было, стало, s, d)}] — свои ключи снимка и сообщения
   function fmt(d, ev) {
     if (d.sub === 'olt' || d.sub === 'ont' || d.sub === 'ap') return null;   // формат сообщений OLT/ONT/ТД в источниках не приведён
     var b = d.type === 'mes' ? d.st.dialect : 'esr', p = ev.port;
@@ -262,6 +263,7 @@
         if (s._stp && s._stp.root[id] === id && Object.keys(t[id]).length) o['R|' + id] = '*'; }
       Object.keys(vr[id] || {}).forEach(function (k) { var v = vr[id][k]; o['V|' + id + '|' + k + '|' + v.id] = v.master ? 'Master' : 'Backup'; });
     });
+    EL.evX.forEach(function (x) { x.snap(s, o); });
     var A = (s._adj || {}).O || {};
     Object.keys(A).forEach(function (k) { var r = A[k]; o['O|' + r.id + '|' + r.ifn + '|' + r.dev] = r.state === 'full' ? 'Full' : r.state === '2way' ? '2-Way' : r.state === 'exstart' ? 'ExStart' : 'Init'; });
     return o;
@@ -289,8 +291,9 @@
       else if (q[0] === 'V') { ev = { k: 'vrrp', port: q[2], vrid: q[3], state: b || 'Init' }; }
       else if (q[0] === 'O') { var nb = s.devs[q[3]]; ev = { k: 'ospf', port: q[2], state: b || 'Down',
         rid: nb ? ((nb.st.run.ospf && nb.st.run.ospf.rid) || (s.ifaces(q[3])[0] || {}).ip || q[3]) : q[3] }; }
+      if (!ev && EL.evX.length) EL.evX.some(function (x) { ev = x.ev(q, a, b, s, d); return !!ev; });   // события модулей (ra.js …)
       if (!ev) return;
-      var msg = fmt(d, ev); if (!msg) return;
+      var msg = ev.msg || fmt(d, ev); if (!msg) return;
       (s._evlog = s._evlog || []).push({ t: s.now, dev: d.name, k: ev.k, msg: msg }); if (s._evlog.length > 2000) s._evlog.shift();   // лента событий для «Результатов»
       logLine(s, d, msg);
       if ((d.type === 'esr' ? d.st.run.logcon : d.st.logcon) !== false) out.push({ id: id, msg: msg });
