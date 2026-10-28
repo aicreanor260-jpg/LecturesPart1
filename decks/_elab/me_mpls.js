@@ -11,8 +11,10 @@
    L2VPN: l2vpn → xconnect-group G → p2p NAME → interface AC, pw ADDR ID (pw-class), mtu; l2vpn pw-class → encapsulation mpls …
      Псевдопровод Up: у второго PE такой же pw-id с pw на наш адрес, targeted LDP (mpls ldp neighbor) с обеих сторон, LSP в обе стороны, AC подняты,
      MTU совпадают (иначе MM). Кадры с AC переносятся на AC второго PE (саб-интерфейс AC — со своим outer-vid). AC с IP-адресом — commit отклоняется (РН с. 180).
-   Упрощения: номера меток условные (локальные — с 16 по порядку префиксов, метка VPN — 1000 + номер VRF, метка PW — 2000 + pw-id); таймеры IS-IS/LDP
-     (hello, hold) не моделируются — смежность поднимается и рвётся сразу; LSP, базы LSDB и TLV не моделируются — show isis database показывает по LSP
+   Таймеры: IS-IS hold 30 с, LDP session holdtime 40 с — сосед пропал без падения своего интерфейса (выключен, обрыв за коммутатором) — смежность,
+     маршруты и метки держатся до конца hold («чёрная дыра»); свой интерфейс упал или сосед снял LDP — сразу.
+   Упрощения: номера меток условные (локальные — с 16 по порядку префиксов, метка VPN — 1000 + номер VRF, метка PW — 2000 + pw-id); смежность поднимается сразу
+     (без ожидания hello); LSP, базы LSDB и TLV не моделируются — show isis database показывает по LSP
      на маршрутизатор; ECMP нет; control-word не сравнивается; backup PW хранится, но не используется. */
 (function (G) {
   'use strict';
@@ -86,17 +88,27 @@
         if (dist[e.dev] === undefined || c < dist[e.dev]) { dist[e.dev] = c; first[e.dev] = u === src ? e : first[u]; q.push(e.dev); } }); }
     return { dist: dist, first: first };
   }
+  // таймеры: IS-IS hello 10 с, hold 30 с (3 × hello); сосед пропал, а свой интерфейс жив — смежность и маршруты держатся до конца hold
+  var ISIS_HOLD = 30, LDP_HOLD = 40;
+  function isisHold(s, A) {
+    var M = s._isM = s._isM || {}, seen = {};
+    Object.keys(A).forEach(function (id) { A[id].forEach(function (e) { var k = id + '|' + e.dev + '|' + e.lvl + '|' + e.ifn; seen[k] = 1; M[k] = { last: s.now, e: e }; }); });
+    Object.keys(M).forEach(function (k) { if (seen[k]) return; var q = k.split('|'), id = q[0], m = M[k];
+      if (!A[id] || !ifOf(s, id, m.e.ifn) || s.now - m.last >= ISIS_HOLD) { delete M[k]; return; }
+      A[id].push({ dev: m.e.dev, lvl: m.e.lvl, ifn: m.e.ifn, nh: m.e.nh, met: m.e.met, stale: true, left: ISIS_HOLD - (s.now - m.last) }); });
+  }
   P.isisDyn = function () {
-    if (this._isis && this._isis.gen === this.gen) return this._isis;
-    var s = this, A = adjs(s), R = {}, pre = {};
+    if (this._isis && this._isis.gen === this.gen && this._isis.now === this.now) return this._isis;
+    var s = this, A = adjs(s), R = {}, pre = {}; isisHold(s, A);
     Object.keys(A).forEach(function (id) { var I = s.devs[id].st.run.isis; pre[id] = [];
       Object.keys(I.ifs).forEach(function (k) { var x = I.ifs[k]; if (!x.af || x.shut) return; var f = ifOf(s, id, k); if (!f || f.vrf) return;
         pre[id].push({ net: IP.netOf(f.ip, f.len), len: f.len, m: /^lo/.test(k) ? 0 : x.met }); }); });
+    s._isPre = Object.assign(s._isPre || {}, pre);
     Object.keys(A).forEach(function (id) { var I = s.devs[id].st.run.isis, mine = {}, out = {}; R[id] = [];
       s.ifaces(id).forEach(function (f) { mine[IP.netOf(f.ip, f.len)] = true; });
       [1, 2].forEach(function (L) { if (!lv(I)[L]) return; var sp = spf(A, id, L);
         Object.keys(sp.dist).forEach(function (rid) { if (rid === id) return; var e = sp.first[rid];
-          pre[rid].forEach(function (p) { if (mine[p.net]) return; var cost = sp.dist[rid] + (p.m[L] || 0), cur = out[p.net];
+          (pre[rid] || (s._isPre || {})[rid] || []).forEach(function (p) { if (mine[p.net]) return; /* пропавший сосед — его LSP ещё в базе */ var cost = sp.dist[rid] + (p.m[L] || 0), cur = out[p.net];
             var cand = { p: 'i', lvl: L, net: p.net, len: p.len, nh: e.nh, ifn: e.ifn, ad: L === 1 ? 115 : 116, m: cost };
             if (!cur || cand.ad < cur.ad || (cand.ad === cur.ad && cost < cur.m)) out[p.net] = cand; }); }); });
       if (I.lvl === 'level-1') { var sp1 = spf(A, id, 1), best = null;      // бит ATT: ближайший L1/L2 своей области с L2-смежностями
@@ -104,7 +116,7 @@
           if (J.lvl === 'level-1-2' && (A[rid] || []).some(function (e) { return e.lvl === 2; }) && (!best || sp1.dist[rid] < sp1.dist[best])) best = rid; });
         if (best) out['0.0.0.0/0'] = { p: 'i', lvl: 1, net: '0.0.0.0/0', len: 0, nh: sp1.first[best].nh, ifn: sp1.first[best].ifn, ad: 115, m: sp1.dist[best], att: true }; }
       Object.keys(out).forEach(function (k) { R[id].push(out[k]); }); });
-    this._isis = { gen: this.gen, A: A, R: R };
+    this._isis = { gen: this.gen, now: this.now, A: A, R: R };
     return this._isis;
   };
   var routes0 = P.routes;
@@ -127,7 +139,7 @@
     return false;
   }
   P.ldpDyn = function () {
-    if (this._ldp && this._ldp.gen === this.gen) return this._ldp;
+    if (this._ldp && this._ldp.gen === this.gen && this._ldp.now === this.now) return this._ldp;
     var s = this, ses = {}, lab = {}, me = s.order.filter(function (id) { var d = s.devs[id]; return isMe(d) && !d.off && d.st.run.ldp; });
     function key(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
     me.forEach(function (id) { var L = s.devs[id].st.run.ldp;
@@ -141,12 +153,20 @@
         var kk = key(id, pid); (ses[kk] = ses[kk] || { a: id, b: pid, link: [], tgt: false }).tgt = true; }); });
     Object.keys(ses).forEach(function (kk) { var x = ses[kk], ta = taddr(s, x.a), tb = taddr(s, x.b);
       x.up = !!(ta && tb && reach(s, x.a, tb) && reach(s, x.b, ta)); x.why = x.up ? '' : 'нет связи между transport-адресами ' + ta + ' и ' + tb + ' (TCP 646)'; });
+    // сессия LDP: keepalive не приходят (сосед выключен или пропал путь) — держится session holdtime 40 с; сосед снял LDP — разрыв сразу (notification)
+    var LM = s._ldpM = s._ldpM || {};
+    Object.keys(ses).forEach(function (kk) { if (ses[kk].up) LM[kk] = { last: s.now, x: ses[kk] }; });
+    Object.keys(LM).forEach(function (kk) { if (ses[kk] && ses[kk].up) return; var m = LM[kk], a = s.devs[m.x.a], b = s.devs[m.x.b];
+      var gone = function (d) { return !d || d.off || (isMe(d) && d.st.run.ldp && !ses[kk]); };
+      var soft = a && b && (a.off || b.off || (ses[kk] && !ses[kk].up)) && !(a.off && b.off);
+      if (!soft || s.now - m.last >= LDP_HOLD || (a && !a.off && !a.st.run.ldp) || (b && !b.off && !b.st.run.ldp)) { delete LM[kk]; return; }
+      void gone; var y = EL.clone(m.x); y.up = true; y.stale = true; y.left = LDP_HOLD - (s.now - m.last); y.why = 'keepalive не приходят ' + Math.floor(s.now - m.last) + ' с'; ses[kk] = y; });
     // локальные метки на IGP- и connected-префиксы глобальной таблицы
     me.forEach(function (id) { var L = s.devs[id].st.run.ldp, by = s.best(id), n = 16, T = lab[id] = {};
       Object.keys(by).sort(function (a, b) { return IP.ip2n(a.split('/')[0]) - IP.ip2n(b.split('/')[0]) || a.length - b.length; }).forEach(function (net) {
         var r = by[net]; if (r.vrf || !/^(C|O|i|R)$/.test(r.p)) return;
         T[net] = r.p === 'C' ? (L.php ? 3 : 0) : n++; }); });
-    this._ldp = { gen: this.gen, ses: ses, lab: lab };
+    this._ldp = { gen: this.gen, now: this.now, ses: ses, lab: lab };
     return this._ldp;
   };
   function sess(s, a, b) { var D = s.ldpDyn(), k = a < b ? a + '|' + b : b + '|' + a; return D.ses[k] || null; }
@@ -176,6 +196,8 @@
     if (cur !== dst) { steps.push({ k: 'drop', t: 'LSP до ' + peer + ' не дошёл до ' + nm(dst) }); return { ok: false, steps: steps }; }
     return { ok: true, steps: steps };
   }
+  var ex0 = P.exec; P.exec = function () { this.isisDyn(); this.ldpDyn(); return ex0.apply(this, arguments); };
+  var tk0 = P.tick; P.tick = function () { this.isisDyn(); this.ldpDyn(); return tk0.apply(this, arguments); };
   X.lsp = function (s, src, dst, peer, inner) { return lsp(s, src, dst, peer, inner, 'метка VPN'); };
   X.vpnLabel = function (s, dev, vrf) { var v = Object.keys((s.devs[dev].st.run.vpn || { vrfs: {} }).vrfs).sort(); return 1000 + Math.max(0, v.indexOf(vrf)); };
 
@@ -238,7 +260,7 @@
     var o = ['IS-IS Router ' + (I ? I.name : '') + ' adjacency:', 'System Id      Interface              State Type     SNPA            Hold NSF   BFD  Hostname',
       '-------------- ---------------------- ----- -------- --------------- ---- ----- ---- ----------------'];
     A.forEach(function (e) { var J = s.devs[e.dev].st.run.isis; o.push(pad(J.sys, 15) + pad(e.ifn, 23) + pad('up', 6) + pad('level-' + e.lvl, 9) + pad(EL.mac(s.devs[e.dev].name + 'sys').replace(/:/g, '').replace(/(\w{4})(?=\w)/g, '$1.'), 16) +
-      pad(30, 5) + pad('true', 6) + pad('none', 5) + (J.host || s.devs[e.dev].st.run.host)); });
+      pad(e.stale ? Math.ceil(e.left) : ISIS_HOLD - Math.floor(s.now % 10), 5) + pad('true', 6) + pad('none', 5) + (J.host || s.devs[e.dev].st.run.host)); });
     return o.join('\n'); }
   function isisDb(s, st) { var D = s.isisDyn(), I = st.run.isis, o = ['   IS-IS Router ' + I.name];
     [1, 2].forEach(function (L) { if (!lv(I)[L]) return; var ids = Object.keys(D.A).filter(function (id) { return id === st.dev || spf(D.A, st.dev, L).dist[id] !== undefined; })
@@ -262,7 +284,7 @@
   function ldpNbText(s, st, detail) { var D = s.ldpDyn(), id = st.dev, o = detail ? [] : [date(), 'Peer                    Up/Down time  Expires    Adjcs  Addrs  Labels  GR', '----------------------- ------------- ---------- ------ ------ ------- ---'];
     Object.keys(D.ses).forEach(function (k) { var x = D.ses[k]; if (x.a !== id && x.b !== id) return; var pid = x.a === id ? x.b : x.a, pr = taddr(s, pid);
       var adj = x.link.filter(function (q) { return q.dev === id; }).length + (x.tgt ? 1 : 0), lb = Object.keys(D.lab[pid] || {}).length, addrs = s.ifaces(pid).filter(function (f) { return !f.vrf; }).length;
-      if (!detail) { if (x.up) o.push(pad(pr + ':0', 24) + pad(age(s, st), 14) + pad('33s', 11) + pad(adj, 7) + pad(addrs, 7) + pad(lb, 8) + 'N'); return; }
+      if (!detail) { if (x.up) o.push(pad(pr + ':0', 24) + pad(age(s, st), 14) + pad((x.stale ? Math.ceil(x.left) : LDP_HOLD - Math.floor(s.now % 7)) + 's', 11) + pad(adj, 7) + pad(addrs, 7) + pad(lb, 8) + 'N'); return; }
       o.push('   LDPv1 peer: ' + pr + ':0', '      Current state: ' + (x.up ? 'operational' : 'non-existent (' + x.why + ')'), '      Label distribution method: downstream-unsolicited',
         '      Session holdtime: 40 secs (own 40 secs, peer 40 secs)', '      Established adjacencies:');
       x.link.filter(function (q) { return q.dev === id; }).forEach(function (q) { o.push('         link, ' + q.ifn + ', holdtime: 15 secs, bfd: none (not-required)'); });

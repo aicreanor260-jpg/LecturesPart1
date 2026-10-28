@@ -1842,6 +1842,29 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ ME: IS-IS, LDP, L2VPN');
 })();
 
+// ME: таймеры IS-IS (hold 30 с) и LDP (session holdtime 40 с) — сосед за коммутатором выключился
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ME таймеры: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('ME5100S', 'A'), b = n.add('ME5100S', 'B'), sw = n.add('MES2428', 'SW');
+  n.connect(a.id, 'te0/0/1', sw.id, 'gi1/0/1'); n.connect(b.id, 'te0/0/1', sw.id, 'gi1/0/2');
+  function cfg(d, lo, ip, net) { ['configure', 'interface loopback 1', 'ipv4 address ' + lo + '/32', 'exit', 'interface te 0/0/1', 'ipv4 address ' + ip + '/24', 'exit',
+    'router isis c', 'net ' + net, 'interface loopback 1', 'address-family ipv4 unicast', 'exit', 'passive', 'exit', 'interface te 0/0/1', 'address-family ipv4 unicast', 'exit', 'exit', 'root',
+    'mpls', 'router-id ' + lo, 'forwarding', 'interface te 0/0/1', 'exit', 'exit', 'ldp', 'discovery interface te 0/0/1', 'exit', 'root', 'commit', 'end'].forEach(function (l) { n.exec(d.id, l); }); }
+  cfg(a, '1.1.1.1', '10.0.0.1', '49.0001.0010.0100.1001.00'); cfg(b, '2.2.2.2', '10.0.0.2', '49.0001.0020.0200.2002.00');
+  chk('смежность и маршрут до 2.2.2.2', /2\.2\.2\.2\/32/.test(n.exec(a.id, 'show route isis')) && /:0 /.test(n.exec(a.id, 'show mpls ldp neighbors')));
+  n.power(b.id, false); n.tick(29);
+  chk('B выключен, 29 с — смежность ещё up (Hold 1), маршрут и LDP-сессия держатся', /2\.2\.2\.2\/32/.test(n.exec(a.id, 'show route isis')) && /up\s+level-\d\s+\S+\s+1\s/.test(n.exec(a.id, 'show isis neighbors')) &&
+      /2\.2\.2\.2:0/.test(n.exec(a.id, 'show mpls ldp neighbors')) && !n.ping(a.id, '2.2.2.2').ok, n.exec(a.id, 'show isis neighbors'));
+  n.tick(1);
+  chk('30 с — hold истёк: смежности и маршрута нет, LDP ещё держится (40 с)', !/2\.2\.2\.2\/32/.test(n.exec(a.id, 'show route isis')) && /2\.2\.2\.2:0/.test(n.exec(a.id, 'show mpls ldp neighbors')));
+  n.tick(10); chk('40 с — LDP-сессия закрыта', !/2\.2\.2\.2:0/.test(n.exec(a.id, 'show mpls ldp neighbors')));
+  n.power(b.id, true);
+  chk('B включился — смежность и маршрут снова', /2\.2\.2\.2\/32/.test(n.exec(a.id, 'show route isis')));
+  ['configure', 'interface te 0/0/1', 'shutdown', 'root', 'commit', 'end'].forEach(function (l) { n.exec(a.id, l); });
+  chk('свой интерфейс выключен — сразу без маршрута', !/2\.2\.2\.2\/32/.test(n.exec(a.id, 'show route isis')));
+  console.log('✓ ME: таймеры IS-IS и LDP');
+})();
+
 // симуляция пакетов как в Packet Tracer: события со временем, протоколы, линейный код L1
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
