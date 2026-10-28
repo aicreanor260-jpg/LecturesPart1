@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -457,6 +457,37 @@ EL.labs.LABS.forEach(runLab);
   var f4 = run([udp])[0];
   chk('R1 маркирует DSCP 46, R2 по DSCP ограничивает на входе', f4.loss > 90 && Object.keys(f4.drops).some(function (k) { return /R2 gi1\/0\/1: police 500 Кбит\/с \(класс EF\)/.test(k); }), JSON.stringify(f4.drops));
   console.log('✓ QoS');
+})();
+
+// PIM-SM со статическим RP на MES 6.x: источник и получатель за разными L3-коммутаторами
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ PIM: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), a = n.add('MES3348', 'SWA'), b = n.add('MES3348', 'SWB'), src = n.add('Debian', 'SRC'), rc = n.add('Debian', 'RC'), r2 = n.add('Debian', 'RC2');
+  n.connect(a.id, 'gi1/0/24', b.id, 'gi1/0/24'); n.connect(src.id, 'ens3', a.id, 'gi1/0/1'); n.connect(rc.id, 'ens3', b.id, 'gi1/0/1'); n.connect(r2.id, 'ens3', b.id, 'gi1/0/2');
+  function sw(lan, ip, mine, peer, net) { return ['enable', 'configure', 'vlan database', 'vlan ' + lan + ',100', 'exit', 'interface gi1/0/1', 'switchport mode access', 'switchport access vlan ' + lan, 'exit',
+    'interface gi1/0/2', 'switchport mode access', 'switchport access vlan ' + lan, 'exit', 'interface gi1/0/24', 'switchport mode access', 'switchport access vlan 100', 'exit',
+    'interface vlan ' + lan, 'ip address ' + ip + ' 255.255.255.0', 'exit', 'interface vlan 100', 'ip address ' + mine + ' 255.255.255.0', 'exit',
+    'ip route ' + net + ' 255.255.255.0 ' + peer, 'ip multicast-routing', 'ip pim rp-address 10.100.0.1', 'end']; }
+  function host(ip, gw) { return ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + ip + '/24 dev ens3', 'ip route add default via ' + gw]; }
+  var e = EL.labs.apply(n, { SWA: sw(10, '10.10.0.1', '10.100.0.1', '10.100.0.2', '10.20.0.0'), SWB: sw(20, '10.20.0.1', '10.100.0.2', '10.100.0.1', '10.10.0.0'),
+    SRC: host('10.10.0.10', '10.10.0.1'), RC: host('10.20.0.10', '10.20.0.1'), RC2: host('10.20.0.11', '10.20.0.1') });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  chk('unicast: источник видит получателя', n.ping(src.id, '10.20.0.10').ok);
+  chk('show ip pim neighbor на SWA — сосед 10.100.0.2', /10\.100\.0\.2\s+vlan100/.test(n.exec(a.id, 'show ip pim neighbor')), n.exec(a.id, 'show ip pim neighbor'));
+  n.exec(rc.id, 'ip addr add 239.1.1.1/32 dev ens3 autojoin');
+  var r = n.mcastSend(src.id, '239.1.1.1');
+  chk('поток 239.1.1.1 дошёл до RC за вторым коммутатором (Register на RP, дерево (*,G))', r.ok && r.got.indexOf('RC') >= 0 && r.got.indexOf('RC2') < 0 &&
+      r.steps.some(function (x) { return /Register на RP 10\.100\.0\.1/.test(x.t); }) && r.steps.some(function (x) { return /SWB \(\*,239\.1\.1\.1\)/.test(x.t); }), r.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { SWB: ['configure', 'interface vlan 100', 'no ip pim', 'end'] });
+  var r2x = n.mcastSend(src.id, '239.1.1.1');
+  chk('no ip pim на SVI к RP — SWB не присоединился, поток не доходит', r2x.got.indexOf('RC') < 0 && r2x.steps.some(function (x) { return /не присоединился/.test(x.t); }), r2x.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { SWB: ['configure', 'interface vlan 100', 'ip pim', 'exit', 'no ip pim rp-address 10.100.0.1', 'end'] });
+  chk('на SWB нет RP — поток не доходит', n.mcastSend(src.id, '239.1.1.1').got.indexOf('RC') < 0);
+  EL.labs.apply(n, { SWB: ['configure', 'ip pim rp-address 10.100.0.1', 'interface vlan 20', 'ip igmp static-group 239.2.2.2', 'end'] });
+  chk('running-config: ip multicast-routing pim, rp-address, static-group', /ip multicast-routing pim\nip pim rp-address 10\.100\.0\.1/.test(n.exec(b.id, 'show running-config')) &&
+      /ip igmp static-group 239\.2\.2\.2/.test(n.exec(b.id, 'show running-config')));
+  chk('show ip pim rp mapping', /RP: 10\.100\.0\.1, static/.test(n.exec(b.id, 'show ip pim rp mapping')));
+  console.log('✓ PIM');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
