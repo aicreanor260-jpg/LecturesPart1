@@ -381,6 +381,11 @@ Debian при `ip link set ens3 up` повторяет Router Solicitation ещ�
 
 Упрощения: клиент DHCP не просит своё время аренды, `max-lease-time` не моделируется, VPC при `clear ip` не шлёт DHCPRELEASE; размер пакета в счётчиках NAT условный (ICMP 84 байта, как в примере справочника); `no lldp transmit` у соседа — сразу (shutdown-LLDPDU по 802.1AB), по TTL сосед пропадает, только если LLDPDU перестали приходить без него.
 
+### QoS на ESR (справочник 1.23, MQC)
+`class-map NAME` → `match access-group ACL`, `match dscp N`, `set dscp N`; `policy-map NAME` → `shape average Кбит/с [burst]` (на весь интерфейс) и `class NAME` → `set dscp N`, `police Кбит/с [burst-conforming байт] [exceed-action drop | set-dscp-transmit N | transmit]`, `shape average Кбит/с [burst]`; на интерфейсе `service-policy input|output NAME` (`qos enable` хранится).
+Действует в «Симуляции трафика» («Тест»): пакет относится к первому подошедшему классу политики (по ACL — протокол, адреса, порт; по DSCP); police — корзина маркеров (по умолчанию 1500 байт): лишнее отбрасывается («R1 gi1/0/2: police 1000 Кбит/с (класс BULK) — лишнее отброшено» в потерях) или перемаркируется; shape — пакеты ждут полосу (по умолчанию burst 128000 байт): потерь нет, растёт задержка. Маркировка `set dscp` едет с пакетом дальше — следующий маршрутизатор может классифицировать по `match dscp`. У потока в окне симуляции есть поле DSCP.
+Упрощения: priority-queue, WRR и bandwidth не моделируются; ping и трасса в консоли QoS не учитывают — только симуляция; `shape average percent` не принимается.
+
 ### Вход через RADIUS и TACACS+ (справочник ESR 1.23, руководство MES 6.6.8.8)
 - **ESR:** `tacacs-server host A` → `(config-tacacs-server)#` `key ascii-text СЕКРЕТ`, `port 49`; `radius-server host A` → `(config-radius-server)#` `key ascii-text СЕКРЕТ` (8–16 символов); `aaa authentication login default tacacs local` (или своё имя списка + `line console|ssh|telnet` → `login authentication ИМЯ`); `aaa authentication mode chain` (по умолчанию: отказ сервера — пробуется следующий метод) | `break` (следующий метод — только если сервер недоступен).
 - **MES 6.x:** `tacacs-server host A key К [port-number N]`, `radius-server host A key К`, `aaa authentication login default|ИМЯ radius|tacacs|local|line|enable|none …`, на линии `login authentication ИМЯ`.

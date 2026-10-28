@@ -332,6 +332,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show ip nat translations · ip firewall sessions icmp-timeout N</td><td>NAT-трансляции стареют по таймаутам сессий (ICMP 30 с, UDP 30/180, TCP 60/120/30)</td></tr>
 <tr><td>lacp timeout short|long (8.x: [no] lacp actor admin state longtimeout)</td><td>партнёр вышел из LACP — порт ещё 3 / 90 с в агрегате</td></tr>
 <tr><td>lldp timer · lldp hold-multiplier (MES 10.x: lldp transmit-interval · lldp holdtime-multiplier)</td><td>TTL соседа в show lldp neighbors отсчитывается и обновляется каждые timer секунд</td></tr>
+<tr><td>class-map C → match access-group ACL | match dscp N; policy-map P → class C → police Кбит/с · shape average Кбит/с · set dscp N; interface → service-policy input|output P</td><td>QoS в «Симуляции трафика»: ограничение, сглаживание, маркировка</td></tr>
 <tr><td>ESR: tacacs-server host A → key ascii-text K · aaa authentication login default tacacs local; MES 6.x: radius-server host A key K · aaa authentication login default radius local; Debian-server: tac_plus.conf · freeradius</td><td>вход в консоль и по SSH через TACACS+/RADIUS, local — запасной</td></tr>
 <tr><td>ESR: snmp-server · snmp-server community public ro · snmp-server host A · enable traps; MES 6.x: snmp-server server; Debian: snmpwalk -v2c -c public A system · systemctl start snmptrapd</td><td>SNMP: опрос MIB system/interfaces, snmpset, трапы linkDown/linkUp/authenticationFailure</td></tr>
 <tr><td>route-map N → rule 10 → match ip address A/L · match as-path · action set local-preference · as-path prepend · set community no-export; ip prefix-list N → permit|deny A/L; у соседа route-map|prefix-list N in|out</td><td>политики BGP и выбор лучшего пути по атрибутам</td></tr>
@@ -9472,12 +9473,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (!fw.length || !reached) { st.why = r.why || 'нет пути'; st.blocked = true; }
       if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + (pr.hit && !pr.hit.local ? ' на ' + s.devs[pr.hit.dev].name : '') + ' при DF — «Fragmentation needed», не доставлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
       st.fw = fw; st.bk = bk;
+      var ip0 = (r.steps || []).filter(function (x) { return x.f && x.f.src && x.k === 'ip'; })[0];          // поля пакета для QoS (qos.js)
+      st.pk = { proto: fl.kind === 'udp' ? 'udp' : 'icmp', src: ip0 ? ip0.f.src : ((s.ifaces(fl.src)[0] || {}).ip), dst: fl.dst, dport: fl.kind === 'udp' ? (fl.port || 5001) : null };
       var n = fl.kind === 'udp' ? Math.floor((fl.dur || 1) * (fl.rate || 100)) : (fl.count || 5), gap = fl.kind === 'udp' ? 1 / (fl.rate || 100) : (fl.interval || 1);
       for (var k = 0; k < n; k++) { st.sent++; if (st.blocked) { st.drops[st.why] = (st.drops[st.why] || 0) + 1; continue; }
         var t0 = (fl.start || 0) + k * gap, frBytes = Math.min(ipLen, mtu) + 18;
-        for (var f = 0; f < st.frag; f++) push({ t: t0, kind: 'arrive', flow: fi, pkt: k, frag: f, dir: 'fw', i: 0, bytes: f === st.frag - 1 && st.frag > 1 ? (ipLen - (mtu - 20) * (st.frag - 1)) + 20 + 18 : frBytes, born: t0 }); }
+        for (var f = 0; f < st.frag; f++) push({ t: t0, kind: 'arrive', flow: fi, pkt: k, frag: f, dir: 'fw', i: 0, dscp: fl.dscp || 0, bytes: f === st.frag - 1 && st.frag > 1 ? (ipLen - (mtu - 20) * (st.frag - 1)) + 20 + 18 : frBytes, born: t0 }); }
     });
-    var got = {}, MAXEV = 200000, guard = 0;
+    var got = {}, MAXEV = 200000, guard = 0, qctx = {};
     while (q.length && guard++ < MAXEV) {
       var e = pop(), st = res[e.flow], path = e.dir === 'fw' ? st.fw : st.bk;
       if (opt.until && e.t > opt.until) break;
@@ -9485,13 +9488,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var key = e.flow + '|' + e.pkt + '|' + e.dir; got[key] = (got[key] || 0) + 1;
         if (got[key] < st.frag) continue;                         // ждём все фрагменты
         ev.push({ t: e.t, kind: 'deliver', flow: e.flow, pkt: e.pkt, dir: e.dir, delay: e.t - e.born, node: (path.length ? s.devs[path[path.length - 1].to] : s.devs[st.src] || {}).name });
-        if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born }); }
+        if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born, dscp: e.dscp }); }
         else { st.recv++; st.rtt.push(e.t - e.born); }           // ping — RTT, UDP — задержка в одну сторону
         continue;
       }
       var sg = path[e.i], li = linkInfo(s, sg); if (!li) { st.drops['кабель удалён'] = (st.drops['кабель удалён'] || 0) + 1; continue; }
       var pk = sg.li + '|' + sg.from, P2 = ports[pk] || (ports[pk] = { busy: 0, wait: [], maxq: 0, name: s.devs[sg.from].name + ' ' + li.port });
       var t = e.t + (e.i === 0 && e.dir === 'fw' ? 0 : DEF.proc);
+      if (EL.qosSim && st.pk) {                                  // QoS: политика на входе (интерфейс прихода) и на выходе (li.port)
+        var pkq = { proto: st.pk.proto, src: e.dir === 'fw' ? st.pk.src : st.pk.dst, dst: e.dir === 'fw' ? st.pk.dst : st.pk.src, dport: st.pk.dport, dscp: e.dscp || 0 }, qs = [];
+        if (e.i > 0) { var pv = path[e.i - 1], pl = s.links[pv.li]; if (pl) qs.push([pl.a.dev === pv.to ? pl.a.port : pl.b.port, 'input']); }
+        qs.push([li.port, 'output']); var qdrop = null;
+        qs.forEach(function (q) { if (qdrop) return; var qr = EL.qosSim(s, qctx, sg.from, q[0], q[1], pkq, t, e.bytes); if (!qr) return; if (qr.drop) { qdrop = qr.why; return; } t = qr.t; pkq.dscp = qr.dscp; });
+        if (qdrop) { st.drops[qdrop] = (st.drops[qdrop] || 0) + 1; ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: qdrop }); continue; }
+        e.dscp = pkq.dscp; }
       P2.wait = P2.wait.filter(function (x) { return x > t; });
       if (P2.wait.length >= (opt.qcap || DEF.qcap)) { var w = 'очередь ' + P2.name + ' переполнена'; st.drops[w] = (st.drops[w] || 0) + 1;
         ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: w }); continue; }
@@ -9502,7 +9512,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (li.mismatch && rand() < DEF.collide) { var wc = 'коллизия на ' + L.name + ' (дуплекс не совпадает)'; st.drops[wc] = (st.drops[wc] || 0) + 1;
         ev.push({ t: t1, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: wc, t1: t1, t2: t3 }); continue; }
       ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, tx: tx, dir: e.dir, frag: e.frag, bytes: e.bytes, q: P2.wait.length, port: P2.name });
-      push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born });
+      push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born, dscp: e.dscp });
     }
     var tEnd = ev.reduce(function (m, x) { return Math.max(m, x.t2 || x.t); }, 0) || 1;
     res.forEach(function (st) { var r = st.rtt.slice(); st.loss = st.sent ? Math.round((st.sent - st.recv) / st.sent * 100) : 0;
@@ -9513,6 +9523,100 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var out = { events: ev, flows: res, links: lk, queues: pq, tEnd: tEnd, truncated: guard >= MAXEV };
     if (!opt.probe) this._simLast = out;      // «Свойства»: загрузка портов по последней симуляции
     return out;
+  };
+})(typeof window !== 'undefined' ? window : global);
+
+/* QoS на ESR (справочник ESR-Series CLI 1.23, MQC): классификация, маркировка, ограничение и сглаживание полосы.
+   class-map NAME → (config-class-map)#: match access-group ACL · match dscp N · set dscp N
+   policy-map NAME → (config-policy-map)#: shape average КБИТ/С [BURST] (на весь интерфейс) · class NAME → (config-class-policy-map)#:
+     set dscp N · police КБИТ/С [burst-conforming БАЙТ] [conform-action transmit] [exceed-action drop | set-dscp-transmit N] · shape average КБИТ/С [BURST]
+   интерфейс: service-policy input|output NAME (qos enable — хранится).
+   Действует в «Симуляции трафика» (sim.js): пакет классифицируется по ACL (протокол, адреса, порт) и DSCP; police — корзина маркеров
+   (burst-conforming по умолчанию 1500 байт): лишнее отбрасывается или перемаркируется; shape — пакеты ждут, пока полоса не позволит
+   (burst по умолчанию 128000 байт). Маркировка (set dscp) едет с пакетом дальше и видна следующим маршрутизаторам.
+   Упрощения: очереди по приоритету (priority-queue, WRR, bandwidth) не моделируются; ping/трасса в консоли QoS не учитывают — только симуляция. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr;
+  function touch(st) { st.pending = true; }
+  function bad() { return 'Syntax error: Illegal parameter'; }
+  var PR = { cmap: '(config-class-map)#', pmap: '(config-policy-map)#', pcls: '(config-class-policy-map)#' };
+  Object.keys(PR).forEach(function (k) { S.PROMPT[k] = PR[k]; });
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('cmap', 'pmap', 'pcls'); });
+  function Q(st) { return st.cand.qos || (st.cand.qos = { cmaps: {}, pmaps: {} }); }
+  function cm(st) { return Q(st).cmaps[st.ctx]; }
+  function pc(st) { var p = st.ctx.split('|'); return Q(st).pmaps[p[0]].cls[p[1]]; }
+  function pm(st) { return Q(st).pmaps[st.ctx.split('|')[0]]; }
+  S.cmd('config', 'class-map <w>', function (st, a) { var C = Q(st).cmaps; C[a[0]] = C[a[0]] || { acl: [], dscp: [] }; st.mode = 'cmap'; st.ctx = a[0]; touch(st); }, 'Класс трафика (QoS)');
+  S.cmd('config', 'no class-map <w>', function (st, a) { delete Q(st).cmaps[a[0]]; touch(st); });
+  S.cmd('cmap', 'match access-group <w>', function (st, a) { if (cm(st).acl.indexOf(a[0]) < 0) cm(st).acl.push(a[0]); touch(st); }, 'Пакеты, разрешённые списком доступа');
+  S.cmd('cmap', 'no match access-group <w>', function (st, a) { cm(st).acl = a[0] === 'all' ? [] : cm(st).acl.filter(function (x) { return x !== a[0]; }); touch(st); });
+  S.cmd('cmap', 'match dscp <n>', function (st, a) { if (a[0] > 63) return bad(); if (cm(st).dscp.indexOf(a[0]) < 0) cm(st).dscp.push(a[0]); touch(st); }, 'Пакеты с этим DSCP');
+  S.cmd('cmap', 'no match dscp <n>', function (st, a) { cm(st).dscp = cm(st).dscp.filter(function (x) { return x !== a[0]; }); touch(st); });
+  S.cmd('cmap', 'set dscp <n>', function (st, a) { if (a[0] > 63) return bad(); cm(st).set = a[0]; touch(st); }, 'Перемаркировать DSCP');
+  S.cmd('cmap', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  S.cmd('config', 'policy-map <w>', function (st, a) { var P = Q(st).pmaps; P[a[0]] = P[a[0]] || { cls: {}, order: [] }; st.mode = 'pmap'; st.ctx = a[0]; touch(st); }, 'Политика QoS');
+  S.cmd('config', 'no policy-map <w>', function (st, a) { delete Q(st).pmaps[a[0]]; touch(st); });
+  S.cmd('pmap', 'class <w>', function (st, a) { var P = pm(st); if (!P.cls[a[0]]) { P.cls[a[0]] = {}; P.order.push(a[0]); } st.mode = 'pcls'; st.ctx = st.ctx + '|' + a[0]; touch(st); }, 'Действия для класса');
+  S.cmd('pmap', 'no class <w>', function (st, a) { var P = pm(st); delete P.cls[a[0]]; P.order = P.order.filter(function (x) { return x !== a[0]; }); touch(st); });
+  function shape(set) { return function (st, a) { var w = a[0].trim().split(/\s+/); if (w[0] === 'percent') return bad();   // percent — от скорости интерфейса: не моделируется
+    var bw = +w[0], b = w[1] ? +w[1] : 128000; if (!(bw >= 1 && bw <= 10000000) || !(b >= 128 && b <= 16000000)) return bad(); set(st, { kbps: bw, burst: b }); touch(st); }; }
+  S.cmd('pmap', 'shape average <rest>', shape(function (st, v) { pm(st).shape = v; }), 'Сглаживание всего трафика интерфейса, Кбит/с');
+  S.cmd('pcls', 'shape average <rest>', shape(function (st, v) { pc(st).shape = v; }), 'Сглаживание класса, Кбит/с [burst, байт]');
+  S.cmd('pcls', 'no shape average', function (st) { delete pc(st).shape; touch(st); });
+  S.cmd('pcls', 'set dscp <n>', function (st, a) { if (a[0] > 63) return bad(); pc(st).set = a[0]; touch(st); }, 'Перемаркировать DSCP');
+  S.cmd('pcls', 'police <rest>', function (st, a) { var w = a[0].trim().split(/\s+/), o = { kbps: +w[0], burst: 1500, exceed: 'drop' };
+    if (!(o.kbps >= 1)) return bad();
+    for (var i = 1; i < w.length; i++) { if (w[i] === 'burst-conforming') o.burst = +w[++i]; else if (w[i] === 'conform-action') i++;
+      else if (w[i] === 'exceed-action') { var x = w[++i]; if (x === 'drop') o.exceed = 'drop'; else if (x === 'set-dscp-transmit') o.exceed = +w[++i]; else if (x === 'transmit') o.exceed = 'transmit'; else return bad(); }
+      else return bad(); }
+    pc(st).police = o; touch(st); }, 'Ограничение полосы класса, Кбит/с (лишнее — drop)');
+  S.cmd('pcls', 'no police', function (st) { delete pc(st).police; touch(st); });
+  S.cmd('pcls', 'exit', function (st) { st.mode = 'pmap'; st.ctx = st.ctx.split('|')[0]; });
+  S.cmd('pmap', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  function ifs(st, f) { (Array.isArray(st.ctx) ? st.ctx : [st.ctx]).forEach(function (k) { f(st.cand.ifs[k]); }); touch(st); }
+  S.cmd('gi sub', 'service-policy <w> <w>', function (st, a) { if (a[0] !== 'input' && a[0] !== 'output') return bad(); if (!Q(st).pmaps[a[1]]) return '% Политика ' + a[1] + ' не создана';
+    ifs(st, function (x) { (x.qos = x.qos || {})[a[0]] = a[1]; }); }, 'Политика QoS на вход | выход');
+  S.cmd('gi sub', 'no service-policy <w>', function (st, a) { ifs(st, function (x) { if (x.qos) delete x.qos[a[0]]; }); });
+  S.cmd('gi sub', 'qos enable', function (st) { ifs(st, function (x) { x.qosOn = true; }); }, 'Включить QoS на интерфейсе');
+  S.cmd('gi sub', 'no qos enable', function (st) { ifs(st, function (x) { delete x.qosOn; }); });
+  S.RUNX.push(function (c, o) { var q = c.qos; if (!q) return;
+    Object.keys(q.cmaps).forEach(function (n) { var x = q.cmaps[n]; o.push('class-map ' + n); x.acl.forEach(function (a) { o.push('  match access-group ' + a); });
+      x.dscp.forEach(function (d) { o.push('  match dscp ' + d); }); if (x.set !== undefined) o.push('  set dscp ' + x.set); o.push('exit'); });
+    Object.keys(q.pmaps).forEach(function (n) { var P = q.pmaps[n]; o.push('policy-map ' + n); if (P.shape) o.push('  shape average ' + P.shape.kbps + (P.shape.burst !== 128000 ? ' ' + P.shape.burst : ''));
+      P.order.forEach(function (k) { var x = P.cls[k]; o.push('  class ' + k); if (x.set !== undefined) o.push('    set dscp ' + x.set);
+        if (x.police) o.push('    police ' + x.police.kbps + (x.police.burst !== 1500 ? ' burst-conforming ' + x.police.burst : '') + (x.police.exceed === 'drop' ? '' : x.police.exceed === 'transmit' ? ' exceed-action transmit' : ' exceed-action set-dscp-transmit ' + x.police.exceed));
+        if (x.shape) o.push('    shape average ' + x.shape.kbps + (x.shape.burst !== 128000 ? ' ' + x.shape.burst : '')); o.push('  exit'); }); o.push('exit'); });
+    Object.keys(c.ifs).forEach(function (k) { var x = c.ifs[k], L = []; if (x.qosOn) L.push('  qos enable'); Object.keys(x.qos || {}).forEach(function (d) { L.push('  service-policy ' + d + ' ' + x.qos[d]); });
+      if (L.length) o.push('interface ' + S.longIf(k), L.join('\n'), 'exit'); }); });
+
+  // ---------------------------------------------------------------- в симуляции: классы, маркировка, police, shape
+  function classOf(c, P, pk) {                   // первый подошедший класс политики
+    var q = c.qos; for (var i = 0; i < P.order.length; i++) { var n = P.order[i], C = q.cmaps[n]; if (!C) continue;
+      var hit = (!C.acl.length && !C.dscp.length) || C.acl.some(function (a) { var r = EL.aclPass && EL.aclPass((c.acls || {})[a], pk); return r && r.ok && r.rule !== null; }) ||
+        C.dscp.indexOf(pk.dscp || 0) >= 0;
+      if (hit) return n; }
+    return null;
+  }
+  function bucket(ctx, key, kbps, burst, t, bytes, shapeIt) {
+    var B = ctx[key] = ctx[key] || { tok: burst, last: 0, vt: 0 }, rate = kbps * 1000 / 8;
+    if (shapeIt) { B.vt = Math.max(t, B.vt) + bytes / rate; var ahead = B.vt - t - burst / rate; return ahead > 0 ? t + ahead : t; }
+    B.tok = Math.min(burst, B.tok + (t - B.last) * rate); B.last = t;
+    if (B.tok >= bytes) { B.tok -= bytes; return true; } return false;
+  }
+  // dir 'input' — пакет вошёл в устройство через ifn, 'output' — уходит через ifn. Возвращает {drop, why} или {t, dscp}
+  EL.qosSim = function (net, ctx, dev, ifn, dir, pk, t, bytes) {
+    var d = net.devs[dev]; if (!d || d.type !== 'esr') return null; var c = d.st.run, x = c.ifs[ifn], name = x && x.qos && x.qos[dir], P = name && c.qos && c.qos.pmaps[name];
+    if (!P) return null;
+    var cls = classOf(c, P, pk), out = { t: t, dscp: pk.dscp };
+    if (cls) { var A = P.cls[cls], C = c.qos.cmaps[cls];
+      if (C && C.set !== undefined) out.dscp = C.set; if (A.set !== undefined) out.dscp = A.set;
+      if (A.police) { var ok = bucket(ctx, dev + '|' + ifn + '|' + dir + '|' + cls + '|p', A.police.kbps, A.police.burst, t, bytes, false);
+        if (!ok) { if (A.police.exceed === 'drop') return { drop: true, why: d.name + ' ' + ifn + ': police ' + A.police.kbps + ' Кбит/с (класс ' + cls + ') — лишнее отброшено' };
+          if (A.police.exceed !== 'transmit') out.dscp = A.police.exceed; } }
+      if (A.shape) out.t = Math.max(out.t, bucket(ctx, dev + '|' + ifn + '|' + dir + '|' + cls + '|s', A.shape.kbps, A.shape.burst, out.t, bytes, true)); }
+    if (P.shape) out.t = Math.max(out.t, bucket(ctx, dev + '|' + ifn + '|' + dir + '|*|s', P.shape.kbps, P.shape.burst, out.t, bytes, true));
+    out.cls = cls; return out;
   };
 })(typeof window !== 'undefined' ? window : global);
 
@@ -11830,6 +11934,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       '<td><input data-f="size" type="number" min="28" max="9000" value="' + f.size + '"></td>' +
       (f.kind === 'ping' ? '<td><input data-f="count" type="number" min="1" max="200" value="' + f.count + '"> шт</td><td><input data-f="interval" type="number" min="0.001" step="0.1" value="' + f.interval + '"> с</td>'
         : '<td><input data-f="rate" type="number" min="1" max="20000" value="' + f.rate + '"> п/с</td><td><input data-f="dur" type="number" min="0.01" max="5" step="0.1" value="' + f.dur + '"> с</td>') +
+      '<td><input data-f="dscp" type="number" min="0" max="63" value="' + (f.dscp || 0) + '" style="width:48px"></td>' +
       '<td><label><input data-f="df" type="checkbox"' + (f.df ? ' checked' : '') + '> DF</label></td><td><button data-c="del">✕</button></td></tr>';
   }
   function openSim() {
@@ -11839,7 +11944,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var body = document.createElement('div'); body.className = 'cap sim';
     body.innerHTML = '<div class="cbar"><button data-c="run">▶ Запустить</button><button data-c="add">+ Поток</button><button data-c="stop">■ Стоп</button>' +
       '<span class="cnt">Очередь порта <input data-g="qcap" type="number" min="1" max="1000" value="' + qcap + '"> кадров</span><span class="clk">t = 0</span></div>' +
-      '<div class="list"><table><thead><tr><th>Поток</th><th>Откуда</th><th>Куда (IP)</th><th>Данные, байт</th><th>Сколько</th><th>Интервал</th><th></th><th></th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="list"><table><thead><tr><th>Поток</th><th>Откуда</th><th>Куда (IP)</th><th>Данные, байт</th><th>Сколько</th><th>Интервал</th><th>DSCP</th><th></th><th></th></tr></thead><tbody></tbody></table></div>' +
       '<div class="det">Задайте потоки и нажмите «Запустить». Кадры летят по кабелям в замедленном модельном времени, часы вверху — время модели.</div>';
     U.makeWin('sim', 'Симуляция', 'потоки во времени · очереди · потери', body, { w: Math.min(900, innerWidth - 40), h: Math.min(400, innerHeight - 160), x: 20, y: Math.max(70, innerHeight - 470) });
     var tb = body.querySelector('tbody'), det = body.querySelector('.det');
@@ -11863,7 +11968,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var fl = flows.map(function (f) { var d = n.byName(f.src);
       if (!d) bad = 'нет устройства ' + f.src; else if (EL.ip.ip2n(f.dst) === null) bad = 'адрес назначения ' + (f.dst || '(пусто)') + ' — не IPv4';
       return { kind: f.kind, src: d && d.id, dst: f.dst, size: Math.max(28, Math.min(9000, f.size | 0)), count: Math.max(1, Math.min(200, f.count | 0)), interval: Math.max(0.001, +f.interval || 1),
-               rate: Math.max(1, Math.min(20000, +f.rate || 100)), dur: Math.max(0.01, Math.min(5, +f.dur || 0.5)), df: !!f.df }; });
+               rate: Math.max(1, Math.min(20000, +f.rate || 100)), dur: Math.max(0.01, Math.min(5, +f.dur || 0.5)), df: !!f.df, dscp: Math.max(0, Math.min(63, f.dscp | 0)) }; });
     if (bad) { det.innerHTML = '<span style="color:var(--bad)">' + esc(bad) + '</span>'; return; }
     stopAnim();
     var r = n.simulate(fl, { qcap: qcap }); n.gen++;

@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -426,6 +426,37 @@ EL.labs.LABS.forEach(runLab);
   var m2 = n.aaaLogin(sw.id, 'console', 'bob', 'b0b', loc(sw));
   chk('MES 6.x: secret не совпал — сервер «недоступен», local не знает bob', !m2.ok && /clients\.conf/.test(m2.log.join(' ')), JSON.stringify(m2));
   console.log('✓ AAA: RADIUS и TACACS+');
+})();
+
+// QoS на ESR в симуляции: police, shape, маркировка DSCP и класс по DSCP на следующем маршрутизаторе
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ QoS: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B');
+  n.connect(a.id, 'eth0', r1.id, 'gi1/0/1'); n.connect(r1.id, 'gi1/0/2', r2.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/2', b.id, 'eth0');
+  var e = EL.labs.apply(n, {
+    R1: ['configure', 'interface gi1/0/1', 'ip address 10.1.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.12.0.1/30', 'ip firewall disable', 'exit',
+      'ip route 10.2.2.0/24 10.12.0.2', 'ip access-list extended UDP', 'rule 10', 'action permit', 'match protocol udp', 'enable', 'exit', 'exit',
+      'class-map BULK', 'match access-group UDP', 'exit', 'policy-map LIMIT', 'class BULK', 'police 1000', 'exit', 'exit', 'interface gi1/0/2', 'service-policy output LIMIT', 'exit', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'interface gi1/0/1', 'ip address 10.12.0.2/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.2.2.1/24', 'ip firewall disable', 'exit',
+      'ip route 10.1.1.0/24 10.12.0.1', 'end', 'commit', 'confirm'],
+    A: ['ip 10.1.1.10/24 10.1.1.1'], B: ['ip 10.2.2.10/24 10.2.2.1'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  chk('running-config: class-map, policy-map, service-policy', /class-map BULK\n  match access-group UDP\nexit\npolicy-map LIMIT\n  class BULK\n    police 1000/.test(n.exec(r1.id, 'show running-config')) &&
+      /service-policy output LIMIT/.test(n.exec(r1.id, 'show running-config')));
+  function run(fl) { return n.simulate(fl, { qcap: 1000 }).flows; }
+  var udp = { kind: 'udp', src: a.id, dst: '10.2.2.10', size: 972, rate: 1000, dur: 1 };            // 1000 пакетов × 1000 байт ≈ 8 Мбит/с
+  var f1 = run([udp])[0];
+  chk('police 1000 Кбит/с: ~1/8 UDP проходит, остальное отброшено', f1.loss > 80 && f1.loss < 92 && Object.keys(f1.drops).some(function (k) { return /police 1000/.test(k); }), f1.loss + '% ' + JSON.stringify(f1.drops));
+  var f2 = run([{ kind: 'ping', src: a.id, dst: '10.2.2.10', count: 5, interval: 0.001 }])[0];
+  chk('ICMP не в классе BULK — без потерь', f2.loss === 0, JSON.stringify(f2.drops));
+  EL.labs.apply(n, { R1: ['configure', 'policy-map LIMIT', 'class BULK', 'no police', 'shape average 2000', 'end', 'commit', 'confirm'] });
+  var f3 = run([{ kind: 'udp', src: a.id, dst: '10.2.2.10', size: 972, rate: 500, dur: 1 }])[0];
+  chk('shape 2000 Кбит/с: потерь нет, задержка растёт до секунд', f3.loss === 0 && f3.max > 0.5, f3.loss + '% max ' + f3.max);
+  EL.labs.apply(n, { R1: ['configure', 'policy-map LIMIT', 'class BULK', 'no shape average', 'set dscp 46', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'class-map EF', 'match dscp 46', 'exit', 'policy-map IN', 'class EF', 'police 500', 'exit', 'exit', 'interface gi1/0/1', 'service-policy input IN', 'exit', 'end', 'commit', 'confirm'] });
+  var f4 = run([udp])[0];
+  chk('R1 маркирует DSCP 46, R2 по DSCP ограничивает на входе', f4.loss > 90 && Object.keys(f4.drops).some(function (k) { return /R2 gi1\/0\/1: police 500 Кбит\/с \(класс EF\)/.test(k); }), JSON.stringify(f4.drops));
+  console.log('✓ QoS');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN

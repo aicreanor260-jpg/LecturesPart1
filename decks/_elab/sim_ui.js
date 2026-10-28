@@ -29,6 +29,7 @@
       '<td><input data-f="size" type="number" min="28" max="9000" value="' + f.size + '"></td>' +
       (f.kind === 'ping' ? '<td><input data-f="count" type="number" min="1" max="200" value="' + f.count + '"> шт</td><td><input data-f="interval" type="number" min="0.001" step="0.1" value="' + f.interval + '"> с</td>'
         : '<td><input data-f="rate" type="number" min="1" max="20000" value="' + f.rate + '"> п/с</td><td><input data-f="dur" type="number" min="0.01" max="5" step="0.1" value="' + f.dur + '"> с</td>') +
+      '<td><input data-f="dscp" type="number" min="0" max="63" value="' + (f.dscp || 0) + '" style="width:48px"></td>' +
       '<td><label><input data-f="df" type="checkbox"' + (f.df ? ' checked' : '') + '> DF</label></td><td><button data-c="del">✕</button></td></tr>';
   }
   function openSim() {
@@ -38,7 +39,7 @@
     var body = document.createElement('div'); body.className = 'cap sim';
     body.innerHTML = '<div class="cbar"><button data-c="run">▶ Запустить</button><button data-c="add">+ Поток</button><button data-c="stop">■ Стоп</button>' +
       '<span class="cnt">Очередь порта <input data-g="qcap" type="number" min="1" max="1000" value="' + qcap + '"> кадров</span><span class="clk">t = 0</span></div>' +
-      '<div class="list"><table><thead><tr><th>Поток</th><th>Откуда</th><th>Куда (IP)</th><th>Данные, байт</th><th>Сколько</th><th>Интервал</th><th></th><th></th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="list"><table><thead><tr><th>Поток</th><th>Откуда</th><th>Куда (IP)</th><th>Данные, байт</th><th>Сколько</th><th>Интервал</th><th>DSCP</th><th></th><th></th></tr></thead><tbody></tbody></table></div>' +
       '<div class="det">Задайте потоки и нажмите «Запустить». Кадры летят по кабелям в замедленном модельном времени, часы вверху — время модели.</div>';
     U.makeWin('sim', 'Симуляция', 'потоки во времени · очереди · потери', body, { w: Math.min(900, innerWidth - 40), h: Math.min(400, innerHeight - 160), x: 20, y: Math.max(70, innerHeight - 470) });
     var tb = body.querySelector('tbody'), det = body.querySelector('.det');
@@ -62,7 +63,7 @@
     var fl = flows.map(function (f) { var d = n.byName(f.src);
       if (!d) bad = 'нет устройства ' + f.src; else if (EL.ip.ip2n(f.dst) === null) bad = 'адрес назначения ' + (f.dst || '(пусто)') + ' — не IPv4';
       return { kind: f.kind, src: d && d.id, dst: f.dst, size: Math.max(28, Math.min(9000, f.size | 0)), count: Math.max(1, Math.min(200, f.count | 0)), interval: Math.max(0.001, +f.interval || 1),
-               rate: Math.max(1, Math.min(20000, +f.rate || 100)), dur: Math.max(0.01, Math.min(5, +f.dur || 0.5)), df: !!f.df }; });
+               rate: Math.max(1, Math.min(20000, +f.rate || 100)), dur: Math.max(0.01, Math.min(5, +f.dur || 0.5)), df: !!f.df, dscp: Math.max(0, Math.min(63, f.dscp | 0)) }; });
     if (bad) { det.innerHTML = '<span style="color:var(--bad)">' + esc(bad) + '</span>'; return; }
     stopAnim();
     var r = n.simulate(fl, { qcap: qcap }); n.gen++;

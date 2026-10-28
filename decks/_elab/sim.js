@@ -45,12 +45,14 @@
       if (!fw.length || !reached) { st.why = r.why || 'нет пути'; st.blocked = true; }
       if (ipLen > mtu) { if (fl.df) { st.why = 'Пакет ' + ipLen + ' байт больше MTU ' + mtu + (pr.hit && !pr.hit.local ? ' на ' + s.devs[pr.hit.dev].name : '') + ' при DF — «Fragmentation needed», не доставлен'; st.blocked = true; } else st.frag = Math.ceil((ipLen - 20) / (mtu - 20)); }
       st.fw = fw; st.bk = bk;
+      var ip0 = (r.steps || []).filter(function (x) { return x.f && x.f.src && x.k === 'ip'; })[0];          // поля пакета для QoS (qos.js)
+      st.pk = { proto: fl.kind === 'udp' ? 'udp' : 'icmp', src: ip0 ? ip0.f.src : ((s.ifaces(fl.src)[0] || {}).ip), dst: fl.dst, dport: fl.kind === 'udp' ? (fl.port || 5001) : null };
       var n = fl.kind === 'udp' ? Math.floor((fl.dur || 1) * (fl.rate || 100)) : (fl.count || 5), gap = fl.kind === 'udp' ? 1 / (fl.rate || 100) : (fl.interval || 1);
       for (var k = 0; k < n; k++) { st.sent++; if (st.blocked) { st.drops[st.why] = (st.drops[st.why] || 0) + 1; continue; }
         var t0 = (fl.start || 0) + k * gap, frBytes = Math.min(ipLen, mtu) + 18;
-        for (var f = 0; f < st.frag; f++) push({ t: t0, kind: 'arrive', flow: fi, pkt: k, frag: f, dir: 'fw', i: 0, bytes: f === st.frag - 1 && st.frag > 1 ? (ipLen - (mtu - 20) * (st.frag - 1)) + 20 + 18 : frBytes, born: t0 }); }
+        for (var f = 0; f < st.frag; f++) push({ t: t0, kind: 'arrive', flow: fi, pkt: k, frag: f, dir: 'fw', i: 0, dscp: fl.dscp || 0, bytes: f === st.frag - 1 && st.frag > 1 ? (ipLen - (mtu - 20) * (st.frag - 1)) + 20 + 18 : frBytes, born: t0 }); }
     });
-    var got = {}, MAXEV = 200000, guard = 0;
+    var got = {}, MAXEV = 200000, guard = 0, qctx = {};
     while (q.length && guard++ < MAXEV) {
       var e = pop(), st = res[e.flow], path = e.dir === 'fw' ? st.fw : st.bk;
       if (opt.until && e.t > opt.until) break;
@@ -58,13 +60,20 @@
         var key = e.flow + '|' + e.pkt + '|' + e.dir; got[key] = (got[key] || 0) + 1;
         if (got[key] < st.frag) continue;                         // ждём все фрагменты
         ev.push({ t: e.t, kind: 'deliver', flow: e.flow, pkt: e.pkt, dir: e.dir, delay: e.t - e.born, node: (path.length ? s.devs[path[path.length - 1].to] : s.devs[st.src] || {}).name });
-        if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born }); }
+        if (e.dir === 'fw' && st.kind === 'ping') { for (var f2 = 0; f2 < st.frag; f2++) push({ t: e.t + DEF.proc, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: f2, dir: 'bk', i: 0, bytes: e.bytes, born: e.born, dscp: e.dscp }); }
         else { st.recv++; st.rtt.push(e.t - e.born); }           // ping — RTT, UDP — задержка в одну сторону
         continue;
       }
       var sg = path[e.i], li = linkInfo(s, sg); if (!li) { st.drops['кабель удалён'] = (st.drops['кабель удалён'] || 0) + 1; continue; }
       var pk = sg.li + '|' + sg.from, P2 = ports[pk] || (ports[pk] = { busy: 0, wait: [], maxq: 0, name: s.devs[sg.from].name + ' ' + li.port });
       var t = e.t + (e.i === 0 && e.dir === 'fw' ? 0 : DEF.proc);
+      if (EL.qosSim && st.pk) {                                  // QoS: политика на входе (интерфейс прихода) и на выходе (li.port)
+        var pkq = { proto: st.pk.proto, src: e.dir === 'fw' ? st.pk.src : st.pk.dst, dst: e.dir === 'fw' ? st.pk.dst : st.pk.src, dport: st.pk.dport, dscp: e.dscp || 0 }, qs = [];
+        if (e.i > 0) { var pv = path[e.i - 1], pl = s.links[pv.li]; if (pl) qs.push([pl.a.dev === pv.to ? pl.a.port : pl.b.port, 'input']); }
+        qs.push([li.port, 'output']); var qdrop = null;
+        qs.forEach(function (q) { if (qdrop) return; var qr = EL.qosSim(s, qctx, sg.from, q[0], q[1], pkq, t, e.bytes); if (!qr) return; if (qr.drop) { qdrop = qr.why; return; } t = qr.t; pkq.dscp = qr.dscp; });
+        if (qdrop) { st.drops[qdrop] = (st.drops[qdrop] || 0) + 1; ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: qdrop }); continue; }
+        e.dscp = pkq.dscp; }
       P2.wait = P2.wait.filter(function (x) { return x > t; });
       if (P2.wait.length >= (opt.qcap || DEF.qcap)) { var w = 'очередь ' + P2.name + ' переполнена'; st.drops[w] = (st.drops[w] || 0) + 1;
         ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: w }); continue; }
@@ -75,7 +84,7 @@
       if (li.mismatch && rand() < DEF.collide) { var wc = 'коллизия на ' + L.name + ' (дуплекс не совпадает)'; st.drops[wc] = (st.drops[wc] || 0) + 1;
         ev.push({ t: t1, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: wc, t1: t1, t2: t3 }); continue; }
       ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, tx: tx, dir: e.dir, frag: e.frag, bytes: e.bytes, q: P2.wait.length, port: P2.name });
-      push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born });
+      push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born, dscp: e.dscp });
     }
     var tEnd = ev.reduce(function (m, x) { return Math.max(m, x.t2 || x.t); }, 0) || 1;
     res.forEach(function (st) { var r = st.rtt.slice(); st.loss = st.sent ? Math.round((st.sent - st.recv) / st.sent * 100) : 0;
