@@ -1090,6 +1090,13 @@ EL.labs.LABS.forEach(runLab);
   chk('show spanning-tree mst 2', /MST 2 Vlans Mapped: 20[\s\S]*gi1\/0\/1\s+enabled[\s\S]*Dsc/.test(n.exec(b.id, 'show spanning-tree mst 2')), n.exec(b.id, 'show spanning-tree mst 2'));
   chk('running-config: spanning-tree mst configuration', /spanning-tree mst configuration\n instance 1 vlan 10\n instance 2 vlan 20\n name LAB\n revision 1\nexit/.test(n.exec(b.id, 'show running-config')) && /spanning-tree mst 2 cost 200000/.test(n.exec(b.id, 'show running-config')));
   chk('приглашение (config-mst)#', (n.exec(a.id, 'configure'), n.exec(a.id, 'spanning-tree mst configuration'), /\(config-mst\)#$/.test(n.prompt(a.id))), n.prompt(a.id)); n.exec(a.id, 'end');
+  // регионы: другая ревизия у SW2 — граница региона, экземпляры не идут, порты по CIST (балансировки нет)
+  EL.labs.apply(n, { SW2: ['configure', 'spanning-tree mst configuration', 'revision 2', 'exit', 'end'] });
+  var b1 = n.stp(1)[b.id], b2 = n.stp(2)[b.id], c0 = n.stp(0)[b.id];
+  chk('MSTP: разная ревизия — граница региона, MSTI 1 и 2 повторяют CIST', b1['gi1/0/1'].bound && b1['gi1/0/1'].fwd === c0['gi1/0/1'].fwd && b2['gi1/0/2'].fwd === c0['gi1/0/2'].fwd &&
+      /Bound/.test(n.exec(b.id, 'show spanning-tree mst 1')), n.exec(b.id, 'show spanning-tree mst 1'));
+  var q10 = n.ping(p1.id, '10.0.10.2'), q20 = n.ping(p3.id, '10.0.20.2');
+  chk('MSTP: разные регионы — VLAN 10 и 20 идут по одному линку CIST', q10.ok && q20.ok && used(q10, 'gi1/0/1') === used(q20, 'gi1/0/1'));
   console.log('✓ MSTP-экземпляры');
 })();
 

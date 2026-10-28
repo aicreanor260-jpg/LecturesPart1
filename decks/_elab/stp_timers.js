@@ -98,7 +98,7 @@
   P.stpSts = function (id, ln, k) { return this.stpState(id, ln, k) || 'Frw'; };
   P.stpType = function (id, L, r) { var c = L.cfg || {}, st = this.devs[id].st;
     var edge = c.portfast || (r.host && autoEdge(st, c));
-    return (c.linkType === 'shared' ? 'Shr' : 'P2p') + (edge ? ' Edge' : '') + (legacy(st) ? ' (STP)' : ''); };
+    return (c.linkType === 'shared' ? 'Shr' : 'P2p') + (edge ? ' Edge' : '') + (r.bound ? ' Bound' : '') + (legacy(st) ? ' (STP)' : ''); };
 
   // «кабели подключены давно»: текущие переходы считаются завершёнными (автотест собирает схему мгновенно)
   P.stpSettle = function () { this.stpSync(); var PS = this._ps || {};

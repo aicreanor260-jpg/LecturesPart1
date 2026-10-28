@@ -282,13 +282,14 @@
     if (!k && this.bpduGuard && this.bpduGuard()) this.gen++;
     var s = this, t = {}, br = this.order.filter(function (id) { var d = s.devs[id]; return d.type === 'mes' && (!d.st.stp || d.st.stp.on !== false); });
     var on = {}; br.forEach(function (id) { on[id] = true; });
-    var edges = [];
+    var edges = [], bound = [];
     br.forEach(function (id) {
       t[id] = {};
       s.lports(id).forEach(function (L) {
         var pr = s.peer(id, L.members[0]); if (!pr || !s.linkUp(id, L.members[0])) return;
         if (L.cfg.stpOff || L.cfg.stackLink || !on[pr.dev]) { t[id][L.name] = { role: 'Desg', fwd: true, host: !on[pr.dev], nostp: !!(L.cfg.stpOff || L.cfg.stackLink) }; return; }
         var R = s.lportOf(pr.dev, pr.port); if (!R) return;
+        if (k && s.mstRegion && s.mstRegion(id) !== s.mstRegion(pr.dev)) { bound.push([id, L.name]); return; }   // граница региона MSTP: порт по CIST
         edges.push({ u: id, a: L.name, v: pr.dev, b: R.name, cu: pcost(L, k) });
       });
     });
@@ -323,6 +324,7 @@
       if (less(mine, his)) t[e.u][e.a] = { role: 'Desg', fwd: true };
       else t[e.u][e.a] = { role: e.v === e.u ? 'Back' : 'Altn', fwd: false };
     });
+    if (bound.length) { var c0 = this.stp(0); bound.forEach(function (q) { var r0 = (c0[q[0]] || {})[q[1]]; t[q[0]][q[1]] = { role: r0 ? r0.role : 'Desg', fwd: r0 ? r0.fwd : true, bound: true }; }); }
     var res = { gen: this.gen, t: t, root: root, dist: dist };
     if (k) K[k] = res; else this._stp = res;
     return t;

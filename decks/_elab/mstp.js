@@ -3,7 +3,9 @@
    spanning-tree mst N priority P (кратно 4096); на порту spanning-tree mst N cost C; show spanning-tree mst N.
    У каждого экземпляра своё дерево: свой корень по приоритету экземпляра и своя стоимость портов — разные VLAN могут
    блокироваться на разных портах (балансировка). VLAN без экземпляра идут по CIST (экземпляр 0, обычные настройки STP).
-   Упрощение: совпадение имени/ревизии/привязок региона не проверяется — все коммутаторы считаются одним регионом. */
+   Регион: имя, ревизия и привязка VLAN к экземплярам должны совпадать у соседей; иначе порт между ними — граница региона:
+   экземпляры через неё не идут, порт во всех экземплярах ведёт себя по CIST (в show — Bound).
+   Упрощение: имя по умолчанию — пустое (одинаковое у всех), CST между регионами считается как обычное RSTP-дерево. */
 (function (G) {
   'use strict';
   var EL = G.EL, E = EL.E, P = EL.Net.prototype, CMDS = E.CMDS;
@@ -11,6 +13,10 @@
   function mcmd(dl, modes, pat, run, d) { var n = CMDS.length; E.cmd(modes, pat, run); var c = CMDS.splice(n, 1)[0]; c.dl = dl; if (d) c.d = d; CMDS.unshift(c); return c; }
   function ports(st) { return st.ctx && st.ctx.ports ? st.ctx.ports.map(function (k) { return st.ports[k] || (st.pos || {})[k]; }).filter(Boolean) : null; }
   function each(st, f) { var p = ports(st); if (!p) return '% Команда доступна в настройке порта'; p.forEach(f); }
+  // отпечаток конфигурации региона: имя | ревизия | VLAN→экземпляр (как digest в MST BPDU)
+  P.mstRegion = function (id) { var st = this.devs[id].st, m = st.mst || { inst: {} };
+    var map = Object.keys(m.inst).map(Number).sort(function (a, b) { return a - b; }).map(function (k) { return k + ':' + m.inst[k].vlans.join(','); }).join(';');
+    return (m.name || '') + '|' + (m.rev || 0) + '|' + map; };
   function M(st) { return st.mst || (st.mst = { inst: {}, name: null, rev: 0 }); }
   function inst(st, k) { var m = M(st); return m.inst[k] || (m.inst[k] = { vlans: [] }); }
   var D = ['10', '6'];
