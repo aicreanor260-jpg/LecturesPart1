@@ -381,6 +381,17 @@ Debian при `ip link set ens3 up` повторяет Router Solicitation ещ�
 
 Упрощения: клиент DHCP не просит своё время аренды, `max-lease-time` не моделируется, VPC при `clear ip` не шлёт DHCPRELEASE; размер пакета в счётчиках NAT условный (ICMP 84 байта, как в примере справочника); `no lldp transmit` у соседа — сразу (shutdown-LLDPDU по 802.1AB), по TTL сосед пропадает, только если LLDPDU перестали приходить без него.
 
+### SNMP (справочник ESR 1.23, руководства MES 10.4.6 и 6.6.8.8)
+| Где | Команды |
+|---|---|
+| ESR | `snmp-server`, `snmp-server community NAME ro|rw [ADDR] [v1|v2c]`, `snmp-server host ADDR`, `snmp-server enable traps`, `snmp-server location …`, `snmp-server contact …`; `show snmp`. Запросы к самому ESR проходят межсетевой экран (зона → self, UDP 161) |
+| MES 6.x | `snmp-server server`, `snmp-server community NAME ro|rw|su [ADDR]`, `snmp-server host ADDR traps version 2c COMMUNITY`, `snmp-server enable traps`, `snmp-server location / contact` |
+| MES 10.x | агент включён (`snmp-server disable` / `enable`); доступ по схеме руководства (раздел 3.6.2.3): `snmp user USER`, `snmp community index 1 name NETMAN security USER`, `snmp group GROUP user USER security-model v2c`, `snmp access GROUP v2c read iso write iso notify iso`, `snmp view iso 1 included`; трапы — `snmp targetaddr ADDR param TRAPS 192.168.1.1 taglist TAG`, `snmp targetparams TRAPS user USER security-model v2c message-processing v2c`, `snmp notify USER tag TAG type Trap` |
+| Debian | `snmpwalk | snmpget | snmpset -v2c -c COMMUNITY ADDR [OID]` — OID числом или именем (`system`, `sysName.0`, `IF-MIB::ifDescr.1`, `ifOperStatus` …); приём трапов — `systemctl start snmptrapd`, журнал `/var/log/snmptrapd.log` |
+
+MIB: группа system (sysDescr, sysObjectID, sysUpTime, sysContact, sysName, sysLocation) и interfaces (ifNumber, ifIndex, ifDescr, ifType, ifMtu, ifSpeed, ifPhysAddress, ifAdminStatus, ifOperStatus, ifIn/OutOctets, ifIn/OutUcastPkts — из счётчиков портов). `snmpset` с rw-community меняет sysName (это hostname), sysLocation, sysContact; с ro — `noAccess`. Неверная community — `Timeout: No Response` и трап `authenticationFailure`. Трапы: `coldStart` (включение), `linkDown` / `linkUp` с ifIndex.
+Упрощения: SNMPv3 (auth/priv) только хранится; view проверяется по наличию, без масок OID; sysObjectID — общий OID Eltex 1.3.6.1.4.1.35265.
+
 ### MSTP-экземпляры на MES (руководства 10.4.6 и 6.6.8.8)
 `spanning-tree mode mst`, затем `spanning-tree mst configuration` → `(config-mst)#`: `instance 1 vlan 10`, `instance 2 vlan 20`, `name LAB`, `revision 1`, `exit`; `spanning-tree mst 1 priority 4096` (кратно 4096); на порту `spanning-tree mst 2 cost 200000`, `spanning-tree mst 2 port-priority 64`. Показ: `show spanning-tree mst 2`, `show spanning-tree mst configuration`.
 У каждого экземпляра своё дерево — свой корень и свои заблокированные порты, поэтому VLAN разных экземпляров могут идти по разным линкам (балансировка); трасса показывает, в каком MSTI заблокирован порт. VLAN без экземпляра идут по CIST (обычные `spanning-tree priority`/`cost`). Регион: имя (`name`), ревизия (`revision`) и привязка VLAN к экземплярам должны совпадать у соседей. Если хоть что-то отличается, порт между ними — граница региона: экземпляры через неё не идут, порт во всех MSTI ведёт себя по CIST (в `show spanning-tree mst N` — тип `Bound`), и балансировка по экземплярам пропадает. Упрощение: имя по умолчанию у всех одинаковое (пустое).

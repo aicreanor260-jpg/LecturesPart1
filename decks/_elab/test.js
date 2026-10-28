@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -353,6 +353,40 @@ EL.labs.LABS.forEach(runLab);
   ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(d2.id, l); });
   chk('DHCPv6-сервер выключен — No DHCPv6 servers responded', !e2.length && /No DHCPv6 servers responded/.test(n.exec(d2.id, 'dhclient -6')));
   console.log('✓ DHCPv6 и старение ND');
+})();
+
+// SNMP: агенты ESR, MES 6.x, MES 10.x; snmpwalk/snmpget/snmpset и трапы на Debian-server
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ SNMP: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES2428', 'SW10'), s6 = n.add('MES3348', 'SW6'), srv = n.add('Debian-server', 'NMS'), pc = n.add('VPC', 'PC');
+  n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/24'); n.connect(srv.id, 'ens3', sw.id, 'gi1/0/1'); n.connect(s6.id, 'gi1/0/1', sw.id, 'gi1/0/2'); n.connect(pc.id, 'eth0', r.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, {
+    R1: ['configure', 'hostname R1', 'interface gi1/0/1', 'ip address 10.9.9.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 10.8.8.1/24', 'ip firewall disable', 'exit',
+      'snmp-server', 'snmp-server community public ro', 'snmp-server community private rw', 'snmp-server host 10.9.9.10', 'snmp-server enable traps', 'snmp-server location "Aud 305"', 'end', 'commit', 'confirm'],
+    SW10: ['enable', 'configure', 'hostname SW10', 'interface vlan 1', 'ip address 10.9.9.2 255.255.255.0', 'exit', 'snmp user USER', 'snmp community index 1 name NETMAN security USER',
+      'snmp group GROUP user USER security-model v2c', 'snmp access GROUP v2c read iso write iso notify iso', 'snmp view iso 1 included', 'end'],
+    SW6: ['enable', 'configure', 'hostname SW6', 'interface vlan 1', 'ip address 10.9.9.3 255.255.255.0', 'exit', 'snmp-server server', 'snmp-server community campus ro', 'end'],
+    NMS: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.9.9.10/24 dev ens3', 'systemctl start snmptrapd'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  var w = n.exec(srv.id, 'snmpwalk -v2c -c public 10.9.9.1 system');
+  chk('ESR: snmpwalk system — sysName R1, sysLocation', /SNMPv2-MIB::sysName\.0 = STRING: R1/.test(w) && /sysLocation\.0 = STRING: Aud 305/.test(w) && /sysUpTimeInstance = Timeticks/.test(w), w);
+  chk('ESR: snmpget ifDescr.1 — gi1/0/1', /IF-MIB::ifDescr\.1 = STRING: gi1\/0\/1/.test(n.exec(srv.id, 'snmpget -v2c -c public 10.9.9.1 IF-MIB::ifDescr.1')), n.exec(srv.id, 'snmpget -v2c -c public 10.9.9.1 IF-MIB::ifDescr.1'));
+  chk('ESR: snmpset с ro-community — noAccess', /noAccess/.test(n.exec(srv.id, 'snmpset -v2c -c public 10.9.9.1 SNMPv2-MIB::sysLocation.0 s Lab')));
+  chk('ESR: snmpset с rw-community меняет sysLocation', /sysLocation\.0 = STRING: Lab 2/.test(n.exec(srv.id, 'snmpset -v2c -c private 10.9.9.1 sysLocation.0 s "Lab 2"')) &&
+      /Lab 2/.test(n.exec(srv.id, 'snmpget -v2c -c public 10.9.9.1 sysLocation.0')));
+  chk('неверная community — Timeout и трап authenticationFailure', /Timeout: No Response/.test(n.exec(srv.id, 'snmpwalk -v2c -c wrong 10.9.9.1')) &&
+      /authenticationFailure/.test(srv.st.files['/var/log/snmptrapd.log'] || ''), srv.st.files['/var/log/snmptrapd.log']);
+  n.events();   // снимок состояния (в интерфейсе события опрашиваются каждую секунду)
+  ['configure', 'interface gi1/0/2', 'shutdown', 'end', 'commit', 'confirm'].forEach(function (l) { n.exec(r.id, l); }); n.events(); n.tick(1);
+  chk('линк gi1/0/2 упал — трап linkDown с ifIndex', /IF-MIB::linkDown\tIF-MIB::ifIndex\.2/.test(srv.st.files['/var/log/snmptrapd.log'] || ''), srv.st.files['/var/log/snmptrapd.log']);
+  var w10 = n.exec(srv.id, 'snmpget -v2c -c NETMAN 10.9.9.2 sysName.0');
+  chk('MES 10.x: community → user → group → access → view (руководство 3.6.2.3)', /sysName\.0 = STRING: SW10/.test(w10), w10);
+  chk('MES 10.x: другая community — нет ответа', /Timeout/.test(n.exec(srv.id, 'snmpget -v2c -c public 10.9.9.2 sysName.0')));
+  var w6 = n.exec(srv.id, 'snmpwalk -v2c -c campus 10.9.9.3 ifOperStatus');
+  chk('MES 6.x: snmp-server server + community — ifOperStatus', /IF-MIB::ifOperStatus\.1 = INTEGER: up\(1\)/.test(w6) && /snmp-server community campus ro/.test(n.exec(s6.id, 'show running-config')), w6);
+  chk('MES 6.x: без snmp-server server — нет ответа', (EL.labs.apply(n, { SW6: ['configure', 'no snmp-server server', 'end'] }), /Timeout/.test(n.exec(srv.id, 'snmpget -v2c -c campus 10.9.9.3 sysName.0'))));
+  chk('running-config ESR: snmp-server …', /snmp-server community public ro\nsnmp-server community private rw\nsnmp-server host 10\.9\.9\.10/.test(n.exec(r.id, 'show running-config')));
+  console.log('✓ SNMP');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
