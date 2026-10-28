@@ -11,8 +11,10 @@
    Таймеры и ограничения — по руководствам MES 10.4.6, 6.6.8.8, 8.4.0.7:
      forward-time 4..30 (15), hello-time 1..10 (2; на 8.x глобальной команды нет), max-age 6..40 (20),
      2*(Forward-Delay - 1) >= Max-Age >= 2*(Hello-Time + 1).
-   Упрощения: proposal/agreement — мгновенно (в железе — миллисекунды); TCN и сброс MAC-таблицы
-   при смене топологии не моделируются; hello-time влияет только на вывод show. */
+   Смена топологии (не-edge порт перешёл в forwarding или перестал передавать): RSTP — мосты домена сразу стирают динамические MAC
+   с не-edge портов; 802.1D — флаг TC на max-age + forward-delay, MAC стареют за forward-delay.
+   Упрощения: proposal/agreement — мгновенно (в железе — миллисекунды); при RSTP стираются записи всех не-edge портов
+   (в железе — кроме порта, откуда пришёл TC); hello-time влияет только на вывод show. */
 (function (G) {
   'use strict';
   var EL = G.EL, E = EL.E, P = EL.Net.prototype, CMDS = E.CMDS;
@@ -40,18 +42,42 @@
     if (prev && !prev.fwd && !(oldRoot && !newDev[oldRoot])) return [['Blk', tm.ma]].concat(timers);
     return timers;
   }
+  // порт к конечному узлу (portfast / auto-edge) или без STP — его смена топологию не меняет
+  function edge(net, id, ln, r) { if (!r || r.nostp) return true; var c = lp(net, id, ln).cfg || {}; return !!(c.portfast || (r.host && autoEdge(net.devs[id].st, c))); }
   function track(net, k, t) {
-    var PS = net._ps || (net._ps = {}), old = PS[k] || {}, nw = {};
+    var PS = net._ps || (net._ps = {}), old = PS[k] || {}, nw = {}, tc = [];
     Object.keys(t).forEach(function (id) {
       var o = old[id] || {}, n = nw[id] = {};
       Object.keys(t[id]).forEach(function (ln) {
         var r = t[id][ln], p = o[ln];
-        if (p && p.fwd === r.fwd) { n[ln] = { fwd: p.fwd, role: r.role, t0: p.t0, plan: p.plan, leg: p.leg }; return; }
-        n[ln] = { fwd: r.fwd, role: r.role, t0: net.now, plan: r.fwd ? plan(net, id, ln, r, p, o, t[id]) : [], leg: legacy(net.devs[id].st) };
+        if (p && p.fwd === r.fwd) { n[ln] = { fwd: p.fwd, role: r.role, t0: p.t0, plan: p.plan, leg: p.leg, r: r }; return; }
+        if (r.fwd && !edge(net, id, ln, r)) tc.push(id);                       // не-edge порт пошёл в forwarding
+        n[ln] = { fwd: r.fwd, role: r.role, t0: net.now, plan: r.fwd ? plan(net, id, ln, r, p, o, t[id]) : [], leg: legacy(net.devs[id].st), r: r };
       });
+      Object.keys(o).forEach(function (ln) { var p = o[ln];                    // не-edge порт перестал передавать (линк упал, блок)
+        if (p.fwd && (!n[ln] || !n[ln].fwd) && !edge(net, id, ln, p.r || t[id][ln])) tc.push(id); });
     });
     PS[k] = nw;
+    if (tc.length) topoChange(net, t, tc);
   }
+  // смена топологии (TC): RSTP — мосты домена сразу стирают динамические MAC с не-edge портов; 802.1D — TCN до корня,
+  // корень ставит флаг TC на max-age + forward-delay, и на это время MAC-записи стареют за forward-delay (15 с)
+  function topoChange(net, t, from) {
+    var seen = {}, q = from.slice(), dom = [];
+    while (q.length) { var id = q.shift(); if (seen[id] || !t[id]) continue; seen[id] = 1; dom.push(id);
+      Object.keys(t[id]).forEach(function (ln) { var r = t[id][ln]; if (r.host || r.nostp) return; var pr = net.peer(id, lp(net, id, ln).members[0]); if (pr && t[pr.dev]) q.push(pr.dev); }); }
+    var TC = net._tc = net._tc || {};
+    dom.forEach(function (id) { var st = net.devs[id].st, tm = net.stpTimers(st), M = net.mac[id] || {};
+      TC[id] = { n: ((TC[id] || {}).n || 0) + 1, t: net.now, until: legacy(st) ? net.now + tm.ma + tm.fd : net.now };
+      if (legacy(st)) return;
+      Object.keys(M).forEach(function (k) { var e = M[k]; if (e.sec || e.st) return; var r = (t[id] || {})[e.port];
+        if (!r || !edge(net, id, e.port, r)) delete M[k]; }); });              // порт без линка — его записи тоже уходят
+  }
+  // 802.1D: пока стоит флаг TC — MAC-записи стареют за forward-delay
+  var age0 = P.macAge;
+  P.macAge = function (id) { var a = age0.apply(this, arguments), x = (this._tc || {})[id], d = this.devs[id];
+    return x && this.now < x.until && d && d.type === 'mes' ? Math.min(a, this.stpTimers(d.st).fd) : a; };
+  P.stpTc = function (id) { return (this._tc || {})[id] || null; };
   var stp0 = P.stp;
   P.stp = function (k) {
     k = k || 0; var c = k ? (this._stpK || {})[k] : this._stp, fresh = !(c && c.gen === this.gen);
@@ -77,7 +103,7 @@
   // «кабели подключены давно»: текущие переходы считаются завершёнными (автотест собирает схему мгновенно)
   P.stpSettle = function () { this.stpSync(); var PS = this._ps || {};
     Object.keys(PS).forEach(function (k) { Object.keys(PS[k]).forEach(function (id) { Object.keys(PS[k][id]).forEach(function (ln) {
-      var e = PS[k][id][ln]; PS[k][id][ln] = { fwd: e.fwd, role: e.role, t0: -1e9, plan: e.plan, leg: e.leg }; }); }); }); };
+      var e = PS[k][id][ln]; PS[k][id][ln] = { fwd: e.fwd, role: e.role, t0: -1e9, plan: e.plan, leg: e.leg, r: e.r }; }); }); }); };
   // синхронизация: смена топологии фиксируется в момент модельного времени, когда она произошла
   P.stpSync = function () {
     var s = this, ks = { 0: 1 };

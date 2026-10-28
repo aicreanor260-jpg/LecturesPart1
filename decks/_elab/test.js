@@ -302,6 +302,34 @@ EL.labs.LABS.forEach(runLab);
   console.log('✓ физика: дуплекс, трансиверы, MTU коммутатора');
 })();
 
+// STP: смена топологии — очистка MAC (RSTP) и короткое старение (802.1D)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ STP TC: ' + name + (extra !== undefined ? ' — ' + extra : '')); } }
+  function ring(compat) {
+    var n = new EL.Net(), x = ['X1', 'X2', 'X3'].map(function (nm) { return n.add('MES2428', nm); }), a = n.add('VPC', 'A'), b = n.add('VPC', 'B'), sc = {};
+    x.forEach(function (d, i) { sc[d.name] = ['enable', 'configure'].concat(compat ? ['spanning-tree compatibility stp'] : [], ['spanning-tree priority ' + (4096 * (i + 1)), 'end']); });
+    sc.A = ['ip 10.4.4.1/24']; sc.B = ['ip 10.4.4.2/24']; EL.labs.apply(n, sc);
+    n.connect(x[0].id, 'gi1/0/1', x[1].id, 'gi1/0/1'); n.connect(x[0].id, 'gi1/0/2', x[2].id, 'gi1/0/1'); n.connect(x[1].id, 'gi1/0/2', x[2].id, 'gi1/0/2');
+    n.connect(a.id, 'eth0', x[1].id, 'gi1/0/5'); n.connect(b.id, 'eth0', x[2].id, 'gi1/0/5'); n.tick(31);
+    return { n: n, x: x, a: a, b: b };
+  }
+  function rows(n, d, port) { return n.macRows(d.id).filter(function (r) { return !port || r.port === port; }); }
+  var R = ring(false), n = R.n;
+  chk('ping через кольцо', n.ping(R.a.id, '10.4.4.2').ok);
+  var before = rows(n, R.x[0]).length, edgeB = rows(n, R.x[1], 'gi1/0/5').length;
+  ['configure', 'interface gi1/0/1', 'shutdown', 'end'].forEach(function (l) { n.exec(R.x[0].id, l); }); n.stp();
+  chk('RSTP: обрыв X1–X2 — X1 стёр MAC с не-edge портов', before > 0 && rows(n, R.x[0]).length === 0, before + ' → ' + JSON.stringify(rows(n, R.x[0])));
+  chk('RSTP: запись с edge-порта (ПК) у X2 осталась', edgeB === 1 && rows(n, R.x[1], 'gi1/0/5').length === 1);
+  chk('RSTP: счётчик смен топологии', n.stpTc(R.x[0].id) && n.stpTc(R.x[0].id).n >= 1);
+  chk('после TC связь восстанавливается', n.ping(R.a.id, '10.4.4.2').ok);
+  R = ring(true); n = R.n; n.tick(10); n.ping(R.a.id, '10.4.4.2');   // начальная сходимость тоже TC: ждём, пока флаг снимется
+  chk('802.1D: обычное старение 300 с', n.macAge(R.x[0].id) === 300);
+  ['configure', 'interface gi1/0/1', 'shutdown', 'end'].forEach(function (l) { n.exec(R.x[0].id, l); }); n.stp();
+  chk('802.1D: после TC MAC стареют за forward-delay (15 с)', n.macAge(R.x[0].id) === 15, n.macAge(R.x[0].id));
+  n.tick(36); chk('802.1D: через max-age + forward-delay (35 с) — снова 300', n.macAge(R.x[0].id) === 300, n.macAge(R.x[0].id));
+  console.log('✓ STP: смена топологии');
+})();
+
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
 (function () {
   function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
