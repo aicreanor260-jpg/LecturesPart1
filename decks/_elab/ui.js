@@ -354,6 +354,10 @@
   function needLogin(d) { return (d.type === 'mes' && d.sub !== 'ont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
+    var aa = net.aaaLogin ? net.aaaLogin(d.id, 'console', u, p, function (uu, pp) { return localLogin(d, uu, pp); }) : null;   // RADIUS/TACACS+ (aaa.js)
+    return aa ? aa.ok : localLogin(d, u, p);
+  }
+  function localLogin(d, u, p) {
     var U = d.type === 'esr' ? d.st.run.users : d.st.users;
     if (d.type === 'mes' && !Object.keys(U || {}).length) return u === 'admin' && p === (d.st.dialect === '8' ? '' : 'admin');   // MES 8.x — admin с пустым паролем, остальные — admin/admin (CREDENTIALS.md)
     return !!(U && U[u] && (U[u].pw === p || (U[u].pwEnc && EL.E.hash(p).slice(0, 30) === U[u].pwEnc)));

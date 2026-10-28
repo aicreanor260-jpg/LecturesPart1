@@ -381,6 +381,13 @@ Debian при `ip link set ens3 up` повторяет Router Solicitation ещ�
 
 Упрощения: клиент DHCP не просит своё время аренды, `max-lease-time` не моделируется, VPC при `clear ip` не шлёт DHCPRELEASE; размер пакета в счётчиках NAT условный (ICMP 84 байта, как в примере справочника); `no lldp transmit` у соседа — сразу (shutdown-LLDPDU по 802.1AB), по TTL сосед пропадает, только если LLDPDU перестали приходить без него.
 
+### Вход через RADIUS и TACACS+ (справочник ESR 1.23, руководство MES 6.6.8.8)
+- **ESR:** `tacacs-server host A` → `(config-tacacs-server)#` `key ascii-text СЕКРЕТ`, `port 49`; `radius-server host A` → `(config-radius-server)#` `key ascii-text СЕКРЕТ` (8–16 символов); `aaa authentication login default tacacs local` (или своё имя списка + `line console|ssh|telnet` → `login authentication ИМЯ`); `aaa authentication mode chain` (по умолчанию: отказ сервера — пробуется следующий метод) | `break` (следующий метод — только если сервер недоступен).
+- **MES 6.x:** `tacacs-server host A key К [port-number N]`, `radius-server host A key К`, `aaa authentication login default|ИМЯ radius|tacacs|local|line|enable|none …`, на линии `login authentication ИМЯ`.
+- **Серверы на Debian-server:** TACACS+ — `/etc/tacacs+/tac_plus.conf` (`key = СЕКРЕТ`, `user = ИМЯ { login = cleartext "ПАРОЛЬ" }`), `systemctl start tac_plus`; RADIUS — freeradius, как для 802.1X (`clients.conf` с адресом устройства и secret, `users` с `ИМЯ Cleartext-Password := "ПАРОЛЬ"`), `systemctl start freeradius`.
+- Работает и для входа в консоль, и для SSH. Сервер недоступен (нет маршрута, служба остановлена, ключ или secret не совпал) — следующий метод списка; поэтому в конце обычно ставят `local`.
+- Упрощения: авторизация команд и accounting только хранятся; таймауты и повторы запросов не моделируются; пользователь RADIUS/TACACS+ получает уровень 15.
+
 ### SNMP (справочник ESR 1.23, руководства MES 10.4.6 и 6.6.8.8)
 | Где | Команды |
 |---|---|

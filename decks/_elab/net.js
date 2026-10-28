@@ -829,8 +829,8 @@
     };
     sess.exec = function (line) {
       if (sess.stage === 'pw') {
-        var u = users[user];
-        if (!u || u.pw !== line.trim()) { hst.ssh = null; return 'Permission denied, please try again.\n' + user + '@' + ip + ': Permission denied (publickey,password).'; }
+        var u = users[user], aa = s.aaaLogin ? s.aaaLogin(d.id, 'ssh', user, line.trim(), function (uu, pp) { var x = users[uu]; return !!x && x.pw === pp; }) : null;   // RADIUS/TACACS+ (aaa.js)
+        if (aa ? !aa.ok : (!u || u.pw !== line.trim())) { hst.ssh = null; return 'Permission denied, please try again.\n' + user + '@' + ip + ': Permission denied (publickey,password).'; }
         sess.stage = 'cli'; var o = [];
         if (d.type === 'esr') s.syslog(own, 'login.log', 'sshd: %AAA-I-LOGIN: user ' + user + ' logged in via ssh from ' + (s.ifaces(hst.dev)[0] || { ip: '?' }).ip);
         if (banner.login) o.push(banner.login);

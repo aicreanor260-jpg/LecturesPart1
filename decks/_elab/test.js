@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -387,6 +387,45 @@ EL.labs.LABS.forEach(runLab);
   chk('MES 6.x: без snmp-server server — нет ответа', (EL.labs.apply(n, { SW6: ['configure', 'no snmp-server server', 'end'] }), /Timeout/.test(n.exec(srv.id, 'snmpget -v2c -c campus 10.9.9.3 sysName.0'))));
   chk('running-config ESR: snmp-server …', /snmp-server community public ro\nsnmp-server community private rw\nsnmp-server host 10\.9\.9\.10/.test(n.exec(r.id, 'show running-config')));
   console.log('✓ SNMP');
+})();
+
+// AAA: вход через TACACS+ (ESR) и RADIUS (MES 6.x) на Debian-server
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ AAA: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES3348', 'SW6'), srv = n.add('Debian-server', 'AAA');
+  n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/24'); n.connect(srv.id, 'ens3', sw.id, 'gi1/0/1');
+  var e = EL.labs.apply(n, {
+    R1: ['configure', 'interface gi1/0/1', 'ip address 10.5.5.1/24', 'ip firewall disable', 'exit', 'ip ssh server',
+      'tacacs-server host 10.5.5.10', 'key ascii-text secret1', 'exit', 'aaa authentication login default tacacs local', 'end', 'commit', 'confirm'],
+    SW6: ['enable', 'configure', 'interface vlan 1', 'ip address 10.5.5.2 255.255.255.0', 'exit', 'radius-server host 10.5.5.10 key radkey', 'aaa authentication login default radius local', 'end'],
+    AAA: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.5.5.10/24 dev ens3'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  var F = srv.st.files; F['/etc/tacacs+/tac_plus.conf'] = 'key = secret1\nuser = alice {\n    login = cleartext "pa55"\n}\n';
+  F['/etc/freeradius/3.0/clients.conf'] = 'client sw6 {\n\tipaddr = 10.5.5.2\n\tsecret = radkey\n}\n'; F['/etc/freeradius/3.0/users'] = 'bob Cleartext-Password := "b0b"\n';
+  n.exec(srv.id, 'systemctl start tac_plus'); n.exec(srv.id, 'systemctl start freeradius');
+  function loc(d) { return function (u, p) { var U = d.type === 'esr' ? d.st.run.users : d.st.users; return !!(U && U[u] && U[u].pw === p); }; }
+  var a1 = n.aaaLogin(r.id, 'console', 'alice', 'pa55', loc(r));
+  chk('ESR: alice входит через TACACS+', a1 && a1.ok && a1.method === 'tacacs', JSON.stringify(a1));
+  chk('ESR: неверный пароль TACACS+ — отказ, local тоже не знает alice', !n.aaaLogin(r.id, 'console', 'alice', 'bad', loc(r)).ok);
+  var a3 = n.aaaLogin(r.id, 'console', 'admin', 'password', loc(r));
+  chk('ESR: admin нет на TACACS+ (отказ) — chain: проверен local, вход', a3.ok && a3.method === 'local', JSON.stringify(a3));
+  EL.labs.apply(n, { R1: ['configure', 'aaa authentication mode break', 'end', 'commit', 'confirm'] });
+  chk('ESR: mode break — отказ TACACS+ окончательный', !n.aaaLogin(r.id, 'console', 'admin', 'password', loc(r)).ok);
+  n.exec(srv.id, 'systemctl stop tac_plus');
+  var a5 = n.aaaLogin(r.id, 'console', 'admin', 'password', loc(r));
+  chk('ESR: TACACS+ недоступен — даже при break вход по local', a5.ok && a5.method === 'local' && /tac_plus|недоступен/.test(a5.log.join(' ')), JSON.stringify(a5));
+  n.exec(srv.id, 'systemctl start tac_plus');
+  var s1 = n.exec(srv.id, 'ssh alice@10.5.5.1'), s2 = n.exec(srv.id, 'pa55');
+  chk('SSH на ESR пользователем TACACS+', /authenticity/.test(s1) && !/Permission denied/.test(s2) && !!srv.st.ssh, s1 + ' / ' + s2);
+  n.exec(srv.id, 'exit'); n.exec(srv.id, 'ssh alice@10.5.5.1');
+  chk('SSH: неверный пароль TACACS+ — Permission denied', /Permission denied/.test(n.exec(srv.id, 'wrong')));
+  chk('running-config ESR: tacacs-server host / key ascii-text', /tacacs-server host 10\.5\.5\.10\n  key ascii-text secret1\nexit/.test(n.exec(r.id, 'show running-config')));
+  var m1 = n.aaaLogin(sw.id, 'console', 'bob', 'b0b', loc(sw));
+  chk('MES 6.x: bob входит через RADIUS', m1 && m1.ok && m1.method === 'radius', JSON.stringify(m1));
+  F['/etc/freeradius/3.0/clients.conf'] = 'client sw6 {\n\tipaddr = 10.5.5.2\n\tsecret = other\n}\n';
+  var m2 = n.aaaLogin(sw.id, 'console', 'bob', 'b0b', loc(sw));
+  chk('MES 6.x: secret не совпал — сервер «недоступен», local не знает bob', !m2.ok && /clients\.conf/.test(m2.log.join(' ')), JSON.stringify(m2));
+  console.log('✓ AAA: RADIUS и TACACS+');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
