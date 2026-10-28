@@ -9,7 +9,8 @@
      dpkg-reconfigure openssh-server — новые ключи хоста.
    ESR: ip ssh server, ip ssh port N, update ssh-host-key rsa|ecdsa|ed25519|dsa [N], show crypto key mypubkey rsa|ecdsa|ed25519|dsa,
      ssh ИМЯ A [port N] (клиент, свои known hosts), clear ssh host A [port N].  MES: crypto key generate rsa — новый ключ хоста.
-   Упрощения: known_hosts без хеширования имён; агент ssh-agent, сертификаты и scp не моделируются; ключ хоста ESR/Debian для клиента — ECDSA, MES — RSA. */
+   scp [-P ПОРТ] [-i КЛЮЧ] ФАЙЛ ИМЯ@A:[ПУТЬ] | ИМЯ@A:ПУТЬ ФАЙЛ — копирование между компьютерами Debian (по паролю или ключу).
+   Упрощения: known_hosts без хеширования имён; агент ssh-agent, сертификаты и scp -r не моделируются; ключ хоста ESR/Debian для клиента — ECDSA, MES — RSA. */
 (function (G) {
   'use strict';
   var EL = G.EL, S = EL.esr, P = EL.Net.prototype, H = EL.hosts, E = EL.E;
@@ -108,6 +109,7 @@
     function login() {
       sess.stage = 'cli';
       if (o.copy) return copyKey();
+      if (o.after) return close(d.type === 'deb' ? o.after(st, user) : 'scp: на ' + ip + ' (' + d.model + ') нет командной оболочки Linux — копирование файлов по scp здесь не моделируется');
       if (d.type === 'esr') s.syslog(d.id, 'login.log', 'sshd: %AAA-I-LOGIN: user ' + user + ' logged in via ssh from ' + (s.ifaces(src)[0] || { ip: '?' }).ip);
       if (d.type === 'deb') return 'Linux ' + st.host + ' 5.10.0-23-amd64 #1 SMP Debian 5.10.179-1 x86_64\n\nLast login: from ' + ((s.ifaces(src)[0] || {}).ip || '?');
       var b = d.type === 'esr' ? st.run.banner : st.banner, x = []; if (b && b.login) x.push(b.login); if (b && b.exec) x.push(b.exec); return x.join('\n');
@@ -126,7 +128,7 @@
       return aa ? aa.ok : !!u && u.pw === p;
     }
     function afterHk() {                      // после проверки ключа хоста: ключ пользователя без фразы — сразу внутрь
-      if (pub && !phrase) { var m = login(); return (o.copy ? '' : m); }
+      if (pub && !phrase) { var m = login(); return o.copy ? '' : m; }
       if (d.type === 'deb' && !pub && !cfg.pw) return denied();
       return null;
     }
@@ -217,6 +219,21 @@
       var kf = a.o.UserKnownHostsFile, kh = kf ? (kf === '/dev/null' ? { get: function () { return ''; }, add: function () {}, file: '/dev/null' } : khDeb(st, kf)) : null;
       return st.net.sshOpen(st, m[1] || a.opt.l || st.user, m[2], { port: +(a.opt.p || 22), ident: a.opt.i ? [a.opt.i.replace(/\.pub$/, '')] : idents(st), strict: a.o.StrictHostKeyChecking, kh: kh, cfiles: st.files });
     }
+    if (c === 'scp') { a = args(t, 'Pi'); if (a.pos.length !== 2) return 'usage: scp [-P port] [-i identity_file] source ... target';
+      var rs = function (x) { var m = x.match(/^(?:([^@:]+)@)?(\d+\.\d+\.\d+\.\d+):(.*)$/); return m ? { user: m[1] || st.user, ip: m[2], path: m[3] } : null; };
+      var A = rs(a.pos[0]), B = rs(a.pos[1]); if (!!A === !!B) return 'scp: один из путей должен быть удалённым — ИМЯ@A.B.C.D:ПУТЬ';
+      var R0 = A || B, put = !!B, abs = function (pth, u) { pth = String(pth || '').replace(/^~(\/|$)/, ''); return !pth || pth === '.' ? home(u) : pth.charAt(0) === '/' ? pth : home(u) + '/' + pth; };
+      var lp = abs(put ? a.pos[0] : a.pos[1], st.user);
+      if (put && st.files[lp] === undefined) return a.pos[0] + ': No such file or directory';
+      var after = function (ts, u) {
+        var isDir = function (F, x) { return Object.keys(F).some(function (k) { return k.indexOf(x.replace(/\/$/, '') + '/') === 0; }) || /\/$/.test(x); };
+        var base = function (x) { return x.split('/').pop(); }, rp2 = abs(R0.path, u), src = put ? st.files : ts.files, dstF = put ? ts.files : st.files, from = put ? lp : rp2, to = put ? rp2 : lp;
+        if (src[from] === undefined) return 'scp: ' + from + ': No such file or directory';
+        if (isDir(dstF, to) || to === home(put ? u : st.user)) to = to.replace(/\/$/, '') + '/' + base(from);
+        var who = put ? u : st.user; if (who !== 'root' && to.indexOf(home(who) + '/') !== 0 && to.indexOf('/tmp/') !== 0) return 'scp: ' + to + ': Permission denied';
+        dstF[to] = src[from]; var sz = String(src[from]).length, nm = base(from); while (nm.length < 46) nm += ' ';
+        return nm + '100%  ' + sz + '    ' + (sz / 1024 * 40).toFixed(1) + 'KB/s   00:00'; };
+      return st.net.sshOpen(st, R0.user, R0.ip, { port: +(a.opt.P || 22), ident: a.opt.i ? [a.opt.i.replace(/\.pub$/, '')] : idents(st), cfiles: st.files, after: after }); }
     if (c === 'ssh-copy-id') { a = args(t, 'ip'); var m2 = (a.pos[0] || '').match(/^(?:([^@]+)@)?(\d+\.\d+\.\d+\.\d+)$/); if (!m2) return 'Usage: /usr/bin/ssh-copy-id [-i [identity_file]] [-p port] [user@]hostname';
       var pf = a.opt.i ? (/\.pub$/.test(a.opt.i) ? a.opt.i : a.opt.i + '.pub') : idents(st).map(function (x) { return x + '.pub'; }).filter(function (x) { return st.files[x] !== undefined; })[0];
       if (!pf || st.files[pf] === undefined) return '/usr/bin/ssh-copy-id: ERROR: No identities found';

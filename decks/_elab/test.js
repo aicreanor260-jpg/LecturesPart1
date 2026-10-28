@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -627,6 +627,84 @@ EL.labs.LABS.forEach(runLab);
   chk('show crypto key mypubkey rsa', /Key data\n-+\nssh-rsa\nAAAA/.test(n.exec(r.id, 'show crypto key mypubkey rsa')));
   chk('running-config: ip ssh port', /ip ssh port 2222/.test(n.exec(r.id, 'show running-config')));
   console.log('✓ SSH: ключи и known_hosts');
+})();
+// WireGuard: ключи wg genkey/pubkey → TFTP → crypto:…; туннель ESR–ESR; сервер remote-access wireguard и ноутбук Debian с wg-quick
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ WG: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), isp = n.add('vESR', 'ISP'), r2 = n.add('vESR', 'R2'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B'),
+      ks = n.add('Debian-server', 'KS'), lap = n.add('Debian', 'LAP');
+  n.connect(a.id, 'eth0', r1.id, 'gi1/0/1'); n.connect(ks.id, 'ens3', r1.id, 'gi1/0/3'); n.connect(r1.id, 'gi1/0/2', isp.id, 'gi1/0/1');
+  n.connect(isp.id, 'gi1/0/2', r2.id, 'gi1/0/2'); n.connect(r2.id, 'gi1/0/1', b.id, 'eth0'); n.connect(lap.id, 'ens3', isp.id, 'gi1/0/3');
+  function ifs(L) { var o = ['configure']; L.forEach(function (x) { o.push('interface ' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit'); }); return o; }
+  var e = EL.labs.apply(n, {
+    KS: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.3.5/24 dev ens3', 'ip route add default via 192.168.3.1',
+      'wg genkey | tee /tftp/r1.priv | wg pubkey > /tftp/r1.pub', 'wg genkey | tee /tftp/r2.priv | wg pubkey > /tftp/r2.pub'],
+    ISP: ifs([['gi1/0/1', '100.0.0.1/30'], ['gi1/0/2', '100.0.1.1/30'], ['gi1/0/3', '100.0.2.1/24']]).concat(['ip route 192.168.3.0/24 100.0.0.2', 'end', 'commit', 'confirm']),
+    R1: ifs([['gi1/0/1', '192.168.1.1/24'], ['gi1/0/2', '100.0.0.2/30'], ['gi1/0/3', '192.168.3.1/24']]).concat(['ip route 0.0.0.0/0 100.0.0.1', 'end', 'commit', 'confirm',
+      'copy tftp://192.168.3.5:/r1.priv crypto:private-key/r1', 'copy tftp://192.168.3.5:/r2.pub crypto:public-key/r2']),
+    R2: ifs([['gi1/0/1', '192.168.2.1/24'], ['gi1/0/2', '100.0.1.2/30']]).concat(['ip route 0.0.0.0/0 100.0.1.1', 'end', 'commit', 'confirm',
+      'copy tftp://192.168.3.5:/r2.priv crypto:private-key/r2', 'copy tftp://192.168.3.5:/r1.pub crypto:public-key/r1']),
+    A: ['ip 192.168.1.10/24 192.168.1.1'], B: ['ip 192.168.2.10/24 192.168.2.1'] });
+  chk('конфигурация и загрузка ключей без ошибок', !e.length, e.join('; '));
+  chk('ключи: закрытый и открытый — разные, формат WireGuard', /^[A-Za-z0-9+/]{43}=\n?$/.test(ks.st.files['/tftp/r1.priv']) && EL.wgPub(ks.st.files['/tftp/r1.priv']) === ks.st.files['/tftp/r1.pub'].trim());
+  function tun(me, peer, priv, pub, tip, net, ip) { return ['configure', 'object-group network PEER', 'ip prefix ' + net, 'exit', 'tunnel wireguard 1', 'ip address ' + tip, 'port 51820',
+    'private-key ' + priv, 'ip firewall disable', 'peer 1', 'public-key ' + pub, 'remote address ' + peer, 'remote port 51820', 'subnet PEER', 'enable', 'exit', 'enable', 'exit',
+    'ip route ' + net + ' ' + ip, 'end', 'commit', 'confirm']; void me; }
+  e = EL.labs.apply(n, { R1: tun('R1', '100.0.1.2', 'r1', 'r2', '10.99.0.1/30', '192.168.2.0/24', '10.99.0.2'), R2: tun('R2', '100.0.0.2', 'r2', 'r1', '10.99.0.2/30', '192.168.1.0/24', '10.99.0.1') });
+  chk('туннель: конфигурация без ошибок', !e.length, e.join('; '));
+  var p = n.ping(a.id, '192.168.2.10');
+  chk('A → B через WireGuard', p.ok && p.steps.some(function (x) { return /wg1 — получатель 192\.168\.2\.10 в разрешённых адресах peer 1; пакет зашифрован и упакован в UDP 51820 → 100\.0\.1\.2:51820/.test(x.t); }), p.steps.map(function (x) { return x.t; }).join(' | '));
+  chk('show wireguard peers: рукопожатие и трафик', /peer 1: endpoint 100\.0\.1\.2:51820, subnet 192\.168\.2\.0\/24, latest handshake \d+ s ago, transfer [1-9]/.test(n.exec(r1.id, 'show wireguard peers')), n.exec(r1.id, 'show wireguard peers'));
+  chk('running-config: tunnel wireguard и peer', /tunnel wireguard 1\n  ip firewall disable\n  ip address 10\.99\.0\.1\/30\n  port 51820\n  private-key r1\n  peer 1\n    public-key r2\n    remote address 100\.0\.1\.2\n    remote port 51820\n    subnet PEER\n    enable\n  exit\n  enable/.test(n.exec(r1.id, 'show running-config')));
+  // чужой адрес вне subnet
+  EL.labs.apply(n, { R2: ['configure', 'object-group network PEER', 'no ip prefix 192.168.1.0/24', 'ip prefix 192.168.9.0/24', 'end', 'commit', 'confirm'] });
+  var p2 = n.ping(a.id, '192.168.2.10');
+  chk('источник вне subnet у принимающей стороны — отброшен', !p2.ok && p2.steps.some(function (x) { return /источник 192\.168\.1\.10 не в разрешённых адресах/.test(x.t); }), p2.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { R2: ['configure', 'object-group network PEER', 'ip prefix 192.168.1.0/24', 'end', 'commit', 'confirm', 'delete crypto:public-key/r1'] });
+  chk('удалён открытый ключ пира — нет рукопожатия', !n.ping(a.id, '192.168.2.10').ok && /нет ключа crypto:public-key\/r1/.test(n.exec(r2.id, 'show wireguard peers')));
+  EL.labs.apply(n, { R2: ['copy tftp://192.168.3.5:/r2.pub crypto:public-key/r1'] });
+  var p3 = n.ping(a.id, '192.168.2.10');
+  chk('не тот открытый ключ — R1 отвергает рукопожатие', !p3.ok && p3.steps.some(function (x) { return /нет пира с открытым ключом|не совпадает/.test(x.t); }), p3.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { R2: ['copy tftp://192.168.3.5:/r1.pub crypto:public-key/r1'] });
+  chk('ключ исправлен — снова работает', n.ping(a.id, '192.168.2.10').ok);
+  // удалённый доступ: сервер на R1, ноутбук с wg-quick
+  e = EL.labs.apply(n, { LAP: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 100.0.2.10/24 dev ens3', 'ip route add default via 100.0.2.1', 'umask 077; wg genkey | tee /root/lap.priv | wg pubkey > /root/lap.pub'] });
+  ks.st.files['/tftp/lap.pub'] = lap.st.files['/root/lap.pub'];
+  e = e.concat(EL.labs.apply(n, { R1: ['copy tftp://192.168.3.5:/lap.pub crypto:public-key/lap', 'configure', 'security zone trusted', 'exit', 'object-group network LAP', 'ip prefix 10.10.0.2/32', 'exit',
+    'remote-access wireguard RA', 'local-address 10.10.0.1/24', 'port 43021', 'private-key r1', 'security-zone trusted', 'peer 1', 'public-key lap', 'subnet LAP', 'enable', 'exit', 'enable', 'exit', 'end', 'commit', 'confirm'] }));
+  chk('сервер: конфигурация без ошибок', !e.length, e.join('; '));
+  lap.st.files['/etc/wireguard/wg0.conf'] = '[Interface]\nAddress = 10.10.0.2/24\nPrivateKey = ' + lap.st.files['/root/lap.priv'].trim() + '\n\n[Peer]\nPublicKey = ' + ks.st.files['/tftp/r1.pub'].trim() +
+    '\nEndpoint = 100.0.0.2:43021\nAllowedIPs = 10.10.0.0/24, 192.168.1.0/24\n';
+  chk('сервер без рукопожатия не знает, куда слать клиенту', (n.exec(lap.id, 'wg-quick up wg0'), !n.ping(a.id, '10.10.0.2').ok));
+  var up = n.ping(lap.id, '192.168.1.10');
+  chk('ноутбук → офис через wg-quick, сервер запомнил адрес', up.ok && n.ping(a.id, '10.10.0.2').ok, up.steps.map(function (x) { return x.t; }).join(' | '));
+  chk('wg show: рукопожатие и трафик', /interface: wg0\n  public key: \S+\n  private key: \(hidden\)/.test(n.exec(lap.id, 'wg show')) && /latest handshake: /.test(n.exec(lap.id, 'wg show')) && /transfer: [1-9]/.test(n.exec(lap.id, 'wg show')), n.exec(lap.id, 'wg show'));
+  chk('ip addr показывает wg0', /wg0: <POINTOPOINT,NOARP,UP,LOWER_UP>[\s\S]*inet 10\.10\.0\.2\/24/.test(n.exec(lap.id, 'ip addr')));
+  chk('show remote-access status wireguard', /peer 1\s+10\.10\.0\.2\s+wireguard\(RA\)/.test(n.exec(r1.id, 'show remote-access status wireguard')), n.exec(r1.id, 'show remote-access status wireguard'));
+  n.exec(lap.id, 'wg-quick down wg0'); chk('wg-quick down — туннеля нет', !n.ping(lap.id, '192.168.1.10').ok);
+  lap.st.files['/etc/wireguard/wg0.conf'] = lap.st.files['/etc/wireguard/wg0.conf'].replace('PrivateKey = ', 'PrivateKey = x');
+  chk('битый PrivateKey — ошибка разбора', /Configuration parsing error/.test(n.exec(lap.id, 'wg-quick up wg0')));
+  console.log('✓ WireGuard');
+})();
+// scp между компьютерами Debian: отправка и получение, вход по ключу, права, ошибки
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ scp: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2428', 'SW'), pc = n.add('Debian', 'PC'), sv = n.add('Debian-server', 'SRV');
+  n.connect(pc.id, 'ens3', sw.id, 'gi1/0/1'); n.connect(sv.id, 'ens3', sw.id, 'gi1/0/2');
+  EL.labs.apply(n, { PC: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.10/24 dev ens3'], SRV: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 10.0.0.20/24 dev ens3'] });
+  function x(l) { return n.exec(pc.id, l); }
+  pc.st.files['/root/report.txt'] = 'hello';
+  x('scp report.txt user@10.0.0.20:'); x('yes'); var r = x('user');
+  chk('scp на сервер по паролю: файл в домашнем каталоге user', /^report\.txt\s+100%\s+5\s/.test(r) && sv.st.files['/home/user/report.txt'] === 'hello' && !pc.st.ssh, r);
+  x('scp report.txt user@10.0.0.20:/etc/'); var r2 = x('user');
+  chk('scp в /etc от user — Permission denied', /scp: \/etc\/report\.txt: Permission denied/.test(r2), r2);
+  x('ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ""'); x('ssh-copy-id user@10.0.0.20'); x('user');
+  sv.st.files['/home/user/data.csv'] = 'a;b';
+  var r3 = x('scp user@10.0.0.20:~/data.csv /tmp/');
+  chk('scp с сервера по ключу — без пароля', /^data\.csv\s+100%/.test(r3) && pc.st.files['/tmp/data.csv'] === 'a;b', r3);
+  chk('нет файла на сервере', /No such file or directory/.test(x('scp user@10.0.0.20:/home/user/none.txt .')));
+  chk('нет локального файла', /nope\.txt: No such file or directory/.test(x('scp nope.txt user@10.0.0.20:')));
+  console.log('✓ scp');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
