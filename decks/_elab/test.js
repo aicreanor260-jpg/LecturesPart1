@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -488,6 +488,52 @@ EL.labs.LABS.forEach(runLab);
       /ip igmp static-group 239\.2\.2\.2/.test(n.exec(b.id, 'show running-config')));
   chk('show ip pim rp mapping', /RP: 10\.100\.0\.1, static/.test(n.exec(b.id, 'show ip pim rp mapping')));
   console.log('✓ PIM');
+})();
+// Удалённый доступ PPTP и L2TP over IPsec: сервер R1 за провайдером ISP, клиент R2 подключается к outside-address
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ RA: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), isp = n.add('vESR', 'ISP'), r2 = n.add('vESR', 'R2'), a = n.add('VPC', 'A');
+  n.connect(a.id, 'eth0', r1.id, 'gi1/0/1'); n.connect(r1.id, 'gi1/0/2', isp.id, 'gi1/0/1'); n.connect(isp.id, 'gi1/0/2', r2.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, {
+    R1: ['configure', 'interface gi1/0/1', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.0.2/30', 'ip firewall disable', 'exit',
+      'ip route 0.0.0.0/0 100.0.0.1', 'remote-access pptp office', 'local-address ip-address 10.10.10.1', 'remote-address address-range 10.10.10.20-10.10.10.40',
+      'outside-address ip-address 100.0.0.2', 'authentication method mschap-v2', 'username ivan', 'password ascii-text Pa55word', 'enable', 'exit', 'enable', 'exit', 'end', 'commit', 'confirm'],
+    ISP: ['configure', 'interface gi1/0/1', 'ip address 100.0.0.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 100.0.1.1/30', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'interface gi1/0/2', 'ip address 100.0.1.2/30', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 100.0.1.1',
+      'tunnel pptp 1', 'remote address 100.0.0.2', 'username ivan password ascii-text Pa55word', 'enable', 'exit', 'end', 'commit', 'confirm'],
+    A: ['ip 192.168.1.10/24 192.168.1.1'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  var st = n.exec(r1.id, 'show remote-access status');
+  chk('сервер: ivan получил 10.10.10.20', /ivan\s+10\.10\.10\.20\s+pptp\(office\)/.test(st) && /Count sessions: 1/.test(st), st);
+  var p = n.ping(r2.id, '192.168.1.10');
+  chk('клиент через PPTP достаёт офисную сеть', p.ok && p.steps.some(function (x) { return /PPP в GRE/.test(x.t); }), p.steps.map(function (x) { return x.t; }).join(' | '));
+  chk('show tunnels status на клиенте: pptp 1 Up', /pptp 1\s+Up\s+\d+\s+10\.10\.10\.20/.test(n.exec(r2.id, 'show tunnels status')), n.exec(r2.id, 'show tunnels status'));
+  chk('интернет-адрес провайдера доступен мимо туннеля', n.ping(r2.id, '100.0.1.1').ok);
+  chk('running-config сервера и клиента', /remote-access pptp office\n  local-address ip-address 10\.10\.10\.1\n  remote-address address-range 10\.10\.10\.20-10\.10\.10\.40\n  outside-address ip-address 100\.0\.0\.2\n  authentication method mschap-v2\n  username ivan\n    password ascii-text Pa55word\n    enable\n  exit\n  enable/.test(n.exec(r1.id, 'show running-config')) &&
+      /tunnel pptp 1\n  remote address 100\.0\.0\.2\n  username ivan password ascii-text Pa55word\n  enable/.test(n.exec(r2.id, 'show running-config')));
+  EL.labs.apply(n, { R2: ['configure', 'tunnel pptp 1', 'username ivan password ascii-text wrong', 'end', 'commit', 'confirm'] });
+  chk('неверный пароль — сессии нет, туннель Down с причиной', /Count sessions: 0/.test(n.exec(r1.id, 'show remote-access status')) && /pptp 1\s+Down.*неверный пароль/.test(n.exec(r2.id, 'show tunnels status')) && !n.ping(r2.id, '192.168.1.10').ok);
+  // L2TP over IPsec с проверкой через RADIUS
+  var srv = n.add('Debian-server', 'RAD'); n.connect(srv.id, 'ens3', r1.id, 'gi1/0/3');
+  e = EL.labs.apply(n, {
+    RAD: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.3.10/24 dev ens3', 'ip route add default via 192.168.3.1'],
+    R1: ['configure', 'interface gi1/0/3', 'ip address 192.168.3.1/24', 'ip firewall disable', 'exit', 'radius-server host 192.168.3.10', 'key ascii-text testing123', 'exit',
+      'remote-access l2tp home', 'local-address ip-address 10.20.20.1', 'remote-address address-range 10.20.20.5-10.20.20.9', 'outside-address ip-address 100.0.0.2',
+      'authentication mode radius', 'ipsec authentication method pre-shared-key', 'ipsec authentication pre-shared-key ascii-text K3y12345', 'enable', 'exit', 'end', 'commit', 'confirm'],
+    R2: ['configure', 'no tunnel pptp 1', 'tunnel l2tp 1', 'remote address 100.0.0.2', 'username fedor password ascii-text secret1', 'ipsec authentication method pre-shared-key',
+      'ipsec authentication pre-shared-key ascii-text K3y12345', 'ignore-default-route', 'enable', 'exit', 'ip route 192.168.1.0/24 10.20.20.1', 'end', 'commit', 'confirm'] });
+  chk('L2TP: конфигурация без ошибок', !e.length, e.join('; '));
+  chk('RADIUS не запущен — L2TP не поднимается', /l2tp 1\s+Down.*RADIUS/.test(n.exec(r2.id, 'show tunnels status')), n.exec(r2.id, 'show tunnels status'));
+  srv.st.files['/etc/freeradius/3.0/clients.conf'] = 'client r1 {\n  ipaddr = 192.168.3.1\n  secret = testing123\n}\n';
+  srv.st.files['/etc/freeradius/3.0/users'] = 'fedor Cleartext-Password := "secret1"\n';
+  n.exec(srv.id, 'systemctl start freeradius');
+  var p2 = n.ping(r2.id, '192.168.1.10');
+  chk('L2TP + RADIUS: fedor подключён, офис доступен', /fedor\s+10\.20\.20\.5\s+l2tp\(home\)/.test(n.exec(r1.id, 'show remote-access status l2tp')) && p2.ok && p2.steps.some(function (x) { return /L2TP\/UDP 1701 внутри IPsec/.test(x.t); }),
+      n.exec(r2.id, 'show tunnels status') + ' | ' + p2.steps.map(function (x) { return x.t; }).join(' | '));
+  EL.labs.apply(n, { R2: ['configure', 'tunnel l2tp 1', 'ipsec authentication pre-shared-key ascii-text Other999', 'end', 'commit', 'confirm'] });
+  chk('L2TP: несовпадение ключа IPsec', /l2tp 1\s+Down.*ключи IPsec/.test(n.exec(r2.id, 'show tunnels status')));
+  chk('show remote-access configuration l2tp home', /Authentication mode:  radius/.test(n.exec(r1.id, 'show remote-access configuration l2tp home')) && /Remote address:       10\.20\.20\.5-10\.20\.20\.9/.test(n.exec(r1.id, 'show remote-access configuration l2tp home')));
+  console.log('✓ Удалённый доступ PPTP / L2TP');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN

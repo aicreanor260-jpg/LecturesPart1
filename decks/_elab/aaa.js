@@ -69,6 +69,7 @@
     var nas = (s.ifaces(id).filter(function (f) { return IP.sameNet(f.ip, ip, f.len); })[0] || s.ifaces(id)[0] || {}).ip;
     return kind === 'radius' ? radius(s, srv, nas, cfg.key || '', u, p) : tacacs(s, srv, cfg.key || '', u, p);
   }
+  EL.aaaAsk = ask;
   var lx0 = EL.listensX;
   EL.listensX = function (d, proto, port) {
     if (d.type === 'deb' && proto === 'udp' && port === 1812) return !!(d.st.svc || {}).freeradius;
