@@ -332,6 +332,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 <tr><td>show ip nat translations · ip firewall sessions icmp-timeout N</td><td>NAT-трансляции стареют по таймаутам сессий (ICMP 30 с, UDP 30/180, TCP 60/120/30)</td></tr>
 <tr><td>lacp timeout short|long (8.x: [no] lacp actor admin state longtimeout)</td><td>партнёр вышел из LACP — порт ещё 3 / 90 с в агрегате</td></tr>
 <tr><td>lldp timer · lldp hold-multiplier (MES 10.x: lldp transmit-interval · lldp holdtime-multiplier)</td><td>TTL соседа в show lldp neighbors отсчитывается и обновляется каждые timer секунд</td></tr>
+<tr><td>route-map N → rule 10 → match ip address A/L · match as-path · action set local-preference · as-path prepend · set community no-export; ip prefix-list N → permit|deny A/L; у соседа route-map|prefix-list N in|out</td><td>политики BGP и выбор лучшего пути по атрибутам</td></tr>
 <tr><td>(router bgp / neighbor) timers keepalive N · timers holdtime N · show bgp neighbors</td><td>BGP по таймерам: сосед пропал без разрыва линка — сессия и маршруты живут hold time (180 с); NOTIFICATION или свой линк — сразу</td></tr>
 <tr><td>ipv6 ospf hello-interval · dead-interval · wait-interval · priority · network point-to-point · cost; (config-ripng) timers update|invalid|flush</td><td>OSPFv3/RIPng по таймерам: DR/BDR, ожидание wait, possibly down до flush</td></tr>
 <tr><td>Новый кабель → модули на концах (SX/LX/SR/LR/DAC) · (MES 10.x) system mtu N · mtu N · (MES 6.x) port jumbo-frame + write + reload</td><td>разные модули — нет линка; кадр больше MTU коммутатора отброшен молча; дуплекс не совпадает — ~20 % потерь</td></tr>
@@ -6676,7 +6677,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
    TCP 179 доступен по таблице маршрутов (без BGP); eBGP — сосед в подключённой сети или ebgp-multihop. Маршруты: эталонный вектор путей —
    AS_PATH (петля — маршрут отбрасывается), выбор по длине AS_PATH, затем меньшему адресу соседа; от iBGP-соседа к iBGP-соседу не передаётся;
    next-hop: eBGP — адрес соседа, iBGP — как пришёл (next-hop-self — адрес соседа); AD: eBGP 20, iBGP 200.
-   Упрощения: атрибуты LOCAL_PREF/MED/community, route-map, peer-group, межсетевой экран для TCP 179 не моделируется.
+   Атрибуты и политики — bgp_policy.js (LOCAL_PREF, MED, community, route-map, prefix-list).
+   Упрощения: peer-group, межсетевой экран для TCP 179 не моделируется.
    Таймеры: keepalive/holdtime (60/180, согласуется меньший hold); сосед пропал без разрыва своего линка — сессия и маршруты живут
    до истечения hold time; NOTIFICATION (смена настроек) или падение своего интерфейса — разрыв сразу; новая попытка — через error-wait 60 с,
    если соединение не вызвано изменением настроек на одной из сторон. */
@@ -6735,8 +6737,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     Object.keys(b.nbr).forEach(function (ip) { var x = b.nbr[ip]; o.push('  neighbor ' + ip); if (x.desc) o.push('    description "' + x.desc + '"');
       if (x.as) o.push('    remote-as ' + x.as); if (x.src) o.push('    update-source ' + x.src); if (x.multihop) o.push('    ebgp-multihop');
       if (x.ka) o.push('    timers keepalive ' + x.ka); if (x.hold) o.push('    timers holdtime ' + x.hold);
-      if (x.af || x.nhs || x.rmap) { o.push('    address-family ipv4 unicast'); if (x.nhs) o.push('      next-hop-self');
-        Object.keys(x.rmap || {}).forEach(function (d) { o.push('      route-map ' + x.rmap[d] + ' ' + d); }); if (x.af) o.push('      enable'); o.push('    exit'); }
+      if (x.af || x.nhs || x.rmap || x.pl) { o.push('    address-family ipv4 unicast'); if (x.nhs) o.push('      next-hop-self');
+        Object.keys(x.rmap || {}).forEach(function (d) { o.push('      route-map ' + x.rmap[d] + ' ' + d); });
+        Object.keys(x.pl || {}).forEach(function (d) { o.push('      prefix-list ' + x.pl[d] + ' ' + d); }); if (x.af) o.push('      enable'); o.push('    exit'); }
       if (x.on) o.push('    enable'); o.push('  exit'); });
     if (b.nets.length || b.redist.length) { o.push('  address-family ipv4 unicast'); b.nets.forEach(function (n) { o.push('    network ' + n); });
       b.redist.forEach(function (n) { o.push('    redistribute ' + n); }); o.push('  exit'); }
@@ -6835,6 +6838,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.tick = function () { this.bgpSessions(); return tk0.apply(this, arguments); };
   // запомненные маршруты соседа (adj-RIB-in): пока сессия жива по hold time, они остаются (соседа уже нет — «чёрная дыра»)
   // вектор путей: маршруты каждого ESR — {net: {path:[AS…], nh, from, ibgp}}
+  // выбор лучшего пути (порядок как в BGP): LOCAL_PREF ↑, AS_PATH ↓, ORIGIN (i < e < ?), MED ↓ (если пути из одной соседней AS), eBGP лучше iBGP, адрес соседа ↓
+  var ORG = { i: 0, e: 1, '?': 2 };
+  function better(a, b) {
+    var la = a.lp === undefined ? 100 : a.lp, lb = b.lp === undefined ? 100 : b.lp; if (la !== lb) return la > lb;
+    if (a.path.length !== b.path.length) return a.path.length < b.path.length;
+    var oa = ORG[a.origin || 'i'], ob = ORG[b.origin || 'i']; if (oa !== ob) return oa < ob;
+    if (a.nAs === b.nAs && (a.med || 0) !== (b.med || 0)) return (a.med || 0) < (b.med || 0);
+    if (!!a.ibgp !== !!b.ibgp) return !a.ibgp;
+    return IP.ip2n(a.from) < IP.ip2n(b.from);
+  }
   P.bgpRib = function () {
     if (this._bgpR && this._bgpR.gen === this.gen && this._bgpR.now === this.now) return this._bgpR.t;
     var s = this, S2 = s.bgpSessions(), rib = {}, ids = Object.keys(S2), adjIn = s._adjIn = s._adjIn || {};
@@ -6845,24 +6858,33 @@ vesr(config)#         do confirm  — подтвердить</pre>
       var live = rs.filter(function (r) { return !r.dead; });
       b.nets.forEach(function (n) { if (live.some(function (r) { return r.net === n; })) rib[id][n] = { path: [], nh: '0.0.0.0', local: true }; });
       b.redist.forEach(function (k) { live.filter(function (r) { return r.p === (k === 'connected' ? 'C' : 'S'); }).forEach(function (r) { if (!rib[id][r.net]) rib[id][r.net] = { path: [], nh: '0.0.0.0', local: true, origin: '?' }; }); }); });
-    for (var it = 0; it < 12; it++) { var ch = false;
-      ids.forEach(function (id) { if (!rib[id]) return; var asMe = s.devs[id].st.run.bgp.as;
-        Object.keys(S2[id]).forEach(function (ip) { var ss = S2[id][ip]; if (ss.state !== 'Established') return; var pd = ss.peer.dev, mk = id + '|' + ip;
-          if (ss.stale || !rib[pd]) { Object.keys(adjIn[mk] || {}).forEach(function (net) { var c = adjIn[mk][net], cur = rib[id][net];
-              if (cur && cur.local) return; if (!cur || c.path.length < cur.path.length) { if (!cur || cur.from !== c.from || cur.nh !== c.nh) { rib[id][net] = c; ch = true; } } }); return; }
-          var pAs = s.devs[pd].st.run.bgp.as, pn = s.devs[pd].st.run.bgp.nbr[ss.peer.ip] || {};
-          var my = s.devs[id].st.run.bgp.nbr[ip] || {}; if (!my.af || !pn.af) return;    // address-family ipv4 unicast → enable у обоих
+    // синхронные итерации: каждый шаг — лучший путь из локальных и пришедших от соседей по их таблицам прошлого шага
+    var local = {}; ids.concat(Object.keys(rib)).forEach(function (id) { if (rib[id]) local[id] = EL.clone(rib[id]); });
+    var pol = EL.bgpPol || function (c, n, d, net, e) { return e; };
+    for (var it = 0; it < 16; it++) {
+      var nx = {}, ch = false;
+      Object.keys(rib).forEach(function (id) { var asMe = s.devs[id].st.run.bgp.as, myc = s.devs[id].st.run; nx[id] = EL.clone(local[id]);
+        Object.keys(S2[id] || {}).forEach(function (ip) { var ss = S2[id][ip]; if (ss.state !== 'Established') return; var pd = ss.peer.dev, mk = id + '|' + ip;
+          var my = myc.bgp.nbr[ip] || {}, take = function (net, cand) { var cur = nx[id][net]; if (cur && cur.local) return; if (!cur || better(cand, cur)) nx[id][net] = cand; };
+          if (ss.stale || !rib[pd]) { Object.keys(adjIn[mk] || {}).forEach(function (net) { take(net, adjIn[mk][net]); }); return; }
+          var pc = s.devs[pd].st.run, pAs = pc.bgp.as, pn = pc.bgp.nbr[ss.peer.ip] || {};
+          if (!my.af || !pn.af) return;                                  // address-family ipv4 unicast → enable у обоих
+          var fresh = {};
           Object.keys(rib[pd]).forEach(function (net) { var e = rib[pd][net];
-            if (!ss.peer.ebgp && e.ibgp) return;                       // iBGP → iBGP не передаётся
-            var path = ss.peer.ebgp ? [pAs].concat(e.path) : e.path.slice();
-            if (path.indexOf(asMe) >= 0) return;                        // петля AS_PATH
-            var nh = ss.peer.ebgp || pn.nhs || e.local ? ip : e.nh, cand = { path: path, nh: nh, from: ip, ibgp: !ss.peer.ebgp, origin: e.origin };
-            (adjIn[mk] = adjIn[mk] || {})[net] = cand;
-            var cur = rib[id][net];
-            if (cur && cur.local) return;
-            if (!cur || path.length < cur.path.length || (path.length === cur.path.length && IP.ip2n(ip) < IP.ip2n(cur.from))) {
-              if (!cur || cur.from !== ip || cur.path.join() !== path.join() || cur.nh !== nh) { rib[id][net] = cand; ch = true; } } }); }); });
-      if (!ch) break; }
+            if (!ss.peer.ebgp && e.ibgp) return;                         // iBGP → iBGP не передаётся
+            if ((e.comm || []).indexOf('no-advertise') >= 0) return;    // no-advertise — никому
+            if (ss.peer.ebgp && (e.comm || []).indexOf('no-export') >= 0) return;   // no-export — не за пределы AS
+            var out = { path: e.path.slice(), nh: e.nh, origin: e.origin || 'i', comm: (e.comm || []).slice(), lp: ss.peer.ebgp ? undefined : e.lp, med: ss.peer.ebgp ? undefined : e.med };
+            out = pol(pc, pn, 'out', net, out); if (!out) return;        // политика отправителя
+            var path = ss.peer.ebgp ? [pAs].concat(out.path) : out.path;
+            if (path.indexOf(asMe) >= 0) return;                         // петля AS_PATH
+            var cand = { path: path, nh: ss.peer.ebgp || pn.nhs || e.local ? ip : e.nh, from: ip, ibgp: !ss.peer.ebgp, origin: out.origin, comm: out.comm,
+              lp: ss.peer.ebgp ? 100 : (out.lp === undefined ? 100 : out.lp), med: out.med || 0, nAs: ss.peer.ebgp ? pAs : (path[0] || asMe) };
+            cand = pol(myc, my, 'in', net, cand); if (!cand) return;     // политика получателя
+            fresh[net] = cand; take(net, cand); });
+          adjIn[mk] = fresh; }); });
+      Object.keys(nx).forEach(function (id) { if (JSON.stringify(nx[id]) !== JSON.stringify(rib[id])) ch = true; });
+      rib = nx; if (!ch) break; }
     this._bgpR = { gen: this.gen, now: this.now, t: rib };
     return rib;
   };
@@ -6891,11 +6913,132 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var rib = s.bgpRib()[st.dev] || {};
     return ['Status codes: u – unicast, b – broadcast, m – multicast a – anycast', '              * – valid, > – best', 'Origin codes: i – IGP, e – EGP, ? – incomplete',
       '     Network              Next Hop             Metric  LocPrf  Path'].concat(Object.keys(rib).sort().map(function (n) { var e = rib[n];
-        return '*> u ' + rp(n, 21) + rp(e.nh, 21) + rp('', 8) + rp(100, 8) + (e.path.length ? e.path.join(' ') + ' ' : '') + (e.origin || 'i'); })).join('\n'); }, 'Таблица BGP');
+        return '*> u ' + rp(n, 21) + rp(e.nh, 21) + rp(e.med || '', 8) + rp(e.lp === undefined ? 100 : e.lp, 8) + (e.path.length ? e.path.join(' ') + ' ' : '') + (e.origin || 'i') +
+          (e.comm && e.comm.length ? '  [' + e.comm.join(' ') + ']' : ''); })).join('\n'); }, 'Таблица BGP');
   S.cmd('priv', 'show bgp neighbors', function (st) { var s = st.net, b = st.run.bgp; if (!s || !b) return ''; var t = s.bgpSessions()[st.dev] || {};
     return Object.keys(b.nbr).map(function (ip) { var x = t[ip] || {}; return 'BGP neighbor is ' + ip + ', remote AS ' + (b.nbr[ip].as || '--') + ', ' + (x.peer && !x.peer.ebgp ? 'internal' : 'external') + ' link\n' +
       '  BGP state = ' + (x.state || 'Idle') + (x.state === 'Established' ? ', up for ' + hms(s.now - x.since) : '') + (x.why ? '  (' + x.why + ')' : '') +
       '\n  Hold time is ' +s.bgpTimers(st.dev, ip).hold + ', keepalive interval is ' + s.bgpTimers(st.dev, ip).ka + ' seconds'; }).join('\n\n'); }, 'Соседи BGP');
+})(typeof window !== 'undefined' ? window : global);
+
+/* Политики BGP на ESR (справочник ESR-Series CLI 1.23): маршрутные карты, списки префиксов, атрибуты.
+   route-map NAME → rule N → (config-route-map-rule)#:
+     match ip address A/L [eq|le|ge N [le N]] · match ip address object-group NAME [eq|le|ge …] · match as-path [begin|contain|end] AS… | empty | regex R
+     match community СПИСОК | regex R · action permit | deny
+     action set local-preference N | increment N | decrement N · action set metric bgp N | increment N | decrement N
+     action set as-path prepend AS… · action set community СПИСОК | no-advertise | no-export · action add/remove community … · action set origin igp|egp|incomplete
+   ip prefix-list NAME → (config-pl)#: permit|deny A/L [eq|le|ge N [le N]] · permit|deny object-group NAME
+   Сосед: address-family ipv4 unicast → route-map NAME in|out, prefix-list NAME in|out.
+   Порядок: правила по номеру, первое совпавшее решает; не совпало ни одно — запрет (в маршрутной карте и в списке префиксов).
+   Атрибуты: LOCAL_PREF (100) — только внутри AS; MED — соседней AS, дальше не уходит; community no-export — не за пределы AS, no-advertise — никому.
+   Упрощения: список community в match — совпадение, если у маршрута есть все перечисленные; weight, extcommunity, network … route-map не моделируются. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, S = EL.esr, IP = EL.ip;
+  function touch(st) { st.pending = true; }
+  function rule(st) { var p = st.ctx.split('|'); return st.cand.rmaps[p[0]].rules[p[1]]; }
+  function bad() { return 'Syntax error: Illegal parameter'; }
+  function cmd(modes, pat, fn, d) { S.cmd(modes, pat, fn, d); var c = S.T.pop(); S.T.unshift(c); return c; }
+  // A/L [eq N | le N | ge N [le N]]
+  function pfx(a, rest) { var c = IP.parseCidr(a); if (!c) return null; var w = String(rest || '').trim().split(/\s+/).filter(Boolean), o = { net: IP.netOf(c.ip, c.len), len: c.len };
+    for (var i = 0; i < w.length; i += 2) { var k = w[i], v = +w[i + 1]; if (!/^(eq|le|ge)$/.test(k) || !(v >= 1 && v <= 32)) return null; o[k] = v; } return o; }
+  function pfxTxt(o) { return (o.og ? 'object-group ' + o.og : o.net) + (o.eq ? ' eq ' + o.eq : '') + (o.ge ? ' ge ' + o.ge : '') + (o.le ? ' le ' + o.le : ''); }
+  function pfxHit(o, net, c) {                      // net 'A/L' попадает в описание o
+    var q = net.split('/'), L = +q[1], bases = o.og ? (((c.og || {}).net || {})[o.og] || { items: [] }).items.map(function (x) { return x[2]; }).filter(function (t) { return /\//.test(t); }) : [o.net];
+    return bases.some(function (b) { var p = b.split('/'), bl = +p[1]; if (!IP.sameNet(q[0], p[0], bl) || L < bl) return false;
+      if (o.eq) return L === o.eq; if (o.ge || o.le) return L >= (o.ge || bl) && L <= (o.le || 32); return L === bl; });
+  }
+  // ---------------------------------------------------------------- route-map: условия и действия для BGP
+  cmd('rmapr', 'match ip address object-group <w>', function (st, a) { rule(st).pfx = { og: a[0] }; touch(st); }, 'Префиксы из object-group network');
+  cmd('rmapr', 'match ip address object-group <w> <rest>', function (st, a) { var o = pfx('0.0.0.0/0', a[1]); if (!o) return bad(); o.og = a[0]; delete o.net; rule(st).pfx = o; touch(st); });
+  cmd('rmapr', 'match ip address <w>', function (st, a) { var o = pfx(a[0]); if (!o) return bad(); rule(st).pfx = o; touch(st); }, 'Префикс A/L [eq|le|ge N]');
+  cmd('rmapr', 'match ip address <w> <rest>', function (st, a) { var o = pfx(a[0], a[1]); if (!o) return bad(); rule(st).pfx = o; touch(st); });
+  cmd('rmapr', 'no match ip address', function (st) { delete rule(st).pfx; touch(st); });
+  cmd('rmapr', 'match as-path <rest>', function (st, a) { var w = a[0].trim().split(/\s+/), how = /^(begin|contain|end|empty|regex)$/.test(w[0]) ? w.shift() : 'contain';
+    if (how === 'regex') { try { new RegExp(w.join(' ')); } catch (e) { return bad(); } }
+    else if (how !== 'empty' && (!w.length || w.some(function (x) { return !/^\d+$/.test(x); }))) return bad();
+    rule(st).asp = { how: how, v: how === 'regex' ? w.join(' ') : w.map(Number) }; touch(st); }, 'AS_PATH: begin | contain | end AS… | empty | regex');
+  cmd('rmapr', 'no match as-path', function (st) { delete rule(st).asp; touch(st); });
+  cmd('rmapr', 'match community <rest>', function (st, a) { var w = a[0].trim(); rule(st).mcom = /^regex /.test(w) ? { re: w.slice(6) } : { all: w.split(/[\s,]+/) }; touch(st); }, 'Community маршрута');
+  cmd('rmapr', 'no match community', function (st) { delete rule(st).mcom; touch(st); });
+  function num(how, v) { return how === 'increment' || how === 'decrement' ? { how: how, v: +v } : { v: +how }; }
+  cmd('rmapr', 'action set local-preference <rest>', function (st, a) { var w = a[0].trim().split(/\s+/); if (!/^(\d+|increment|decrement)$/.test(w[0]) || (w[1] && !/^\d+$/.test(w[1]))) return bad();
+    rule(st).lp = num(w[0], w[1]); touch(st); }, 'LOCAL_PREF (внутри AS, больше — лучше)');
+  cmd('rmapr', 'action set metric bgp <rest>', function (st, a) { var w = a[0].trim().split(/\s+/); if (!/^(\d+|increment|decrement)$/.test(w[0])) return bad();
+    rule(st).med = num(w[0], w[1]); touch(st); }, 'MED (соседней AS, меньше — лучше)');
+  cmd('rmapr', 'action set as-path prepend <rest>', function (st, a) { var w = a[0].replace(/,/g, ' ').trim().split(/\s+/); if (w.some(function (x) { return !/^\d+$/.test(x); })) return bad();
+    rule(st).prep = w.map(Number); touch(st); }, 'Удлинить AS_PATH');
+  ['set', 'add', 'remove'].forEach(function (k) {
+    cmd('rmapr', 'action ' + k + ' community <rest>', function (st, a) { (rule(st).com = rule(st).com || {})[k] = a[0].trim().split(/[\s,]+/); touch(st); }, { set: 'Заменить community', add: 'Добавить community', remove: 'Убрать community' }[k]); });
+  cmd('rmapr', 'action set origin <w>', function (st, a) { var o = { igp: 'i', egp: 'e', incomplete: '?' }[a[0]]; if (!o) return bad(); rule(st).org = o; touch(st); }, 'ORIGIN: igp | egp | incomplete');
+  // ---------------------------------------------------------------- prefix-list
+  S.PROMPT.pl = '(config-pl)#';
+  S.T.forEach(function (c) { if (c.pat.length === 1 && c.pat[0] === 'end') c.modes.push('pl'); });
+  function plist(st) { return st.cand.plists[st.ctx]; }
+  cmd('config', 'ip prefix-list <w>', function (st, a) { if (!/^[\w.-]{1,31}$/.test(a[0])) return bad(); var L = st.cand.plists = st.cand.plists || {}; L[a[0]] = L[a[0]] || [];
+    st.mode = 'pl'; st.ctx = a[0]; touch(st); }, 'Список префиксов для фильтрации маршрутов');
+  cmd('config', 'no ip prefix-list <w>', function (st, a) { if (st.cand.plists) delete st.cand.plists[a[0]]; touch(st); });
+  ['permit', 'deny'].forEach(function (act) {
+    cmd('pl', act + ' object-group <w>', function (st, a) { plist(st).push({ act: act, og: a[0] }); touch(st); });
+    cmd('pl', act + ' <w>', function (st, a) { var o = pfx(a[0]); if (!o) return bad(); o.act = act; plist(st).push(o); touch(st); }, act === 'permit' ? 'Разрешить префикс' : 'Запретить префикс');
+    cmd('pl', act + ' <w> <rest>', function (st, a) { var o = pfx(a[0], a[1]); if (!o) return bad(); o.act = act; plist(st).push(o); touch(st); }); });
+  cmd('pl', 'exit', function (st) { st.mode = 'config'; st.ctx = null; });
+  function nb(st) { return st.cand.bgp.nbr[st.ctx]; }
+  cmd('bgpnaf', 'prefix-list <w> <w>', function (st, a) { if (a[1] !== 'in' && a[1] !== 'out') return bad(); (nb(st).pl = nb(st).pl || {})[a[1]] = a[0]; touch(st); }, 'Список префиксов in | out');
+  cmd('bgpnaf', 'no prefix-list <w>', function (st, a) { if (nb(st).pl) delete nb(st).pl[a[0]]; touch(st); });
+  cmd('bgpnaf', 'route-map <w> <w>', function (st, a) { if (a[1] !== 'in' && a[1] !== 'out') return bad(); (nb(st).rmap = nb(st).rmap || {})[a[1]] = a[0]; touch(st); }, 'Маршрутная карта in | out');
+  cmd('bgpnaf', 'no route-map <w>', function (st, a) { if (nb(st).rmap) delete nb(st).rmap[a[0]]; touch(st); });
+  S.RUNX.push(function (c, o) {
+    Object.keys(c.plists || {}).forEach(function (n) { o.push('ip prefix-list ' + n); c.plists[n].forEach(function (x) { o.push('  ' + x.act + ' ' + pfxTxt(x)); }); o.push('exit'); }); });
+  // в running-config route-map печатает pbr.js; добавляем строки BGP-условий и действий
+  var pbrDump = null; S.RUNX.forEach(function (f, i) { if (/rmaps/.test(String(f))) pbrDump = i; });
+  if (pbrDump !== null) { var f0 = S.RUNX[pbrDump]; S.RUNX[pbrDump] = function (c, o) { var n0 = o.length; f0(c, o); var add = [];
+    for (var i = n0; i < o.length; i++) { add.push(o[i]); var m = o[i].match(/^route-map (\S+)$/); if (m) var cur = m[1];
+      var r = o[i].match(/^  rule (\d+)$/); if (r && cur) { var R = c.rmaps[cur].rules[r[1]]; extra(R).forEach(function (l) { add.push('    ' + l); }); } }
+    o.splice.apply(o, [n0, o.length - n0].concat(add)); }; }
+  function extra(R) { var L = [];
+    if (R.pfx) L.push('match ip address ' + pfxTxt(R.pfx)); if (R.asp) L.push('match as-path ' + (R.asp.how === 'contain' ? '' : R.asp.how + ' ') + (R.asp.how === 'regex' ? R.asp.v : (R.asp.v || []).join(' ')).trim());
+    if (R.mcom) L.push('match community ' + (R.mcom.re ? 'regex ' + R.mcom.re : R.mcom.all.join(',')));
+    if (R.lp) L.push('action set local-preference ' + (R.lp.how ? R.lp.how + ' ' : '') + R.lp.v); if (R.med) L.push('action set metric bgp ' + (R.med.how ? R.med.how + ' ' : '') + R.med.v);
+    if (R.prep) L.push('action set as-path prepend ' + R.prep.join(' '));
+    Object.keys(R.com || {}).forEach(function (k) { L.push('action ' + k + ' community ' + R.com[k].join(',')); }); if (R.org) L.push('action set origin ' + { i: 'igp', e: 'egp', '?': 'incomplete' }[R.org]);
+    return L; }
+  // ---------------------------------------------------------------- применение к маршруту: null — отброшен
+  function arith(cur, x) { return x.how === 'increment' ? cur + x.v : x.how === 'decrement' ? Math.max(0, cur - x.v) : x.v; }
+  function rmHit(R, net, e, c) {
+    if (R.acl) return false;                       // правило PBR — к BGP не относится
+    if (R.pfx && !pfxHit(R.pfx, net, c)) return false;
+    if (R.asp) { var p = e.path, v = R.asp.v;
+      if (R.asp.how === 'empty' && p.length) return false;
+      if (R.asp.how === 'begin' && p.slice(0, v.length).join(' ') !== v.join(' ')) return false;
+      if (R.asp.how === 'end' && p.slice(-v.length).join(' ') !== v.join(' ')) return false;
+      if (R.asp.how === 'contain' && (' ' + p.join(' ') + ' ').indexOf(' ' + v.join(' ') + ' ') < 0) return false;
+      if (R.asp.how === 'regex' && !new RegExp(v).test(p.join(' '))) return false; }
+    if (R.mcom) { var cm = e.comm || []; if (R.mcom.re ? !cm.some(function (x) { return new RegExp(R.mcom.re).test(x); }) : !R.mcom.all.every(function (x) { return cm.indexOf(x) >= 0; })) return false; }
+    return true;
+  }
+  function applyMap(c, name, net, e, local) {
+    var M = (c.rmaps || {})[name]; if (!M) return e;                // карты нет — как в ПО: фильтр не действует
+    var ks = Object.keys(M.rules).map(Number).sort(function (a, b) { return a - b; }), hit = null;
+    ks.some(function (k) { if (rmHit(M.rules[k], net, e, c)) { hit = M.rules[k]; return true; } return false; });
+    if (!hit || hit.act === 'deny') return null;
+    var x = EL.clone(e);
+    if (hit.lp) x.lp = arith(x.lp === undefined ? 100 : x.lp, hit.lp);
+    if (hit.med) x.med = arith(x.med || 0, hit.med);
+    if (hit.prep) x.path = hit.prep.concat(x.path);
+    if (hit.org) x.origin = hit.org;
+    var cm = (x.comm || []).slice(); if (hit.com) { if (hit.com.set) cm = hit.com.set.slice(); if (hit.com.add) hit.com.add.forEach(function (y) { if (cm.indexOf(y) < 0) cm.push(y); });
+      if (hit.com.remove) cm = cm.filter(function (y) { return hit.com.remove.indexOf(y) < 0; }); } x.comm = cm;
+    void local; return x;
+  }
+  function applyPl(c, name, net) { var L = (c.plists || {})[name]; if (!L) return true; var hit = null;
+    L.some(function (o) { if (pfxHit(o, net, c)) { hit = o; return true; } return false; }); return !!hit && hit.act === 'permit'; }
+  // dir 'out' — у отправителя (c — его конфигурация), 'in' — у получателя
+  EL.bgpPol = function (c, nbr, dir, net, e) {
+    if (nbr.pl && nbr.pl[dir] && !applyPl(c, nbr.pl[dir], net)) return null;
+    if (nbr.rmap && nbr.rmap[dir]) return applyMap(c, nbr.rmap[dir], net, e);
+    return e;
+  };
 })(typeof window !== 'undefined' ? window : global);
 
 /* L2TPv3 и bridge-group на ESR (справочник ESR-Series CLI 1.23):

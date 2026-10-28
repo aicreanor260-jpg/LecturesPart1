@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -1238,6 +1238,56 @@ EL.labs.LABS.forEach(runLab);
   EL.labs.apply(n, { RB: ['configure', 'router bgp 65002', 'enable', 'end', 'commit', 'confirm'] });
   chk('enable — сессия сразу (настройку изменили)', n.ping(pa.id, '192.168.2.10').ok);
   console.log('✓ BGP по таймерам');
+})();
+
+// BGP: политики — LOCAL_PREF, AS_PATH prepend, prefix-list, community no-export, MED
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ BGP-политики: ' + name + (extra ? ' — ' + extra : '')); } }
+  function build() {
+    var n = new EL.Net(), R = {}; ['R1', 'R2', 'R3', 'R4'].forEach(function (k) { R[k] = n.add('vESR', k); }); var pc = n.add('VPC', 'PC4');
+    n.connect(R.R1.id, 'gi1/0/1', R.R2.id, 'gi1/0/1'); n.connect(R.R1.id, 'gi1/0/2', R.R3.id, 'gi1/0/1');
+    n.connect(R.R2.id, 'gi1/0/2', R.R4.id, 'gi1/0/1'); n.connect(R.R3.id, 'gi1/0/2', R.R4.id, 'gi1/0/2'); n.connect(pc.id, 'eth0', R.R4.id, 'gi1/0/3');
+    function ifc(k, ip) { return ['interface ' + k, 'ip address ' + ip, 'ip firewall disable', 'exit']; }
+    function nbr(ip, as) { return ['neighbor ' + ip, 'remote-as ' + as, 'address-family ipv4 unicast', 'enable', 'exit', 'enable', 'exit']; }
+    var cfg = {
+      R1: ['configure'].concat(ifc('gi1/0/1', '10.12.0.1/24'), ifc('gi1/0/2', '10.13.0.1/24'), ['router bgp 65001'], nbr('10.12.0.2', 65002), nbr('10.13.0.3', 65003), ['enable', 'end', 'commit', 'confirm']),
+      R2: ['configure'].concat(ifc('gi1/0/1', '10.12.0.2/24'), ifc('gi1/0/2', '10.24.0.2/24'), ['router bgp 65002'], nbr('10.12.0.1', 65001), nbr('10.24.0.4', 65004), ['enable', 'end', 'commit', 'confirm']),
+      R3: ['configure'].concat(ifc('gi1/0/1', '10.13.0.3/24'), ifc('gi1/0/2', '10.34.0.3/24'), ['router bgp 65003'], nbr('10.13.0.1', 65001), nbr('10.34.0.4', 65004), ['enable', 'end', 'commit', 'confirm']),
+      R4: ['configure'].concat(ifc('gi1/0/1', '10.24.0.4/24'), ifc('gi1/0/2', '10.34.0.4/24'), ifc('gi1/0/3', '172.16.4.1/24'), ['router bgp 65004'], nbr('10.24.0.2', 65002), nbr('10.34.0.3', 65003),
+        ['address-family ipv4 unicast', 'network 172.16.4.0/24', 'exit', 'enable', 'end', 'commit', 'confirm']) };
+    var e = EL.labs.apply(n, cfg); return { n: n, R: R, e: e };
+  }
+  function best(n, R) { var l = n.exec(R.R1.id, 'show bgp ipv4 unicast').split('\n').filter(function (x) { return /172\.16\.4\.0\/24/.test(x); })[0]; if (!l) return null;
+    return { nh: l.substr(26, 21).trim(), med: l.substr(47, 8).trim(), lp: +l.substr(55, 8).trim(), path: l.substr(63).replace(/\s+i.*$/, '').trim() }; }
+  var T = build(), n = T.n, R = T.R;
+  chk('конфигурация без ошибок', !T.e.length, T.e.join('; '));
+  var b0 = best(n, R);
+  chk('два равных пути — выбран сосед с меньшим адресом (R2)', b0 && b0.nh === '10.12.0.2' && b0.path === '65002 65004', JSON.stringify(b0));
+  EL.labs.apply(n, { R1: ['configure', 'route-map LP200', 'rule 10', 'action set local-preference 200', 'exit', 'exit',
+    'router bgp 65001', 'neighbor 10.13.0.3', 'address-family ipv4 unicast', 'route-map LP200 in', 'end', 'commit', 'confirm'] });
+  var b1 = best(n, R);
+  chk('route-map in: LOCAL_PREF 200 от R3 — путь через R3', b1 && b1.nh === '10.13.0.3' && b1.lp === 200, JSON.stringify(b1));
+  chk('running-config: route-map и route-map … in', /route-map LP200\n  rule 10\n    action set local-preference 200/.test(n.exec(R.R1.id, 'show running-config')) && /route-map LP200 in/.test(n.exec(R.R1.id, 'show running-config')));
+  T = build(); n = T.n; R = T.R;
+  EL.labs.apply(n, { R4: ['configure', 'route-map PREP', 'rule 10', 'action set as-path prepend 65004 65004', 'exit', 'exit',
+    'router bgp 65004', 'neighbor 10.24.0.2', 'address-family ipv4 unicast', 'route-map PREP out', 'end', 'commit', 'confirm'] });
+  var b2 = best(n, R);
+  chk('as-path prepend на R4 к R2 — R1 выбирает короткий путь через R3', b2 && b2.nh === '10.13.0.3' && b2.path === '65003 65004', JSON.stringify(b2));
+  T = build(); n = T.n; R = T.R;
+  EL.labs.apply(n, { R4: ['configure', 'ip prefix-list NO4', 'deny 172.16.4.0/24', 'permit 0.0.0.0/0 le 32', 'exit',
+    'router bgp 65004', 'neighbor 10.24.0.2', 'address-family ipv4 unicast', 'prefix-list NO4 out', 'end', 'commit', 'confirm'] });
+  var b3 = best(n, R);
+  chk('prefix-list out на R4 к R2 — R1 идёт через R3, а R2 узнаёт сеть обходом через R1', b3 && b3.nh === '10.13.0.3' && /172\.16\.4\.0\/24\s+10\.12\.0\.1\s+100\s+65001 65003 65004/.test(n.exec(R.R2.id, 'show bgp ipv4 unicast')), JSON.stringify(b3));
+  T = build(); n = T.n; R = T.R;
+  EL.labs.apply(n, { R4: ['configure', 'route-map NOEXP', 'rule 10', 'action set community no-export', 'exit', 'exit',
+    'router bgp 65004', 'neighbor 10.24.0.2', 'address-family ipv4 unicast', 'route-map NOEXP out', 'exit', 'exit', 'neighbor 10.34.0.3', 'address-family ipv4 unicast', 'route-map NOEXP out', 'end', 'commit', 'confirm'] });
+  chk('community no-export: R2 и R3 знают сеть, но R1 (другая AS) — нет', /172\.16\.4/.test(n.exec(R.R2.id, 'show bgp ipv4 unicast')) && !best(n, R), n.exec(R.R1.id, 'show bgp ipv4 unicast'));
+  T = build(); n = T.n; R = T.R;
+  EL.labs.apply(n, { R1: ['configure', 'route-map DENY', 'rule 10', 'match ip address 172.16.4.0/24', 'action deny', 'exit', 'rule 20', 'exit', 'exit',
+    'router bgp 65001', 'neighbor 10.12.0.2', 'address-family ipv4 unicast', 'route-map DENY in', 'end', 'commit', 'confirm'] });
+  var b5 = best(n, R);
+  chk('route-map in: match ip address + action deny от R2 — путь через R3', b5 && b5.nh === '10.13.0.3', JSON.stringify(b5));
+  console.log('✓ BGP: политики и атрибуты');
 })();
 
 // L2TPv3: два офиса в одной L2-сети 192.168.50.0/24 через провайдера
