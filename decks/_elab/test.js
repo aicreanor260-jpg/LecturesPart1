@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'stack.js', 'mtu.js', 'scs.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -328,6 +328,31 @@ EL.labs.LABS.forEach(runLab);
   chk('802.1D: после TC MAC стареют за forward-delay (15 с)', n.macAge(R.x[0].id) === 15, n.macAge(R.x[0].id));
   n.tick(36); chk('802.1D: через max-age + forward-delay (35 с) — снова 300', n.macAge(R.x[0].id) === 300, n.macAge(R.x[0].id));
   console.log('✓ STP: смена топологии');
+})();
+
+// DHCPv6 на ESR, клиент Debian dhclient -6; старение ND (ipv6 nd reachable-time)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ DHCPv6/ND: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), sw = n.add('MES2428', 'SW1'), deb = n.add('Debian', 'D1');
+  n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/24'); n.connect(deb.id, 'ens3', sw.id, 'gi1/0/2');
+  var e = EL.labs.apply(n, { R1: ['configure', 'interface gi1/0/1', 'ipv6 address 2001:db8:7::1/64', 'ipv6 nd prefix 2001:db8:7::/64 86400 3600', 'ipv6 nd managed-config-flag', 'ip firewall disable', 'exit',
+    'ipv6 dhcp-server pool V6', 'network 2001:db8:7::/64', 'address-range 2001:db8:7::100-2001:db8:7::1ff', 'dns-server 2001:db8:7::53', 'exit', 'ipv6 dhcp-server', 'end', 'commit', 'confirm'] });
+  chk('конфигурация без ошибок', !e.length, e.join('; '));
+  chk('running-config: ipv6 dhcp-server pool и флаг M', /ipv6 dhcp-server pool V6\n  network 2001:db8:7::\/64\n  address-range 2001:db8:7::100-2001:db8:7::1ff/.test(n.exec(r.id, 'show running-config')) &&
+      /ipv6 nd managed-config-flag/.test(n.exec(r.id, 'show running-config')));
+  ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(deb.id, l); }); n.tick(5);   // префикс on-link и шлюз — из RA (повторный RS через 4 с)
+  var o = n.exec(deb.id, 'dhclient -6 ens3');
+  chk('Debian dhclient -6: адрес из пула', /Bound to lease 2001:db8:7::100/.test(o) && /2001:db8:7::100\/128/.test(n.exec(deb.id, 'ip -6 addr')), o);
+  chk('ESR show ipv6 dhcp binding', /2001:db8:7::100\s+[0-9a-f:]{17}\s+active/.test(n.exec(r.id, 'show ipv6 dhcp binding')), n.exec(r.id, 'show ipv6 dhcp binding'));
+  chk('связь по адресу из DHCPv6', n.ping6(r.id, '2001:db8:7::100').ok);
+  chk('ND: сразу после обмена — reachable', /2001:db8:7::100\s+\S+\s+reachable/.test(n.exec(r.id, 'show ipv6 neighbors')), n.exec(r.id, 'show ipv6 neighbors'));
+  n.tick(31); chk('ND: через 31 с (reachable-time 30000) — stale', /2001:db8:7::100\s+\S+\s+stale/.test(n.exec(r.id, 'show ipv6 neighbors')));
+  EL.labs.apply(n, { R1: ['configure', 'ipv6 nd reachable-time 60000', 'end', 'commit', 'confirm'] });
+  chk('ipv6 nd reachable-time 60000 — снова reachable до 60 с', /2001:db8:7::100\s+\S+\s+reachable/.test(n.exec(r.id, 'show ipv6 neighbors')));
+  var e2 = EL.labs.apply(n, { R1: ['configure', 'no ipv6 dhcp-server', 'end', 'commit', 'confirm'] }), d2 = n.add('Debian', 'D2'); n.connect(d2.id, 'ens3', sw.id, 'gi1/0/3');
+  ['root', 'toor', 'ip link set ens3 up'].forEach(function (l) { n.exec(d2.id, l); });
+  chk('DHCPv6-сервер выключен — No DHCPv6 servers responded', !e2.length && /No DHCPv6 servers responded/.test(n.exec(d2.id, 'dhclient -6')));
+  console.log('✓ DHCPv6 и старение ND');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN

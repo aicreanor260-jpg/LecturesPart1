@@ -267,7 +267,8 @@ security zone-pair trusted self        ← трафик самому маршр�
 
 Как работает: у каждого IPv6-интерфейса есть link-local fe80::/64 из MAC (EUI-64). Перед отправкой — Neighbor Solicitation на solicited-node адрес `ff02::1:ffXX:XXXX` (MAC `33:33:ff:XX:XX:XX`, кадр multicast), ответ — Neighbor Advertisement; запись появляется в `show ipv6 neighbors`. В трассе и захвате — шаги NS/NA/ICMPv6 Echo с Hop Limit, разбор IPv6 (Next Header 58) и ICMPv6 (типы 128/129/135/136). RIPng и OSPFv3: соседи — ESR в одном сегменте с адресами из одной IPv6-сети, next-hop — link-local соседа.
 
-Упрощения: DHCPv6 нет; записи ND не стареют; OSPFv3 — одна область, стоимость интерфейса по умолчанию 10 (auto-cost не считается), типы сети non-broadcast/point-to-multipoint не моделируются; IPv6 на SVI MES не поддерживается (межсетевой экран, SLAAC и таймеры — см. ниже).
+**DHCPv6.** ESR: `ipv6 dhcp-server` и `ipv6 dhcp-server pool NAME` → `(config-ipv6-dhcp-server)#`: `network 2001:db8:7::/64`, `address-range A-B`, `dns-server`, `domain-name`, `default-lease-time`; на интерфейсе `ipv6 nd managed-config-flag` / `other-config-flag` (флаги M/O в RA); `show ipv6 dhcp binding`. Debian: `dhclient -6 [ens3]` — Solicit → Advertise → Request → Reply, адрес /128; префикс и шлюз приходят из RA (SLAAC). **ND:** `ipv6 nd reachable-time 5000..100000000` мс (30000, в config и на интерфейсе) — запись `reachable` это время, затем `stale`.
+Упрощения: аренда DHCPv6 не отсчитывается, relay DHCPv6 и prefix delegation нет; stale-записи ND не удаляются; OSPFv3 — одна область, стоимость интерфейса по умолчанию 10 (auto-cost не считается), типы сети non-broadcast/point-to-multipoint не моделируются; IPv6 на SVI MES не поддерживается (межсетевой экран, SLAAC и таймеры — см. ниже).
 
 ### DNS
 

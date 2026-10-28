@@ -215,7 +215,7 @@
     return o.join('\n'); }
   function nd6Text(st) { var s = st.net; if (!s) return ''; var t = nd(s, st.dev);
     var o = ['Interface         IPv6 address                MAC address         State             Age(min)', '---------------   -------------------------   -----------------   ---------------   ----------'];
-    Object.keys(t).forEach(function (ip) { var e = t[ip]; o.push(rp(e.ifn, 18) + rp(ip, 28) + rp(e.mac, 20) + rp(s.now - e.t < 30 ? 'reachable' : 'stale', 18) + Math.floor((s.now - e.t) / 60)); });
+    Object.keys(t).forEach(function (ip) { var e = t[ip]; o.push(rp(e.ifn, 18) + rp(ip, 28) + rp(e.mac, 20) + rp(s.now - e.t < (s.ndReach ? s.ndReach(st.dev, e.ifn) : 30) ? 'reachable' : 'stale', 18) + Math.floor((s.now - e.t) / 60)); });
     return o.join('\n'); }
   S.cmd('priv', 'show ipv6 interfaces', ifs6Text, 'IPv6-интерфейсы');
   S.cmd('priv', 'show ipv6 route', route6Text, 'Таблица IPv6-маршрутов');
