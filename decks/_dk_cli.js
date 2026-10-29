@@ -42,13 +42,19 @@
   // gi1/0/1, gi1/0/1-4, te1/0/1, fo1/0/2; без префикса — порты FASTPATH (MES5448/7048): 1/0/1, 1/0/1-1/0/4
   var PFX = { gi: 'gigabitethernet', te: 'tengigabitethernet', fo: 'fortygigabitethernet', hu: 'hundredgigabitethernet',
               tw: 'twopointfivegigabitethernet', fa: 'fastethernet' };
+  // порт, диапазон или список: gi1/0/1 · gi1/0/1-4 · gi1/0/1-1/0/4 · gi1/0/1-4,gi1/0/7,te1/0/1-2 · gi1/0/1,3,5 (тип и юнит берутся от предыдущего);
+  // юнит стека 1–8, слот 0; диапазон — внутри одного юнита
   function ifList(spec) {
-    var m = spec.match(/^(gi|te|fo|hu|tw|fa)?(\d+)\/(\d+)\/(\d+)(?:-(?:(?:gi|te|fo|hu|tw|fa)?\d+\/\d+\/)?(\d+))?$/);
-    if (!m || m[2] !== '1' || m[3] !== '0') return null;
-    var pf = m[1] || '', a = +m[4], b = m[5] ? +m[5] : a, out = [];
-    if (a < 1 || b > 64 || b < a) return null;
-    for (var i = a; i <= b; i++) out.push(pf + '1/0/' + i);
-    return out;
+    var out = [], pf = '', unit = null;
+    var ok = String(spec).split(',').every(function (it) {
+      var m = it.match(/^(gi|te|fo|hu|tw|fa)?(?:(\d+)\/(\d+)\/)?(\d+)(?:-(?:(gi|te|fo|hu|tw|fa)?(\d+)\/(\d+)\/)?(\d+))?$/);
+      if (!m) return false;
+      if (m[1]) pf = m[1]; if (m[2]) unit = m[2]; if (!unit || +unit < 1 || +unit > 8 || (m[3] && m[3] !== '0')) return false;
+      if ((m[5] && m[5] !== pf) || (m[6] && m[6] !== unit) || (m[7] && m[7] !== '0')) return false;
+      var a = +m[4], b = m[8] ? +m[8] : a; if (a < 1 || b > 64 || b < a) return false;
+      for (var i = a; i <= b; i++) { var k = pf + unit + '/0/' + i; if (out.indexOf(k) < 0) out.push(k); }
+      return true; });
+    return ok && out.length ? out : null;
   }
   function longIf(k) { var m = k.match(/^([a-z]*)(\d.*)$/); return m[1] ? PFX[m[1]] + ' ' + m[2] : m[2]; }
   function portGroups(names) {      // ['gi1/0/1','gi1/0/2','te1/0/1'] → 'gi1/0/1-2, te1/0/1'
@@ -144,10 +150,12 @@
     Object.keys(st.ports).forEach(function (k) { if (st.ports[k].access === a[0]) st.ports[k].access = 1; });
   });
   cmd('config', 'interface <if>', function (st, a) {
-    if (a[0].length > 1) return '% Для нескольких портов используйте interface range';
+    if (a[0].length > 1) return "% Invalid input detected at '^' marker. (несколько портов сразу — interface range gigabitethernet 1/0/1-2)";
     if (!st.ports[a[0][0]]) return '% Такого порта нет на устройстве';
     st.mode = 'if'; st.ctx = { ports: a[0] }; });
-  cmd('config', 'interface range <if>', function (st, a) { st.mode = 'range'; st.ctx = { ports: a[0] }; });
+  cmd('config', 'interface range <if>', function (st, a) {
+    var bad = a[0].filter(function (k) { return !st.ports[k]; }); if (bad.length) return '% Таких портов нет на устройстве: ' + bad.join(', ');
+    st.mode = 'range'; st.ctx = { ports: a[0] }; });
   function eachPort(st, f) {
     if (!st.ctx || !st.ctx.ports) return '% Команда доступна в настройке физического порта';
     if (st.ctx.ports.some(function (k) { return !st.ports[k] && !(st.pos && st.pos[k]); })) return '% Такого порта нет на устройстве';
@@ -261,7 +269,9 @@
     return s.replace(/\b(?:te|ten|tengig\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'te').replace(/\b(?:fo|for|forty\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fo')
             .replace(/\b(?:hu|hun|hundred\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'hu').replace(/\b(?:tw|two\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'tw')
             .replace(/\b(?:fa|fast\w*)\s*(?=\d+\/\d+\/\d+)/ig, 'fa')
-            .replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi');
+            .replace(/\b(?:g|gi|gig|giga|gigabit|gigabitethernet)\s*(?=\d+\/\d+\/\d+)/ig, 'gi')
+            // список портов через запятую с пробелами: «gi1/0/1-2, gi1/0/5» / «1/0/1, 3» → одним словом
+            .replace(/(\d\/\d+(?:-[\w\/]*\d)?)\s*,\s*(?=(?:gi|te|fo|hu|tw|fa)?\d)/ig, '$1,').replace(/(\d\/\d+(?:-[\w\/]*\d)?(?:,[\w\/-]+)+)\s*,\s*(?=(?:gi|te|fo|hu|tw|fa)?\d)/ig, '$1,');
   }
   function exec(st, raw) {
     var line = normLine(raw.trim());

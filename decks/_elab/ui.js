@@ -370,7 +370,7 @@
     if (mode === 'test' || !r || (d.type !== 'mes' && d.type !== 'esr')) return r;
     var L = String(r).split('\n'), keep = [], err = false;
     L.forEach(function (x) {
-      var hm = x.match(/^(  \S+)\s{2,}\S/); if (hm && CYR.test(x)) { keep.push(hm[1]); return; }   // строка подсказки «?»: слово без русского описания
+      var hm = x.match(/^(  \S+(?: [^\sЀ-ӿ]+)*?)\s{2,}\S/); if (hm && CYR.test(x)) { keep.push(hm[1]); return; }   // строка подсказки «?»: слово (или «gigabitethernet 1/0/N») без русского описания
       if (!CYR.test(x)) { keep.push(x); return; }
       if (/^\s*%/.test(x)) { err = true; return; }
       var cut = x.replace(/\s+←.*$/, '').replace(/\s*\([^()]*[А-Яа-яЁё][^()]*\)\s*$/, '');

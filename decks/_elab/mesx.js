@@ -131,6 +131,8 @@
   function exec(st, raw) {
     if (/^\s*banner\s+motd\s/i.test(raw) && st.mode !== 'config') return '% Команда недоступна в этом режиме — проверьте приглашение';
     if (/^\s*ban/i.test(raw)) return E.exec(st, raw);       // баннеры с разделителем разбирает движок
+    // interface gi / interface range te — тип порта без номера: команда не дописана
+    if (st.mode === 'config' && /^\s*int\w*\s+(ran\w*\s+)?(g\w*|te\w*|fa\w*|fo\w*|hu\w*|tw\w*|po\w*)\s*$/i.test(raw) && !/^\s*int\w*\s+(ran\w*\s+)?(gr\w*)\s*$/i.test(raw)) return '% Incomplete command';
     return EL.cli.runTable(E.CMDS, st, raw);
   }
   EL.mes = { fresh: fresh, save: save, exec: exec, prompt: E.prompt, T: E.CMDS, showIpIf: showIpIf, sviUp: sviUp };

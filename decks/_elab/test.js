@@ -102,6 +102,37 @@ EL.labs.LABS.forEach(runLab);
   chk('MES 6.x: неоднозначное слово — % Ambiguous command', !amb6.length || n.exec(s6.id, amb6[0]) === '% Ambiguous command', amb6.join());
   console.log('✓ Неоднозначные сокращения и Tab');
 })();
+// несколько портов сразу: interface range с диапазонами и списками (MES 6.x, 10.x), interface 1/0/1-1/0/4 (MES 8.x), «?» после номера порта
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Диапазоны портов: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s6 = n.add('MES2300-24', 'SW6'), s10 = n.add('MES2428', 'SW10'), s8 = n.add('MES5448', 'SW8');
+  function acc(s, ps, v) { return ps.every(function (p) { var q = s.st.ports['gi1/0/' + p] || s.st.ports['te1/0/' + p] || s.st.ports['1/0/' + p]; return q && q.mode === 'access' && q.access === v; }); }
+  [s6, s10].forEach(function (s) { var dl = s.st.dialect;
+    n.exec(s.id, 'enable'); n.exec(s.id, 'configure'); n.exec(s.id, 'vlan database'); n.exec(s.id, 'vlan 10,20,30'); n.exec(s.id, 'exit');
+    var r = n.exec(s.id, 'interface range gi 1/0/1-2');
+    chk(dl + '.x: interface range gi 1/0/1-2 (пробел) → (config-if-range)#', !r && /\(config-if-range\)#$/.test(n.prompt(s.id)), r + ' ' + n.prompt(s.id));
+    n.exec(s.id, 'switchport mode access'); n.exec(s.id, 'switchport access vlan 10'); n.exec(s.id, 'exit');
+    chk(dl + '.x: команда применилась к обоим портам', acc(s, [1, 2], 10));
+    n.exec(s.id, 'interface range gigabitethernet 1/0/3-4,gigabitethernet 1/0/7'); n.exec(s.id, 'switchport mode access'); n.exec(s.id, 'switchport access vlan 20'); n.exec(s.id, 'exit');
+    chk(dl + '.x: список gi1/0/3-4,gi1/0/7', acc(s, [3, 4, 7], 20) && !acc(s, [5], 20));
+    var r2 = n.exec(s.id, 'int range gi 1/0/8-9, gi1/0/11'); n.exec(s.id, 'switchport mode access'); n.exec(s.id, 'switchport access vlan 30'); n.exec(s.id, 'exit');
+    chk(dl + '.x: пробелы после запятой — тоже список', !r2 && acc(s, [8, 9, 11], 30), r2);
+    n.exec(s.id, 'int range gi1/0/12,13'); n.exec(s.id, 'shutdown'); n.exec(s.id, 'exit');
+    chk(dl + '.x: gi1/0/12,13 — номер без типа берёт тип предыдущего', s.st.ports['gi1/0/12'].shut && s.st.ports['gi1/0/13'].shut);
+    var e1 = n.exec(s.id, 'interface gi 1/0/1-2');
+    chk(dl + '.x: interface без range с диапазоном — ошибка (как в руководстве: несколько портов — interface range)', /^% Invalid input detected/.test(e1) && n.prompt(s.id).indexOf('(config)#') >= 0, e1);
+    chk(dl + '.x: interface range на несуществующие порты — ошибка', /%/.test(n.exec(s.id, 'interface range gi1/0/1-60')) && n.prompt(s.id).indexOf('(config)#') >= 0);
+    chk(dl + '.x: interface g без номера — % Incomplete command', n.exec(s.id, 'interface g') === '% Incomplete command');
+    chk(dl + '.x: «?» после номера порта — не пусто', /gigabitethernet|<cr>/.test(n.help(s.id, 'interface range gi 1/0/1')), n.help(s.id, 'interface range gi 1/0/1'));
+    n.exec(s.id, 'end'); });
+  // MES 8.x (FASTPATH): диапазон прямо в interface — interface 1/0/1-1/0/4
+  n.exec(s8.id, 'enable'); n.exec(s8.id, 'configure');
+  var r8 = n.exec(s8.id, 'interface 1/0/1-1/0/4');
+  chk('8.x: interface 1/0/1-1/0/4 → (Interface 1/0/1-1/0/4)#', !/%/.test(r8 || '') && /\(Interface 1\/0\/1-1\/0\/4\)#$/.test(n.prompt(s8.id)), r8 + ' ' + n.prompt(s8.id));
+  n.exec(s8.id, 'shutdown'); n.exec(s8.id, 'exit');
+  chk('8.x: команда применилась к 4 портам', [1, 2, 3, 4].every(function (p) { return s8.st.ports['1/0/' + p].shut; }) && !s8.st.ports['1/0/5'].shut);
+  console.log('✓ Диапазоны и списки портов');
+})();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {
