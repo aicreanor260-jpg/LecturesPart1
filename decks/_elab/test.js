@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -314,6 +314,46 @@ EL.labs.LABS.forEach(runLab);
     chk('неверный remote port транка — регистрация не проходит, транк unavailable', /недоступен/.test(n.voipRegs()[t2.id + '|1'].why) && /unavailable/.test(n.exec(e.id, 'show esbc trunks sip')), n.voipRegs()[t2.id + '|1'].why);
     chk('esbc на обычном ESR — неизвестная команда', (function () { var r = n.add('vESR', 'R'); n.exec(r.id, 'configure'); return /Unknown command|Syntax error/.test(n.exec(r.id, 'esbc')); })());
     console.log('✓ ESBC-3200: абоненты TAU ↔ ESBC ↔ SMG');
+  })();
+  // Типы медных кабелей (MDI / MDI-X, Auto-MDIX) и огоньки на концах кабелей
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Кабели: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), s1 = n.add('MES2300-24', 'SW1'), s2 = n.add('MES2300-24', 'SW2'), pc = n.add('VPC', 'PC1'), pc2 = n.add('VPC', 'PC2'), rg = n.add('RG-35-WZ', 'RG'), rg2 = n.add('RG-35-WZ', 'RG2'),
+        r = n.add('vESR', 'R1');
+    n.connect(pc.id, 'eth0', s1.id, 'gi1/0/1', 'straight'); n.connect(s1.id, 'gi1/0/24', s2.id, 'gi1/0/24', 'cross'); n.connect(pc2.id, 'eth0', s2.id, 'gi1/0/2', 'cross');
+    chk('прямой ПК–коммутатор: зелёный', n.ledOf(pc.id, 'eth0').c === 'g' && n.ledOf(s1.id, 'gi1/0/1').c === 'g', JSON.stringify(n.ledOf(pc.id, 'eth0')));
+    chk('перекрёстный коммутатор–коммутатор: зелёный', n.linkUp(s1.id, 'gi1/0/24'));
+    var l3 = n.ledOf(pc2.id, 'eth0');
+    chk('перекрёстный ПК–MES: линк есть, Auto-MDIX поменял пары', l3.c === 'g' && /Auto-MDIX/.test(l3.why), l3.why);
+    // RG-35-WZ: LAN 10/100 без Auto-MDIX
+    n.connect(rg.id, 'gi1/0/2', rg2.id, 'gi1/0/3', 'straight');
+    var lr = n.ledOf(rg.id, 'gi1/0/2');
+    chk('прямой между LAN-портами двух RG-35-WZ (MDI-X ↔ MDI-X, без Auto-MDIX) — красный', lr.c === 'r' && /нужен перекрёстный/.test(lr.why), JSON.stringify(lr));
+    n.disconnect(n.links.findIndex(function (l) { return l.a.dev === rg.id && l.a.port === 'gi1/0/2'; }));
+    n.connect(r.id, 'gi1/0/1', rg.id, 'gi1/0/4', 'cross');
+    chk('перекрёстный ESR (MDI, Auto-MDIX) – LAN RG: работает за счёт Auto-MDIX ESR', n.ledOf(r.id, 'gi1/0/1').c === 'g');
+    n.connect(r.id, 'gi1/0/2', s1.id, 'gi1/0/5', 'serial');
+    chk('Serial в Ethernet-порт — красный', n.ledOf(r.id, 'gi1/0/2').c === 'r' && /Serial/.test(n.ledOf(r.id, 'gi1/0/2').why));
+    n.connect(r.id, 'gi1/0/3', s1.id, 'gi1/0/6', 'sfp1g');
+    chk('оптика в медный порт — красный', n.ledOf(s1.id, 'gi1/0/6').c === 'r' && /медный/.test(n.ledOf(s1.id, 'gi1/0/6').why), n.ledOf(s1.id, 'gi1/0/6').why);
+    EL.labs.apply(n, { SW1: ['enable', 'configure', 'interface gigabitethernet 1/0/1', 'shutdown', 'end'] });
+    chk('shutdown на коммутаторе — красный на обоих концах', n.ledOf(s1.id, 'gi1/0/1').c === 'r' && /shutdown/.test(n.ledOf(pc.id, 'eth0').why), n.ledOf(pc.id, 'eth0').why);
+    n.devs[pc2.id].off = true; n.gen++;
+    chk('устройство выключено — красный у соседа', n.ledOf(s2.id, 'gi1/0/2').c === 'r' && /выключено/.test(n.ledOf(s2.id, 'gi1/0/2').why));
+    // LACP не собран — оранжевый
+    var m = new EL.Net(), a = m.add('MES2300-24', 'A'), b = m.add('MES2300-24', 'B'); m.connect(a.id, 'gi1/0/1', b.id, 'gi1/0/1'); m.connect(a.id, 'gi1/0/2', b.id, 'gi1/0/2');
+    EL.labs.apply(m, { A: ['enable', 'configure', 'interface range gigabitethernet 1/0/1-2', 'channel-group 1 mode auto', 'end'] });
+    var lo = m.ledOf(a.id, 'gi1/0/1');
+    chk('LACP: на соседе нет channel-group — оранжевый', lo.c === 'o' && /LACP/.test(lo.why), JSON.stringify(lo));
+    EL.labs.apply(m, { B: ['enable', 'configure', 'interface range gigabitethernet 1/0/1-2', 'channel-group 1 mode auto', 'end'] });
+    chk('LACP собран — зелёный', m.ledOf(a.id, 'gi1/0/1').c !== 'r' && m.ledOf(a.id, 'gi1/0/1').c === (m.ledOf(a.id, 'gi1/0/1').c === 'o' && /STP/.test(m.ledOf(a.id, 'gi1/0/1').why) ? 'o' : 'g'), JSON.stringify(m.ledOf(a.id, 'gi1/0/1')));
+    // STP: петля — у одного порта оранжевый (blocking / discarding)
+    var q = new EL.Net(), x1 = q.add('MES2300-24', 'X1'), x2 = q.add('MES2300-24', 'X2'); q.connect(x1.id, 'gi1/0/1', x2.id, 'gi1/0/1'); q.connect(x1.id, 'gi1/0/2', x2.id, 'gi1/0/2');
+    EL.labs.apply(q, { X1: ['enable', 'configure', 'spanning-tree', 'end'], X2: ['enable', 'configure', 'spanning-tree', 'end'] });
+    var all = [x1, x2].map(function (d) { return ['gi1/0/1', 'gi1/0/2'].map(function (p) { return q.ledOf(d.id, p).c; }).join(''); }).join('');
+    chk('STP-петля: один порт оранжевый, остальные зелёные', all.split('o').length - 1 === 1 && all.split('g').length - 1 === 3, all);
+    chk('кабель в файле схемы сохраняется', /cross/.test(JSON.stringify(n.toJSON())) && EL.Net.fromJSON(n.toJSON()).links.some(function (l) { return l.cab === 'cross'; }));
+    console.log('✓ Кабели: прямой/перекрёстный/Serial, Auto-MDIX, огоньки портов');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES

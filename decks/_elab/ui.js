@@ -86,6 +86,12 @@
         var dx = zz[1].x - zz[0].x, dy = zz[1].y - zz[0].y, L = Math.hypot(dx, dy) || 1, k = Math.min(Math.abs(dy) > Math.abs(dx) ? 96 : 84, L * 0.38);
         var px = zz[0].x + dx / L * k, py = zz[0].y + dy / L * k, g = el('g', { 'class': 'pl', 'data-dp': (zz[0] === A ? l.a.dev : l.b.dev) + '|' + zz[2] }, gp), w = zz[2].length * 7.4 + 12;
         el('rect', { x: px - w / 2, y: py - 9, width: w, height: 18 }, g); el('text', { x: px, y: py }, g).textContent = zz[2];
+        // огонёк порта у края значка устройства (виден всегда; причина — подсказкой в «Тесте»)
+        var lo = net.ledOf ? net.ledOf(zz[0] === A ? l.a.dev : l.b.dev, zz[2]) : null;
+        if (lo) { var t = Math.min(dx ? 70 / Math.abs(dx / L) : 1e9, dy ? 44 / Math.abs(dy / L) : 1e9, L * 0.3), hv = Math.abs(dx) >= Math.abs(dy) ? w / 2 : 9,
+            sh = k - t < hv + 6 ? 13 : 0,              // подпись порта рядом — огонёк сбоку от кабеля
+            c = el('circle', { 'class': 'pled ' + lo.c, cx: zz[0].x + dx / L * t - dy / L * sh, cy: zz[0].y + dy / L * t + dx / L * sh, r: 5 }, gp);
+          if (mode === 'test') el('title', {}, c).textContent = ({ g: 'Зелёный', o: 'Оранжевый', r: 'Красный' }[lo.c]) + ': ' + lo.why; }
       });
     });
     stpMarks();
@@ -304,10 +310,10 @@
     function opts(L) { return L.map(function (p) { return '<option>' + p + '</option>'; }).join(''); }
     body.innerHTML = '<div class="k">Новый кабель</div><label>' + esc(a.name) + ' — порт</label><select id="cpa">' + opts(fa) + '</select>' +
       '<label>' + esc(d.name) + ' — порт</label><select id="cpb">' + opts(fb) + '</select>' +
-      '<label>Кабель / модуль</label><select id="cpc"><option value="">Авто: медь, между портами 10G — SFP+</option>' +
+      '<label>Кабель / модуль</label><select id="cpc"><option value="">Авто: медь (Auto-MDIX), между портами 10G — SFP+</option>' +
       Object.keys(EL.CABLES || {}).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select>' +
       '<label>Модуль на стороне ' + esc(d.name) + '</label><select id="cpd"><option value="">Такой же</option>' +
-      Object.keys(EL.CABLES || {}).filter(function (k) { return k !== 'cu'; }).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
+      Object.keys(EL.CABLES || {}).filter(function (k) { return /^(sfp|dac)/.test(k); }).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
     makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 380, h: 330, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
       if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, (body.querySelector('#cpc').value ? body.querySelector('#cpc').value + (body.querySelector('#cpd').value ? '|' + body.querySelector('#cpd').value : '') : undefined)); if (err) { toast(err); return; }
