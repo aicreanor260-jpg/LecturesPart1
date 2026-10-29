@@ -136,10 +136,12 @@
   function listHtml() { var L = R.list, m0 = me();
     return '<div class="row"><input class="q" data-f="code" placeholder="код комнаты" maxlength="16"><button class="pri" data-r="join">Войти по коду</button><button data-r="refresh">Обновить</button></div><span class="cs"></span>' +
       ((R.invites || []).length ? '<h3>Приглашения</h3>' + R.invites.map(function (v) { return '<div class="mem"><b>' + esc(v.name || '') + '</b><span>' + esc((v.from ? 'от ' + v.from : '') + (v.lab ? ' · лаба ' + v.lab : '')) + '</span><button class="pri" data-r="acc" data-iid="' + esc(v.iid) + '">Принять</button><button data-r="dec" data-iid="' + esc(v.iid) + '">Отклонить</button></div>'; }).join('') : '') +
-      '<h3>Комнаты</h3>' + (!L ? '<p class="cs2">Загружаю…</p>' : !L.length ? '<p class="cs2">Комнат пока нет — создайте свою.</p>' : L.map(function (r) { var M = r.members || [], open = r.vis !== 'closed', known = r.mine || r.member;
+      '<h3>Комнаты</h3>' + (!L ? '<p class="cs2">Загружаю…</p>' : !L.length ? '<p class="cs2">Комнат пока нет — создайте свою.</p>' : L.map(function (r) { var M = r.members || [], open = r.vis !== 'closed' && r.open !== false, known = r.mine || r.member,
+          inv = !open && !known && (R.invites || []).filter(function (v) { return v.id === r.id && v.iid; })[0];
         return '<div class="rrow"><div><b>' + esc(r.name) + '</b> <em class="' + (open ? 'op' : 'cl') + '">' + (open ? 'открытая' : 'закрытая') + '</em>' + (r.mine ? ' <em class="op">моя</em>' : '') + '<br><span class="cs2">' + esc((r.lab ? 'лаба ' + r.lab + ' · ' : 'схема · ') + 'владелец ' + (r.owner || '—') + ' · в комнате ' + (r.size !== undefined ? r.size : M.length)) + '</span><div class="rmem">' +
           M.map(function (x) { var l = x.login || x; return '<span>' + dot(l) + esc(l) + (l === m0 ? ' (вы)' : '') + '</span>'; }).join('') + (M.length ? '' : '<span class="cs2">никого</span>') + '</div></div>' +
-          '<button class="pri" data-r="jid" data-id="' + esc(r.id) + '">' + (open || known ? 'Подключиться' : 'Попроситься') + '</button></div>'; }).join('')) +
+          (inv ? '<button class="pri" data-r="acc" data-iid="' + esc(inv.iid) + '">Принять приглашение</button>' :      // закрытая, куда позвали: ответ на приглашение, а не стук
+            '<button class="pri" data-r="jid" data-id="' + esc(r.id) + '">' + (open || known ? 'Подключиться' : 'Попроситься') + '</button>') + '</div>'; }).join('')) +
       ((R.saved || []).length ? '<h3>Сохранённые схемы закрытых комнат</h3>' + R.saved.map(function (s) { return '<div class="mem"><b>' + esc(s.name || s.lab) + '</b><span>' + esc(s.at ? new Date(s.at).toLocaleString('ru-RU') : '') + '</span><button data-r="open" data-lab="' + esc(s.lab) + '">Открыть</button></div>'; }).join('') : ''); }
   function paintList() { var w = U.wins.rooms; if (!w) return; var b = w.el.querySelector('.roomsw'); if (b) b.innerHTML = listHtml(); }
   function openList() {
