@@ -10,7 +10,8 @@
 (function () {
   'use strict';
   var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
-  var WSURL = (location.search.match(/[?&]wsurl=([^&]+)/) || [])[1];               // локальная проверка: ?wsurl=ws://127.0.0.1:8799
+  var LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  var WSURL = LOCAL ? (location.search.match(/[?&]wsurl=([^&]+)/) || [])[1] : null;   // только при локальной проверке: на сайте чужая ссылка ?wsurl= не уведёт работу студента на чужой сервер
   var SITE = location.hostname === 'net-cat.duckdns.org' || !!WSURL;
   var watchM = location.hash.match(/^#watch=(.+)$/), WATCH = watchM ? decodeURIComponent(watchM[1]) : null;
   var ws = null, ready = false, queue = [], H = {}, you = null, msgs = [], saved = [], lastGen = -1, lastSnap = 0, conBuf = {}, conT = null, labState = '', retry = 0;

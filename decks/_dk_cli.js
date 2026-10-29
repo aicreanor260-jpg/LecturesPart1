@@ -456,7 +456,7 @@
   }
 
   // ------------------------------------------------------------------ виджет
-  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }   // и в тексте, и в атрибутах
   function init(box) {
     var deck = box.dataset.deck, pool = (box.dataset.pool || '').split(',').map(Number);
     var out = box.querySelector('.cs-out'), inp = box.querySelector('.cs-in input'), pr = box.querySelector('.cs-pr');

@@ -14,6 +14,7 @@
   MODELS['Debian-server'] = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Сервер Debian: веб-сервер apache2 (80/tcp) и NTP chronyd', opts: { host: 'debian-serv', web: true, tz: 8 } };
   MODELS.Docker = { type: 'deb', ports: 1, group: 'Конечные узлы', note: 'Docker-браузер: open http://A.B.C.D (как pnet-chrome)', opts: { host: 'docker', auto: true, browser: true } };
 
+  var NAME_OK = /^[\w.-]{1,24}$/;          // как у rename: только ASCII — имя из чужой схемы не должно нести разметку
   function Net() { this.devs = {}; this.order = []; this.links = []; this.mac = {}; this.arp = {}; this.onTrace = null; this.now = 0; }
   var P = Net.prototype;
 
@@ -25,7 +26,8 @@
     var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
   };
   P.add = function (model, name, x, y) {
-    var m = MODELS[model]; if (!m) throw new Error('Нет модели ' + model);
+    var m = Object.prototype.hasOwnProperty.call(MODELS, model) && MODELS[model]; if (!m) throw new Error('Нет модели ' + String(model).slice(0, 40));
+    if (name !== null && name !== undefined && !NAME_OK.test(String(name))) throw new Error('Имя устройства: латиница, цифры, - _ . (до 24 символов)');   // имя попадает в разметку и атрибуты
     if (!name) { var n = 1, base = model === 'Docker' ? 'Docker' : model === 'Debian-server' ? 'Server' : { mes: 'SW', esr: 'R', vpc: 'VPC', deb: 'Debian' }[m.type];
       while (this.byName(base + n)) n++; name = base + n; }
     if (this.byName(name)) throw new Error('Имя ' + name + ' занято');
@@ -985,7 +987,8 @@
   Net.fromJSON = function (j) {
     var n = new Net();
     if (!j || j.v !== 1 || !Array.isArray(j.devs)) throw new Error('Файл не похож на схему эмулятора');
-    j.devs.forEach(function (x) { var d = n.add(x.model, x.name, x.x, x.y);
+    j.devs.forEach(function (x) { if (!x || !NAME_OK.test(String(x.name)) || !Object.prototype.hasOwnProperty.call(MODELS, x.model)) throw new Error('Схема повреждена или изменена: недопустимое имя или модель устройства');
+      var d = n.add(x.model, x.name, +x.x || 0, +x.y || 0);
       if (x.st && x.st.kind === d.st.kind || x.st && x.st.kind === undefined) { d.st = x.st; d.st.ssh = null; EL.attach(d.st, n, d.id); } });
     j.links.forEach(function (l) { var a = n.byName(l[0]), b = n.byName(l[2]); if (a && b) n.connect(a.id, l[1], b.id, l[3]); });
     return n;

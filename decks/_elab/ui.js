@@ -35,7 +35,7 @@
   }
   function el(tag, attrs, parent) { var x = document.createElementNS(NS, tag); Object.keys(attrs || {}).forEach(function (k) { x.setAttribute(k, attrs[k]); });
     if (parent) parent.appendChild(x); return x; }
-  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }   // и в тексте, и в атрибутах
 
   // ================================================================== вид: панорама и масштаб
   function applyView() { world.setAttribute('transform', 'translate(' + view.x + ',' + view.y + ') scale(' + view.k + ')'); }
@@ -1066,9 +1066,9 @@
     if (tp === 'multi') return [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
     var c = el.querySelector('input:checked'); return c ? +c.value : null;
   }
-  function pctTxt(b) { return b ? b.score + ' из ' + b.max + (b.pct !== undefined && b.pct !== null ? ' (' + b.pct + '%)' : '') : ''; }
+  function pctTxt(b) { return b ? Number(b.score) + ' из ' + Number(b.max) + (b.pct !== undefined && b.pct !== null ? ' (' + Number(b.pct) + '%)' : '') : ''; }
   function quizRender(box, id, q, qs) {
-    var meta = [q.pass_pct ? 'зачёт от ' + q.pass_pct + '%' : '', q.attempts_left !== undefined && q.attempts_left !== null ? 'осталось попыток: ' + q.attempts_left : '',
+    var meta = [q.pass_pct ? 'зачёт от ' + Number(q.pass_pct) + '%' : '', q.attempts_left !== undefined && q.attempts_left !== null ? 'осталось попыток: ' + Number(q.attempts_left) : '',
       q.best ? 'лучший результат: ' + pctTxt(q.best) : ''].filter(Boolean).join(' · ');
     if (!qs.length) { box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(q.title || 'Проверьте себя') + '</h3><p>Попытки закончились' + (q.best ? '. Лучший результат: ' + esc(pctTxt(q.best)) : '') + '</p></div>'; return; }
     var num = 0;
@@ -1077,7 +1077,7 @@
       if (tp === 'info') return '<div class="qinfo">' + txt + '</div>';
       var hint = tp === 'multi' ? ' <i>(несколько ответов)</i>' : tp === 'match' ? ' <i>(сопоставьте)</i>' : tp === 'essay' ? ' <i>(проверяет преподаватель)</i>' : '';
       return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (++num) + '. ' + txt + hint +
-        (x.points ? ' <i>· ' + x.points + ' б.</i>' : '') + ' <b class="qr"></b></div>' + qInput(x, k, tp) + '<div class="qa"></div></div>'; }).join('') +
+        (x.points ? ' <i>· ' + Number(x.points) + ' б.</i>' : '') + ' <b class="qr"></b></div>' + qInput(x, k, tp) + '<div class="qa"></div></div>'; }).join('') +
       '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
     [].forEach.call(box.querySelectorAll('input, textarea, select'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
     box.querySelector('[data-qa="send"]').addEventListener('click', function () {
@@ -1132,8 +1132,8 @@
       : st === 'returned' ? '<div class="subp ret">На доработку' + (s.reviewed_at ? ' · ' + esc(fmtAt(s.reviewed_at)) : '') + '</div>'
       : '<div class="subp sent">Отправлено на проверку · ' + esc(fmtAt(s.at)) + '</div>';
     if (s && s.comment) plate += '<div class="subc"><b>Комментарий преподавателя:</b> ' + esc(s.comment) + '</div>';
-    if (j && j.passed) plate += '<div class="subp ok">Лаба зачтена' + (j.pass_pct ? ' (порог ' + j.pass_pct + '% пунктов или «Принято»)' : '') + '</div>';
-    else if (j && j.pass_pct) plate += '<div class="subm">Зачёт: ' + j.pass_pct + '% пунктов или «Принято» преподавателем</div>';
+    if (j && j.passed) plate += '<div class="subp ok">Лаба зачтена' + (j.pass_pct ? ' (порог ' + Number(j.pass_pct) + '% пунктов или «Принято»)' : '') + '</div>';
+    else if (j && j.pass_pct) plate += '<div class="subm">Зачёт: ' + Number(j.pass_pct) + '% пунктов или «Принято» преподавателем</div>';
     box.innerHTML = '<div class="sub">' + plate + '<textarea class="qin subn" rows="2" placeholder="Комментарий для преподавателя (необязательно)"></textarea>' +
       '<div class="row"><button class="pri" data-sa="send">' + (s ? 'Отправить заново' : 'Отправить на проверку') + '</button><span class="subs"></span></div></div>';
     var ta = box.querySelector('textarea'); ta.addEventListener('keydown', function (e) { e.stopPropagation(); });
@@ -1177,9 +1177,9 @@
     if (!wins.lab) renderLab(true);
     var box = $('labsub'); if (!box) { toast('Работа загружена, но окно задания не открылось'); return; }
     if ($('labmain') && box.nextSibling === $('labquiz')) box.parentNode.insertBefore(box, $('labmain'));   // плашка работы — над пунктами
-    var num = s.id !== undefined ? ('00' + s.id).slice(-3) : s.sid;
+    var num = esc(s.id !== undefined ? ('00' + s.id).slice(-3) : s.sid);
     box.innerHTML = '<div class="sub rev"><div class="subp sent">Работа №' + esc(num) + (s.login ? ' · ' + esc(s.login) : '') + ' · лаба ' + esc(s.lab) + ' · отправлена ' + esc(fmtAt(s.at)) + '</div>' +
-      '<div class="subm">По факту в схеме: ' + Object.keys(lab && lab._done || {}).length + ' из ' + (lab ? lab.tasks(labP).length : s.total) + ' пунктов (при отправке — ' + (s.done || []).length + ' из ' + s.total + ')</div>' +
+      '<div class="subm">По факту в схеме: ' + Object.keys(lab && lab._done || {}).length + ' из ' + (lab ? lab.tasks(labP).length : Number(s.total)) + ' пунктов (при отправке — ' + (s.done || []).length + ' из ' + s.total + ')</div>' +
       (s.note ? '<div class="subc"><b>Комментарий студента:</b> ' + esc(s.note) + '</div>' : '') +
       (s.status && s.status !== 'sent' ? '<div class="subm">Сейчас: ' + (s.status === 'accepted' ? 'принято' : 'на доработку') + (s.comment ? ' — ' + esc(s.comment) : '') + '</div>' : '') +
       '<textarea class="qin subn" rows="3" placeholder="Комментарий для студента">' + esc(s.comment || '') + '</textarea>' +

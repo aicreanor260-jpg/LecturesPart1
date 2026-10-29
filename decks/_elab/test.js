@@ -619,6 +619,23 @@ EL.labs.LABS.forEach(runLab);
     chk('ядро (engine_files) не обращается к DOM и хранилищам браузера', !bad.length, bad.join(', '));
     console.log('✓ Детерминированность и безголовое ядро');
   })();
+  // Безопасность схемы: имя и модель устройства из чужой схемы (сдача, снимок, просмотр) не несут разметку
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Безопасность: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), bad = ['" autofocus onfocus="alert(1)', '<img src=x onerror=alert(1)>', "a'b", 'Имя', 'a b', 'x'.repeat(25)], thrown = 0;
+    bad.forEach(function (nm) { try { n.add('VPC', nm); } catch (e) { thrown++; } });
+    chk('P.add отклоняет имена не по правилу rename', thrown === bad.length && !n.list().length, thrown + '/' + bad.length);
+    chk('P.add: допустимые имена и автоимя', !!n.add('VPC', 'PC_1.a-b') && !!n.add('VPC'));
+    var t = 0; try { n.add('__proto__'); } catch (e) { t++; } try { n.add('toString'); } catch (e) { t++; }
+    chk('P.add: модель — только из MODELS (не из прототипа объекта)', t === 2);
+    var j = n.toJSON(); j.devs[0].name = '"><svg onload=alert(1)>';
+    var r1 = null; try { EL.Net.fromJSON(j); } catch (e) { r1 = e.message; }
+    chk('fromJSON: схема с опасным именем отклоняется целиком', /недопустимое имя/.test(r1 || ''), r1);
+    var j2 = n.toJSON(); j2.devs[0].model = '<b>VPC</b>'; var r2 = null; try { EL.Net.fromJSON(j2); } catch (e) { r2 = e.message; }
+    chk('fromJSON: неизвестная модель отклоняется', /недопустимое/.test(r2 || ''), r2);
+    chk('fromJSON: обычная схема загружается', EL.Net.fromJSON(n.toJSON()).list().length === 2);
+    console.log('✓ Безопасность: имена и модели в схеме');
+  })();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {
