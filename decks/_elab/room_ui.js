@@ -79,13 +79,16 @@
     U.toast('Владелец не пустил в комнату «' + (m.name || '') + '»' + (m.why ? ': ' + m.why : '')); });
   WS.on('room.note', function (m) { U.toast(m.text || ''); });
   WS.on('room.view', function (m) { var first = !R.id; R.id = m.id; R.code = m.code; R.name = m.name; R.owner = m.owner; R.members = m.members || []; R.vis = m.vis || R.vis || 'open';
-    R.watch = !!m.watch || /^room:/.test(WS.watch || '');
+    if (m.link) R.link = linkOf(m.link); R.watch = !!m.watch || /^room:/.test(WS.watch || '');
     if (first) { U.setAutoOff(true); if (R.watch) U.setReadOnly(true); ['rooms', 'roomnew', 'rwait'].forEach(function (k) { U.closeWin(k, true); }); R.waiting = null;
       if (ROOMHASH) history.replaceState(null, '', location.pathname + location.search); if (!R.watch) WS.send({ t: 'room.link', id: m.id }); }
     sync(m.view || {}); paintBtn(); if (first) { U.toast((R.watch ? 'Просмотр комнаты «' : 'Вы в комнате «') + (m.name || m.code) + '»'); openRoom(); } });
   WS.on('room.patch', function (m) { if (!inRoom()) return; if (m.patch && m.patch.view) sync(m.patch.view); out(m.out); });
   WS.on('room.members', function (m) { R.members = m.members || []; U.draw(); paintRoom(); });
-  WS.on('room.link', function (m) { if (m.id && R.id && m.id !== R.id) return; R.link = m.url ? { url: location.origin + m.url, code: m.code, expires: m.until ? Date.parse(m.until) : null, alive: m.alive !== false } : null; paintRoom(); });
+  // ссылка: {url: '/emulator.html#room=…' (от корня сайта), until: ISO | null, alive} или {link: {url: полный адрес, expires: мс | null, alive}}
+  function linkOf(m) { var L = m.link || m; if (!L || !L.url) return null; var ex = L.expires !== undefined ? L.expires : L.until ? Date.parse(L.until) : null;
+    return { url: /^https?:/.test(L.url) ? L.url : location.origin + L.url, code: L.code || m.code, expires: ex || null, alive: L.alive !== false }; }
+  WS.on('room.link', function (m) { if (m.id && R.id && m.id !== R.id) return; var l = linkOf(m); if (l || !m.link) R.link = l; paintRoom(); });
   WS.on('room.list', function (m) { R.list = m.rooms || []; paintList(); });
   WS.on('room.people', function (m) { if (m.id && m.id !== R.id) return; R.students = m.people || []; R.invited = R.invited || {}; R.students.forEach(function (p) { if (p.invited) R.invited[p.login] = 1; }); paintStudents(); });
   WS.on('saved', function (m) { if (!/^room-/.test(m.lab || '') || !m.data) return; var nm = (m.data.room && m.data.room.name) || m.name || m.lab;   // сохранённая схема закрытой комнаты
