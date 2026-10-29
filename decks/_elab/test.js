@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'apps.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -354,6 +354,57 @@ EL.labs.LABS.forEach(runLab);
     chk('STP-петля: один порт оранжевый, остальные зелёные', all.split('o').length - 1 === 1 && all.split('g').length - 1 === 3, all);
     chk('кабель в файле схемы сохраняется', /cross/.test(JSON.stringify(n.toJSON())) && EL.Net.fromJSON(n.toJSON()).links.some(function (l) { return l.cab === 'cross'; }));
     console.log('✓ Кабели: прямой/перекрёстный/Serial, Auto-MDIX, огоньки портов');
+  })();
+  // Рабочий стол ПК: настройка IP, браузер, FTP, почта, Telnet/SSH, генератор трафика
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Рабочий стол: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), sw = n.add('MES2300-24', 'SW1'), pc = n.add('VPC', 'PC1'), db = n.add('Debian', 'WS'), sv = n.add('Debian-server', 'SRV'), r = n.add('vESR', 'R1');
+    n.connect(pc.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(db.id, 'ens3', sw.id, 'gi1/0/2'); n.connect(sv.id, 'ens3', sw.id, 'gi1/0/3'); n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/4');
+    EL.labs.apply(n, { R1: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'ip ssh server', 'ip dhcp-server', 'ip dhcp-server pool P',
+      'network 10.0.0.0/24', 'address-range 10.0.0.100-10.0.0.120', 'default-router 10.0.0.1', 'exit', 'end', 'commit', 'confirm'] });
+    var e1 = n.ipSet(sv.id, { mode: 'static', ip: '10.0.0.10', mask: '255.255.255.0', gw: '10.0.0.1', dns: '' });
+    n.tick(31);
+    chk('IP сервера: static через окно — в /etc/network/interfaces и ip a', e1.ok && /iface ens3 inet static\n    address 10\.0\.0\.10\/24\n    gateway 10\.0\.0\.1/.test(sv.st.files['/etc/network/interfaces']) && sv.st.ip === '10.0.0.10' && sv.st.up, JSON.stringify(e1));
+    chk('ошибки окна IP: маска, шлюз не в подсети', !n.ipSet(pc.id, { mode: 'static', ip: '10.0.0.5', mask: '255.0.255.0' }).ok && /не в подсети/.test(n.ipSet(pc.id, { mode: 'static', ip: '10.0.0.5', mask: '255.255.255.0', gw: '10.1.0.1' }).msg));
+    var e2 = n.ipSet(pc.id, { mode: 'dhcp', dns: '10.0.0.10' });
+    chk('VPC: DHCP через окно', e2.ok && /^10\.0\.0\.1[0-2]\d$/.test(pc.st.ip) && pc.st.gw === '10.0.0.1' && pc.st.dns === '10.0.0.10' && n.ipCfg(pc.id).mode === 'dhcp', JSON.stringify(e2));
+    var e3 = n.ipSet(db.id, { mode: 'dhcp', dns: '10.0.0.10' });
+    n.tick(31);   // ens3 поднялся только сейчас — порт коммутатора проходит listening / learning
+    chk('Debian: DHCP через окно — iface ens3 inet dhcp, resolv.conf', e3.ok && /inet dhcp/.test(db.st.files['/etc/network/interfaces']) && /nameserver 10\.0\.0\.10/.test(db.st.files['/etc/resolv.conf']) && n.ipCfg(db.id).dns === '10.0.0.10', JSON.stringify(e3));
+    // браузер
+    var h = n.httpGet(pc.id, 'http://10.0.0.10');
+    chk('браузер: стандартная страница apache2', h.ok && h.code === 200 && /It works!/.test(h.html), JSON.stringify(h).slice(0, 200));
+    sv.st.files['/var/www/html/index.html'] = '<h1>Колледж</h1>'; sv.st.files['/var/www/html/lab.html'] = '<p>лаба</p>';
+    chk('браузер: своя index.html и lab.html, 404', /Колледж/.test(n.httpGet(pc.id, '10.0.0.10').html) && /лаба/.test(n.httpGet(pc.id, '10.0.0.10/lab.html').html) && n.httpGet(pc.id, '10.0.0.10/x.html').code === 404);
+    chk('браузер: https без SSL — порт 443 закрыт', !n.httpGet(pc.id, 'https://10.0.0.10').ok && /443 закрыт/.test(n.httpGet(pc.id, 'https://10.0.0.10').why));
+    chk('браузер: по имени без DNS — ошибка DNS', !n.httpGet(pc.id, 'www.college.ru').ok, n.httpGet(pc.id, 'www.college.ru').why);
+    // FTP
+    chk('FTP: неверный пароль — 530', /530/.test(n.ftp(pc.id, '10.0.0.10', 'user', 'bad', 'ls').why));
+    n.docs(pc.id).put('otchet.txt', 'Отчёт по лабе');
+    var up = n.ftp(pc.id, '10.0.0.10', 'user', 'user', 'put', 'otchet.txt');
+    chk('FTP: put из Документов в /home/user на сервере', up.ok && sv.st.files['/home/user/otchet.txt'] === 'Отчёт по лабе', JSON.stringify(up));
+    var ls = n.ftp(db.id, '10.0.0.10', 'user', 'user', 'ls');
+    chk('FTP: ls с Debian', ls.ok && ls.files.some(function (f) { return f.name === 'otchet.txt'; }), JSON.stringify(ls).slice(0, 300) + ' ' + db.st.ip);
+    chk('FTP: get на Debian — в /root', n.ftp(db.id, '10.0.0.10', 'user', 'user', 'get', 'otchet.txt').ok && db.st.files['/root/otchet.txt'] === 'Отчёт по лабе');
+    n.exec(sv.id, 'root'); n.exec(sv.id, 'toor'); n.exec(sv.id, 'systemctl stop vsftpd');
+    chk('FTP: vsftpd остановлен — порт 21 закрыт', /21 закрыт/.test(n.ftp(pc.id, '10.0.0.10', 'user', 'user', 'ls').why));
+    // почта
+    var cfg = { from: 'root@college.ru', smtp: '10.0.0.10', pop3: '10.0.0.10', user: 'user', pw: 'user' };
+    chk('SMTP: письмо в ящик user', n.mailSend(pc.id, cfg, { to: 'user@college.ru', subj: 'Привет', body: 'Текст' }).ok && sv.st.mail.user.length === 1);
+    chk('SMTP: нет такого ящика — 550', /550/.test(n.mailSend(pc.id, cfg, { to: 'nobody@college.ru' }).why));
+    var rv = n.mailRecv(db.id, cfg);
+    chk('POP3: письмо забрано и удалено с сервера', rv.ok && rv.msgs.length === 1 && rv.msgs[0].subj === 'Привет' && !sv.st.mail.user.length);
+    chk('POP3: неверный пароль', /Authentication failed/.test(n.mailRecv(db.id, { pop3: '10.0.0.10', user: 'user', pw: 'x' }).why));
+    n.exec(sv.id, 'systemctl stop postfix');
+    chk('SMTP: postfix остановлен — порт 25 закрыт', /25 закрыт/.test(n.mailSend(pc.id, cfg, { to: 'user@college.ru' }).why));
+    // Telnet / SSH, генератор
+    chk('SSH-клиент: до ESR с ip ssh server', n.remote(pc.id, 'ssh', '10.0.0.1').ok && n.remote(pc.id, 'ssh', '10.0.0.1').dev === r.id);
+    chk('Telnet-клиент: на ESR telnet выключен — порт закрыт', !n.remote(pc.id, 'telnet', '10.0.0.1').ok);
+    var g = n.trafficGen(pc.id, { proto: 'udp', dst: '10.0.0.10', port: 5001, size: 1000, rate: 100, dur: 0.5 });
+    chk('генератор трафика: UDP 100 п/с 0,5 с', g.ok && g.res.sent === 50 && g.res.recv === 50, JSON.stringify(g.res && { s: g.res.sent, r: g.res.recv }));
+    var gi = n.trafficGen(pc.id, { proto: 'icmp', dst: '10.0.0.1', size: 64, rate: 10, dur: 1 });
+    chk('генератор трафика: ICMP 10 эхо-запросов', gi.ok && gi.res.sent === 10 && gi.res.recv === 10, JSON.stringify(gi.res && { s: gi.res.sent, r: gi.res.recv }));
+    console.log('✓ Рабочий стол: IP, браузер, FTP, почта, Telnet/SSH, генератор трафика');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES

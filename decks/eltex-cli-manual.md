@@ -272,6 +272,18 @@ security zone-pair trusted self        ← трафик самому маршр�
 **DHCPv6.** ESR: `ipv6 dhcp-server` и `ipv6 dhcp-server pool NAME` → `(config-ipv6-dhcp-server)#`: `network 2001:db8:7::/64`, `address-range A-B`, `dns-server`, `domain-name`, `default-lease-time`; на интерфейсе `ipv6 nd managed-config-flag` / `other-config-flag` (флаги M/O в RA); `show ipv6 dhcp binding`. Debian: `dhclient -6 [ens3]` — Solicit → Advertise → Request → Reply, адрес /128; префикс и шлюз приходят из RA (SLAAC). **ND:** `ipv6 nd reachable-time 5000..100000000` мс (30000, в config и на интерфейсе) — запись `reachable` это время, затем `stale`.
 Упрощения: аренда DHCPv6 не отсчитывается, relay DHCPv6 и prefix delegation нет; stale-записи ND не удаляются; OSPFv3 — одна область, стоимость интерфейса по умолчанию 10 (auto-cost не считается), типы сети non-broadcast/point-to-multipoint не моделируются; IPv6 на SVI MES не поддерживается (межсетевой экран, SLAAC и таймеры — см. ниже).
 
+### Рабочий стол ПК (как в Packet Tracer)
+ПКМ по VPC, Debian или Docker → «Рабочий стол» — программы ПК; работают в «Работе» и «Тесте» (это действия на ПК, а не подсказки).
+- **Настройка IP:** статический адрес (IP, маска, шлюз) или DHCP, DNS-сервер. Меняет то же, что команды: VPC — `ip`, `ip dhcp`, DNS; Debian — `/etc/network/interfaces` (`iface ens3 inet static|dhcp`), `/etc/resolv.conf` и поднимает ens3 (порт коммутатора после этого проходит STP listening / learning).
+- **Командная строка** — консоль этого ПК.
+- **Веб-браузер:** адрес или имя (через DNS), `http://` — TCP 80, `https://` — TCP 443 (если на сервере включён SSL); страница — `/var/www/html/…` сервера Debian (apache2), без файла `index.html` — стандартная «It works!»; нет файла — 404, служба остановлена — «порт закрыт». Страница показывается без скриптов.
+- **FTP-клиент:** сервер (vsftpd на Debian, TCP 21), вход — учётная запись сервера (root / toor, user / user), каталог — домашний; «Скачать», «Удалить», «Загрузить на сервер» из «Документов».
+- **Почта:** свой адрес, SMTP (postfix, TCP 25) и POP3 (dovecot, TCP 110), пользователь и пароль; письмо ИМЯ@домен кладётся в ящик учётной записи ИМЯ на сервере (нет такой — 550 User unknown), «Получить» забирает письма и удаляет их с сервера.
+- **Telnet / SSH:** с Debian — команда `ssh` / `telnet` в его консоли; с VPC — проверка TCP 22 / 23 до устройства и окно его терминала.
+- **Текстовый редактор:** файлы «Документов» (Debian — домашний каталог, `/root`), их можно отправить FTP.
+- **Генератор трафика:** UDP / TCP / ICMP, адрес, порт, размер, частота, длительность (до 5 с) — поток идёт через симуляцию во времени: отправлено / доставлено / потери, задержка и джиттер; в «Тесте» — ещё загрузка кабелей.
+- На Debian-server службы vsftpd, postfix, dovecot запущены (`systemctl stop|start …`), на Debian — остановлены.
+
 ### DNS
 
 | Где | Команды |

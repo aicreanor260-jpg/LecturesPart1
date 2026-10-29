@@ -219,6 +219,20 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .pad code{font:500 13px var(--m);color:var(--cy)}
 .pad .send div{padding:3px 0}.pad .send .ok{color:var(--ok)}.pad .send .no{color:var(--bad)}.pad .send .exp{color:var(--arp)}
 .pad select,.pad .q{width:100%}
+.desk .dgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+.desk .dapp{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;background:rgba(111,227,234,.05);border:1px solid rgba(111,227,234,.22);color:var(--cy);cursor:pointer;font:600 12px/1.2 var(--f);transition:background .2s,border-color .2s,transform .15s}
+.desk .dapp i{font-style:normal;font-size:26px;line-height:1}
+.desk .dapp:hover{background:rgba(111,227,234,.14);border-color:var(--cy);transform:translateY(-2px)}
+.desk .dhead{display:flex;align-items:center;gap:10px;margin-bottom:6px}.desk .dhead b{color:var(--cy);font:700 16px var(--f);letter-spacing:.06em;text-transform:uppercase}
+.desk .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}.desk .row .q{flex:1;width:auto}
+.desk .cs{font:600 12px var(--m)}.desk .cs2{color:var(--dim);font:500 12px var(--m)}
+.desk label.rad{display:inline-flex;gap:6px;align-items:center;margin-right:16px;text-transform:none;letter-spacing:0;font:600 14px var(--f);color:var(--cy)}
+.desk .wpage{width:100%;height:300px;border:1px solid var(--cy2);background:#fff;margin-top:6px}
+.desk .frow{display:flex;gap:6px;align-items:center;margin:4px 0}.desk .frow span{flex:1}.desk .frow i{color:var(--dim);font-style:normal;font-size:12px}
+.desk .mail{border-left:2px solid var(--cy2);padding:4px 8px;margin:6px 0;font:500 13px/1.4 var(--f)}
+.desk textarea.q{resize:vertical;font:500 13px/1.4 var(--m)}.desk h2{font-size:16px;margin-top:12px}
+.desk button:not(.dapp):not(.pri){background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:6px 10px;font:700 12px var(--m);cursor:pointer}.desk button:not(.dapp):not(.pri):hover{border-color:var(--cy);background:rgba(111,227,234,.1)}
+.desk details summary{cursor:pointer;color:var(--cy);font:700 12px var(--m);letter-spacing:.1em;text-transform:uppercase;margin:6px 0}
 .pad select{background:#0d0709;border:1px solid var(--cy2);color:var(--cy);padding:6px;font:500 14px var(--m)}
 .pad h1{font:700 26px var(--f);color:var(--cy);margin:0 0 6px;letter-spacing:.08em;text-transform:uppercase}
 .pad h3{font:700 16px var(--f);color:var(--rd);margin:14px 0 4px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--rd2)}
@@ -10837,6 +10851,148 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 })(typeof window !== 'undefined' ? window : global);
 
+/* Программы «Рабочего стола» конечных узлов (VPC, Debian, Docker) — сетевая часть (окна — desk_ui.js).
+   Настройка IP: статический адрес / DHCP, маска, шлюз, DNS — то же состояние, что у команд: VPC — ip, ip dhcp, ip dns;
+     Debian — /etc/network/interfaces (iface ens3 inet static|dhcp), /etc/resolv.conf и поднятый ens3.
+   Веб-браузер: имя → DNS, запрос TCP 80 (https:// — TCP 443) к серверу; страница — /var/www/html/index.html сервера (apache2),
+     без файла — стандартная страница «It works!». HTTPS — если на сервере включён SSL (вкладка «Службы»).
+   FTP-клиент: TCP 21, сервер vsftpd на Debian, вход — учётные записи сервера (как у vsftpd: локальные пользователи), каталог — домашний
+     (/root, /home/ИМЯ); ls, get, put, delete. Файлы клиента — «Документы» (Debian — домашний каталог, у VPC — свои).
+   Почта: SMTP (TCP 25, postfix) — письмо кладётся в ящик получателя на сервере (ИМЯ@домен, ящик — учётная запись сервера);
+     POP3 (TCP 110, dovecot) — вход учётной записью, письма забираются и удаляются с сервера.
+   Telnet / SSH-клиент — проверка TCP 23 / 22 до устройства и окно терминала к нему.
+   Генератор трафика — поток ICMP / UDP / TCP (адрес, порт, размер, частота, длительность) через симуляцию во времени (sim.js). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype, H = EL.hosts, IP = EL.ip;
+  // службы Debian: FTP, SMTP, POP3 (на сервере включены, на рабочей станции — нет)
+  var deb0 = H.deb;
+  H.deb = function (name, o) { var st = deb0.apply(this, arguments), on = !!(o && o.web);
+    st.svc.vsftpd = on; st.svc.postfix = on; st.svc.dovecot = on; st.mail = {}; st.srv = { https: false, domain: null }; return st; };
+  EL.listensX = (function (lx0) { return function (d, proto, port) {
+    if (d.type === 'deb' && proto === 'tcp') { var v = d.st.svc || {};
+      if (port === 21) return !!v.vsftpd; if (port === 25) return !!v.postfix; if (port === 110) return !!v.dovecot;
+      if (port === 443) return !!(v.apache2 && d.st.srv && d.st.srv.https); }
+    return lx0 ? lx0(d, proto, port) : undefined; }; })(EL.listensX);
+  function host(d) { return d && (d.type === 'vpc' || d.type === 'deb') && !d.sub; }
+  EL.isHost = host;
+
+  // ---------------------------------------------------------------- настройка IP
+  P.ipCfg = function (id) { var d = this.devs[id], st = d.st;
+    var dns = d.type === 'vpc' ? st.dns || '' : (((st.files || {})['/etc/resolv.conf'] || '').match(/^\s*nameserver\s+(\S+)/m) || [])[1] || '';
+    var dh = d.type === 'vpc' ? !!st.dhcp : H.parseIfaces(st.files['/etc/network/interfaces'] || '').mode === 'dhcp';
+    return { mode: dh ? 'dhcp' : 'static', ip: st.ip || '', mask: st.ip ? IP.len2mask(st.len) : '', gw: st.gw || '', dns: dns }; };
+  P.ipSet = function (id, c) {
+    var d = this.devs[id], st = d.st, len = IP.mask2len(c.mask || '');
+    if (c.dns && IP.ip2n(c.dns) === null) return { ok: false, msg: 'Неверный адрес DNS-сервера' };
+    if (c.mode === 'static') {
+      if (IP.ip2n(c.ip || '') === null) return { ok: false, msg: 'Неверный IP-адрес' };
+      if (len === null || len === 0) return { ok: false, msg: 'Неверная маска подсети' };
+      if (c.gw && IP.ip2n(c.gw) === null) return { ok: false, msg: 'Неверный адрес шлюза' };
+      if (c.gw && !IP.sameNet(c.ip, c.gw, len)) return { ok: false, msg: 'Шлюз ' + c.gw + ' не в подсети ' + IP.netOf(c.ip, len) };
+    }
+    var r = { ok: true, msg: 'Настройки применены' };
+    if (d.type === 'vpc') {
+      if (c.mode === 'dhcp') { var o = H.vpcExec(st, 'ip dhcp'); r = { ok: /DORA/.test(o), msg: /DORA/.test(o) ? 'DHCP: ' + o.replace(/^DD?ORA /, '') : 'DHCP-сервер не ответил' }; }
+      else { st.ip = c.ip; st.len = len; st.gw = c.gw || null; st.dhcp = false; }
+      st.dns = c.dns || null;
+    } else {
+      var f = st.files, keep = (f['/etc/network/interfaces'] || '').split('\n# The primary network interface')[0];
+      f['/etc/network/interfaces'] = keep + '\n# The primary network interface\n' + (c.mode === 'dhcp' ? 'allow-hotplug ens3\niface ens3 inet dhcp\n'
+        : 'auto ens3\niface ens3 inet static\n    address ' + c.ip + '/' + len + '\n' + (c.gw ? '    gateway ' + c.gw + '\n' : ''));
+      f['/etc/resolv.conf'] = c.dns ? 'nameserver ' + c.dns + '\n' : '';
+      if (c.mode === 'dhcp') { var dh = this.dhcp(id); if (this.onTrace) this.onTrace({ ok: dh.ok, steps: dh.steps }, id, 'DHCP');
+        if (dh.ok) { st.up = true; st.ip = dh.ip; st.len = dh.len; st.gw = dh.gw || null; r.msg = 'DHCP: ' + dh.ip + '/' + dh.len + (dh.gw ? ', шлюз ' + dh.gw : ''); }
+        else { st.ip = null; st.gw = null; r = { ok: false, msg: 'DHCP-сервер не ответил' }; } }
+      else { st.up = true; st.ip = c.ip; st.len = len; st.gw = c.gw || null; }
+    }
+    this.gen++; return r; };
+
+  // ---------------------------------------------------------------- общее: имя → адрес, запрос к службе
+  function reach(net, id, name, proto, port) {
+    var rs = net.resolve ? net.resolve(id, name) : { ip: name };
+    if (!rs.ip) return { ok: false, why: rs.err === 'nx' ? 'имя ' + name + ' не найдено (DNS)' : rs.err === 'noserver' ? 'не задан DNS-сервер — имя ' + name + ' не разрешить' : 'DNS-сервер не отвечает' };
+    var r = net.request(id, rs.ip, proto, port); if (net.onTrace) net.onTrace(r, id, rs.ip + ':' + port);
+    if (!r.ok) return { ok: false, ip: rs.ip, why: r.why === 'Connection refused' ? 'на ' + rs.ip + ' порт ' + port + ' закрыт (служба не запущена)' : 'нет связи с ' + rs.ip, steps: r.steps };
+    return { ok: true, ip: rs.ip, srv: net.devs[r.dev], steps: r.steps };
+  }
+  EL.appReach = reach;
+  function home(user) { return user === 'root' ? '/root' : '/home/' + user; }
+
+  // ---------------------------------------------------------------- веб-браузер
+  var PAGE = '<!doctype html><html><head><meta charset="utf-8"><title>Apache2 Debian Default Page</title></head><body style="font-family:sans-serif">' +
+    '<h1>It works!</h1><p>Это стандартная страница веб-сервера Apache2 на Debian. Замените файл /var/www/html/index.html.</p></body></html>';
+  EL.webDefault = PAGE;
+  P.httpGet = function (id, url) {
+    var m = String(url || '').trim().match(/^(?:(https?):\/\/)?([^\/:\s]+)(?::(\d+))?(\/\S*)?$/);
+    if (!m) return { ok: false, why: 'неверный адрес' };
+    var sec = m[1] === 'https', port = +(m[3] || (sec ? 443 : 80)), r = reach(this, id, m[2], 'tcp', port);
+    if (!r.ok) return r;
+    var s = r.srv, path = m[4] && m[4] !== '/' ? m[4] : '/index.html';
+    if (s.type === 'deb') { var f = (s.st.files || {})['/var/www/html' + path];
+      if (f === undefined && path === '/index.html') f = PAGE;
+      return f === undefined ? { ok: true, code: 404, ip: r.ip, html: '<h1>Not Found</h1><p>The requested URL ' + path.replace(/[<>&]/g, '') + ' was not found on this server.</p>' }
+        : { ok: true, code: 200, ip: r.ip, html: f, sec: sec, srv: s.name }; }
+    return { ok: true, code: 200, ip: r.ip, html: '<h1>' + s.model + '</h1><p>Веб-интерфейс устройства ' + s.name + '</p>', dev: s.id };
+  };
+
+  // ---------------------------------------------------------------- документы клиента
+  P.docs = function (id) { var d = this.devs[id], st = d.st;
+    if (d.type === 'vpc') { st.docs = st.docs || {}; return { list: function () { return Object.keys(st.docs).sort(); }, get: function (n) { return st.docs[n]; }, put: function (n, t) { st.docs[n] = t; }, del: function (n) { delete st.docs[n]; } }; }
+    var dir = home(st.user && st.user !== 'root' ? st.user : 'root') + '/';
+    return { dir: dir, list: function () { return Object.keys(st.files).filter(function (k) { return k.indexOf(dir) === 0 && k.slice(dir.length).indexOf('/') < 0; }).map(function (k) { return k.slice(dir.length); }).sort(); },
+             get: function (n) { return st.files[dir + n]; }, put: function (n, t) { st.files[dir + n] = t; }, del: function (n) { delete st.files[dir + n]; } }; };
+
+  // ---------------------------------------------------------------- FTP-клиент
+  P.ftp = function (id, srv, user, pw, op, name) {
+    var r = reach(this, id, srv, 'tcp', 21); if (!r.ok) return r;
+    var s = r.srv; if (s.type !== 'deb') return { ok: false, why: '530 Login incorrect' };
+    if (!s.st.accounts[user] || s.st.accounts[user] !== pw) return { ok: false, why: '530 Login incorrect.' };
+    var dir = home(user) + '/', F = s.st.files, D = this.docs(id), base = String(name || '').replace(/^.*\//, '');
+    if (op === 'ls') return { ok: true, files: Object.keys(F).filter(function (k) { return k.indexOf(dir) === 0 && k.slice(dir.length).indexOf('/') < 0; }).map(function (k) { return { name: k.slice(dir.length), size: F[k].length }; }), msg: '230 Login successful.' };
+    if (!base) return { ok: false, why: 'не указано имя файла' };
+    if (op === 'get') { if (F[dir + base] === undefined) return { ok: false, why: '550 Failed to open file.' }; D.put(base, F[dir + base]); return { ok: true, msg: '226 Transfer complete. ' + base + ' → Документы (' + F[dir + base].length + ' байт)' }; }
+    if (op === 'put') { var t = D.get(base); if (t === undefined) return { ok: false, why: 'нет файла ' + base + ' в Документах' }; F[dir + base] = t; return { ok: true, msg: '226 Transfer complete. ' + base + ' → ' + s.name + ':' + dir + base }; }
+    if (op === 'delete') { if (F[dir + base] === undefined) return { ok: false, why: '550 Delete operation failed.' }; delete F[dir + base]; return { ok: true, msg: '250 Delete operation successful.' }; }
+    return { ok: false, why: '500 Unknown command.' };
+  };
+
+  // ---------------------------------------------------------------- почта: SMTP и POP3
+  P.mailSend = function (id, c, msg) {
+    var to = String(msg.to || '').trim().match(/^([^@\s]+)@(\S+)$/); if (!to) return { ok: false, why: 'адрес получателя — ИМЯ@домен' };
+    if (!/^[^@\s]+@\S+$/.test(c.from || '')) return { ok: false, why: 'в настройках не задан свой адрес (ИМЯ@домен)' };
+    var r = reach(this, id, c.smtp, 'tcp', 25); if (!r.ok) return r;
+    var s = r.srv; if (s.type !== 'deb') return { ok: false, why: '554 Transaction failed' };
+    var dom = s.st.srv && s.st.srv.domain;
+    if (dom && to[2].toLowerCase() !== dom.toLowerCase()) return { ok: false, why: '554 5.7.1 <' + msg.to + '>: Relay access denied (сервер обслуживает домен ' + dom + ')' };
+    if (!s.st.accounts[to[1]]) return { ok: false, why: '550 5.1.1 <' + msg.to + '>: Recipient address rejected: User unknown' };
+    (s.st.mail[to[1]] = s.st.mail[to[1]] || []).push({ from: c.from, to: msg.to, subj: msg.subj || '', body: msg.body || '', t: this.now || 0 });
+    return { ok: true, msg: '250 2.0.0 Ok: queued — письмо доставлено в ящик ' + to[1] + ' на ' + s.name };
+  };
+  P.mailRecv = function (id, c) {
+    var r = reach(this, id, c.pop3, 'tcp', 110); if (!r.ok) return r;
+    var s = r.srv; if (s.type !== 'deb') return { ok: false, why: '-ERR' };
+    if (!s.st.accounts[c.user] || s.st.accounts[c.user] !== c.pw) return { ok: false, why: '-ERR [AUTH] Authentication failed.' };
+    var L = s.st.mail[c.user] || []; s.st.mail[c.user] = [];
+    return { ok: true, msgs: L, msg: '+OK ' + L.length + ' сообщ.' };
+  };
+
+  // ---------------------------------------------------------------- Telnet / SSH, генератор трафика
+  P.remote = function (id, proto, hostName) { var r = reach(this, id, hostName, 'tcp', proto === 'ssh' ? 22 : 23); if (!r.ok) return r;
+    return { ok: true, dev: r.srv.id, ip: r.ip }; };
+  // поток генератора: {proto: 'icmp'|'udp'|'tcp', dst, port, size, rate, dur} → итог симуляции
+  P.trafficGen = function (id, g) {
+    var rs = this.resolve ? this.resolve(id, g.dst) : { ip: g.dst }; if (!rs.ip) return { ok: false, why: 'имя ' + g.dst + ' не разрешено' };
+    var size = Math.max(28, Math.min(9000, g.size | 0 || 64)), rate = Math.max(1, Math.min(20000, +g.rate || 10)), dur = Math.max(0.01, Math.min(5, +g.dur || 1));
+    var fl = g.proto === 'icmp' ? { kind: 'ping', src: id, dst: rs.ip, size: size, count: Math.max(1, Math.min(200, Math.round(rate * dur))), interval: 1 / rate }
+      : { kind: 'udp', src: id, dst: rs.ip, size: size, rate: rate, dur: dur, proto: g.proto, port: +g.port || 0 };
+    if (g.proto !== 'icmp' && fl.port) { var rq = this.request(id, rs.ip, g.proto, fl.port);
+      if (!rq.ok && rq.why !== 'Connection refused') return { ok: false, why: 'нет связи с ' + rs.ip }; fl.refused = !rq.ok; }
+    var r = this.simulate([fl], {}), f = r.flows[0]; this.gen++;
+    return { ok: true, flow: fl, res: f, sim: r, refused: fl.refused };
+  };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Маршрутизаторы Eltex ME (ME2001, ME5100S, ME5100 rev.X, ME5200S, ME5210S; спецификация sources/eltex/spec/me.md:
    руководство по настройке, справочник команд ME 3.13, руководство пользователя). Своя CLI: приглашение 0/<МОДЕЛЬ>:<hostname>#,
    режим хранится стеком, приглашение — по последнему узлу ((config-tengigabitethernet)#, (config-area)#, (config-unicast)#…);
@@ -14708,6 +14864,113 @@ vesr(config)#         do confirm  — подтвердить</pre>
     U.makeWin(key, 'Веб-интерфейс', d.name, body, { w: 440, h: Math.min(640, innerHeight - 140) });
   }
   EL.cpeWeb = openWeb;
+})();
+
+/* «Рабочий стол» конечного узла (VPC, Debian, Docker) — программы как у ПК в Packet Tracer (сетевая часть — apps.js).
+   Открывается из меню устройства (ПКМ → «Рабочий стол»). Работает в обоих режимах: это действия пользователя на ПК, а не подсказки. */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  function net() { return U.net(); }
+  var items0 = X.items, run0 = X.run;
+  X.items = function (k, d) { return items0(k, d) + (k === 'dev' && d && EL.isHost(d) ? '<button data-a="desk"><span>🖥</span>Рабочий стол</button>' : ''); };
+  X.run = function (k, a, arg) { run0(k, a, arg); if (k === 'dev' && a === 'desk') openDesk(arg.id); };
+  var APPS = [['ip', '⚙', 'Настройка IP'], ['cmd', '▣', 'Командная строка'], ['web', '🌐', 'Веб-браузер'], ['ftp', '⇅', 'FTP-клиент'], ['mail', '✉', 'Почта'],
+              ['rem', '⌨', 'Telnet / SSH'], ['ed', '✎', 'Текстовый редактор'], ['gen', '≋', 'Генератор трафика']];
+  function v(b, f) { var x = b.querySelector('[data-f="' + f + '"]'); return x ? (x.type === 'checkbox' ? x.checked : x.value.trim()) : ''; }
+  function inp(f, val, ph, type) { return '<input class="q" data-f="' + f + '" value="' + esc(val === undefined || val === null ? '' : val) + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + (type === 'password' ? ' type="text" autocomplete="off" data-lpignore="true" style="-webkit-text-security:disc"' : type ? ' type="' + type + '"' : '') + ' spellcheck="false">'; }
+  function sel(f, opts, cur) { return '<select class="q" data-f="' + f + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>'; }
+  function say(b, ok, t) { var o = b.querySelector('.cs'); if (o) { o.textContent = t; o.style.color = ok ? 'var(--ok, #7dffb0)' : 'var(--bad, #ff6b62)'; } }
+
+  function openDesk(id) {
+    var n = net(), d = n.devs[id]; if (!d) return;
+    var body = document.createElement('div'), app = null; body.className = 'pad desk';
+    var st = d.st; st.ui = st.ui || {};
+    function home() { app = null; body.innerHTML = '<div class="k">' + esc(d.name) + ' · ' + esc(d.model) + '</div><div class="dgrid">' +
+      APPS.map(function (a) { return '<button class="dapp" data-app="' + a[0] + '"><i>' + a[1] + '</i><span>' + esc(a[2]) + '</span></button>'; }).join('') + '</div>'; }
+    function head(t) { return '<div class="dhead"><button data-c="home">← Рабочий стол</button><b>' + esc(t) + '</b></div>'; }
+    var R = {
+      ip: function () { var c = n.ipCfg(id);
+        return head('Настройка IP') + '<label class="rad"><input type="radio" name="m' + id + '" data-m="static"' + (c.mode === 'static' ? ' checked' : '') + '> Статический</label>' +
+          '<label class="rad"><input type="radio" name="m' + id + '" data-m="dhcp"' + (c.mode === 'dhcp' ? ' checked' : '') + '> DHCP</label>' +
+          '<label>IP-адрес</label>' + inp('ip', c.ip, '192.168.1.10') + '<label>Маска подсети</label>' + inp('mask', c.mask || '255.255.255.0') +
+          '<label>Шлюз по умолчанию</label>' + inp('gw', c.gw) + '<label>DNS-сервер</label>' + inp('dns', c.dns) +
+          '<div class="row"><button class="pri" data-c="apply">Применить</button><span class="cs"></span></div>'; },
+      web: function () { return head('Веб-браузер') + '<div class="row">' + inp('url', st.ui.url || 'http://', 'http://адрес или имя') + '<button class="pri" data-c="go">Перейти</button></div>' +
+        '<div class="cs2 wst"></div><iframe class="wpage" sandbox="" title="страница"></iframe>'; },
+      ftp: function () { var f = st.ui.ftp || { srv: '', user: '' };
+        return head('FTP-клиент') + '<label>Сервер</label>' + inp('srv', f.srv, 'адрес или имя') + '<label>Пользователь</label>' + inp('user', f.user) + '<label>Пароль</label>' + inp('pw', '', '', 'password') +
+          '<div class="row"><button class="pri" data-c="ls">Подключиться (ls)</button><span class="cs"></span></div><div class="flist"></div>'; },
+      mail: function () { var m = st.ui.mail || {};
+        return head('Почта') + '<details' + (m.from ? '' : ' open') + '><summary>Настройки почты</summary><label>Мой адрес</label>' + inp('from', m.from, 'user@college.ru') +
+          '<label>Сервер исходящей почты (SMTP)</label>' + inp('smtp', m.smtp) + '<label>Сервер входящей почты (POP3)</label>' + inp('pop3', m.pop3) +
+          '<label>Пользователь</label>' + inp('user', m.user) + '<label>Пароль</label>' + inp('pw', m.pw, '', 'password') + '</details>' +
+          '<h2>Новое письмо</h2><label>Кому</label>' + inp('to') + '<label>Тема</label>' + inp('subj') + '<label>Текст</label><textarea class="q" data-f="text" rows="4"></textarea>' +
+          '<div class="row"><button class="pri" data-c="send">Отправить</button><button data-c="recv">Получить</button><span class="cs"></span></div>' +
+          '<h2>Входящие</h2><div class="inbox">' + inbox() + '</div>'; },
+      rem: function () { var r = st.ui.rem || { proto: 'ssh', host: '', user: 'admin' };
+        return head('Telnet / SSH') + '<label>Протокол</label>' + sel('proto', [['ssh', 'SSH (TCP 22)'], ['telnet', 'Telnet (TCP 23)']], r.proto) +
+          '<label>Адрес или имя</label>' + inp('host', r.host) + '<label>Пользователь (SSH)</label>' + inp('user', r.user) +
+          '<div class="row"><button class="pri" data-c="conn">Подключиться</button><span class="cs"></span></div>'; },
+      ed: function () { var D = n.docs(id), L = D.list(), cur = st.ui.doc || L[0] || 'новый.txt';
+        return head('Текстовый редактор') + '<div class="row">' + sel('doc', L.map(function (x) { return [x, x]; }).concat([['', '— новый файл —']]), L.indexOf(cur) >= 0 ? cur : '') +
+          inp('name', cur, 'имя файла') + '</div><textarea class="q ed" data-f="text" rows="12">' + esc(D.get(cur) || '') + '</textarea>' +
+          '<div class="row"><button class="pri" data-c="save">Сохранить</button><button data-c="del">Удалить</button><span class="cs"></span></div>' +
+          '<p class="cs2">Файлы — в «Документах»' + (D.dir ? ' (' + esc(D.dir) + ')' : '') + '; их можно отправить на сервер FTP-клиентом.</p>'; },
+      gen: function () { var g = st.ui.gen || { proto: 'udp', dst: '', port: 5001, size: 512, rate: 100, dur: 1 };
+        return head('Генератор трафика') + '<label>Протокол</label>' + sel('proto', [['udp', 'UDP'], ['tcp', 'TCP'], ['icmp', 'ICMP (эхо-запросы)']], g.proto) +
+          '<label>Адрес назначения</label>' + inp('dst', g.dst) + '<label>Порт назначения</label>' + inp('port', g.port, '', 'number') +
+          '<label>Размер данных, байт</label>' + inp('size', g.size, '', 'number') + '<label>Частота, пакетов/с</label>' + inp('rate', g.rate, '', 'number') +
+          '<label>Длительность, с (до 5)</label>' + inp('dur', g.dur, '', 'number') +
+          '<div class="row"><button class="pri" data-c="gen">Запустить</button><span class="cs"></span></div><div class="gres"></div>'; }
+    };
+    function inbox() { var L = st.inbox || []; return L.length ? L.slice().reverse().map(function (m) { return '<div class="mail"><b>' + esc(m.subj || '(без темы)') + '</b> — от ' + esc(m.from) + '<br>' + esc(m.body).replace(/\n/g, '<br>') + '</div>'; }).join('') : '<p class="cs2">Писем нет</p>'; }
+    function open(a) { if (a === 'cmd') { U.openTerm(id); return; } app = a; body.innerHTML = R[a](); if (a === 'ftp' && st.ui.ftpPw !== undefined) void 0; }
+    function ftpList(res) { var D = n.docs(id), box = body.querySelector('.flist');
+      box.innerHTML = '<h2>На сервере</h2>' + (res.files.length ? res.files.map(function (f) { return '<div class="frow"><span>' + esc(f.name) + ' <i>' + f.size + ' Б</i></span><button data-c="get" data-n="' + esc(f.name) + '">Скачать</button><button data-c="rm" data-n="' + esc(f.name) + '">Удалить</button></div>'; }).join('') : '<p class="cs2">Пусто</p>') +
+        '<h2>Документы</h2>' + (D.list().length ? D.list().map(function (x) { return '<div class="frow"><span>' + esc(x) + '</span><button data-c="put" data-n="' + esc(x) + '">Загрузить на сервер</button></div>'; }).join('') : '<p class="cs2">Нет файлов (создайте в текстовом редакторе)</p>'); }
+    body.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter' && app === 'web' && e.target.dataset.f === 'url') body.querySelector('[data-c="go"]').click(); });
+    body.addEventListener('change', function (e) { if (app === 'ed' && e.target.dataset.f === 'doc') { st.ui.doc = e.target.value || ''; body.innerHTML = R.ed(); if (!st.ui.doc) body.querySelector('[data-f="name"]').value = ''; } });
+    body.addEventListener('click', function (e) {
+      var ap = e.target.closest('[data-app]'); if (ap) { open(ap.dataset.app); return; }
+      var b = e.target.closest('[data-c]'); if (!b) return; var c = b.dataset.c;
+      if (c === 'home') { home(); return; }
+      if (c === 'apply') { var mo = body.querySelector('[data-m]:checked').dataset.m, r = n.ipSet(id, { mode: mo, ip: v(body, 'ip'), mask: v(body, 'mask'), gw: v(body, 'gw'), dns: v(body, 'dns') });
+        body.innerHTML = R.ip(); say(body, r.ok, r.msg); U.draw(); U.refresh(); return; }
+      if (c === 'go') { var url = v(body, 'url'); st.ui.url = url; var h = n.httpGet(id, url), stl = body.querySelector('.wst'), fr = body.querySelector('.wpage');
+        stl.textContent = h.ok ? (h.code === 200 ? '200 OK' : h.code + ' Not Found') + ' · ' + h.ip + (h.srv ? ' (' + h.srv + ')' : '') + (h.sec ? ' · HTTPS' : '') : 'Не удаётся открыть страницу: ' + h.why;
+        fr.srcdoc = h.ok ? h.html : '<p style="font-family:sans-serif;color:#555">Не удаётся получить доступ к сайту.<br>' + esc(h.why) + '</p>'; U.draw(); return; }
+      if (c === 'ls' || c === 'get' || c === 'put' || c === 'rm') {
+        var srv = v(body, 'srv'), user = v(body, 'user'), pw = v(body, 'pw'); st.ui.ftp = { srv: srv, user: user };
+        var op = { ls: 'ls', get: 'get', put: 'put', rm: 'delete' }[c], res = n.ftp(id, srv, user, pw, op, b.dataset.n);
+        if (!res.ok) { say(body, false, res.why); return; }
+        var lst = op === 'ls' ? res : n.ftp(id, srv, user, pw, 'ls'); say(body, true, res.msg); if (lst.ok) ftpList(lst); return; }
+      if (c === 'send' || c === 'recv') { var m = { from: v(body, 'from'), smtp: v(body, 'smtp'), pop3: v(body, 'pop3'), user: v(body, 'user'), pw: v(body, 'pw') }; st.ui.mail = m;
+        if (c === 'send') { var sr = n.mailSend(id, m, { to: v(body, 'to'), subj: v(body, 'subj'), body: v(body, 'text') }); say(body, sr.ok, sr.ok ? sr.msg : sr.why);
+          if (sr.ok) ['to', 'subj', 'text'].forEach(function (f) { body.querySelector('[data-f="' + f + '"]').value = ''; }); return; }
+        var rv = n.mailRecv(id, m); if (!rv.ok) { say(body, false, rv.why); return; }
+        st.inbox = (st.inbox || []).concat(rv.msgs); body.querySelector('.inbox').innerHTML = inbox(); say(body, true, rv.msg); return; }
+      if (c === 'conn') { var rr = { proto: v(body, 'proto'), host: v(body, 'host'), user: v(body, 'user') }; st.ui.rem = rr;
+        if (d.type === 'deb') { U.openTerm(id); U.run(id, rr.proto === 'ssh' ? 'ssh ' + (rr.user || 'root') + '@' + rr.host : 'telnet ' + rr.host); say(body, true, 'Команда выполнена в командной строке ' + d.name); return; }
+        var cn = n.remote(id, rr.proto, rr.host); if (!cn.ok) { say(body, false, cn.why); return; }
+        U.openTerm(cn.dev); say(body, true, (rr.proto === 'ssh' ? 'SSH' : 'Telnet') + '-сеанс с ' + n.devs[cn.dev].name + ' (' + cn.ip + ') — окно терминала открыто'); return; }
+      if (c === 'save' || c === 'del') { var D = n.docs(id), nm = v(body, 'name').replace(/[\/\\]/g, '');
+        if (!nm) { say(body, false, 'Укажите имя файла'); return; }
+        if (c === 'save') { D.put(nm, body.querySelector('[data-f="text"]').value); st.ui.doc = nm; body.innerHTML = R.ed(); say(body, true, 'Сохранено: ' + nm); }
+        else { D.del(nm); st.ui.doc = ''; body.innerHTML = R.ed(); say(body, true, 'Удалено: ' + nm); } return; }
+      if (c === 'gen') { var g = { proto: v(body, 'proto'), dst: v(body, 'dst'), port: +v(body, 'port'), size: +v(body, 'size'), rate: +v(body, 'rate'), dur: +v(body, 'dur') }; st.ui.gen = g;
+        var gr = n.trafficGen(id, g), box = body.querySelector('.gres'); if (!gr.ok) { say(body, false, gr.why); box.innerHTML = ''; return; }
+        var f = gr.res, ms = function (x) { return x === undefined || x === null ? '—' : (x * 1e3).toFixed(3) + ' мс'; };
+        say(body, f.recv > 0, 'Отправлено ' + f.sent + ', доставлено ' + f.recv + ', потери ' + f.loss + ' %');
+        box.innerHTML = '<p>Задержка ' + (g.proto === 'icmp' ? '(RTT)' : '(в одну сторону)') + ': min ' + ms(f.min) + ', avg ' + ms(f.avg) + ', max ' + ms(f.max) + ', джиттер ' + ms(f.jitter) + '</p>' +
+          (gr.refused ? '<p class="cs2">На ' + esc(g.dst) + ' порт ' + g.port + ' никто не слушает — датаграммы доходят, но приложение их не принимает.</p>' : '') +
+          (U.mode() === 'test' && gr.sim.links.length ? '<p class="cs2">Загрузка: ' + gr.sim.links.map(function (l) { return esc(l.name) + ' ' + l.util.toFixed(1) + ' %'; }).join(', ') + '</p>' : '');
+        U.draw(); return; }
+    });
+    home();
+    U.makeWin('desk' + id, 'Рабочий стол', d.name, body, { w: 460, h: Math.min(620, innerHeight - 120) });
+  }
+  EL.openDesk = openDesk;
 })();
 
 /* Окно «Симуляция пакетов» (режим «Тест»), как Simulation в Packet Tracer: пока окно открыто, каждый обмен (ping, curl, DHCP,
