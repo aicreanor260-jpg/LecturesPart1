@@ -521,6 +521,29 @@ EL.labs.LABS.forEach(runLab);
     chk('параметры канала сохраняются в схеме', EL.Net.fromJSON(n.toJSON()).links[0].jit === 20);
     console.log('✓ Параметры канала: скорость, потери, BER, джиттер');
   })();
+  // Нормы длины кабеля: медь 100 м, оптика по трансиверу
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Длина кабеля: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), a = n.add('VPC', 'A'), b = n.add('VPC', 'B'), s1 = n.add('MES2300-24', 'S1'), s2 = n.add('MES2300-24', 'S2');
+    n.connect(a.id, 'eth0', b.id, 'eth0'); n.exec(a.id, 'ip 10.0.0.1/24'); n.exec(b.id, 'ip 10.0.0.2/24');
+    chk('медь 100 м — норма, зелёный', n.ledOf(a.id, 'eth0').c === 'g');
+    n.setLink(0, { len: 120 });
+    var lo = n.ledOf(a.id, 'eth0');
+    chk('медь 120 м — линк есть, оранжевый, потери', lo.c === 'o' && /длиннее нормы 100 м/.test(lo.why) && n.linkUp(a.id, 'eth0'), JSON.stringify(lo));
+    var f = n.simulate([{ kind: 'udp', src: a.id, dst: '10.0.0.2', size: 500, rate: 200, dur: 1 }]).flows[0];
+    chk('медь 120 м: ≈10 % кадров теряется', f.loss >= 4 && f.loss <= 18, f.loss);
+    n.setLink(0, { len: 160 });
+    chk('медь 160 м — линка нет, красный', !n.linkUp(a.id, 'eth0') && n.ledOf(a.id, 'eth0').c === 'r' && /1,5 раза/.test(n.ledOf(a.id, 'eth0').why));
+    n.connect(s1.id, 'te1/0/1', s2.id, 'te1/0/1', 'sfp10g');
+    var li = n.links.length - 1; n.setLink(li, { len: 400 });
+    chk('10GBASE-SR 400 м (норма 300 м OM3) — оранжевый', n.ledOf(s1.id, 'te1/0/1').c === 'o' || (n.ledOf(s1.id, 'te1/0/1').c === 'o'), JSON.stringify(n.ledOf(s1.id, 'te1/0/1')));
+    n.setLink(li, { len: 9000 });
+    chk('10GBASE-SR 9 км — нет линка', !n.linkUp(s1.id, 'te1/0/1'));
+    n.disconnect(li); n.connect(s1.id, 'te1/0/1', s2.id, 'te1/0/1', 'sfp10g-lr'); n.setLink(n.links.length - 1, { len: 9000 });
+    chk('10GBASE-LR 9 км — норма 10 км, линк есть', n.linkUp(s1.id, 'te1/0/1') && !/длиннее/.test(n.ledOf(s1.id, 'te1/0/1').why));
+    chk('канал связи — без нормы длины', !EL.LENNORM.wan && /не задаётся/.test(EL.lenNorm(n, { cab: 'wan', a: { dev: a.id }, b: { dev: b.id }, len: 3e6 })));
+    console.log('✓ Длина кабеля: нормы IEEE 802.3, ошибки и обрыв');
+  })();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

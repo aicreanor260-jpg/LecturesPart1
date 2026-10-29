@@ -10,7 +10,7 @@
   var FIBER = /^(sfp|pon|wan)/, PROP_F = 2.04e8, PROP_C = 1.98e8;
   function propOf(cab) { return FIBER.test(cab || '') ? PROP_F : PROP_C; }
   P.cabOf = function (l) { return l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port); };
-  P.lenOf = function (l) { return l.len || 100; };
+  P.lenOf = function (l) { return l.len || (/^(dac|rs232)/.test(this.cabOf(l)) ? 3 : 100); };   // по умолчанию 100 м, DAC и консольный — 3 м
   P.propDelay = function (l) { return this.lenOf(l) / propOf(this.cabOf(l)); };          // с, в одну сторону
   EL.propSpeed = propOf;
   // «Канал связи» — линк на скорости портов, как медь без MDI (пары и модули — забота оператора)
@@ -47,6 +47,28 @@
     var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3])
       KEYS.forEach(function (k) { if (isFinite(l[5][k]) && l[5][k] > 0) x[k] = +l[5][k]; }); }); }); return n; };
   P.setLink = function (li, o) { var l = this.links[li]; if (!l) return; KEYS.forEach(function (k) { if (o[k] === undefined) return; if (o[k] > 0) l[k] = +o[k]; else delete l[k]; }); this.gen++; };
+
+  // ---------------------------------------------------------------- нормы длины кабеля (типовые значения стандартов; каталога трансиверов Eltex в источниках нет)
+  // медь 1000BASE-T — 100 м (IEEE 802.3 п. 40); 1000BASE-SX — 550 м (50 мкм, п. 38); 1000BASE-LX — 5 км (одномод, п. 38); 10GBASE-SR — 300 м (OM3, п. 52);
+  // 10GBASE-LR — 10 км (п. 52); DAC SFP+ — 7 м (пассивный, типовое по SFF-8431); RS-232 — 15 м (TIA-232, типовое); PON — 20 км (G.984 класс B+, 802.3ah PX20).
+  // Длиннее нормы до 1,5 раза — линк есть, но кадры бьются (≈10 % потерь, оранжевый огонёк); ещё длиннее — сигнал не доходит, линка нет (красный). Допущение эмулятора.
+  var NORM = { cu: [100, 'IEEE 802.3 1000BASE-T'], straight: [100, 'IEEE 802.3 1000BASE-T'], cross: [100, 'IEEE 802.3 1000BASE-T'], sfp1g: [550, '1000BASE-SX, многомод 50 мкм'],
+    'sfp1g-lx': [5000, '1000BASE-LX, одномод'], sfp10g: [300, '10GBASE-SR, OM3'], 'sfp10g-lr': [10000, '10GBASE-LR, одномод'], dac10g: [7, 'пассивный DAC SFP+, типовое'],
+    rs232: [15, 'TIA-232, типовое'], pon: [20000, 'GPON класс B+ / 1000BASE-PX20'] };
+  EL.LENNORM = NORM;
+  function normOf(net, l) { var c = net.cabOf(l), a = NORM[c], b = l.cabB && NORM[l.cabB]; if (!a) return null; return b && b[0] < a[0] ? b : a; }
+  P.lenErr = function (l) { var m = normOf(this, l), L = this.lenOf(l); return m && L > m[0] && L <= m[0] * 1.5 ? 0.1 : 0; };
+  EL.lenNorm = function (net, l) { var m = normOf(net, l); if (!m) return 'Норма длины для этого типа не задаётся.'; var L = net.lenOf(l);
+    return 'Норма длины: до ' + (m[0] >= 1000 ? m[0] / 1000 + ' км' : m[0] + ' м') + ' (' + m[1] + ')' + (L > m[0] * 1.5 ? ' — превышена более чем в 1,5 раза: линка нет' : L > m[0] ? ' — превышена: линк есть, но кадры бьются (≈10 % потерь)' : ''); };
+  var phys1 = P.phys;
+  P.phys = function (id, port) { var r = phys1.apply(this, arguments), pr = this.peer(id, port); if (!pr || !r.up) return r;
+    var l = this.links[pr.li], m = normOf(this, l), L = this.lenOf(l);
+    if (m && L > m[0] * 1.5) return { up: false, why: 'кабель ' + L + ' м длиннее нормы ' + m[0] + ' м (' + m[1] + ') более чем в 1,5 раза — сигнал не доходит, линка нет' };
+    return r; };
+  var led0 = P.ledOf;
+  if (led0) P.ledOf = function (id, port) { var o = led0.apply(this, arguments), pr = this.peer(id, port); if (!o || o.c !== 'g' || !pr) return o;
+    var l = this.links[pr.li]; if (!this.lenErr(l)) return o; var m = normOf(this, l);
+    return { c: 'o', why: 'кабель ' + this.lenOf(l) + ' м длиннее нормы ' + m[0] + ' м (' + m[1] + '): линк есть, но кадры бьются — CRC-ошибки, ≈10 % потерь' }; };
 
   // ---------------------------------------------------------------- координаты площадок (зоны): расстояние по дуге × коэффициент трассы
   EL.CITIES = { 'Москва': [55.7558, 37.6173], 'Санкт-Петербург': [59.9343, 30.3351], 'Новосибирск': [55.0084, 82.9357], 'Екатеринбург': [56.8389, 60.6057],
