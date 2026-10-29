@@ -1282,6 +1282,8 @@
   window.ELUI = { quizRender: function (box, id, q, qs) { quizRender(box, id, q, qs); }, subRender: function (box, j) { subRender(box, j); }, reviewFromHash: reviewFromHash, snapshot: snapshot, net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
     renderSide: renderSide, ask: function (q, yes, ok) { ask(q, yes, ok); }, setAutoOff: function (v) { autoOff = v; }, setReadOnly: function (v) { readOnly = !!v; document.body.classList.toggle('ro', readOnly); },
+    autoOffer: function (hl, fr) { autoOffer(hl, fr); },
+    clearTerm: function (id) { term(id).html = ''; var b = tEl(id); if (b) b.querySelector('.out').innerHTML = ''; },
     labInfo: function () { if (!lab) return null; var ts = lab.tasks(labP); return { id: lab.id, title: lab.title, total: ts.length, done: Object.keys(lab._done || {}).map(function (i) { return +i + 1; }) }; },
     setNet: function (n) { lab = null; task = null; net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; sel = null; selLink = null; msel = {}; mselL = {}; draw(); renderSide(); },
     startFree: function () { lab = null; task = null; resetNet(); renderSide(); }, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };

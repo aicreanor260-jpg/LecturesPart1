@@ -14706,6 +14706,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   window.ELUI = { quizRender: function (box, id, q, qs) { quizRender(box, id, q, qs); }, subRender: function (box, j) { subRender(box, j); }, reviewFromHash: reviewFromHash, snapshot: snapshot, net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
     renderSide: renderSide, ask: function (q, yes, ok) { ask(q, yes, ok); }, setAutoOff: function (v) { autoOff = v; }, setReadOnly: function (v) { readOnly = !!v; document.body.classList.toggle('ro', readOnly); },
+    autoOffer: function (hl, fr) { autoOffer(hl, fr); },
+    clearTerm: function (id) { term(id).html = ''; var b = tEl(id); if (b) b.querySelector('.out').innerHTML = ''; },
     labInfo: function () { if (!lab) return null; var ts = lab.tasks(labP); return { id: lab.id, title: lab.title, total: ts.length, done: Object.keys(lab._done || {}).map(function (i) { return +i + 1; }) }; },
     setNet: function (n) { lab = null; task = null; net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; sel = null; selLink = null; msel = {}; mselL = {}; draw(); renderSide(); },
     startFree: function () { lab = null; task = null; resetNet(); renderSide(); }, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
@@ -15917,11 +15919,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
 
   // ---------------------------------------------------------------- приветствие, восстановление работы
-  var startLab = null, startFresh = null, started = false;
+  var startLab = null, startFresh = null, started = false, offline = false, live = false;   // live — студент выбрал «Продолжить» / «Начать заново»: до этого ничего не сохраняем
   X.siteStart = function (hashLab, fresh) { startLab = hashLab; startFresh = fresh; U.setAutoOff(true); if (WATCH) { U.setReadOnly(true); return true; }
-    setTimeout(function () { if (!started) { started = true; U.toast('Сервер курса не отвечает — работа пока не сохраняется'); begin(); } }, 5000);   // без связи — работать всё равно можно
+    setTimeout(function () { if (!started) { started = true; offline = true; U.setAutoOff(false); U.autoOffer(startLab, startFresh); } }, 5000);   // /ws недоступен — тихо работаем как раньше (автосохранение в браузере)
     return true; };
-  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; paintMsgBtn();
+  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; offline = false; paintMsgBtn();
     if (WATCH || started) return; started = true;
     var key = startLab || 'free', hit = saved.filter(function (s) { return s.lab === key; })[0];
     if (!hit) { begin(); return; }
@@ -15934,16 +15936,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var w = U.wins.ask, nb = w && w.el.querySelector('[data-q="n"]'); if (nb) nb.textContent = 'Начать заново';
     if (w) w.el.addEventListener('click', function (e) { if (e.target.closest('[data-q="n"],.x,[data-w="close"]')) begin(); }, true); });
   function begin() { if (startLab && startFresh) startFresh(); go(); }
-  function go() { U.setAutoOff(false); lastGen = -1; }
+  function go() { U.setAutoOff(false); lastGen = -1; live = true; }
 
   // ---------------------------------------------------------------- сохранение и журнал
   function snap() { var j = U.snapshot(), s = JSON.stringify(j); if (s.length > 3e6) { U.toast('Схема слишком большая для сохранения на сервер (больше 3 МБ)'); return null; } return j; }
-  EL.serverSave = function (j) { if (WATCH) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
+  EL.serverSave = function (j) { if (WATCH || !live) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
     return new Promise(function (ok) { var t0 = Date.now(); (function wait() { if (!ws || ws.bufferedAmount === 0 || Date.now() - t0 > 3000) ok(); else setTimeout(wait, 50); })(); }); };
-  setInterval(function () { if (WATCH || !started || EL.room && EL.room.id) return; var n = net();
+  setInterval(function () { if (WATCH || !live || EL.room && EL.room.id) return; var n = net();
     var li = U.labInfo(), st = li ? li.id + ':' + li.done.join(',') + '/' + li.total : 'free'; if (st !== labState) { labState = st; send({ t: 'state', lab: curLab(), mode: U.mode(), done: li ? li.done : [], total: li ? li.total : 0 }); }
     if (n.gen !== lastGen && Date.now() - lastSnap > 5000) { var j = snap(); if (j) { send({ t: 'snap', lab: curLab(), data: j }); lastSnap = Date.now(); } lastGen = n.gen; } }, 1500);
-  window.addEventListener('pagehide', function () { if (!WATCH && started && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
+  window.addEventListener('pagehide', function () { if (!WATCH && live && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
   var cmd0 = X.onCmd; X.onCmd = function (id, line, secret) { cmd0(id, line, secret); if (WATCH) return; var d = net().devs[id]; if (!d) return;
     send(secret ? { t: 'cmd', name: d.name, line: '***', secret: true } : { t: 'cmd', name: d.name, line: String(line).slice(0, 500) }); };
   var out0 = X.onOut; X.onOut = function (id, text, cls) { out0(id, text, cls); if (WATCH || EL.room && EL.room.id) return; var d = net().devs[id]; if (!d) return;
@@ -15977,7 +15979,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   var wName = {};
   on('watch.snap', function (m) { if (!m.data) { U.toast(WATCH + ': сохранённой работы нет'); return; } try { U.loadScheme(m.data); } catch (er) { U.toast('Не удалось показать схему: ' + er.message); return; }
     wName = {}; net().list().forEach(function (d) { wName[d.name] = d.id; }); U.setReadOnly(true); U.draw(); banner('Просмотр: ' + (m.login || WATCH) + (m.lab && m.lab !== 'free' ? ' · лаба ' + m.lab : '') + (m.at ? ' · ' + fmtAt(m.at) : '')); });
-  on('watch.con', function (m) { var id = wName[m.dev]; if (!id) return; String(m.text).replace(/\n$/, '').split('\n').forEach(function (l) { U.tlog(id, l, ''); }); });
+  on('watch.con', function (m) { var id = wName[m.dev]; if (!id) return;
+    if (m.tail) U.clearTerm(id);   // хвост консоли при подключении — вместо содержимого
+    String(m.text).replace(/\n$/, '').split('\n').forEach(function (l) { U.tlog(id, l, ''); }); });
   on('watch.state', function (m) { banner('Просмотр: ' + (m.login || WATCH) + ' · ' + (m.lab || '') + (m.total ? ' · пункты ' + (m.done || []).length + '/' + m.total : '')); });
   on('watch.inroom', function (m) { banner('Просмотр: ' + WATCH + ' — сейчас в комнате ' + (m.room && (m.room.name || m.room.code) || '')); });
   function banner(t) { var b = document.getElementById('wbar'); if (!b) { b = document.createElement('div'); b.id = 'wbar'; b.className = 'wbar'; document.body.appendChild(b);
@@ -16014,11 +16018,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
     n.now = view.time || n.now;
     (view.devs || []).forEach(function (v) { seen[v.id] = 1; var lid = S2L[v.id], d = lid && n.devs[lid];
       if (!d) { try { d = n.add(v.model, v.name, v.x, v.y); } catch (er) { d = n.add(v.model, null, v.x, v.y); } S2L[v.id] = d.id; L2S[d.id] = v.id; }
-      d.x = v.x; d.y = v.y; d.off = !!v.off; if (d.name !== v.name && !n.byName(v.name)) n.rename(d.id, v.name); });
+      d.x = v.x; d.y = v.y; d.off = !!v.off; if (v.prompt !== undefined) prompts[d.id] = v.prompt; if (d.name !== v.name && !n.byName(v.name)) n.rename(d.id, v.name); });
     Object.keys(S2L).forEach(function (sid) { if (seen[sid]) return; var lid = S2L[sid]; if (n.devs[lid]) n.remove(lid); delete L2S[lid]; delete S2L[sid]; });
     n.links = []; links = [];
     (view.links || []).forEach(function (l) { var a = S2L[l.a], b = S2L[l.b]; if (!a || !b) return; var er = n.connect(a, l.pa, b, l.pb, l.cab); if (!er) links.push(l.i); });
-    n.gen++; R.lab = view.lab || null; U.draw(); U.refresh(); paintRoom();
+    n.gen++; R.lab = view.lab || null; U.draw(); U.refresh(); paintRoom(); n.list().forEach(function (d) { U.setPr(d.id); });
   }
   function out(L) { (L || []).forEach(function (o) { var id = S2L[o.dev]; if (!id) return;
     if (o.prompt !== undefined) prompts[id] = o.prompt;

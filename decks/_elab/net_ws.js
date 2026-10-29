@@ -33,11 +33,11 @@
   }
 
   // ---------------------------------------------------------------- приветствие, восстановление работы
-  var startLab = null, startFresh = null, started = false;
+  var startLab = null, startFresh = null, started = false, offline = false, live = false;   // live — студент выбрал «Продолжить» / «Начать заново»: до этого ничего не сохраняем
   X.siteStart = function (hashLab, fresh) { startLab = hashLab; startFresh = fresh; U.setAutoOff(true); if (WATCH) { U.setReadOnly(true); return true; }
-    setTimeout(function () { if (!started) { started = true; U.toast('Сервер курса не отвечает — работа пока не сохраняется'); begin(); } }, 5000);   // без связи — работать всё равно можно
+    setTimeout(function () { if (!started) { started = true; offline = true; U.setAutoOff(false); U.autoOffer(startLab, startFresh); } }, 5000);   // /ws недоступен — тихо работаем как раньше (автосохранение в браузере)
     return true; };
-  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; paintMsgBtn();
+  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; offline = false; paintMsgBtn();
     if (WATCH || started) return; started = true;
     var key = startLab || 'free', hit = saved.filter(function (s) { return s.lab === key; })[0];
     if (!hit) { begin(); return; }
@@ -50,16 +50,16 @@
     var w = U.wins.ask, nb = w && w.el.querySelector('[data-q="n"]'); if (nb) nb.textContent = 'Начать заново';
     if (w) w.el.addEventListener('click', function (e) { if (e.target.closest('[data-q="n"],.x,[data-w="close"]')) begin(); }, true); });
   function begin() { if (startLab && startFresh) startFresh(); go(); }
-  function go() { U.setAutoOff(false); lastGen = -1; }
+  function go() { U.setAutoOff(false); lastGen = -1; live = true; }
 
   // ---------------------------------------------------------------- сохранение и журнал
   function snap() { var j = U.snapshot(), s = JSON.stringify(j); if (s.length > 3e6) { U.toast('Схема слишком большая для сохранения на сервер (больше 3 МБ)'); return null; } return j; }
-  EL.serverSave = function (j) { if (WATCH) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
+  EL.serverSave = function (j) { if (WATCH || !live) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
     return new Promise(function (ok) { var t0 = Date.now(); (function wait() { if (!ws || ws.bufferedAmount === 0 || Date.now() - t0 > 3000) ok(); else setTimeout(wait, 50); })(); }); };
-  setInterval(function () { if (WATCH || !started || EL.room && EL.room.id) return; var n = net();
+  setInterval(function () { if (WATCH || !live || EL.room && EL.room.id) return; var n = net();
     var li = U.labInfo(), st = li ? li.id + ':' + li.done.join(',') + '/' + li.total : 'free'; if (st !== labState) { labState = st; send({ t: 'state', lab: curLab(), mode: U.mode(), done: li ? li.done : [], total: li ? li.total : 0 }); }
     if (n.gen !== lastGen && Date.now() - lastSnap > 5000) { var j = snap(); if (j) { send({ t: 'snap', lab: curLab(), data: j }); lastSnap = Date.now(); } lastGen = n.gen; } }, 1500);
-  window.addEventListener('pagehide', function () { if (!WATCH && started && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
+  window.addEventListener('pagehide', function () { if (!WATCH && live && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
   var cmd0 = X.onCmd; X.onCmd = function (id, line, secret) { cmd0(id, line, secret); if (WATCH) return; var d = net().devs[id]; if (!d) return;
     send(secret ? { t: 'cmd', name: d.name, line: '***', secret: true } : { t: 'cmd', name: d.name, line: String(line).slice(0, 500) }); };
   var out0 = X.onOut; X.onOut = function (id, text, cls) { out0(id, text, cls); if (WATCH || EL.room && EL.room.id) return; var d = net().devs[id]; if (!d) return;
@@ -93,7 +93,9 @@
   var wName = {};
   on('watch.snap', function (m) { if (!m.data) { U.toast(WATCH + ': сохранённой работы нет'); return; } try { U.loadScheme(m.data); } catch (er) { U.toast('Не удалось показать схему: ' + er.message); return; }
     wName = {}; net().list().forEach(function (d) { wName[d.name] = d.id; }); U.setReadOnly(true); U.draw(); banner('Просмотр: ' + (m.login || WATCH) + (m.lab && m.lab !== 'free' ? ' · лаба ' + m.lab : '') + (m.at ? ' · ' + fmtAt(m.at) : '')); });
-  on('watch.con', function (m) { var id = wName[m.dev]; if (!id) return; String(m.text).replace(/\n$/, '').split('\n').forEach(function (l) { U.tlog(id, l, ''); }); });
+  on('watch.con', function (m) { var id = wName[m.dev]; if (!id) return;
+    if (m.tail) U.clearTerm(id);   // хвост консоли при подключении — вместо содержимого
+    String(m.text).replace(/\n$/, '').split('\n').forEach(function (l) { U.tlog(id, l, ''); }); });
   on('watch.state', function (m) { banner('Просмотр: ' + (m.login || WATCH) + ' · ' + (m.lab || '') + (m.total ? ' · пункты ' + (m.done || []).length + '/' + m.total : '')); });
   on('watch.inroom', function (m) { banner('Просмотр: ' + WATCH + ' — сейчас в комнате ' + (m.room && (m.room.name || m.room.code) || '')); });
   function banner(t) { var b = document.getElementById('wbar'); if (!b) { b = document.createElement('div'); b.id = 'wbar'; b.className = 'wbar'; document.body.appendChild(b);

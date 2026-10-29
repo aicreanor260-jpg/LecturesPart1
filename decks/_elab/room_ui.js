@@ -25,11 +25,11 @@
     n.now = view.time || n.now;
     (view.devs || []).forEach(function (v) { seen[v.id] = 1; var lid = S2L[v.id], d = lid && n.devs[lid];
       if (!d) { try { d = n.add(v.model, v.name, v.x, v.y); } catch (er) { d = n.add(v.model, null, v.x, v.y); } S2L[v.id] = d.id; L2S[d.id] = v.id; }
-      d.x = v.x; d.y = v.y; d.off = !!v.off; if (d.name !== v.name && !n.byName(v.name)) n.rename(d.id, v.name); });
+      d.x = v.x; d.y = v.y; d.off = !!v.off; if (v.prompt !== undefined) prompts[d.id] = v.prompt; if (d.name !== v.name && !n.byName(v.name)) n.rename(d.id, v.name); });
     Object.keys(S2L).forEach(function (sid) { if (seen[sid]) return; var lid = S2L[sid]; if (n.devs[lid]) n.remove(lid); delete L2S[lid]; delete S2L[sid]; });
     n.links = []; links = [];
     (view.links || []).forEach(function (l) { var a = S2L[l.a], b = S2L[l.b]; if (!a || !b) return; var er = n.connect(a, l.pa, b, l.pb, l.cab); if (!er) links.push(l.i); });
-    n.gen++; R.lab = view.lab || null; U.draw(); U.refresh(); paintRoom();
+    n.gen++; R.lab = view.lab || null; U.draw(); U.refresh(); paintRoom(); n.list().forEach(function (d) { U.setPr(d.id); });
   }
   function out(L) { (L || []).forEach(function (o) { var id = S2L[o.dev]; if (!id) return;
     if (o.prompt !== undefined) prompts[id] = o.prompt;
