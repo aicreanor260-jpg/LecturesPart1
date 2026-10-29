@@ -277,7 +277,7 @@
   function pcost(L, k) { var c = k && L.cfg.mstCost && L.cfg.mstCost[k]; return c || L.cfg.stpCost || (L.name.indexOf('po') === 0 ? 10000 : 20000); }
   function bidLess(a, b) { return a.prio !== b.prio ? a.prio < b.prio : a.mac < b.mac; }
   function pnum(n) { if (n.indexOf('po') === 0) return 1000 + +n.slice(2); var pf = { gi: 0, fa: 0, tw: 100, te: 200, fo: 300, hu: 400 }[n.replace(/[\d\/]+$/, '')] || 0;
-    return pf + +n.split('/')[2]; }
+    return pf + +n.split('/').pop(); }   // номер — последнее число имени (gi1/0/5, GE0/0/5, fa0/5)
   P.stp = function (k) {
     k = k || 0; var K = (this._stpK = this._stpK || {});
     if (!k && this._stp && this._stp.gen === this.gen) return this._stp.t;

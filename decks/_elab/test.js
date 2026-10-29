@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3102,6 +3102,65 @@ EL.labs.LABS.forEach(runLab);
   var D = EL.faults.analyze(n, { k: 'cfg', cfg: 'gw', dev: 'PC1' });
   chk('Список ошибок конфигурации строится по устройству (Huawei S1 — STP, регион MSTP)', EL.faults.cfgFor(n, 'S1').some(function (x) { return x.cfg === 'mst-name'; }) && !!D);
   console.log('✓ Отказы: матрица связности, перестроение, единые точки отказа');
+})();
+// Cisco IOS (спецификации sources/cisco/spec): 2960/3560 в модели MES, ISR в модели ESR, стыки с Eltex и Huawei
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function run(n, id, L) { return L.filter(function (l) { var r = n.exec(id, l); return /(^|\n)%/.test(r) && !/Access VLAN does not exist/.test(r); }); }   // сообщение о создании VLAN — не ошибка
+  var n = new EL.Net(), a = n.add('2960-24TT', 'S1'), b = n.add('2960-24TT', 'S2'), p1 = n.add('VPC', 'PC1'), p2 = n.add('VPC', 'PC2');
+  n.connect(a.id, 'gi0/1', b.id, 'gi0/1'); n.connect(p1.id, 'eth0', a.id, 'fa0/1'); n.connect(p2.id, 'eth0', b.id, 'fa0/1');
+  chk('IOS: Switch> → enable → Switch# → conf t → Switch(config)#', n.prompt(a.id) === 'Switch>' && (n.exec(a.id, 'en'), n.prompt(a.id) === 'Switch#') &&
+    /Enter configuration commands/.test(n.exec(a.id, 'conf t')) && n.prompt(a.id) === 'Switch(config)#');
+  chk('IOS: % Invalid input с маркером ^', /\n% Invalid input detected at '\^' marker\.$/.test(n.exec(a.id, 'interfce fa0/1')));
+  chk('IOS: % Incomplete command. и % Ambiguous command', n.exec(a.id, 'hostname') === '% Incomplete command.' && /^% Ambiguous command:/.test(n.exec(a.id, 'no s')));
+  var bad = run(n, a.id, ['hostname S1', 'vlan 10', 'name SALES', 'exit', 'vtp domain LAB', 'int fa0/1', 'switchport mode access', 'switchport access vlan 10', 'int gi0/1', 'switchport mode trunk', 'end']);
+  bad = bad.concat(run(n, b.id, ['en', 'conf t', 'hostname S2', 'int fa0/1', 'sw mode acc', 'sw acc vlan 10', 'end']));
+  chk('2960: VLAN, access, trunk без ошибок', !bad.length, bad.join('; '));
+  chk('EXEC: неизвестное слово — Translating…domain server', /Translating "foo"\.\.\.domain server/.test(n.exec(a.id, 'foo')));
+  n.exec(p1.id, 'ip 10.0.0.1/24'); n.exec(p2.id, 'ip 10.0.0.2/24'); n.tick(40);
+  chk('DTP: trunk ↔ dynamic auto — транк, ping в VLAN 10', n.ping(p1.id, '10.0.0.2').ok && /Gi0\/1\s+auto\s+802\.1q\s+trunking/.test(n.exec(b.id, 'show interfaces trunk')));
+  chk('VTP: S2 взял домен LAB и VLAN 10 SALES от сервера S1', /VTP Domain Name\s+: LAB/.test(n.exec(b.id, 'show vtp status')) && /10\s+SALES\s+active\s+Fa0\/1/.test(n.exec(b.id, 'show vlan brief')));
+  chk('PVST+: show spanning-tree vlan 10 — protocol ieee, sys-id-ext 10', /VLAN0010\n  Spanning tree enabled protocol ieee[\s\S]*sys-id-ext 10/.test(n.exec(b.id, 'show spanning-tree vlan 10')));
+  chk('CDP: S2 видит S1 на Gi 0/1', /S1\s+Gi 0\/1\s+\d+\s+S\s+2960-24TT Gi 0\/1/.test(n.exec(b.id, 'show cdp neighbors')));
+  chk('show running-config | include hostname', n.exec(a.id, 'show running-config | include hostname') === 'hostname S1');
+  run(n, a.id, ['conf t', 'int gi0/1', 'switchport mode dynamic auto', 'end']); n.tick(2);
+  chk('DTP: auto ↔ auto — транка нет, VLAN 10 не проходит', !n.ping(p1.id, '10.0.0.2').ok);
+  chk('copy running-config startup-config → [OK]; reload поднимает сохранённое', (n.exec(a.id, 'copy running-config startup-config'), /\[OK\]/.test(n.exec(a.id, ''))) &&
+    (n.exec(a.id, 'conf t'), n.exec(a.id, 'hostname X'), n.exec(a.id, 'end'), n.reboot(a.id), n.prompt(a.id) === 'S1>'));
+  // маршрутизатор: OSPF с Huawei, выходной ACL
+  var o = new EL.Net(), r = o.add('1941', 'R1'), h = o.add('AR2220', 'R2'), q1 = o.add('VPC', 'PC1'), q2 = o.add('VPC', 'PC2');
+  o.connect(r.id, 'gi0/0', h.id, 'GE0/0/0'); o.connect(q1.id, 'eth0', r.id, 'gi0/1'); o.connect(q2.id, 'eth0', h.id, 'GE0/0/1');
+  chk('ISR: интерфейсы по умолчанию administratively down', /GigabitEthernet0\/0\s+unassigned\s+YES unset\s+administratively down down/.test(o.exec(r.id, 'show ip interface brief')));
+  bad = run(o, r.id, ['en', 'conf t', 'hostname R1', 'int gi0/0', 'ip add 10.0.12.1 255.255.255.252', 'no sh', 'int g0/1', 'ip address 192.168.1.1 255.255.255.0', 'no shutdown',
+    'router ospf 1', 'network 10.0.12.0 0.0.0.3 area 0', 'network 192.168.1.0 0.0.0.255 area 0', 'end']);
+  EL.labs.apply(o, { R2: ['system-view', 'interface GigabitEthernet0/0/0', 'ip address 10.0.12.2 30', 'interface GigabitEthernet0/0/1', 'ip address 192.168.2.1 24', 'quit', 'ospf 1', 'area 0',
+    'network 10.0.12.0 0.0.0.3', 'network 192.168.2.0 0.0.0.255', 'return'], PC1: ['ip 192.168.1.10/24 192.168.1.1'], PC2: ['ip 192.168.2.10/24 192.168.2.1'] });
+  o.tick(60);
+  chk('Cisco 1941 ↔ Huawei AR2220: OSPF FULL, O 192.168.2.0/24 [110/1], ping ПК–ПК', !bad.length && /FULL\//.test(o.exec(r.id, 'show ip ospf neighbor')) &&
+    /O\s+192\.168\.2\.0\/24 \[110\/1\] via 10\.0\.12\.2/.test(o.exec(r.id, 'show ip route')) && o.ping(q1.id, '192.168.2.10').ok, bad.join('; '));
+  chk('ping IOS: !!!!! и Success rate is 100 percent (5/5)', /!!!!!\nSuccess rate is 100 percent \(5\/5\)/.test(o.exec(r.id, 'ping 192.168.2.10')));
+  run(o, r.id, ['conf t', 'access-list 10 deny host 192.168.1.10', 'access-list 10 permit any', 'int gi0/0', 'ip access-group 10 out', 'end']);
+  chk('ACL standard на выходе Gi0/0 режет PC1, неявный deny в конце', !o.ping(q1.id, '192.168.2.10').ok);
+  // router-on-a-stick + DHCP + PAT
+  var m = new EL.Net(), R1 = m.add('2911', 'R1'), S = m.add('2960-24TT', 'S1'), A = m.add('VPC', 'PC1'), B = m.add('VPC', 'PC2'), I = m.add('vESR', 'ISP'), W = m.add('VPC', 'WEB');
+  m.connect(R1.id, 'gi0/1', S.id, 'gi0/1'); m.connect(A.id, 'eth0', S.id, 'fa0/1'); m.connect(B.id, 'eth0', S.id, 'fa0/2'); m.connect(R1.id, 'gi0/0', I.id, 'gi1/0/1'); m.connect(W.id, 'eth0', I.id, 'gi1/0/2');
+  bad = run(m, S.id, ['en', 'conf t', 'vlan 10', 'vlan 20', 'exit', 'int fa0/1', 'sw mode access', 'sw access vlan 10', 'int fa0/2', 'sw mo acc', 'sw acc vl 20', 'int gi0/1', 'sw mode trunk', 'end'])
+    .concat(run(m, R1.id, ['en', 'conf t', 'int gi0/1', 'no shut', 'int gi0/1.10', 'encapsulation dot1Q 10', 'ip add 192.168.10.1 255.255.255.0', 'ip nat inside', 'int gi0/1.20', 'encap dot1q 20',
+      'ip add 192.168.20.1 255.255.255.0', 'ip nat inside', 'int gi0/0', 'ip add 203.0.113.2 255.255.255.252', 'no shut', 'ip nat outside', 'exit', 'ip dhcp excluded-address 192.168.10.1 192.168.10.9',
+      'ip dhcp pool V10', 'network 192.168.10.0 255.255.255.0', 'default-router 192.168.10.1', 'exit', 'access-list 1 permit 192.168.0.0 0.0.255.255',
+      'ip nat inside source list 1 interface gi0/0 overload', 'ip route 0.0.0.0 0.0.0.0 203.0.113.1', 'end']));
+  EL.labs.apply(m, { ISP: ['configure', 'interface gi1/0/1', 'ip address 203.0.113.1/30', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 198.51.100.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    WEB: ['ip 198.51.100.10/24 198.51.100.1'], PC2: ['ip 192.168.20.10/24 192.168.20.1'] });
+  m.tick(40); m.exec(A.id, 'ip dhcp');
+  chk('Router-on-a-stick: CLI без ошибок, DHCP из пула с excluded-address', !bad.length && /^192\.168\.10\.(1\d|[2-9]\d|1\d\d|2[0-4]\d|25[0-4])$/.test(m.devs[A.id].st.ip || ''), bad.join('; ') + ' ' + m.devs[A.id].st.ip);
+  chk('Router-on-a-stick: PC1 (VLAN 10) ↔ PC2 (VLAN 20); PAT наружу', m.ping(A.id, '192.168.20.10').ok && m.ping(B.id, '198.51.100.10').ok);
+  // EtherChannel PAgP
+  var e = new EL.Net(), c1 = e.add('2960-24TT', 'S1'), c2 = e.add('2960-24TT', 'S2'); [1, 2].forEach(function (i) { e.connect(c1.id, 'fa0/' + i, c2.id, 'fa0/' + i); });
+  run(e, c1.id, ['en', 'conf t', 'int range fa0/1 - 2', 'channel-group 1 mode desirable', 'end']); run(e, c2.id, ['en', 'conf t', 'int range fa0/1-2', 'channel-group 1 mode auto', 'end']);
+  chk('EtherChannel PAgP desirable ↔ auto: Po1(SU)', /Po1\(SU\)\s+PAgP/.test(e.exec(c1.id, 'show etherchannel summary')));
+  run(e, c1.id, ['conf t', 'int range fa0/1 - 2', 'channel-group 1 mode auto', 'end']);
+  chk('EtherChannel PAgP auto ↔ auto не поднимается', /Po1\(SD\)/.test(e.exec(c1.id, 'show etherchannel summary')));
+  console.log('✓ Cisco IOS: 2960, 1941, 2911 в смешанных схемах');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

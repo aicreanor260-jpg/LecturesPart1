@@ -351,7 +351,8 @@
   //   с version 1 / version 2 в процессе — шлёт и принимает только эту версию. ESR в модели шлёт v2 и принимает обе.
   // OSPF: тип сети на концах линка должен совпадать — «both ends of the link must be identical» (ospf_network-type_1);
   //   проверяется, если хотя бы один из концов — Huawei (поведение Eltex при несовпадении в спецификациях не описано).
-  function ripVer(net, id) { var d = net.devs[id]; return d && Vr.isVrp(d) && d.st.vrp.c.rip ? d.st.vrp.c.rip.ver || null : 'esr'; }
+  function ripVer(net, id) { var d = net.devs[id]; if (d && EL.ios && EL.ios.isIos(d)) return (d.st.ios.c.rip || {}).ver || null;   // Cisco: так же, шлёт v1 по умолчанию
+    return d && Vr.isVrp(d) && d.st.vrp.c.rip ? d.st.vrp.c.rip.ver || null : 'esr'; }
   var tl0 = EL.Net.prototype.timeLayer;
   EL.Net.prototype.timeLayer = function (proto, rs, info, tab) {
     var s = this;

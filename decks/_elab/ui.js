@@ -377,7 +377,7 @@
   // ================================================================== терминалы
   function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
   // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
-  function needLogin(d) { if (d.sub === 'vrp') return false;   // Huawei VRP: консоль без пароля, как в eNSP
+  function needLogin(d) { if (d.sub === 'vrp' || d.sub === 'ios') return false;   // Huawei VRP и Cisco IOS: консоль без пароля, как в eNSP / Packet Tracer
     return (d.type === 'mes' && d.sub !== 'ont' && d.sub !== 'eont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
@@ -407,6 +407,7 @@
   }
   function banner(d) {
     if (d.sub === 'vrp') return d.model + '\n';
+    if (d.sub === 'ios') return 'Cisco ' + d.model + '\n\nPress RETURN to get started!\n';
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
     if (d.sub === 'phone') return 'Аналоговый телефон · dial НОМЕР — набрать, hangup — положить трубку, status — состояние';
     if (d.sub === 'tau' || d.sub === 'smg') return 'Eltex ' + d.model + '\n';
@@ -442,7 +443,8 @@
       }
       if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(id, v); e.preventDefault(); }
       else if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); var dz = net.devs[id];   // Ctrl+Z — выход в привилегированный режим
-        if (dz && dz.sub === 'vrp' && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = ''; net.exec(id, 'return'); setPr(id); }   // VRP: Ctrl+Z — в user view
+        if (dz && (dz.sub === 'vrp' || dz.sub === 'ios') && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';   // VRP: Ctrl+Z — в user view; IOS — end
+          if (dz.sub === 'vrp') net.exec(id, 'return'); else if (!/[>#]$/.test(net.prompt(id)) || /\(/.test(net.prompt(id))) net.exec(id, 'end'); setPr(id); }
         else if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
           if (dz.type === 'mes' ? dz.st.mode !== 'user' && dz.st.mode !== 'priv' : dz.st.mode !== 'priv') net.exec(id, 'end'); setPr(id); } }
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
@@ -639,7 +641,7 @@
       if (!net.devs[id]) return;
       if (reload) net.reboot(id); else net.power(id, true);
       var tt = term(id); tt.auth = false; tt.user = null;   // после загрузки снова вход
-      tlog(id, d.sub === 'vrp' ? 'Booting ' + d.model + ' … OK' : d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
+      tlog(id, d.sub === 'vrp' || d.sub === 'ios' ? 'Booting ' + d.model + ' … OK' : d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
         d.type === 'deb' ? 'Debian GNU/Linux 11 ' + d.st.host + ' tty1' : 'VPCS ready', 's');
       draw(); setPr(id); refresh();
     }, 1100);
