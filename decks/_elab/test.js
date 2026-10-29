@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3229,6 +3229,34 @@ EL.labs.LABS.forEach(runLab);
   chk('OSPF v7 MikroTik ↔ Cisco: DAo 192.168.2.0/24 … 110, ping, сосед Full', o.ping(q1.id, '192.168.2.10').ok && /DAo 192\.168\.2\.0\/24\s+10\.0\.12\.2%ether1\s+110/.test(o.exec(R1.id, '/ip route print')) &&
     /Full/.test(o.exec(R1.id, '/routing ospf neighbor print')));
   console.log('✓ MikroTik RouterOS v7: мост и VLAN, DHCP, NAT, firewall, OSPF v7');
+})();
+// D-Link (spec/dlink-legacy.md, dlink-ios.md): DES-3200 — плоский CLI, DGS-1510 — Cisco-подобный; стыки с Cisco и Huawei
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), d = n.add('DES-3200-28', 'SW1'), c = n.add('2960-24TT', 'S2'), a = n.add('VPC', 'PC1'), b = n.add('VPC', 'PC2');
+  n.connect(d.id, '25', c.id, 'gi0/1'); n.connect(a.id, 'eth0', d.id, '1'); n.connect(b.id, 'eth0', c.id, 'fa0/1');
+  chk('DES-3200: приглашение DES-3200-28:admin#; эхо Command: … и Success.', n.prompt(d.id) === 'DES-3200-28:admin#' && n.exec(d.id, 'create vlan v10 tag 10') === 'Command: create vlan v10 tag 10\n\nSuccess.');
+  chk('DES-3200: маска в эхе приводится к префиксу; неизвестная команда — Available commands', /^Command: config ipif System ipaddress 10\.24\.22\.100\/8\n\nSuccess\.$/.test(n.exec(d.id, 'config ipif System ipaddress 10.24.22.100/255.0.0.0')) &&
+    /^Available commands:\n\.\.  \?  cable_diag/.test(n.exec(d.id, 'foo')));
+  chk('DES-3200: неполная команда — Next possible completions', /Next possible completions:/.test(n.exec(d.id, 'config vlan')));
+  ['config vlan default delete 1-24', 'config vlan v10 add untagged 1-24', 'config vlan v10 add tagged 25-26'].forEach(function (l) { n.exec(d.id, l); });
+  ['en', 'conf t', 'vlan 10', 'int fa0/1', 'sw mo acc', 'sw acc vl 10', 'int gi0/1', 'sw mode trunk', 'end'].forEach(function (l) { n.exec(c.id, l); });
+  n.exec(a.id, 'ip 10.10.0.1/24'); n.exec(b.id, 'ip 10.10.0.2/24'); n.tick(40);
+  chk('DES-3200 (untagged 1-24, tagged 25-26) ↔ Cisco 2960 trunk: VLAN 10 проходит', n.ping(a.id, '10.10.0.2').ok);
+  chk('DES-3200: show vlan — Current Tagged Ports : 25-26, Untagged : 1-24', /VID              :10[\s\S]*Current Tagged Ports : 25-26\nCurrent Untagged Ports: 1-24/.test(n.exec(d.id, 'show vlan')));
+  chk('DES-3200: save — Saving all configurations to NV-RAM.......... Done.', /Saving all configurations to NV-RAM\.{10} Done\./.test(n.exec(d.id, 'save')));
+  var m = new EL.Net(), g = m.add('DGS-1510-28X', 'SW1'), h = m.add('S5700', 'S3'), p1 = m.add('VPC', 'A'), p2 = m.add('VPC', 'B');
+  m.connect(g.id, 'eth1/0/26', h.id, 'GE0/0/24'); m.connect(p1.id, 'eth0', g.id, 'eth1/0/1'); m.connect(p2.id, 'eth0', h.id, 'GE0/0/1');
+  chk('DGS-1510: сразу Switch# (уровень 15); ошибки без % — Ambiguous command / Incomplete command / Invalid input detected at ^marker', m.prompt(g.id) === 'Switch#' &&
+    m.exec(g.id, 'show v') === 'Ambiguous command' && m.exec(g.id, 'show') === 'Incomplete command' && /\^\nInvalid input detected at \^marker$/.test(m.exec(g.id, 'show verb')));
+  ['configure terminal', 'vlan 10', 'exit', 'interface eth1/0/1', 'switchport mode access', 'switchport access vlan 10', 'interface eth1/0/26', 'switchport mode trunk', 'end'].forEach(function (l) { m.exec(g.id, l); });
+  ['sys', 'vlan batch 10', 'int g0/0/1', 'port link-type access', 'port default vlan 10', 'int g0/0/24', 'port link-type trunk', 'port trunk allow-pass vlan 10', 'return'].forEach(function (l) { m.exec(h.id, l); });
+  m.exec(p1.id, 'ip 10.10.0.1/24'); m.exec(p2.id, 'ip 10.10.0.3/24'); m.tick(40);
+  chk('DGS-1510 ↔ Huawei S5700: транк VLAN 10', m.ping(p1.id, '10.10.0.3').ok);
+  chk('DGS-1510: show vlan — Tagged Member Ports : eth1/0/26', /VLAN 10\n     Name : VLAN0010\n     Description :\n     Tagged Member Ports : eth1\/0\/26\n     Untagged Member Ports : eth1\/0\/1/.test(m.exec(g.id, 'show vlan')));
+  chk('DGS-1510: copy running-config startup-config — вопрос [y/n] и сохранение', /\[y\/n\]/.test(m.exec(g.id, 'copy running-config startup-config')) && /Saving all configurations to NV-RAM/.test(m.exec(g.id, 'y')));
+  chk('DGS-1510: STP по умолчанию выключен (spanning-tree global state)', m.exec(g.id, 'show spanning-tree') === 'Spanning Tree: Disabled');
+  console.log('✓ D-Link: DES-3200 (старый CLI), DGS-1510 (Cisco-подобный)');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

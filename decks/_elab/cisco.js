@@ -24,13 +24,13 @@
     m.login = [{ u: '—', p: '—', a: 'консоль без пароля; enable secret не задан' }]; EL.MODELS[x[0]] = m; });
 
   function isIos(d) { return !!d && d.sub === 'ios'; }
-  function dports(net, d) { return net.portsOf(d).filter(function (p) { return /^(fa|gi)\d/.test(p); }); }
+  function dports(net, d) { return net.portsOf(d).filter(function (p) { return /^(fa|gi|eth)\d/.test(p); }); }
   // ---------------------------------------------------------------- имена интерфейсов
-  var TY = { fa: ['FastEthernet', 'Fa'], gi: ['GigabitEthernet', 'Gi'], vlan: ['Vlan', 'Vl'], po: ['Port-channel', 'Po'], lo: ['Loopback', 'Lo'] };
-  function full(n) { var m = String(n).match(/^(fa|gi|vlan|po|lo)(\d.*)$/); return m ? TY[m[1]][0] + m[2] : n; }
-  function short(n) { var m = String(n).match(/^(fa|gi|vlan|po|lo)(\d.*)$/); return m ? TY[m[1]][1] + m[2] : n; }
+  var TY = { fa: ['FastEthernet', 'Fa'], gi: ['GigabitEthernet', 'Gi'], vlan: ['Vlan', 'Vl'], po: ['Port-channel', 'Po'], lo: ['Loopback', 'Lo'], eth: ['eth', 'eth'] };   // eth — D-Link (eth1/0/1)
+  function full(n) { var m = String(n).match(/^(fa|gi|vlan|po|lo|eth)(\d.*)$/); return m ? TY[m[1]][0] + m[2] : n; }
+  function short(n) { var m = String(n).match(/^(fa|gi|vlan|po|lo|eth)(\d.*)$/); return m ? TY[m[1]][1] + m[2] : n; }
   function pre(w, kw, min) { return w.length >= (min || 1) && kw.indexOf(w) === 0; }
-  function ifType(w) { w = w.toLowerCase(); if (pre(w, 'fastethernet')) return 'fa'; if (pre(w, 'gigabitethernet')) return 'gi'; if (pre(w, 'port-channel', 2)) return 'po';
+  function ifType(w) { w = w.toLowerCase(); if (pre(w, 'ethernet', 2) || w === 'eth') return 'eth'; if (pre(w, 'fastethernet')) return 'fa'; if (pre(w, 'gigabitethernet')) return 'gi'; if (pre(w, 'port-channel', 2)) return 'po';
     if (pre(w, 'loopback', 2)) return 'lo'; if (pre(w, 'vlan', 1) && w.length >= 1 && w !== 'v') return 'vlan'; return null; }
   // строка → токены; «FastEthernet 0/1», «fa0/1», «f0/1» → fa0/1; «interface vlan 10» → vlan10; диапазон «fa0/1 - 5» → fa0/1-5
   function norm(line) {
@@ -41,7 +41,7 @@
       if (m && (ty = ifType(m[1])) && (ty !== 'vlan' || ifCtx)) { o.push(ty + m[2]); continue; }
       if (/^[A-Za-z-]+$/.test(w) && nx && /^\d+(\/\d+){0,2}(\.\d+)?$/.test(nx) && (ty = ifType(w)) && (/\//.test(nx) || ifCtx && ty !== 'fa' && ty !== 'gi')) {
         if (ty !== 'vlan' || /^(interface|int|in)$/i.test(o[o.length - 1] || '') || pre((o[o.length - 1] || '').toLowerCase(), 'interface', 2)) { o.push(ty + nx); i++; continue; } }
-      if (w === '-' && o.length && /^(fa|gi)\d/.test(o[o.length - 1]) && /^\d+$/.test(nx || '')) { o[o.length - 1] += '-' + nx; i++; continue; }
+      if (w === '-' && o.length && /^(fa|gi|eth)\d/.test(o[o.length - 1]) && /^\d+$/.test(nx || '')) { o[o.length - 1] += '-' + nx; i++; continue; }
       o.push(w);
     }
     return o;
@@ -50,10 +50,10 @@
   // ---------------------------------------------------------------- таблица команд
   var T = [];
   function cmd(views, pat, run, d) { var e = { v: views.split(' '), p: pat.split(' '), run: run, d: d || '' }; T.push(e); return e; }
-  function isIf(t) { return /^(fa|gi)\d+(\/\d+){1,2}(\.\d+)?$|^(vlan|po|lo)\d+$/.test(t); }
+  function isIf(t) { return /^(fa|gi|eth)\d+(\/\d+){1,2}(\.\d+)?$|^(vlan|po|lo)\d+$/.test(t); }
   function tokOk(p, t) {
     if (p === '<n>') return /^\d+$/.test(t); if (p === '<w>') return true; if (p === '<ip>') return IP.ip2n(t) !== null;
-    if (p === '<if>') return isIf(t); if (p === '<rng>') return /^(fa|gi)\d+(\/\d+){1,2}(-\d+)?$/.test(t); if (p === '<list>') return /^[\d,\-]+$/.test(t);
+    if (p === '<if>') return isIf(t); if (p === '<rng>') return /^(fa|gi|eth)\d+(\/\d+){1,2}(-\d+)?$/.test(t); if (p === '<list>') return /^[\d,\-]+$/.test(t);
     return pre(t.toLowerCase(), p);
   }
   function list(s) { var o = []; String(s).split(',').forEach(function (p) { var m = p.match(/^(\d+)-(\d+)$/); if (m) { for (var i = +m[1]; i <= +m[2]; i++) o.push(i); } else if (/^\d+$/.test(p)) o.push(+p); }); return o; }
@@ -95,7 +95,7 @@
     var s = String(raw), at = 0, pos = 0, words = s.match(/\S+/g) || [];
     for (var i = 0; i <= k && i < words.length; i++) { var j = s.indexOf(words[i], at); pos = j; at = j + words[i].length; }
     if (k >= words.length) pos = s.replace(/\s+$/, '').length + 1;
-    return new Array(prompt(st).length + pos + 1).join(' ') + '^\n% Invalid input detected at \'^\' marker.';
+    return new Array(prompt(st).length + pos + 1).join(' ') + '^\n' + (X(st).dl ? 'Invalid input detected at ^marker' : '% Invalid input detected at \'^\' marker.');   // D-Link — без «%» (dlink-ios.md §4)
   }
 
   // ---------------------------------------------------------------- режимы и приглашения
@@ -133,11 +133,11 @@
     var x = X(st), H = hits(st, v, toks);
     if (!H.length && ['if', 'range', 'subif', 'vlan', 'line', 'router', 'std', 'ext', 'dhcp', 'obj', 'pmap', 'pmapc'].indexOf(v) >= 0) {   // команда глобальной конфигурации из подрежима
       var H2 = hits(st, 'config', toks); if (H2.length) { toConfig(st); v = 'config'; H = H2; } }
-    if (H.length > 1 && ambiguous(H, toks)) return '% Ambiguous command:  "' + line.trim() + '"';
-    if (!H.length && ambPart(st, v, toks)) return '% Ambiguous command:  "' + line.trim() + '"';
+    var dl = !!x.dl;
+    if (H.length > 1 && ambiguous(H, toks) || !H.length && ambPart(st, v, toks)) return dl ? 'Ambiguous command' : '% Ambiguous command:  "' + line.trim() + '"';
     if (!H.length) {
-      if (partial(st, v, toks)) return '% Incomplete command.';
-      if ((v === 'user' || v === 'priv') && toks.length === 1 && !T.some(function (e) { return inView(e, v) && tokOk(e.p[0], toks[0]); })) return translating(st, toks[0]);
+      if (partial(st, v, toks)) return dl ? 'Incomplete command' : '% Incomplete command.';
+      if (!dl && (v === 'user' || v === 'priv') && toks.length === 1 && !T.some(function (e) { return inView(e, v) && tokOk(e.p[0], toks[0]); })) return translating(st, toks[0]);
       return caret(st, line, errAt(st, v, toks));
     }
     H.sort(function (a, b) { return b.r.ex - a.r.ex; });
@@ -229,7 +229,7 @@
   cmd('if range', 'speed <w>', function (st, a) { cur(st).forEach(function (x) { x.speed = a[0]; }); });
   cmd('if range', 'duplex <w>', function (st, a) { cur(st).forEach(function (x) { x.duplex = a[0]; }); });
   cmd('if subif', 'ip address <ip> <ip>', function (st, a) { var l = IP.mask2len(a[1]); if (l === null || l < 1) return null; var n = curNames(st)[0];
-    if (/^(fa|gi)\d/.test(n) && X(st).kind === 'sw' && !cur(st)[0].routed) return null; cur(st)[0].ip = [a[0], l]; }, 'Set the IP address of an interface');
+    if (/^(fa|gi|eth)\d/.test(n) && X(st).kind === 'sw' && !cur(st)[0].routed) return null; cur(st)[0].ip = [a[0], l]; }, 'Set the IP address of an interface');
   cmd('if subif', 'no ip address', function (st) { delete cur(st)[0].ip; });
 
   // ---------------------------------------------------------------- конфигурация: show running-config, сохранение, reload
@@ -296,7 +296,7 @@
   cmd('exec', 'show ip interface brief', function (st) {
     var net = st.net, d = net && net.devs[st.dev], c = C(st), o = ['Interface              IP-Address      OK? Method Status                Protocol'];
     if (!d) return o.join('\n');
-    var names = dports(net, d).concat(Object.keys(c.ifs).filter(function (k) { return !/^(fa|gi)\d+(\/\d+){1,2}$/.test(k); }).sort());
+    var names = dports(net, d).concat(Object.keys(c.ifs).filter(function (k) { return !/^(fa|gi|eth)\d+(\/\d+){1,2}$/.test(k); }).sort());
     if (X(st).kind === 'sw' && names.indexOf('vlan1') < 0) names.push('vlan1');
     names.forEach(function (k) { var x = c.ifs[k] || {}, sh = EL.ios.isShut(st, k, x), up = EL.ios.ifUp(st, k, x);
       o.push(pad(full(k), 23) + pad(x.ip ? x.ip[0] : 'unassigned', 16) + pad('YES', 4) + pad(x.ip ? 'manual' : 'unset', 7) + pad(sh ? 'administratively down' : up ? 'up' : 'down', 22) + (!sh && up ? 'up' : 'down')); });

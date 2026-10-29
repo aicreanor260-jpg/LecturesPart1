@@ -377,7 +377,7 @@
   // ================================================================== терминалы
   function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
   // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
-  function needLogin(d) { if (d.sub === 'vrp' || d.sub === 'ios' || d.sub === 'ros') return false;   // Huawei VRP, Cisco IOS, MikroTik (admin без пароля): консоль сразу
+  function needLogin(d) { if (d.sub === 'vrp' || d.sub === 'ios' || d.sub === 'ros' || d.sub === 'dlegacy') return false;   // Huawei VRP, Cisco IOS, MikroTik, D-Link: консоль сразу (вход упрощён)
     return (d.type === 'mes' && d.sub !== 'ont' && d.sub !== 'eont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
@@ -407,6 +407,9 @@
   }
   function banner(d) {
     if (d.sub === 'vrp') return d.model + '\n';
+    var dm = EL.MODELS[d.model] || {};   // D-Link: баннер из CLI Reference (dlink-legacy.md §2.2, dlink-ios.md §2.2)
+    if (d.sub === 'dlegacy' || d.sub === 'ios' && dm.dlink) return '          ' + d.model + ' ' + (dm.banner || '') + '\n                    Command Line Interface\n\n                    Firmware: Build ' + (dm.fw || dm.ios || '') +
+      '\n          Copyright(C) 2022 D-Link Corporation. All rights reserved.\n';
     if (d.sub === 'ios') return 'Cisco ' + d.model + '\n\nPress RETURN to get started!\n';
     if (d.sub === 'ros') return '  MMM      MMM       KKK                          TTTTTTTTTTT      KKK\n  MMMM    MMMM       KKK                          TTTTTTTTTTT      KKK\n' +
       '  MMM MMMM MMM  III  KKK  KKK  RRRRRR     OOOOOO      TTT     III  KKK  KKK\n  MMM  MM  MMM  III  KKKKK     RRR  RRR  OOO  OOO     TTT     III  KKKKK\n' +
@@ -645,7 +648,7 @@
       if (!net.devs[id]) return;
       if (reload) net.reboot(id); else net.power(id, true);
       var tt = term(id); tt.auth = false; tt.user = null;   // после загрузки снова вход
-      tlog(id, d.sub === 'vrp' || d.sub === 'ios' || d.sub === 'ros' ? 'Booting ' + d.model + ' … OK' : d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
+      tlog(id, d.sub === 'vrp' || d.sub === 'ios' || d.sub === 'ros' || d.sub === 'dlegacy' ? 'Booting ' + d.model + ' … OK' : d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
         d.type === 'deb' ? 'Debian GNU/Linux 11 ' + d.st.host + ' tty1' : 'VPCS ready', 's');
       draw(); setPr(id); refresh();
     }, 1100);

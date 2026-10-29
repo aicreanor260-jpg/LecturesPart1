@@ -18,7 +18,7 @@
   function C(st) { return st.ios.c; }
   function top(st) { return I.top(st); }
   function each(st, f) { var bad = false, N = I.curNames(st); I.cur(st).forEach(function (x, i) { if (f(x, N[i]) === false) bad = true; }); return bad ? null : undefined; }
-  function phys(n) { return /^(fa|gi)\d+\/\d+$/.test(n); }
+  function phys(n) { return /^(fa|gi|eth)\d+(\/\d+){1,2}$/.test(n); }
   function vlans(st) { var c = C(st); return c.vlans || (c.vlans = {}); }
   function bump(st) { var c = C(st); c.vtp = c.vtp || {}; if ((c.vtp.mode || 'server') === 'server') c.vtp.rev = (c.vtp.rev || 0) + 1; }
   function vtpMode(st) { return ((C(st).vtp || {}).mode) || 'server'; }
@@ -34,13 +34,13 @@
   // ---------------------------------------------------------------- interface / range
   sc('config', 'interface range <rest>', function (st, a) {                  // fa0/1 - 5, fa0/7 - 8 ; gi0/1 - 2
     var ports = st.net ? I.dports(st.net, st.net.devs[st.dev]) : [], L = [], ok = true;
-    a[0].split(',').forEach(function (part) { var t = I.norm(part.trim()), m = (t[0] || '').match(/^((?:fa|gi)\d+\/)(\d+)(?:-(\d+))?$/); if (!m) { ok = false; return; }
+    a[0].split(',').forEach(function (part) { var t = I.norm(part.trim()), m = (t[0] || '').match(/^((?:fa|gi|eth)\d+(?:\/\d+)*\/)(\d+)(?:-(?:(?:eth)?\d+\/\d+\/)?(\d+))?$/); if (!m) { ok = false; return; }
       var to = m[3] || (t[1] === '-' ? t[2] : null) || m[2]; for (var i = +m[2]; i <= +to; i++) { if (ports.indexOf(m[1] + i) < 0) { ok = false; return; } L.push(m[1] + i); } });
     if (!ok || !L.length) return null; L.forEach(function (n) { I.ifc(st, n); }); I.push(st, { v: 'range', name: L[0], names: L }); });
   sc('config', 'interface <if>', function (st, a) { var n = a[0], ports = st.net ? I.dports(st.net, st.net.devs[st.dev]) : [];
-    if (/^(fa|gi)/.test(n) && ports.indexOf(n) < 0) return null; if (/^lo/.test(n) && !st.ios.l3) return null; if (/^vlan/.test(n) && (+n.slice(4) < 1 || +n.slice(4) > 4094)) return null;
+    if (/^(fa|gi|eth)/.test(n) && ports.indexOf(n) < 0) return null; if (/^lo/.test(n) && !st.ios.l3) return null; if (/^vlan/.test(n) && (+n.slice(4) < 1 || +n.slice(4) > 4094)) return null;
     I.ifc(st, n); I.push(st, { v: 'if', name: n }); }, 'Select an interface to configure');
-  sc('config', 'no interface <if>', function (st, a) { if (/^(fa|gi)/.test(a[0]) || a[0] === 'vlan1') return null; delete C(st).ifs[a[0]]; });
+  sc('config', 'no interface <if>', function (st, a) { if (/^(fa|gi|eth)/.test(a[0]) || a[0] === 'vlan1') return null; delete C(st).ifs[a[0]]; });
   function l2(f) { return function (st, a) { return each(st, function (x, n) { if (!(phys(n) || /^po/.test(n)) || x.routed) return false; return f(x, a, n); }); }; }
   sc('if range', 'switchport mode access', l2(function (x) { x.mode = 'access'; }), 'Set trunking mode of the interface');
   sc('if range', 'switchport mode trunk', l2(function (x) { x.mode = 'trunk'; }));
@@ -149,7 +149,7 @@
     if (/^po\d+$/.test(k)) return !!st.net && st.net.lports(st.dev).some(function (L) { return L.name === k && L.members.length; }); return o(st, k, x); }; })(EL.ios.ifUp);
 
   // ---------------------------------------------------------------- сеть: DTP, VTP, PVST+, PAgP
-  function isSw(d) { return I.isIos(d) && d.type === 'mes'; }
+  function isSw(d) { return I.isIos(d) && d.type === 'mes' && !d.st.ios.dl; }   // Catalyst (у D-Link нет DTP, VTP, PVST+)
   function cport(d, p) { return d && d.st.ports && d.st.ports[p]; }
   function trunkUp(a, b) {                       // DTP (CG-2960X Trunks Table 1): access — никогда; trunk — всегда (сосед auto/desirable тоже станет транком)
     if (a.admin === 'access') return false; if (a.admin === 'trunk') return true;
