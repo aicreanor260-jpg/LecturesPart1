@@ -37,13 +37,14 @@
   X.siteStart = function (hashLab, fresh) { startLab = hashLab; startFresh = fresh; U.setAutoOff(true); if (WATCH) { U.setReadOnly(true); return true; }
     setTimeout(function () { if (!started) { started = true; offline = true; U.setAutoOff(false); U.autoOffer(startLab, startFresh); } }, 5000);   // /ws недоступен — тихо работаем как раньше (автосохранение в браузере)
     return true; };
-  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; offline = false; paintMsgBtn();
+  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = (m.saved || []).filter(function (x) { return !/^room-/.test(x.lab); }); offline = false; paintMsgBtn();
     if (WATCH || started) return; started = true;
     if (/^#room=/.test(location.hash)) return;           // вход по ссылке в комнату — своя работа не нужна (room_ui.js)
     var key = startLab || 'free', hit = saved.filter(function (s) { return s.lab === key; })[0];
     if (!hit) { begin(); return; }
     send({ t: 'load', lab: key }); });
   on('saved', function (m) {
+    if (/^room-/.test(m.lab || '')) return;                   // схема закрытой комнаты — открывает room_ui.js
     if (!m.data) { begin(); return; }
     var at = new Date(m.at || Date.now()), p = function (v) { return ('0' + v).slice(-2); }, when = p(at.getDate()) + '.' + p(at.getMonth() + 1) + ' в ' + p(at.getHours()) + ':' + p(at.getMinutes());
     U.ask('На сервере сохранена ваша работа (' + (m.lab === 'free' ? 'свободная схема' : 'лаба ' + m.lab) + ', ' + when + '). Продолжить с этого места?', function () {
