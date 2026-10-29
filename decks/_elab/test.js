@@ -2646,8 +2646,9 @@ EL.labs.LABS.forEach(runLab);
       return v === 'eltex' ? /^docs\/(eltex\/)?[\w.-]+\.pdf$/.test(u) : u.indexOf('docs/' + v + '/') === 0; });
     if (!ok) bad.push(k + ' → ' + urls.join(', ')); });
   chk('руководства всех моделей — своего вендора', !bad.length, bad.join('; '));
-  var miss = EL.MANUAL_PDFS.filter(function (p) { return !fs.existsSync(path.join(D, '../..', p.src)); }).map(function (p) { return p.src; });
-  chk('все PDF для сервера есть в sources', !miss.length, miss.join(', '));
+  if (!fs.existsSync(path.join(D, '../../sources'))) console.log('  все PDF для сервера есть в sources — пропущено: нет sources/');
+  else { var miss = EL.MANUAL_PDFS.filter(function (p) { return !fs.existsSync(path.join(D, '../..', p.src)); }).map(function (p) { return p.src; });
+    chk('все PDF для сервера есть в sources', !miss.length, miss.join(', ')); }
   var u = function (k) { var d = n.add(k, 'Q' + Math.random()), m = n.manualFor(d.id); return m && m.url; };
   chk('AR2220 — документация AR на support.huawei.com, не ESR', /huawei\.com\/.*EDOC1100007335/.test(u('AR2220')));
   chk('2960-24TT — Command Reference 2960', /2960/.test(u('2960-24TT')));
