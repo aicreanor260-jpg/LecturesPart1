@@ -7,7 +7,7 @@
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
     undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; },
-    roomRun: function () { return false; }, onCmd: function () {}, onOut: function () {}, siteStart: function () { return false; } };   // клиент сайта и комнат — net_ws.js
+    roomRun: function () { return false; }, roomAct: function () { return false; }, roomTab: function () { return false; }, roomPrompt: function () { return null; }, onCmd: function () {}, onOut: function () {}, siteStart: function () { return false; } };   // клиент сайта и комнат — net_ws.js
   var readOnly = false;                            // просмотр преподавателем: схема и консоли без ввода
   var msel = {}, mselL = {}, spaceDown = false;    // множественное выделение: устройства и кабели
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
@@ -165,6 +165,7 @@
       if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) { moved = true; draw(); } }
     function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null;
       if (!moved) { var tnow = Date.now(); if (lastClick.id === d.id && tnow - lastClick.t < 450) { lastClick = { id: null, t: 0 }; draw(); openTerm(d.id); return; } lastClick = { id: d.id, t: tnow }; } else lastClick = { id: null, t: 0 };
+      if (moved) start.forEach(function (q) { if (q.d.x !== q.x || q.d.y !== q.y) X.roomAct({ k: 'dev.move', id: q.d.id, x: Math.round(q.d.x), y: Math.round(q.d.y) }); });
       if (moved) start.forEach(function (q) { if (q.d.x !== q.x || q.d.y !== q.y) X.rec({ k: 'move', name: q.d.name, x: q.x, y: q.y }); }); draw(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
@@ -236,7 +237,7 @@
         if (a === 'tables') openTables(d.id);
         if (a === 'cable') startCable(d.id);
         if (a === 'ping') openPing(d.id);
-        if (a === 'off') { net.power(d.id, false); tlog(d.id, '%SYS: питание выключено', 's'); setPr(d.id); draw(); }
+        if (a === 'off') { if (X.roomAct({ k: 'power', dev: d.id, on: false })) return; net.power(d.id, false); tlog(d.id, '%SYS: питание выключено', 's'); setPr(d.id); draw(); }
         if (a === 'on') boot(d.id, false);
         if (a === 'reload') boot(d.id, true);
         if (a === 'del') { msel = {}; mselL = {}; msel[d.id] = 1; selLink = null; delSelected(); }
@@ -250,7 +251,7 @@
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
       (ph && mode === 'test' ? '<div class="h" style="border:0;text-transform:none;letter-spacing:0">' + esc((net.cableText ? net.cableText(l) : EL.CABLES[ph.cab || net.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port)] || '') + ' · ' +
         (ph.up ? ph.speed + ' Мбит/с, ' + ph.dup[l.a.dev] + '/' + ph.dup[l.b.dev] + (ph.mismatch ? ' — дуплекс не совпадает!' : '') : 'нет линка: ' + ph.why)) + '</div>' : '') +
-      X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
+      X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { if (X.roomAct({ k: 'link.del', i: i })) return; X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
         return X.run('link', a, i); });
   }
   // панель устройств: сверху — что нужно в лабах (доступ, маршрутизаторы, серверы и ПК), остальное — «Ещё оборудование» (more: true)
@@ -286,7 +287,7 @@
           return '<button data-a="add" data-m="' + k + '"><span>+</span>' + k + '</button>'; }).join('') : ''; }).join(''); }
     q.addEventListener('input', fill); q.addEventListener('keydown', function (ev) { ev.stopPropagation(); }); fill(); setTimeout(function () { q.focus(); }, 0);
   }
-  function addDev(model, x, y) { var d = net.add(model, null, x, y); sel = d.id; X.rec({ k: 'add', name: d.name }); draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
+  function addDev(model, x, y) { if (X.roomAct({ k: 'dev.add', model: model, x: Math.round(x), y: Math.round(y) })) return null; var d = net.add(model, null, x, y); sel = d.id; X.rec({ k: 'add', name: d.name }); draw(); refresh(); toast(d.name + ' добавлен · ПКМ — меню, 2×клик — консоль'); return d; }
   function plural(n, a, b, c) { var m = n % 10, h = n % 100; return n + ' ' + (m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c); }
   // подтверждение в окне эмулятора (не window.confirm)
   function ask(text, yes, yesLabel) {
@@ -304,10 +305,10 @@
     if (!ds.length && !ls.length) return;
     var txt = 'Вы точно хотите удалить ' + [ds.length ? plural(ds.length, 'устройство', 'устройства', 'устройств') : '', ls.length ? plural(ls.length, 'кабель', 'кабеля', 'кабелей') : ''].filter(Boolean).join(' и ') + '?';
     ask(txt, function () {
-      ls.sort(function (a, b) { return b - a; }).forEach(function (i) { X.rec({ k: 'dis', l: X.linkArr(net.links[i]) }); net.disconnect(i); });
+      ls.sort(function (a, b) { return b - a; }).forEach(function (i) { if (X.roomAct({ k: 'link.del', i: i })) return; X.rec({ k: 'dis', l: X.linkArr(net.links[i]) }); net.disconnect(i); });
       ds.forEach(function (id) { delDev(id); }); msel = {}; mselL = {}; selLink = null; sel = null; draw(); refresh(); });
   }
-  function delDev(id) { X.rec(X.delOp(id)); closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
+  function delDev(id) { if (X.roomAct({ k: 'dev.del', id: id })) return; X.rec(X.delOp(id)); closeWin('t' + id); closeWin('p' + id); delete terms[id]; net.remove(id); if (sel === id) sel = null; draw(); refresh(); }
   function clearAll() { if (net.list().length && !confirm('Очистить схему?')) return; lab = null; task = null; resetNet(); renderSide(); autoClear(); }
 
   // ================================================================== кабель
@@ -326,6 +327,7 @@
       Object.keys(EL.CABLES || {}).filter(function (k) { return /^(sfp|dac)/.test(k); }).map(function (k) { return '<option value="' + k + '">' + EL.CABLES[k] + '</option>'; }).join('') + '</select><div class="row"><button class="pri" data-c="ok">Соединить</button><button data-c="no">Отмена</button></div>';
     makeWin('cable', 'Кабель', a.name + ' ↔ ' + d.name, body, { w: 380, h: 330, x: innerWidth / 2 - 180, y: innerHeight / 2 - 140 });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
+      if (b.dataset.c === 'ok' && X.roomAct({ k: 'link.add', a: a.id, pa: body.querySelector('#cpa').value, b: d.id, pb: body.querySelector('#cpb').value })) { closeWin('cable'); return; }
       if (b.dataset.c === 'ok') { var err = net.connect(a.id, body.querySelector('#cpa').value, d.id, body.querySelector('#cpb').value, (body.querySelector('#cpc').value ? body.querySelector('#cpc').value + (body.querySelector('#cpd').value ? '|' + body.querySelector('#cpd').value : '') : undefined)); if (err) { toast(err); return; }
         X.rec({ k: 'con', l: X.linkArr(net.links[net.links.length - 1]) }); draw(); refresh(); toast('Кабель проложен'); }
       closeWin('cable'); });
@@ -443,6 +445,7 @@
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
       else if (e.key === 'ArrowDown') { if (t.hi < t.hist.length) { t.hi++; inp.value = t.hist[t.hi] || ''; } e.preventDefault(); }
       else if (needLogin(net.devs[id]) && !t.auth) { if (e.key === 'Tab' || e.key === '?') e.preventDefault(); }
+      else if (e.key === 'Tab' && X.roomTab(id, inp.value)) e.preventDefault();
       else if (e.key === 'Tab') { e.preventDefault(); var r = net.tab(id, inp.value); if (r) inp.value = r; else if (net.table(id, inp.value)) { tlog(id, net.prompt(id) + inp.value, 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); } }
       else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); }
       e.stopPropagation();
@@ -552,8 +555,8 @@
     var b = tEl(id); if (b) { var out = b.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight;
       if (consOrder.indexOf(String(id)) >= 0 && consActive !== String(id) && !t.unread) { t.unread = true; renderTabs(); } }
   }
-  function setPr(id) { var w = tEl(id) ? { el: tEl(id) } : null, d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
-    if (t.more && !d.off) p = net.moreText(id);
+  function setPr(id) { var w = tEl(id) ? { el: tEl(id) } : null, d = net.devs[id]; if (!w || !d) return; var t = term(id), rp = X.roomPrompt(id), p = rp !== null ? rp : needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
+    if (t.more && !d.off && rp === null) p = net.moreText(id);
     if (t.ask && !d.off) p = t.ask.q;
     if (t.cep && !d.off) p = net.prompt(id).replace(/#$/, '') + '(change-expired-password)# ';
     var sec = !d.off && /(password|passphrase[^:]*): ?$/i.test(p); if (sec !== !!t.secret) { t.secret = sec; t.pwbuf = ''; inp.value = ''; }
@@ -626,6 +629,7 @@
       tlog(e.id, e.msg, 's'); });
   }
   function boot(id, reload) {
+    if (X.roomAct(reload ? { k: 'power', dev: id, reboot: true } : { k: 'power', dev: id, on: true })) return;
     var d = net.devs[id]; tlog(id, reload ? 'System is going to reboot…' : 'Power on…', 's');
     net.power(id, false); draw(); setPr(id);
     setTimeout(function () {
@@ -685,10 +689,11 @@
     makeWin('p' + id, 'Свойства', d.name, body, { w: 600, h: 600 });
     var inp = body.querySelector('#pname'); inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-p]'); if (!b) return; var a = b.dataset.p;
+      if (a === 'name' && X.roomAct({ k: 'dev.rename', id: id, name: inp.value.trim() })) return;
       if (a === 'name') { var err = net.rename(id, inp.value); if (err) { toast(err); return; } net.setHost(id, d.name); setPr(id); draw(); toast('Имя и hostname изменены');
         if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } renderTabs(); chips(); }
       if (a === 'term') openTerm(id);
-      if (a === 'off') { net.power(id, false); setPr(id); draw(); openProps(id); }
+      if (a === 'off') { if (X.roomAct({ k: 'power', dev: id, on: false })) return; net.power(id, false); setPr(id); draw(); openProps(id); }
       if (a === 'on') { boot(id, false); setTimeout(function () { openProps(id); }, 1200); }
     });
   }
@@ -890,7 +895,7 @@
   $('sbody').addEventListener('click', function (e) {
     var b = e.target.closest('[data-model],[data-lab],[data-s]'); if (!b) return;
     if (b.dataset.model) { var r = cv.getBoundingClientRect(), p = toWorld(r.left + r.width / 2 + (Math.random() - .5) * 160, r.top + r.height / 2 + (Math.random() - .5) * 120); addDev(b.dataset.model, p.x, p.y); return; }
-    if (b.dataset.lab) { startLab(b.dataset.lab); return; }
+    if (b.dataset.lab) { if (X.roomAct({ k: 'lab', id: b.dataset.lab })) return; startLab(b.dataset.lab); return; }
     var a = b.dataset.s;
     if (a === 'labwin') renderLab(true);
     if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
@@ -1278,5 +1283,6 @@
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
     renderSide: renderSide, ask: function (q, yes, ok) { ask(q, yes, ok); }, setAutoOff: function (v) { autoOff = v; }, setReadOnly: function (v) { readOnly = !!v; document.body.classList.toggle('ro', readOnly); },
     labInfo: function () { if (!lab) return null; var ts = lab.tasks(labP); return { id: lab.id, title: lab.title, total: ts.length, done: Object.keys(lab._done || {}).map(function (i) { return +i + 1; }) }; },
+    setNet: function (n) { lab = null; task = null; net = n; net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; sel = null; selLink = null; msel = {}; mselL = {}; draw(); renderSide(); },
     startFree: function () { lab = null; task = null; resetNet(); renderSide(); }, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();

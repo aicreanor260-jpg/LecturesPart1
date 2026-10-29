@@ -4,7 +4,8 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'];
+engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -590,6 +591,33 @@ EL.labs.LABS.forEach(runLab);
     chk('тетрадка .ipynb: nbformat 4, ячейки markdown и code, разбор .vec/.sca', nb.nbformat === 4 && nb.cells.length >= 10 && nb.cells.some(function (c) { return c.cell_type === 'markdown'; }) &&
       /def read_vec/.test(EL.SIM_PY) && /def read_sca/.test(EL.SIM_PY) && nb.cells.every(function (c) { return Array.isArray(c.source); }));
     console.log('✓ Экспорт результатов: .vec, .sca, CSV');
+  })();
+  // Детерминированность для комнат: один и тот же журнал действий → одно и то же состояние (toJSON), ядро — без DOM
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Детерминированность: ' + name + (extra ? ' — ' + extra : '')); } }
+    var J = [['add', 'vESR', 'R1', 300, 100], ['add', 'MES2300-24', 'SW1', 300, 300], ['add', 'VPC', 'PC1', 150, 450], ['add', 'Debian-server', 'SRV', 450, 450],
+      ['con', 'R1', 'gi1/0/1', 'SW1', 'gi1/0/24'], ['con', 'PC1', 'eth0', 'SW1', 'gi1/0/1'], ['con', 'SRV', 'ens3', 'SW1', 'gi1/0/2'],
+      ['cli', 'R1', 'configure'], ['cli', 'R1', 'interface gigabitethernet 1/0/1'], ['cli', 'R1', 'ip address 10.0.0.1/24'], ['cli', 'R1', 'ip firewall disable'], ['cli', 'R1', 'end'], ['cli', 'R1', 'commit'], ['cli', 'R1', 'confirm'],
+      ['cli', 'SW1', 'enable'], ['cli', 'SW1', 'configure'], ['cli', 'SW1', 'hostname CORE'], ['cli', 'SW1', 'end'],
+      ['cli', 'PC1', 'ip 10.0.0.5/24 10.0.0.1'], ['cli', 'SRV', 'root'], ['cli', 'SRV', 'toor'], ['cli', 'SRV', 'ip addr add 10.0.0.10/24 dev ens3'], ['cli', 'SRV', 'ip link set ens3 up'],
+      ['time', 31], ['cli', 'PC1', 'ping 10.0.0.10'], ['power', 'PC1', false], ['power', 'PC1', true], ['move', 'SRV', 500, 470], ['time', 400], ['cli', 'PC1', 'ping 10.0.0.1']];
+    function play() { var n = new EL.Net(), outs = [];
+      J.forEach(function (a) { var d = a[1] && n.byName(a[1]);
+        if (a[0] === 'add') n.add(a[1], a[2], a[3], a[4]);
+        if (a[0] === 'con') n.connect(n.byName(a[1]).id, a[2], n.byName(a[3]).id, a[4]);
+        if (a[0] === 'cli') outs.push(String(n.exec(d.id, a[2])));
+        if (a[0] === 'time') n.tick(a[1]);
+        if (a[0] === 'power') n.power(d.id, a[2]);
+        if (a[0] === 'move') { d.x = a[2]; d.y = a[3]; } });
+      return { j: JSON.stringify(n.toJSON()), o: outs.join('\n'), arp: JSON.stringify(n.arpRows(n.byName('PC1').id)) }; }
+    var A = play(), B = play();
+    chk('журнал действий дважды → одинаковый toJSON', A.j === B.j, A.j.length + ' / ' + B.j.length);
+    chk('… и одинаковый вывод консолей и ARP (MAC от имён, не от порядка создания)', A.o === B.o && A.arp === B.arp);
+    chk('ping в журнале прошёл', /bytes from 10\.0\.0\.10/.test(A.o));
+    // ../_dk_cli.js — тренажёр CLI дек: его интерфейс под typeof document, в Node не выполняется
+    var bad = engineFiles.filter(function (f) { if (f === '../_dk_cli.js') return false; var s = fs.readFileSync(path.join(D, f), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ''); return /\bdocument\.|localStorage|sessionStorage|addEventListener\(/.test(s); });
+    chk('ядро (engine_files) не обращается к DOM и хранилищам браузера', !bad.length, bad.join(', '));
+    console.log('✓ Детерминированность и безголовое ядро');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES
