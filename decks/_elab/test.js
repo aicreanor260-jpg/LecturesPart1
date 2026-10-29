@@ -73,6 +73,35 @@ EL.labs.LABS.forEach(runLab);
   chk('E.1: имя R3 — загорелся ровно один пункт «1. R3: имя …»', le.length === 1 && TE[le[0] - 1] === TE[TE.indexOf(nm)] || (le.length === 1 && /^1\. R3/.test(TE[le[0] - 1].t)), le.map(function (k) { return TE[k - 1].t; }).join(' | '));
   console.log('✓ Пункты лаб — по одному действию');
 })();
+// неоднозначные сокращения: Enter — ошибка без выполнения, Tab — до общего начала, повторный Tab — варианты; do — по командам режима #
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Сокращения: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('vESR', 'R1'), s = n.add('MES2428', 'SW'), s6 = n.add('MES3348', 'SW6');
+  chk('ESR: con + Enter — неоднозначно, режим не сменился', n.exec(r.id, 'con') === '% Ambiguous command' && r.st.mode === 'priv');
+  chk('ESR: conf + Enter — тоже неоднозначно (configure / confirm)', n.exec(r.id, 'conf') === '% Ambiguous command' && r.st.mode === 'priv');
+  chk('ESR: Tab на con → confi (общее начало confirm/configure)', n.tab(r.id, 'con') === 'confi', n.tab(r.id, 'con'));
+  chk('ESR: Tab на confi — дальше дописать нечего, варианты как у «?»', n.tab(r.id, 'confi') === null && /confirm/.test(n.help(r.id, 'confi')) && /configure/.test(n.help(r.id, 'confi')));
+  chk('ESR: confi + g + Tab → configure', n.tab(r.id, 'config') === 'configure ', n.tab(r.id, 'config'));
+  chk('ESR: configure полностью — работает', (n.exec(r.id, 'configure'), r.st.mode === 'config'));
+  chk('ESR: do con — неоднозначно, остаёмся в config', n.exec(r.id, 'do con') === '% Ambiguous command' && r.st.mode === 'config');
+  chk('ESR: do com + Tab → do commit', n.tab(r.id, 'do com') === 'do commit ', n.tab(r.id, 'do com'));
+  chk('ESR: do con + Tab → do confi', n.tab(r.id, 'do con') === 'do confi', n.tab(r.id, 'do con'));
+  chk('ESR: do confir + Tab → do confirm', n.tab(r.id, 'do confir') === 'do confirm ', n.tab(r.id, 'do confir'));
+  chk('ESR: однозначные сокращения работают — sh ru, do sh ru', /hostname/.test(n.exec(r.id, 'do sh ru')) && (n.exec(r.id, 'end'), /hostname/.test(n.exec(r.id, 'sh ru'))));
+  n.exec(s.id, 'enable');
+  chk('MES: conf t — работает', (n.exec(s.id, 'conf t'), s.st.mode === 'config'));
+  chk('MES: do sh ru — работает', /interface|hostname|vlan/.test(n.exec(s.id, 'do sh ru')));
+  chk('MES: end, wr — работает', (n.exec(s.id, 'end'), !/Ambiguous/.test(n.exec(s.id, 'wr'))));
+  // пара однословных команд режима # с общим началом из 2+ букв — из таблицы MES 10.x
+  var one = EL.mes.T.filter(function (c) { return c.pat.length === 1 && c.modes.indexOf('priv') >= 0 && c.pat[0].charAt(0) !== '<' && EL.cli.dlOk(c, s.st); }).map(function (c) { return c.pat[0]; });
+  var amb = []; one.forEach(function (a) { one.forEach(function (b) { if (a < b && a.slice(0, 2) === b.slice(0, 2)) { var k = 2; while (a[k] === b[k]) k++; if (a.slice(0, k) !== a && b.slice(0, k) !== b) amb.push(a.slice(0, k)); } }); });
+  chk('MES 10.x: show sta (stack / startup-config) — % Ambiguous Command, show star — однозначно', n.exec(s.id, 'show sta') === '% Ambiguous Command' && !/Ambiguous/.test(n.exec(s.id, 'show star')));
+  chk('MES 10.x: Tab на show sta — варианты (общее начало уже набрано)', n.tab(s.id, 'show sta') === null && /stack/.test(n.help(s.id, 'show sta')) && /startup-config/.test(n.help(s.id, 'show sta')));
+  n.exec(s6.id, 'enable');
+  var amb6 = amb.filter(function (w) { return /Ambiguous/.test(n.exec(s6.id, w)); });
+  chk('MES 6.x: неоднозначное слово — % Ambiguous command', !amb6.length || n.exec(s6.id, amb6[0]) === '% Ambiguous command', amb6.join());
+  console.log('✓ Неоднозначные сокращения и Tab');
+})();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

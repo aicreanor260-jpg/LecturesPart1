@@ -27,6 +27,8 @@
     var line = E.normLine(String(raw).trim());
     if (!line) return '';
     var toks = line.split(/\s+/), low = lower(toks);
+    var amb = ambiguous(table, st, low);
+    if (amb) return st.dialect === '10' ? '% Ambiguous Command' : '% Ambiguous command';
     for (var i = 0; i < table.length; i++) {
       var c = table[i]; if (c.modes.indexOf(st.mode) < 0 || !dlOk(c, st)) continue;
       var args = E.match(c.pat, low);
@@ -39,6 +41,21 @@
     if (table.some(function (c) { return c.modes.indexOf(st.mode) >= 0 && dlOk(c, st) && partial(c.pat, low); })) return '% Incomplete command';
     if (table.some(function (c) { return dlOk(c, st) && E.match(c.pat, low); })) return '% Команда недоступна в этом режиме — проверьте приглашение';
     return '% Unrecognized command';
+  }
+  // неоднозначное сокращение: строку целиком принимают команды с разными ключевыми словами на одной позиции,
+  // а слово — не полное ни одного из них (con → configure / confirm). Точное слово выбирает свою команду (как на железе)
+  function isKw(p) { return !!p && p.charAt(0) !== '<'; }
+  function ambiguous(table, st, low) {
+    var M = table.filter(function (c) { return c.modes.indexOf(st.mode) >= 0 && dlOk(c, st) && E.match(c.pat, low); });
+    for (var k = 0; k < low.length && M.length > 1; k++) {
+      if (M.some(function (c) { return c.pat.indexOf('<rest>') >= 0 && c.pat.indexOf('<rest>') <= k; })) break;
+      var kws = []; M.forEach(function (c) { var p = c.pat[k]; if (isKw(p) && kws.indexOf(p) < 0) kws.push(p); });
+      if (kws.length < 2) continue;
+      var ex = kws.filter(function (p) { return p === low[k] || (p === 'terminal' && low[k] === 't'); })[0];
+      if (!ex) return kws;
+      M = M.filter(function (c) { return !isKw(c.pat[k]) || c.pat[k] === ex; });
+    }
+    return null;
   }
   // диалект ветки ПО: команда с dl есть только в этих ветках, с xdl — во всех, кроме этих
   function dlOk(c, st) { var d = st.dialect || '10'; return (!c.dl || c.dl.indexOf(d) >= 0) && (!c.xdl || c.xdl.indexOf(d) < 0); }
@@ -84,8 +101,12 @@
   function tab(table, mode, raw, st) {
     var c = candidates(table, mode, raw, st);
     var kw = c.list.filter(function (x) { return !x.ph; });
-    if (!c.part || kw.length !== 1) return null;
-    return raw.replace(/\S+$/, kw[0].w) + ' ';
+    if (!c.part || !kw.length) return null;
+    if (kw.length === 1) return raw.replace(/\S+$/, kw[0].w) + ' ';
+    var exact = kw.filter(function (x) { return x.w === c.part; })[0]; if (exact) return raw.replace(/\S+$/, exact.w) + ' ';
+    // несколько вариантов: дописать до самого длинного общего начала (con → conf); дальше — null, и интерфейс покажет варианты, как «?»
+    var lcp = kw.reduce(function (a, x) { var i = 0; while (i < a.length && i < x.w.length && a[i] === x.w[i]) i++; return a.slice(0, i); }, kw[0].w);
+    return lcp.length > c.part.length ? raw.replace(/\S+$/, lcp) : null;
   }
   EL.cli = { dlOk: dlOk, runTable: runTable, help: help, tab: tab, candidates: candidates };
 

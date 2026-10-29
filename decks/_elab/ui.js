@@ -376,7 +376,7 @@
       var cut = x.replace(/\s+←.*$/, '').replace(/\s*\([^()]*[А-Яа-яЁё][^()]*\)\s*$/, '');
       if (!CYR.test(cut) && cut.trim()) keep.push(cut);
     });
-    if (d.type === 'esr') keep = keep.map(function (x) { return x === '% Unrecognized command' ? 'Syntax error: Unknown command' : x === '% Incomplete command' ? 'Syntax error: Incomplete command' : x; });
+    if (d.type === 'esr') keep = keep.map(function (x) { return x === '% Unrecognized command' ? 'Syntax error: Unknown command' : x === '% Incomplete command' ? 'Syntax error: Incomplete command' : x === '% Ambiguous command' ? 'Syntax error: Ambiguous command' : x; });
     if (!keep.length && err && !/^\s*(do\s+)?sh(o(w)?)?\b/i.test(line)) keep.push(d.type === 'esr' ? 'Syntax error: Illegal parameter' : "% Invalid input detected at '^' marker.");
     return keep.join('\n');
   }
@@ -830,36 +830,59 @@
   }
   // ---------------------------------------------------------------- «Тест» в окне лабы: вопросы с сайта курса (вне сайта блока нет)
   var quizLab = null;
+  // GET /api/quiz?lab=ID → {ok, quiz:{title, pass_pct, attempts_left, best, aid, questions:[{id, type:'one'|'many'|'text', text, points, options}]}} (или те же поля без quiz);
+  // нет теста (404), не вошёл (401), офлайн — блока нет
   function quizLoad() {
     var box = $('labquiz'); if (!box || !lab) return; quizLab = lab.id; box.innerHTML = '';
     if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;
     var id = lab.id;
     fetch('/api/quiz?lab=' + encodeURIComponent(id), { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      var qs = j && (j.questions || j.items) || []; if (!qs.length || !lab || lab.id !== id || !$('labquiz')) return; quizRender($('labquiz'), id, qs, j.title);
+      var q = j && j.ok !== false ? (j.quiz || j) : null; if (!q || !lab || lab.id !== id || !$('labquiz')) return;
+      var qs = q.questions || q.items || [];
+      if (!qs.length && !q.best) return;
+      quizRender($('labquiz'), id, q, qs);
     }).catch(function () { /* теста нет */ });
   }
   function qid(q, i) { return String(q.id !== undefined && q.id !== null ? q.id : 'q' + (i + 1)); }
-  function quizRender(box, id, qs, title) {
-    box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(title || 'Проверьте себя') + '</h3>' + qs.map(function (q, i) {
-      var k = qid(q, i), tp = q.type === 'multi' || q.type === 'text' ? q.type : 'single', opts = q.options || q.choices || [];
+  function qType(t) { return t === 'many' || t === 'multi' ? 'multi' : t === 'text' ? 'text' : 'single'; }
+  function pctTxt(b) { return b ? b.score + ' из ' + b.max + (b.pct !== undefined && b.pct !== null ? ' (' + b.pct + '%)' : '') : ''; }
+  function quizRender(box, id, q, qs) {
+    var meta = [q.pass_pct ? 'зачёт от ' + q.pass_pct + '%' : '', q.attempts_left !== undefined && q.attempts_left !== null ? 'осталось попыток: ' + q.attempts_left : '',
+      q.best ? 'лучший результат: ' + pctTxt(q.best) : ''].filter(Boolean).join(' · ');
+    if (!qs.length) { box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(q.title || 'Проверьте себя') + '</h3><p>Попытки закончились' + (q.best ? '. Лучший результат: ' + esc(pctTxt(q.best)) : '') + '</p></div>'; return; }
+    box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(q.title || 'Проверьте себя') + '</h3>' + (meta ? '<p class="qm">' + esc(meta) + '</p>' : '') + qs.map(function (x, i) {
+      var k = qid(x, i), tp = qType(x.type), opts = x.options || x.choices || [];
       var inp = tp === 'text' ? '<input type="text" class="qin" data-q="' + esc(k) + '" placeholder="Ваш ответ">'
-        : opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '" data-q="' + esc(k) + '"> ' + esc(o) + '</label>'; }).join('');
-      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (i + 1) + '. ' + esc(q.text || q.question || q.q || '') + (tp === 'multi' ? ' <i>(несколько ответов)</i>' : '') +
-        ' <b class="qr"></b></div>' + inp + '</div>'; }).join('') + '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
+        : opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '"> ' + esc(o) + '</label>'; }).join('');
+      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (i + 1) + '. ' + esc(x.text || x.question || x.q || '') + (tp === 'multi' ? ' <i>(несколько ответов)</i>' : '') +
+        (x.points ? ' <i>· ' + x.points + ' б.</i>' : '') + ' <b class="qr"></b></div>' + inp + '<div class="qa"></div></div>'; }).join('') +
+      '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
     [].forEach.call(box.querySelectorAll('input'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
     box.querySelector('[data-qa="send"]').addEventListener('click', function () {
       var answers = {}, btn = this, out = box.querySelector('.qs');
+      if (btn.dataset.again) { quizLoad(); return; }
       [].forEach.call(box.querySelectorAll('.qq'), function (el) { var k = el.dataset.qid, tp = el.dataset.tp;
         if (tp === 'text') answers[k] = (el.querySelector('input').value || '').trim();
         else if (tp === 'multi') answers[k] = [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
         else { var c = el.querySelector('input:checked'); answers[k] = c ? +c.value : null; } });
       btn.disabled = true; out.textContent = 'Проверяем…';
-      fetch('/api/quiz/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ lab: id, answers: answers }) })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(function (j) {
-          var res = j.results || j.correct || {}; btn.disabled = false;
-          [].forEach.call(box.querySelectorAll('.qq'), function (el, i) { var v = Array.isArray(res) ? res[i] : res[el.dataset.qid], m = el.querySelector('.qr');
-            el.classList.toggle('good', v === true); el.classList.toggle('bad', v === false); m.textContent = v === true ? '✓' : v === false ? '✗' : ''; });
-          out.textContent = (j.score !== undefined ? 'Балл: ' + j.score + (j.max !== undefined ? ' из ' + j.max : '') : 'Ответ принят') + (j.comment ? ' — ' + j.comment : '');
+      fetch('/api/quiz/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ lab: id, aid: q.aid, answers: answers }) })
+        .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Ошибка сервера (' + r.status + ')' }; }); }).then(function (j) {
+          btn.disabled = false;
+          if (!j || j.ok === false) { out.textContent = (j && j.error) || 'Ответ не принят'; return; }
+          var R = j.result || {}, res = j.results || j.correct || {}, items = {};
+          (R.items || []).forEach(function (it) { items[String(it.id)] = it; });
+          [].forEach.call(box.querySelectorAll('.qq'), function (el, i) { var k = el.dataset.qid, it = items[k], v = Array.isArray(res) ? res[i] : res[k];
+            var mark = it && typeof it.mark === 'number' ? it.mark : v === true ? 1 : v === false ? 0 : null, m = el.querySelector('.qr'), a = el.querySelector('.qa');
+            el.classList.toggle('good', mark === 1); el.classList.toggle('bad', mark === 0); el.classList.toggle('part', mark !== null && mark > 0 && mark < 1);
+            m.textContent = mark === 1 ? '✓' : mark === 0 ? '✗' : mark !== null ? Math.round(mark * 100) + '%' : '';
+            a.textContent = it && it.right ? 'Правильно: ' + it.right : '';
+            [].forEach.call(el.querySelectorAll('input'), function (x) { x.disabled = true; }); });
+          var score = j.score !== undefined ? j.score : R.score, max = j.max !== undefined ? j.max : R.max, pct = R.pct !== undefined ? R.pct : j.pct;
+          out.textContent = 'Балл: ' + score + (max !== undefined ? ' из ' + max : '') + (pct !== undefined && pct !== null ? ' (' + pct + '%)' : '') +
+            (R.passed === true ? ' — зачтено' : R.passed === false ? ' — не зачтено' : '') + (R.best ? ' · лучший: ' + pctTxt(R.best) : '') +
+            (R.attempts_left !== undefined && R.attempts_left !== null ? ' · осталось попыток: ' + R.attempts_left : '') + (j.comment ? ' — ' + j.comment : '');
+          if (R.attempts_left === undefined || R.attempts_left === null || R.attempts_left > 0) { btn.textContent = 'Новая попытка'; btn.dataset.again = '1'; } else btn.hidden = true;
         }).catch(function () { btn.disabled = false; out.textContent = 'Не удалось отправить ответы — проверьте вход на сайт курса'; });
     });
   }
@@ -998,7 +1021,7 @@
     var w = wins.ask; if (w) w.el.addEventListener('click', function (e) { var b = e.target.closest('[data-q="n"],.x,[data-w="close"]'); if (b) { autoOff = false; autoClear(); fresh(); } }, true);
   }
   window.addEventListener('resize', applyView);
-  window.ELUI = { net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
+  window.ELUI = { quizRender: function (box, id, q, qs) { quizRender(box, id, q, qs); }, net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
     renderSide: renderSide, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();
