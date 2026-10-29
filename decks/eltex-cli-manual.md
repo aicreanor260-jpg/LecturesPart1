@@ -284,6 +284,16 @@ security zone-pair trusted self        ← трафик самому маршр�
 - **Генератор трафика:** UDP / TCP / ICMP, адрес, порт, размер, частота, длительность (до 5 с) — поток идёт через симуляцию во времени: отправлено / доставлено / потери, задержка и джиттер; в «Тесте» — ещё загрузка кабелей.
 - На Debian-server службы vsftpd, postfix, dovecot запущены (`systemctl stop|start …`), на Debian — остановлены.
 
+### Службы сервера Debian (вкладка Services в Packet Tracer)
+ПКМ по Debian-server или Debian → «Службы». Слева — службы с огоньком (зелёный — запущена), справа — галочка «Включено» и настройки. Окно и команды Debian меняют одно и то же: галочка — это `systemctl start|stop` (видно в `systemctl status`), настройки пишутся в те же файлы, «Сохранить и перезапустить» — `systemctl restart`.
+- **DHCP** — isc-dhcp-server, `/etc/dhcp/dhcpd.conf` (`subnet A netmask M { range A B; option routers R; option domain-name-servers D; }`); адреса — в сети сервера и через ретранслятор ESR (`ip dhcp-relay`, `ip helper-address`) — пул по giaddr. По умолчанию выключен.
+- **DNS** — bind9, зоны в `/etc/bind/named.conf.local` и файлах зон; записи A, CNAME, MX (MX только хранится).
+- **HTTP / HTTPS** — apache2, файлы `/var/www/html/*` с редактором; HTTPS (TCP 443) — галочка или `a2enmod ssl` / `a2dismod ssl`.
+- **FTP** — vsftpd; пользователи — учётные записи сервера (те же для входа в консоль, SSH, POP3; `useradd`, `userdel`), файлы в домашних каталогах.
+- **Почта** — postfix + dovecot; домен (пусто — любой; чужой домен — 554 Relay access denied), ящики — учётные записи с числом писем.
+- **TFTP** — tftpd-hpa, каталог `/tftp`; **NTP** — chronyd; **Syslog** — rsyslog, журналы `/var/log/rsyslog/ИМЯ/*.log` (открыть, очистить).
+- **RADIUS** — freeradius: клиенты (`clients.conf`: имя, IP, secret) и пользователи (`users`); **TACACS+** — tac_plus: key и пользователи (`tac_plus.conf`).
+
 ### DNS
 
 | Где | Команды |

@@ -694,9 +694,8 @@
       f: { type: 'ip', smac: EL.mac(EL.macKey(d) + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
     var lease = null, lpath = null;
     fl.eps.some(function (ep) {
-      var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
-      var c = rd.st.run;
-      var fw = s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', sport: 68, dport: 67 }, []);
+      var rd = s.devs[ep.dev], c = rd.type === 'esr' ? rd.st.run : EL.debDhcpCfg ? EL.debDhcpCfg(rd) : null; if (!c) return false;   // Debian: isc-dhcp-server (srv.js)
+      var fw = rd.type === 'esr' ? s.fwPass(ep.dev, ep.iface, { src: '0.0.0.0', dst: ep.iface.ip, proto: 'udp', sport: 68, dport: 67 }, []) : { ok: true };
       if (!fw.ok) { steps.push({ k: 'drop', t: fw.t + ' — DHCP не принят' }); return false; }
       var sv = s.snoopReply ? s.snoopReply(ep.path) : null; if (sv) { steps.push({ k: 'drop', t: sv }); return false; }
       lpath = ep.path;
@@ -707,7 +706,7 @@
         steps.push({ k: 'route', t: rd.name + ': ретранслятор — DISCOVER принят на ' + ep.iface.name + ', giaddr = ' + ep.iface.ip + ', пересылаю на ' + x.helper + ' (unicast)' });
         var f = s.send(ep.dev, { src: null, dst: x.helper, proto: 'udp', dport: 67 }, steps, ct);
         if (!f.ok) { steps.push({ k: 'drop', t: 'Сервер ' + x.helper + ' недостижим с ретранслятора' }); return false; }
-        var sd = s.devs[f.dev], sc = sd.type === 'esr' ? sd.st.run : null, pl = sc && sc.dhcp && sc.dhcp.on && poolFor(sc, ep.iface.ip);
+        var sd = s.devs[f.dev], sc = sd.type === 'esr' ? sd.st.run : EL.debDhcpCfg ? EL.debDhcpCfg(sd) : null, pl = sc && sc.dhcp && sc.dhcp.on && poolFor(sc, ep.iface.ip);
         if (!pl) { steps.push({ k: 'drop', t: sd.name + ': нет DHCP-сервера или пула для сети ' + IP.netOf(ep.iface.ip, ep.iface.len) }); return false; }
         steps.push({ k: 'ok', t: sd.name + ': пул ' + pl.name + ' — выбран по giaddr ' + ep.iface.ip });
         var b = s.send(f.dev, { src: null, dst: ep.iface.ip, proto: 'udp', dport: 67 }, steps, ct);

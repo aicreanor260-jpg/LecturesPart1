@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'apps.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -405,6 +405,54 @@ EL.labs.LABS.forEach(runLab);
     var gi = n.trafficGen(pc.id, { proto: 'icmp', dst: '10.0.0.1', size: 64, rate: 10, dur: 1 });
     chk('генератор трафика: ICMP 10 эхо-запросов', gi.ok && gi.res.sent === 10 && gi.res.recv === 10, JSON.stringify(gi.res && { s: gi.res.sent, r: gi.res.recv }));
     console.log('✓ Рабочий стол: IP, браузер, FTP, почта, Telnet/SSH, генератор трафика');
+  })();
+  // Службы сервера Debian: окно и команды меняют одно состояние; DHCP-сервер isc-dhcp-server, DNS, HTTPS, учётные записи, RADIUS/TACACS+
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Службы: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), sw = n.add('MES2300-24', 'SW1'), sv = n.add('Debian-server', 'SRV'), pc = n.add('VPC', 'PC1'), r = n.add('vESR', 'R1'), sw2 = n.add('MES2300-24', 'SW2'), pc2 = n.add('VPC', 'PC2'), S = EL.srv, st = sv.st;
+    n.connect(sv.id, 'ens3', sw.id, 'gi1/0/1'); n.connect(pc.id, 'eth0', sw.id, 'gi1/0/2'); n.connect(r.id, 'gi1/0/1', sw.id, 'gi1/0/3'); n.connect(r.id, 'gi1/0/2', sw2.id, 'gi1/0/1'); n.connect(pc2.id, 'eth0', sw2.id, 'gi1/0/2');
+    EL.labs.apply(n, { R1: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 10.0.0.1/24', 'ip firewall disable', 'exit', 'interface gigabitethernet 1/0/2', 'ip address 10.0.1.1/24', 'ip firewall disable',
+      'ip helper-address 10.0.0.10', 'exit', 'ip dhcp-relay', 'end', 'commit', 'confirm'] });
+    n.ipSet(sv.id, { mode: 'static', ip: '10.0.0.10', mask: '255.255.255.0', gw: '10.0.0.1' }); n.tick(31);
+    chk('isc-dhcp-server по умолчанию выключен — VPC без адреса', !S.on(st, 'dhcp') && !/DORA/.test(n.exec(pc.id, 'ip dhcp')));
+    S.dhcpWrite(st, [{ net: '10.0.0.0', mask: '255.255.255.0', from: '10.0.0.100', to: '10.0.0.110', gw: '10.0.0.1', dns: '10.0.0.10' },
+      { net: '10.0.1.0', mask: '255.255.255.0', from: '10.0.1.50', to: '10.0.1.60', gw: '10.0.1.1', dns: '' }]);
+    S.set(st, 'dhcp', true);
+    chk('галочка = systemctl: isc-dhcp-server active', /active \(running\)/.test((n.exec(sv.id, 'root'), n.exec(sv.id, 'toor'), n.exec(sv.id, 'systemctl status isc-dhcp-server'))));
+    chk('dhcpd.conf в формате ISC', /subnet 10\.0\.0\.0 netmask 255\.255\.255\.0 \{\n  range 10\.0\.0\.100 10\.0\.0\.110;\n  option routers 10\.0\.0\.1;/.test(n.exec(sv.id, 'cat /etc/dhcp/dhcpd.conf')));
+    var o = n.exec(pc.id, 'ip dhcp');
+    chk('VPC в сети сервера получил адрес от Debian', /DORA IP 10\.0\.0\.10\d\/24 GW 10\.0\.0\.1/.test(o), o);
+    var o2 = n.exec(pc2.id, 'ip dhcp');
+    chk('VPC за ретранслятором ESR — адрес из пула 10.0.1.0 по giaddr', /DORA IP 10\.0\.1\.5\d\/24 GW 10\.0\.1\.1/.test(o2), o2);
+    n.exec(sv.id, 'systemctl stop isc-dhcp-server');
+    chk('systemctl stop — галочка снята, адресов нет', !S.on(st, 'dhcp') && !/DORA/.test(n.exec(pc2.id, 'clear ip') && n.exec(pc2.id, 'ip dhcp')));
+    chk('ошибки пула: сеть не по маске, диапазон вне сети', /не совпадает/.test(S.dhcpCheck({ net: '10.0.0.5', mask: '255.255.255.0', from: '10.0.0.6', to: '10.0.0.7' })) && /вне сети/.test(S.dhcpCheck({ net: '10.0.0.0', mask: '255.255.255.0', from: '10.0.9.6', to: '10.0.9.7' })));
+    // DNS
+    S.dnsWrite(st, S.dnsRead(st).concat([{ zone: 'college.ru', recs: [{ name: 'www', type: 'A', val: '10.0.0.10' }, { name: 'web', type: 'CNAME', val: 'www' }, { name: '@', type: 'MX', val: 'mail', pref: 10 }] }]));
+    S.restart(st, 'dns'); n.exec(pc.id, 'ip dns 10.0.0.10');
+    chk('DNS из окна: зона college.ru, A и CNAME разрешаются', n.resolve(pc.id, 'www.college.ru').ip === '10.0.0.10' && n.resolve(pc.id, 'web.college.ru').ip === '10.0.0.10', JSON.stringify(n.resolve(pc.id, 'web.college.ru')));
+    var rd = S.dnsRead(st).filter(function (z) { return z.zone === 'college.ru'; })[0];
+    chk('DNS: файл зоны читается обратно (A, CNAME, MX)', rd && rd.recs.length === 3 && rd.recs[2].type === 'MX' && rd.recs[2].val === 'mail', JSON.stringify(rd));
+    chk('браузер по имени через DNS сервера', /It works!/.test(n.httpGet(pc.id, 'http://www.college.ru').html || ''));
+    // HTTPS
+    chk('a2enmod ssl — HTTPS работает', /Enabling module ssl/.test(n.exec(sv.id, 'a2enmod ssl')) && st.srv.https && n.httpGet(pc.id, 'https://10.0.0.10').ok);
+    S.https(st, false); chk('галочка HTTPS снята — 443 закрыт', !n.httpGet(pc.id, 'https://10.0.0.10').ok);
+    // учётные записи
+    n.exec(sv.id, 'useradd ivanov');
+    chk('useradd — пользователь виден в окне FTP', S.users(st).some(function (u) { return u.name === 'ivanov'; }));
+    st.accounts.ivanov = 'qwerty';
+    chk('пароль из окна — вход по FTP', n.ftp(pc.id, '10.0.0.10', 'ivanov', 'qwerty', 'ls').ok);
+    // RADIUS / TACACS+
+    S.radWrite(st, { clients: [{ name: 'r1', ip: '10.0.0.1', secret: 'sekret123' }], users: [{ name: 'net', pw: 'p@ss' }] });
+    var rr = S.radRead(st);
+    chk('RADIUS: clients.conf и users из окна читаются обратно', rr.clients[0].ip === '10.0.0.1' && rr.clients[0].secret === 'sekret123' && rr.users[0].name === 'net' && rr.users[0].pw === 'p@ss', JSON.stringify(rr));
+    EL.labs.apply(n, { R1: ['configure', 'radius-server host 10.0.0.10', 'key ascii-text sekret123', 'exit', 'aaa authentication login default radius local', 'end', 'commit', 'confirm'] });
+    var lg = n.aaaLogin(r.id, 'console', 'net', 'p@ss', function () { return false; });
+    chk('вход на ESR по RADIUS с пользователем из окна', lg && lg.ok, JSON.stringify(lg) + JSON.stringify(r.st.run.aaa));
+    S.tacWrite(st, { key: 'tk', users: [{ name: 'adm', pw: '1' }] });
+    chk('TACACS+: tac_plus.conf из окна', S.tacRead(st).key === 'tk' && S.tacRead(st).users[0].pw === '1' && /user = adm \{\n    login = cleartext "1"/.test(st.files['/etc/tacacs+/tac_plus.conf']));
+    chk('все 10 служб переключаются галочкой и видны в systemctl', Object.keys(S.UNITS).every(function (k) { S.set(st, k, true); var on = S.on(st, k); S.set(st, k, false); return on && !S.on(st, k); }));
+    console.log('✓ Службы сервера: DHCP, DNS, HTTPS, FTP-пользователи, RADIUS, TACACS+');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES

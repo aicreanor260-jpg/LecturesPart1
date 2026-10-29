@@ -60,7 +60,7 @@
   function renew(s, d) {                         // T1: unicast серверу, выдавшему адрес
     var st = d.st, L = st.dl; L.t1done = true;
     var sd = L.srv && s.devs[L.srv]; if (!sd || sd.off || !L.sip) return;
-    var c = sd.st.run.dhcp, ok = c && c.on && Object.keys(c.pools).some(function (k) { var p = c.pools[k];
+    var c = (sd.type === 'esr' ? sd.st.run : (EL.debDhcpCfg && EL.debDhcpCfg(sd)) || {}).dhcp, ok = c && c.on && Object.keys(c.pools).some(function (k) { var p = c.pools[k];
       return p.net && IP.sameNet(L.ip, p.net.split('/')[0], +p.net.split('/')[1]); });
     if (!ok || !s.request(d.id, L.sip, 'udp', 67).ok) return;
     var p = Object.keys(c.pools).map(function (k) { return c.pools[k]; }).filter(function (p) { return p.net && IP.sameNet(L.ip, p.net.split('/')[0], +p.net.split('/')[1]); })[0];
