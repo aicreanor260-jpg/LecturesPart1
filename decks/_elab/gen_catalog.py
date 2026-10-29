@@ -169,6 +169,14 @@ def main():
             elif k == "SMG-1016M":
                 models[k] = {"type": "vpc", "kind": "smg", "ports": 1, "portList": ["eth0"], "group": "VoIP-шлюзы", "sw": "ПО " + sv,
                              "note": "цифровой шлюз с SIP-регистратором (sip users) · admin / rootpasswd", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    # абонентский роутер RG-35-WZ (cpe.json, РЭ 2.3.0): WAN = gi1/0/1, LAN 1–4 = gi1/0/2–5 — имена ESR (допущение), настройка через веб-интерфейс
+    csrc = os.path.join(os.path.dirname(SRC), "cpe.json")
+    if os.path.exists(csrc):
+        for m in json.load(open(csrc, encoding="utf-8")):
+            if m["model"] == "RG-35-WZ":
+                sv = m.get("sw_version") or "?"
+                models["RG-35-WZ"] = {"type": "esr", "kind": "cpe", "ports": 5, "portList": ["gi1/0/%d" % i for i in range(1, 6)], "group": "Абонентские роутеры", "host": "RG-35-WZ", "sw": "ПО " + sv,
+                                      "note": "WAN gi1/0/1, LAN 1–4 gi1/0/2–5 · настройка через веб-интерфейс · 192.168.1.1, admin / password", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
     models["Телефон"] = {"type": "vpc", "kind": "phone", "ports": 1, "portList": ["Line"], "group": "VoIP-шлюзы", "sw": "—",
                         "note": "аналоговый телефон (условная модель): dial НОМЕР, hangup", "full": "Аналоговый телефон к порту FXS шлюза TAU"}
     # маршрутизаторы ME (me.json): порты 0/0/N по скорости (10G te, 25G twe — допущение для ME2001, 100G hu), MGMT 0/fmc0/1; шасси без портов — пропуск

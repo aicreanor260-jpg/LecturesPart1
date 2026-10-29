@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'cpe.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -240,6 +240,34 @@ EL.labs.LABS.forEach(runLab);
   chk('reload TAU без confirm — неподтверждённое теряется', (n.reboot(t2.id), n.exec(t2.id, 'admin'), n.exec(t2.id, 'rootpasswd'), /password p202/.test(n.exec(t2.id, 'show configuration running'))));
   chk('неверный вход на TAU — Login incorrect', (n.reboot(t1.id), n.exec(t1.id, 'admin'), n.exec(t1.id, 'bad') === 'Login incorrect'));
   console.log('✓ VoIP: TAU-72.IP + SMG-1016M');
+})();
+// Абонентский роутер RG-35-WZ: заводские LAN 192.168.1.1 + DHCP-сервер, WAN DHCP Client от провайдера, NAT; Static IP через веб-настройки
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ CPE: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), isp = n.add('vESR', 'ISP'), rg = n.add('RG-35-WZ', 'RG'), pc = n.add('VPC', 'PC1'), pc2 = n.add('VPC', 'PC2');
+  n.connect(isp.id, 'gi1/0/1', rg.id, 'gi1/0/1'); n.connect(pc.id, 'eth0', rg.id, 'gi1/0/2'); n.connect(pc2.id, 'eth0', rg.id, 'gi1/0/5');
+  var e = EL.labs.apply(n, { ISP: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 100.64.0.1/24', 'ip firewall disable', 'exit', 'ip dhcp-server', 'ip dhcp-server pool WAN',
+    'network 100.64.0.0/24', 'address-range 100.64.0.10-100.64.0.20', 'default-router 100.64.0.1', 'exit', 'end', 'commit', 'confirm'] });
+  chk('провайдер настроен', !e.length, e.join('; '));
+  chk('консоль роутера — подсказка про веб-интерфейс', /веб-интерфейс/.test(n.exec(rg.id, 'show running-config')) && n.prompt(rg.id) === 'RG-35-WZ> ');
+  var d = n.cpeDhcp(rg.id);
+  chk('WAN DHCP Client: адрес от провайдера', d.ok && /^100\.64\.0\.1\d$/.test(rg.st.cpe.lease.ip) && rg.st.cpe.lease.gw === '100.64.0.1', JSON.stringify(rg.st.cpe.lease));
+  n.exec(pc.id, 'ip dhcp'); n.exec(pc2.id, 'ip dhcp');
+  chk('ПК в LAN получили адреса от DHCP-сервера роутера (192.168.1.2–254, шлюз .1)', /^192\.168\.1\.\d+$/.test(pc.st.ip) && pc.st.gw === '192.168.1.1' && /^192\.168\.1\./.test(pc2.st.ip) && pc.st.ip !== pc2.st.ip, pc.st.ip + ' ' + pc2.st.ip);
+  chk('ПК1 ↔ ПК2 через мост LAN', n.ping(pc.id, pc2.st.ip).ok);
+  var p = n.ping(pc.id, '100.64.0.1');
+  chk('ПК в интернет провайдера — через Source NAT на WAN', p.ok && p.steps.some(function (x) { return /Source NAT/.test(x.t); }), p.steps.map(function (x) { return x.t; }).join(' | '));
+  // Static IP и смена LAN
+  var errs = n.cpeApply(rg.id, { lan: { ip: '10.10.0.1', mask: '255.255.255.0', dhcp: true, from: '10.10.0.100', to: '10.10.0.150', lease: 60 },
+    wan: { mode: 'static', ip: '100.64.0.50', mask: '255.255.255.0', gw: '100.64.0.1' }, user: 'admin', pw: 'password' });
+  chk('Static IP и новый LAN применены без ошибок', !errs.length, errs.join('; '));
+  n.exec(pc.id, 'ip dhcp');
+  chk('ПК получил адрес из нового пула 10.10.0.100–150', /^10\.10\.0\.1[0-5]\d$/.test(pc.st.ip) && pc.st.gw === '10.10.0.1', pc.st.ip);
+  chk('Static WAN — интернет работает', n.ping(pc.id, '100.64.0.1').ok);
+  chk('DHCP-сервер выключен — ПК адрес не получает', (n.cpeApply(rg.id, { lan: { ip: '10.10.0.1', mask: '255.255.255.0', dhcp: false, from: '10.10.0.100', to: '10.10.0.150', lease: 60 },
+    wan: { mode: 'static', ip: '100.64.0.50', mask: '255.255.255.0', gw: '100.64.0.1' }, user: 'admin', pw: 'password' }), !/OK|DORA|DHCP.*10\.10/.test(n.exec(pc2.id, 'ip dhcp') || '') || !/^10\.10\./.test(pc2.st.ip || '')));
+  chk('после перезагрузки настройки веб-интерфейса сохранены', (n.reboot(rg.id), rg.st.cpe.web.lan.ip === '10.10.0.1' && n.ping(pc.id, '100.64.0.1').ok));
+  console.log('✓ RG-35-WZ (CPE)');
 })();
 
 // случайные задания движка: решение на одном коммутаторе MES

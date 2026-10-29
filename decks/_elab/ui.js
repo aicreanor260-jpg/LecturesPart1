@@ -215,7 +215,7 @@
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
       item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
       (mode === 'test' ? item('ping', '⇢', 'Ping отсюда…') : '') + '<hr>' +
-      (net.manualFor(d.id) ? item('man', '❐', 'Руководство') : '') + X.items('dev') + (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
+      (net.manualFor(d.id) ? item('man', '❐', 'Руководство') : '') + X.items('dev', d) + (!d.off ? item('off', '■', 'Выключить') : item('on', '▶', 'Включить')) + item('reload', '⟳', 'Перезагрузить') + '<hr>' + item('del', '✕', 'Удалить'),
       function (a) {
         if (a === 'term') openTerm(d.id);
         if (a === 'props') openProps(d.id);
