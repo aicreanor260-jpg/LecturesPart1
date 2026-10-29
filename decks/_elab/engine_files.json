@@ -83,6 +83,7 @@
   "huawei_usg.js",
   "huawei_wlan.js",
   "huawei_olt.js",
+  "manuals.js",
   "mes10.js",
   "sim.js",
   "qos.js",

@@ -533,7 +533,7 @@
     var ww = Math.min(640, innerWidth - 60), wh = Math.min(420, innerHeight - 160);
     var tw = makeWin('t' + id, d.name, d.model, t.body, { x: Math.max(10, Math.min(x, innerWidth - ww - 10)), y: Math.max(60, Math.min(y, innerHeight - wh - 50)), w: ww, h: wh,
       onMove: function (ev) { stripHint(ev); }, onDrop: function (ev) { var at = stripAt(ev); stripHint(null); if (at !== null) dockTerm(id, at); } });
-    if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство Eltex'; mb.textContent = 'Руководство';
+    if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство ' + ((EL.SITE_NAMES || {})[net.manualFor(id).vendor] || ''); mb.textContent = 'Руководство';
       tw.querySelector('.wt').insertBefore(mb, tw.querySelector('.wt [data-w="min"]')); mb.addEventListener('click', function () { openManual(id); }); }
     if (!consOrder.length) { consActive = null; closeWin('cons'); } else if (consActive === id) consShow(consOrder[Math.min(i, consOrder.length - 1)]); else renderTabs();
     setPr(id); focusTerm(id);
@@ -1212,7 +1212,15 @@
     }).catch(miss);
   }
   function openManual(id) { var d = net.devs[id], m = d && net.manualFor(id); if (!m) return;
+    if (m.site) { openSite('man' + id, m, d.name + ' · ' + d.model); return; }
     openPdf('man' + id, m.url, m.title, d.name + ' · ' + d.model, 'Руководство доступно', m.extra); }
+  // PDF вендора нет — официальная документация на сайте вендора, в новой вкладке
+  function openSite(key, m, sub) { var vn = (EL.SITE_NAMES || {})[m.vendor] || m.vendor;
+    var body = document.createElement('div'); body.className = 'pad';
+    body.innerHTML = '<p>Руководство на сайте ' + esc(vn) + '</p>' + [{ url: m.url, title: m.title }].concat(m.extra || []).map(function (l) {
+      return '<p><a class="act" target="_blank" rel="noopener" href="' + esc(l.url) + '">' + esc(l.title) + '</a></p>'; }).join('');
+    closeWin(key, true); makeWin(key, 'Руководство', sub, body, { x: Math.max(20, innerWidth - 480), y: 70, w: Math.min(460, innerWidth - 40), h: 220 });
+    window.open(m.url, '_blank', 'noopener'); }
   // исходная схема лабы того же варианта: все настройки студента пропадают
   function resetLab() { if (!lab) return; var L = lab, P = labP;
     ask('Сбросить лабу ' + L.id + '? Все настройки устройств и изменения схемы пропадут — вернётся исходная схема задания.', function () {

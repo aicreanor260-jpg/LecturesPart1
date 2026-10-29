@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'huawei_ce.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'huawei_usg.js', 'huawei_wlan.js', 'huawei_olt.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js', 'labs_huawei.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'huawei_ce.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'huawei_usg.js', 'huawei_wlan.js', 'huawei_olt.js', 'manuals.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js', 'labs_huawei.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -2632,6 +2632,30 @@ EL.labs.LABS.forEach(runLab);
   chk('vESR — esr-cli.pdf + vesr-install.pdf', u('vESR') === 'docs/esr-cli.pdf+docs/vesr-install.pdf');
   chk('VPC и Debian — руководства нет', u('VPC') === null && u('Debian') === null);
   console.log('✓ руководства Eltex по моделям');
+})();
+
+// руководство каждой модели каталога — только своего вендора: PDF в docs/<вендор>/ (файл есть в sources) или сайт вендора
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var DOM = { huawei: /^https:\/\/(support|e)\.huawei\.com\//, cisco: /^https:\/\/(www\.cisco\.com|tutorials\.ptnetacad\.net)\//, mikrotik: /^https:\/\/(help\.)?mikrotik\.com\// };
+  var n = new EL.Net(), bad = [];
+  Object.keys(EL.MODELS).forEach(function (k, i) { var d = n.add(k, 'M' + i), m = n.manualFor(d.id), v = EL.vendorOf(k); if (!m) return;
+    var urls = [m.url].concat((m.extra || []).map(function (e) { return e.url; }));
+    var ok = m.vendor === v && urls.every(function (u) {
+      if (/^https?:/.test(u)) return !!DOM[v] && DOM[v].test(u);
+      return v === 'eltex' ? /^docs\/(eltex\/)?[\w.-]+\.pdf$/.test(u) : u.indexOf('docs/' + v + '/') === 0; });
+    if (!ok) bad.push(k + ' → ' + urls.join(', ')); });
+  chk('руководства всех моделей — своего вендора', !bad.length, bad.join('; '));
+  var miss = EL.MANUAL_PDFS.filter(function (p) { return !fs.existsSync(path.join(D, '../..', p.src)); }).map(function (p) { return p.src; });
+  chk('все PDF для сервера есть в sources', !miss.length, miss.join(', '));
+  var u = function (k) { var d = n.add(k, 'Q' + Math.random()), m = n.manualFor(d.id); return m && m.url; };
+  chk('AR2220 — документация AR на support.huawei.com, не ESR', /huawei\.com\/.*EDOC1100007335/.test(u('AR2220')));
+  chk('2960-24TT — Command Reference 2960', /2960/.test(u('2960-24TT')));
+  chk('hEX и CHR — MikroTik', /mikrotik\.com\/product\/RB750Gr3/.test(u('hEX RB750Gr3')) && /CHR/.test(u('CHR')));
+  chk('DGS-1510-28X — CLI Reference DGS-1510 в docs/dlink/', u('DGS-1510-28X') === 'docs/dlink/DGS-1510_CLI_v1.81.pdf');
+  chk('LTP-8X — CLI LTP, не руководство MES', u('LTP-8X rev.B') === 'docs/eltex/LTP-4X_8X_CLI_3.52.0.pdf');
+  chk('Облако провайдера — руководства нет', u('Облако провайдера') === null);
+  console.log('✓ руководства по вендору и серии модели');
 })();
 
 // консольный сервер SCS-32: заводская конфигурация, line aux, консольный кабель, Reverse Telnet / SSH
