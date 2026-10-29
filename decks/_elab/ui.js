@@ -254,22 +254,41 @@
       X.items('link') + item('del', '✕', 'Удалить кабель'), function (a) { if (a === 'del') { if (X.roomAct({ k: 'link.del', i: i })) return; X.rec({ k: 'dis', l: X.linkArr(l) }); net.disconnect(i); selLink = null; draw(); refresh(); return; }
         return X.run('link', a, i); });
   }
-  // панель устройств: сверху — что нужно в лабах (доступ, маршрутизаторы, серверы и ПК), остальное — «Ещё оборудование» (more: true)
-  var TOP = [{ name: 'Коммутаторы доступа', first: ['MES1428', 'MES2308P'], from: ['Коммутаторы доступа'] },
-    { name: 'Маршрутизаторы', first: ['ESR-200', 'vESR'], from: ['Маршрутизаторы ESR'] },
-    { name: 'Серверы и ПК', first: ['Debian-server', 'Docker', 'VPC', 'Debian'], from: [] }];
-  var MORE = ['Коммутаторы доступа PoE', 'Промышленные коммутаторы', 'Коммутаторы агрегации', 'Коммутаторы для ЦОД', 'Маршрутизаторы ME', 'Межсетевые экраны ESR ФСТЭК',
-    'Контроллеры Wi-Fi', 'Точки доступа Wi-Fi', 'OLT GPON / XGS-PON', 'ONT (абонентские терминалы)', 'Консольные серверы SCS'];
+  // панель устройств: дерево «тип устройства → вендор → модели» (от меньшей к большей по числу портов), всё сворачивается
+  var CATS = ['Коммутаторы доступа', 'Маршрутизаторы', 'Серверы и ПК', 'Коммутаторы агрегации и ЦОД', 'Промышленные коммутаторы', 'Межсетевые экраны',
+    'Контроллеры Wi-Fi', 'Точки доступа Wi-Fi', 'OLT GPON / XGS-PON', 'ONT (абонентские терминалы)', 'VoIP-шлюзы', 'Абонентские роутеры', 'Консольные серверы SCS', 'Провайдер'];
+  var CAT_OF = { 'Коммутаторы доступа PoE': 'Коммутаторы доступа', 'Коммутаторы агрегации': 'Коммутаторы агрегации и ЦОД', 'Коммутаторы для ЦОД': 'Коммутаторы агрегации и ЦОД',
+    'Маршрутизаторы ESR': 'Маршрутизаторы', 'Маршрутизаторы ME': 'Маршрутизаторы', 'Межсетевые экраны ESR ФСТЭК': 'Межсетевые экраны', 'Конечные узлы': 'Серверы и ПК' };
+  var VENDORS = ['Eltex', 'Cisco', 'Huawei', 'MikroTik', 'D-Link'];
+  var NOVENDOR = { 'Серверы и ПК': 1, 'Провайдер': 1 };
+  function vendorOf(m) { var g = m.group || ''; for (var i = 1; i < VENDORS.length; i++) if (g.indexOf(VENDORS[i]) === 0) return VENDORS[i]; return 'Eltex'; }
+  function catOf(m) {
+    if (vendorOf(m) === 'Eltex') return CAT_OF[m.group] || m.group;
+    if (m.kind === 'cs-asa' || m.usg) return 'Межсетевые экраны';
+    if (m.ac) return 'Контроллеры Wi-Fi';
+    if (m.kind === 'hwap') return 'Точки доступа Wi-Fi';
+    if (m.ce) return 'Коммутаторы агрегации и ЦОД';
+    if (m.type === 'mes' ) return 'Коммутаторы доступа';
+    return 'Маршрутизаторы';
+  }
+  function bySize(a, b) { var pa = EL.MODELS[a].ports || 0, pb = EL.MODELS[b].ports || 0; return pa - pb || a.localeCompare(b, 'ru', { numeric: true }); }
+  function catalogTree() {
+    var t = {};
+    Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k], c = catOf(m), v = NOVENDOR[c] ? '' : vendorOf(m);
+      if (k === 'CRS326-24G-2S+') c = 'Коммутаторы доступа';
+      ((t[c] = t[c] || {})[v] = t[c][v] || []).push(k); });
+    var order = function (x) { var i = CATS.indexOf(x); return i < 0 ? 99 : i; };
+    return Object.keys(t).sort(function (a, b) { return order(a) - order(b) || a.localeCompare(b); }).map(function (c) {
+      return { name: c, vendors: Object.keys(t[c]).sort(function (a, b) { return VENDORS.indexOf(a) - VENDORS.indexOf(b); })
+        .map(function (v) { return { name: v, items: t[c][v].sort(bySize) }; }) }; });
+  }
+  // плоский список для меню ПКМ «Добавить устройство»
   function catalogGroups() {
-    var g = {}, used = {}, out = [];
-    Object.keys(EL.MODELS).forEach(function (k) { var m = EL.MODELS[k]; (g[m.group] = g[m.group] || []).push(k); });
-    TOP.forEach(function (t) { var its = t.first.filter(function (k) { return EL.MODELS[k]; });
-      t.from.forEach(function (gr) { (g[gr] || []).slice().sort().forEach(function (k) { if (its.indexOf(k) < 0) its.push(k); }); });
-      its.forEach(function (k) { used[k] = 1; }); out.push({ name: t.name, items: its }); });
-    Object.keys(g).sort(function (a, b) { return (MORE.indexOf(a) + 99) % 99 - (MORE.indexOf(b) + 99) % 99; }).forEach(function (gr) {
-      var its = g[gr].filter(function (k) { return !used[k]; }).sort(); if (its.length) out.push({ name: gr, items: its, more: true }); });
+    var out = [];
+    catalogTree().forEach(function (c) { c.vendors.forEach(function (v) { out.push({ name: c.name + (v.name ? ' · ' + v.name : ''), items: v.items }); }); });
     return out;
   }
+  var treeOpen = {};   // что раскрыто в дереве панели (только в памяти страницы)
   function addMenu(e) {
     if (readOnly) return;
     var p = toWorld(e.clientX, e.clientY);
@@ -876,14 +895,20 @@
     var s = $('sbody'), h = '';
     if (tab === 'dev') {
       h = '<input class="q" id="sq" placeholder="Поиск модели…">';
-      var more = false;
-      catalogGroups().forEach(function (g) {
-        if (g.more && !more) { more = true; h += '<details class="more" id="smore"><summary>Ещё оборудование</summary>'; }
-        h += '<h4>' + esc(g.name) + '</h4>' + g.items.map(function (k) { var m = EL.MODELS[k];
-          return '<button class="pi" draggable="true" data-model="' + k + '" title="' + esc(m.full || m.note) + '">' + iconSvg(m.type, k) +
-            '<span><b>' + k + (m.sw ? '<span class="sw">' + m.sw.replace('ПО ', '') + '</span>' : '') + '</b><small>' + esc(m.note) + '</small></span></button>'; }).join('');
+      h += '<div class="tree-ctl"><button data-s="topen">Раскрыть всё</button><button data-s="tclose">Свернуть всё</button></div>';
+      catalogTree().forEach(function (c) {
+        var cn = 0; c.vendors.forEach(function (v) { cn += v.items.length; });
+        h += '<details class="tc" data-k="c:' + esc(c.name) + '"' + (treeOpen['c:' + c.name] ? ' open' : '') + '><summary>' + esc(c.name) + '<i>' + cn + '</i></summary>';
+        c.vendors.forEach(function (v) {
+          var body = v.items.map(function (k) { var m = EL.MODELS[k];
+            return '<button class="pi" draggable="true" data-model="' + esc(k) + '" title="' + esc(m.full || m.note) + '">' + iconSvg(m.type, k) +
+              '<span><b>' + esc(k) + (m.sw ? '<span class="sw">' + m.sw.replace('ПО ', '') + '</span>' : '') + '</b><small>' + esc(m.note) + '</small></span></button>'; }).join('');
+          if (!v.name) { h += body; return; }
+          var key = 'v:' + c.name + '|' + v.name;
+          h += '<details class="tv" data-k="' + esc(key) + '"' + (treeOpen[key] ? ' open' : '') + '><summary>' + esc(v.name) + '<i>' + v.items.length + '</i></summary>' + body + '</details>';
+        });
+        h += '</details>';
       });
-      if (more) h += '</details>';
       h += '<p class="note">Перетащите модель на поле или щёлкните — появится в центре. ПКМ по пустому полю — то же с поиском. ' +
            'Коммутаторы: CLI по ветке ПО (10.x · 6.x/4.x · 8.x FASTPATH), порты как на устройстве. Это модель по документации Eltex, не прошивка.</p>';
     }
@@ -897,11 +922,19 @@
       '<button class="act" data-s="fit">Показать всю схему</button><button class="act red" data-s="clear">Очистить</button>' +
       '<p class="note">PNG — картинка схемы для отчёта. Проект .json хранит устройства, кабели и все настройки — его можно открыть снова. В браузере ничего не сохраняется само.</p>';
     s.innerHTML = h + X.side(tab);
-    var q = $('sq'); if (q) q.addEventListener('input', function () { var v = q.value.trim().toLowerCase();
-      [].forEach.call(s.querySelectorAll('.pi'), function (b) { b.style.display = !v || b.textContent.toLowerCase().indexOf(v) >= 0 ? '' : 'none'; });
-      [].forEach.call(s.querySelectorAll('h4'), function (h4) { var n = h4.nextElementSibling, any = !v; while (n && n.classList.contains('pi')) { if (n.style.display !== 'none') any = true; n = n.nextElementSibling; }
-        h4.style.display = any ? '' : 'none'; });
-      if ($('smore')) $('smore').open = !!v; });
+    var q = $('sq'); if (q) q.addEventListener('input', function () { treeFilter(s, q.value.trim().toLowerCase()); });
+    [].forEach.call(s.querySelectorAll('details[data-k]'), function (d) { d.addEventListener('toggle', function () {
+      if (!s.classList.contains('searching')) { if (d.open) treeOpen[d.dataset.k] = 1; else delete treeOpen[d.dataset.k]; } }); });
+  }
+  // поиск: показать только подходящие модели и раскрыть их ветки; пустой запрос — вернуть, как было раскрыто
+  function treeFilter(s, v) {
+    s.classList.toggle('searching', !!v);
+    [].forEach.call(s.querySelectorAll('.pi'), function (b) { var hit = !v || b.textContent.toLowerCase().indexOf(v) >= 0;
+      if (!hit) { var dv = b.closest('details.tv'), dc = b.closest('details.tc'); hit = (dv && dv.dataset.k.toLowerCase().indexOf(v) >= 0) || (dc && dc.dataset.k.toLowerCase().indexOf(v) >= 0); }
+      b.style.display = hit ? '' : 'none'; });
+    [].forEach.call(s.querySelectorAll('details[data-k]'), function (d) {
+      var any = [].some.call(d.querySelectorAll('.pi'), function (b) { return b.style.display !== 'none'; });
+      d.style.display = any ? '' : 'none'; d.open = v ? any : !!treeOpen[d.dataset.k]; });
   }
   $('sbody').addEventListener('dragstart', function (e) { var b = e.target.closest('[data-model]'); if (b) e.dataTransfer.setData('text/model', b.dataset.model); });
   $('sbody').addEventListener('click', function (e) {
@@ -909,6 +942,8 @@
     if (b.dataset.model) { var r = cv.getBoundingClientRect(), p = toWorld(r.left + r.width / 2 + (Math.random() - .5) * 160, r.top + r.height / 2 + (Math.random() - .5) * 120); addDev(b.dataset.model, p.x, p.y); return; }
     if (b.dataset.lab) { if (X.roomAct({ k: 'lab', id: b.dataset.lab })) return; startLab(b.dataset.lab); return; }
     var a = b.dataset.s;
+    if (a === 'topen' || a === 'tclose') { [].forEach.call($('sbody').querySelectorAll('details[data-k]'), function (d) { d.open = a === 'topen';
+      if (d.open) treeOpen[d.dataset.k] = 1; else delete treeOpen[d.dataset.k]; }); return; }
     if (a === 'labwin') renderLab(true);
     if (a === 'tbase' || a === 'tvlan') startTask(a.slice(1));
     X.sideClick(a);
