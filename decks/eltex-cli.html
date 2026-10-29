@@ -152,6 +152,14 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .pad ol{margin:0 0 8px;padding-left:1.4em}.pad li{margin:4px 0}
 .pad li.ok{color:var(--ok)}.pad li.ok::marker{content:'✓ '}
 .pad ol.tasks{list-style:none;padding:0;counter-reset:tk}
+.pad .quiz{margin-top:16px;padding-top:10px;border-top:1px solid rgba(111,227,234,.25)}
+.pad .quiz h3{margin:2px 0 8px;font-size:15px}
+.pad .qq{margin:7px 0;padding:7px 9px;border:1px solid rgba(111,227,234,.16);background:rgba(255,255,255,.02);transition:border-color .3s,background .3s}
+.pad .qq .qt{margin-bottom:5px}.pad .qq .qt i{opacity:.65;font-style:normal;font-size:12px}
+.pad .qq.good{border-color:#3ddc84;background:rgba(61,220,132,.07)}.pad .qq.good .qr{color:#3ddc84}
+.pad .qq.bad{border-color:#ff5c6c;background:rgba(255,92,108,.07)}.pad .qq.bad .qr{color:#ff5c6c}
+.pad .qo{display:block;margin:3px 0;cursor:pointer}.pad .qin{width:100%;box-sizing:border-box}
+.pad .quiz .qs{margin-left:10px;align-self:center}
 .pad ol.tasks li.task{counter-increment:tk;display:flex;gap:10px;align-items:flex-start;padding:7px 9px;margin:5px 0;border:1px solid rgba(111,227,234,.18);background:rgba(255,255,255,.02);transition:background .4s,border-color .4s}
 .pad ol.tasks li.task::marker{content:''}
 .pad ol.tasks li.task .lamp{flex:0 0 18px;height:18px;border-radius:50%;margin-top:1px;border:2px solid #5d6670;background:#2a2f36;position:relative}
@@ -1256,7 +1264,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   cmd('config', 'hostname <w>', function (st, a) { st.cand.host = a[0]; touch(st); }, 'Имя устройства');
   cmd('config', 'clock timezone gmt <w>', function (st, a) {
     if (!/^[+-]?\d{1,2}$/.test(a[0])) return '% Неверный часовой пояс (пример: +7)';
-    st.cand.tz = (/^[+-]/.test(a[0]) ? '' : '+') + a[0]; touch(st); }, 'Часовой пояс');
+    var h = parseInt(a[0], 10); if (h < -12 || h > 14) return '% Неверный часовой пояс (от -12 до +14)'; st.cand.tz = (h < 0 ? '-' : '+') + Math.abs(h); touch(st); }, 'Часовой пояс');
   cmd('priv', 'set date <w> <n> <w> <n>', function (st, a) {
     if (!/^\d{1,2}:\d{2}:\d{2}$/.test(a[0])) return '% Формат: set date ЧЧ:ММ:СС ДД Месяц ГГГГ';
     var M = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
@@ -2419,7 +2427,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return d;
   };
   Net.seq = 0;
-  P.byName = function (n) { var s = this; return s.order.map(function (i) { return s.devs[i]; }).filter(function (d) { return d.name === n; })[0] || null; };
+  // по имени на схеме; если устройство переименовали (hostname → подпись), находится и по исходному имени — для проверок лаб
+  EL.macKey = function (d) { return (d.st && d.st._name0) || d.name; };   // MAC не меняется, когда устройство переименовали
+  P.byName = function (n, exact) { var s = this, L = s.order.map(function (i) { return s.devs[i]; });
+    return L.filter(function (d) { return d.name === n; })[0] || (exact ? null : L.filter(function (d) { return d.st && d.st._name0 === n; })[0]) || null; };
   P.list = function () { var s = this; return s.order.map(function (i) { return s.devs[i]; }); };
   P.remove = function (id) {
     this.gen++;
@@ -3064,9 +3075,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.dhcp = function (id) {
     var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
     var port = d.type === 'vpc' ? 'eth0' : (d.st.port || 'ens3'), cname = d.name;   // st.port — точка доступа (порт LAN)
-    var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
+    var fl = this.flood(id, { port: port, tag: null }, EL.mac(EL.macKey(d) + port));
     steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
-      f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
+      f: { type: 'ip', smac: EL.mac(EL.macKey(d) + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
     var lease = null, lpath = null;
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
@@ -3094,7 +3105,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     });
     if (!lease) { steps.push({ k: 'drop', t: 'DHCPOFFER не пришёл: в этом широковещательном домене нет DHCP-сервера или ретранслятора' });
       return { ok: false, steps: steps }; }
-    if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
+    if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(EL.macKey(d) + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
     return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server, sip: lease.sip };   // pool — опции пула (WLC: опция 43)
@@ -3288,7 +3299,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var d = this.devs[id];
     if (f.vrrp) { var v = (this.vrrp()[id] || {})[f.name.split(':')[0]];      // виртуальный MAC VRRP: 00:00:5e:00:01:ID
       return '00:00:5e:00:01:' + ('0' + (v ? v.id : 0).toString(16)).slice(-2); }
-    return EL.mac(d.name + (f.port || f.name.split(':')[0]));
+    return EL.mac(EL.macKey(d) + (f.port || f.name.split(':')[0]));
   };
   P.learn = function (path, mac) {
     var s = this, viol = null;
@@ -3349,8 +3360,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.rename = function (id, name) {
     name = String(name || '').trim();
     if (!/^[\w.-]{1,24}$/.test(name)) return 'Имя: латиница, цифры, - _ . (до 24 символов)';
-    var o = this.byName(name); if (o && o.id !== id) return 'Имя ' + name + ' уже занято';
-    var d = this.devs[id]; d.name = name; if (d.st.kind === 'vpc') d.st.name = name; return null;
+    var o = this.byName(name, true); if (o && o.id !== id) return 'Имя ' + name + ' уже занято';
+    var d = this.devs[id]; if (d.st && d.st._name0 === undefined && d.name !== name) d.st._name0 = d.name; d.name = name; if (d.st.kind === 'vpc') d.st.name = name; return null;
   };
   P.toJSON = function () {
     var s = this;
@@ -4704,7 +4715,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var d = this.devs[id], st = d.st, root = this._stp && this.devs[this._stp.root[id]], rs = root ? root.st : st;
     var mode = (st.stp || {}).mode || 'mst', ver = mode === 'stp' ? 0 : mode === 'mst' ? 3 : 2;
     var num = (lname.match(/(\d+)$/) || [0, 1])[1];
-    this.capFrame({ li: pr.li, from: id, to: pr.dev, tag: null }, { type: 'stp', smac: EL.mac(d.name + port), dmac: '01:80:c2:00:00:00', smacB: st.bmac, ver: ver,
+    this.capFrame({ li: pr.li, from: id, to: pr.dev, tag: null }, { type: 'stp', smac: EL.mac(EL.macKey(d) + port), dmac: '01:80:c2:00:00:00', smacB: st.bmac, ver: ver,
       rprio: (rs.stp || { prio: 32768 }).prio, rmac: rs.bmac, bprio: (st.stp || { prio: 32768 }).prio, cost: this._stp ? this._stp.dist[id] || 0 : 0, port: 0x8000 + +num }, 64);
   };
 
@@ -5236,7 +5247,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
 
   // Router Solicitation → Router Advertisement: найти маршрутизатор в сегменте узла
   P.slaac = function (id) {
-    var s = this, d = s.devs[id], port = d.type === 'vpc' ? 'eth0' : 'ens3', mac = EL.mac(d.name + port), steps = s.stepLog();
+    var s = this, d = s.devs[id], port = d.type === 'vpc' ? 'eth0' : 'ens3', mac = EL.mac(EL.macKey(d) + port), steps = s.stepLog();
     var ll = A.eui64(mac), fl = s.flood(id, { name: port, port: port, tag: null }, mac), ra = null;
     steps.push({ k: 'arp', segs: fl.segs, t: d.name + ': Router Solicitation на ff02::2 (все маршрутизаторы)',
       f: { type: 'ip6', icmp6: 'rs', mcast: true, smac: mac, dmac: '33:33:00:00:00:02', src: ll, dst: 'ff02::2', hlim: 255, proto: 'icmp6' } });
@@ -5343,7 +5354,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (d.on) o.push('ipv6 dhcp-server'); });
   // ---------------------------------------------------------------- выдача адреса
   P.dhcp6 = function (id) {
-    var s = this, d = s.devs[id], port = d.st.port || 'ens3', mac = EL.mac(d.name + port), steps = s.stepLog(), fl = s.flood(id, { name: port, port: port, tag: null }, mac), hit = null;
+    var s = this, d = s.devs[id], port = d.st.port || 'ens3', mac = EL.mac(EL.macKey(d) + port), steps = s.stepLog(), fl = s.flood(id, { name: port, port: port, tag: null }, mac), hit = null;
     steps.push({ k: 'arp', segs: fl.segs, t: d.name + ': DHCPv6 Solicit на ff02::1:2 (все DHCPv6-серверы и ретрансляторы), UDP 546 → 547',
       f: { type: 'ip6', mcast: true, smac: mac, dmac: '33:33:00:01:00:02', src: A.eui64(mac), dst: 'ff02::1:2', hlim: 1, proto: 'udp', sport: 546, dport: 547 } });
     fl.reach.some(function (e) { var rd = s.devs[e.dev]; if (rd.type !== 'esr') return false; var c = rd.st.run, d6 = c.dhcp6; if (!d6 || !d6.on) return false;
@@ -8660,14 +8671,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function hostIf(s, id) { var d = s.devs[id]; return d.type === 'vpc' ? { name: 'eth0', port: 'eth0', tag: null, ip: d.st.ip } : { name: 'ens3', port: 'ens3', tag: null, ip: d.st.ip }; }
   P.igmpReport = function (id, group, join) {
     var s = this, f = hostIf(s, id), steps = s.stepLog();
-    s._igmp = { group: group, join: join }; var fl; try { fl = s.flood(id, f, EL.mac(s.devs[id].name + f.port)); } finally { s._igmp = null; }
+    s._igmp = { group: group, join: join }; var fl; try { fl = s.flood(id, f, EL.mac(EL.macKey(s.devs[id]) + f.port)); } finally { s._igmp = null; }
     steps.push({ k: 'arp', segs: fl.segs, t: s.devs[id].name + ': IGMP ' + (join ? 'Membership Report' : 'Leave Group') + ' ' + group + ' — коммутаторы со snooping запомнили порт',
-      f: { type: 'ip', mcast: true, smac: EL.mac(s.devs[id].name + f.port), dmac: mmac(join ? group : '224.0.0.2'), src: f.ip || '0.0.0.0', dst: join ? group : '224.0.0.2', proto: 'igmp', ttl: 1 } });
+      f: { type: 'ip', mcast: true, smac: EL.mac(EL.macKey(s.devs[id]) + f.port), dmac: mmac(join ? group : '224.0.0.2'), src: f.ip || '0.0.0.0', dst: join ? group : '224.0.0.2', proto: 'igmp', ttl: 1 } });
     if (s.countSteps) s.countSteps(steps, 'udp');
     return steps;
   };
   P.mcastSend = function (id, group) {
-    var s = this, f = hostIf(s, id), steps = s.stepLog(), mac = EL.mac(s.devs[id].name + f.port);
+    var s = this, f = hostIf(s, id), steps = s.stepLog(), mac = EL.mac(EL.macKey(s.devs[id]) + f.port);
     s._mc = group; var fl; try { fl = s.flood(id, f, mac); } finally { s._mc = null; }
     var got = fl.eps.filter(function (e) { var h = s.devs[e.dev]; return h.type === 'deb' && (h.st.mgroups || []).indexOf(group) >= 0; }).map(function (e) { return s.devs[e.dev].name; });
     var all = fl.eps.map(function (e) { return s.devs[e.dev].name; }).filter(function (x, i, A) { return A.indexOf(x) === i; });
@@ -9679,7 +9690,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (cmd === 'show-config') return Object.keys(st.apCfg).map(function (k) { return k + ' ' + st.apCfg[k]; }).join('\n');
     if (!c.cfg && !c.path.length) {
       if (cmd === 'configure') { c.cfg = true; return ''; }
-      if (line.trim() === 'monitoring wan-status') return ['Common information:', 'interface | br0', 'mac | ' + EL.mac(d.name + 'LAN'), 'IPv4 information:', 'protocol | ' + (st.apMode === 'dhcp' ? 'dhcp' : 'static-ip'),
+      if (line.trim() === 'monitoring wan-status') return ['Common information:', 'interface | br0', 'mac | ' + EL.mac(EL.macKey(d) + 'LAN'), 'IPv4 information:', 'protocol | ' + (st.apMode === 'dhcp' ? 'dhcp' : 'static-ip'),
         'ip-address | ' + (st.ip || ''), 'netmask | ' + (st.ip ? IP.len2mask(st.len) : ''), 'gateway | ' + (st.gw || '')].join('\n');
       return 'Unknown command';
     }
@@ -9715,7 +9726,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.apSync = function () {
     var s = this;
     this.list().filter(isAp).forEach(function (d) {
-      var st = d.st, mac = EL.mac(d.name + 'LAN');
+      var st = d.st, mac = EL.mac(EL.macKey(d) + 'LAN');
       if (d.off || !s.linkUp(d.id, 'LAN')) { s.list().filter(isWlc).forEach(function (w) { var a = w.st.aps[mac]; if (a && a.status === 'Active') a.status = 'Lost'; }); return; }
       if (st.apMode === 'dhcp' && !st.ip) { var r = s.dhcp(d.id); if (!r.ok) return; st.ip = r.ip; st.len = r.len; st.gw = r.gw || null; st.up = true;
         st.opt43 = r.pool && r.pool.vs ? EL.clone(r.pool.vs) : {}; }
@@ -11128,6 +11139,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return errs;
   }
   var V10 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+  // по пункту на каждый ПК: [[имя, адрес, шлюз(, длина)]] — «одно действие — один пункт»
+  function vpcs(L) { return L.map(function (x) { return { t: x[0] + ': ' + x[1] + '/' + (x[3] || 24) + ', шлюз ' + x[2], ok: function (n) { var d = dev(n, x[0]); return !!d && d.ip === x[1] && (d.len === undefined || d.len === (x[3] || 24)) && d.gw === x[2]; } }; }); }
+  // по пункту на каждое имя: [[устройство, имя]] — для ESR смотрим применённую конфигурацию (после commit), для MES — текущую
+  function names(L) { return L.map(function (x) { return { t: 'Имя ' + x[0] + ': ' + x[1] + ' (hostname ' + x[1] + ')', ok: function (n) { var d = dev(n, x[0]); return !!d && (d.run ? d.run.host : d.host) === x[1]; } }; }); }
+  EL.labH = { vpcs: vpcs, names: names, dev: dev };
 
   var LABS = [
     // ------------------------------------------------------------ 2.1
@@ -11136,12 +11152,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
       build: function (net) { net.add('MES2300-24', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
-        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
+        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config) — все пять сразу или по одной', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
         { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'gi1/0/4–6 → access VLAN ' + v[2], ok: function (n) { return acc(n, 'SW1', [4, 5, 6], v[2]); } },
         { t: 'gi1/0/8–9 → access VLAN ' + v[4], ok: function (n) { return acc(n, 'SW1', [8, 9], v[4]); } },
-        { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
+        { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !!s.vlans[v[0]] && !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
         { t: 'gi1/0/3 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 3); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
         { t: 'Сохраните конфигурацию (write)', ok: function (n) { return !!dev(n, 'SW1').startup; } }]; },
       sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan ' + v.join(','), 'exit', 'do show vlan',
@@ -11163,15 +11179,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
         return [
         { t: 'Имя маршрутизатора R1 (не забудьте do commit и do confirm)', ok: function (n) { return run(n).host === 'R1'; } },
         { t: 'Часовой пояс GMT ' + p.tz + ' (clock timezone gmt ' + p.tz + ')', ok: function (n) { return run(n).tz === p.tz; } },
-        { t: 'gi1/0/1: ' + a + '.1/24, межсетевой экран отключён', ok: function (n) { var x = run(n).ifs['gi1/0/1']; return x.ip === a + '.1/24' && !x.fw; } },
+        { t: 'gi1/0/1: IP-адрес ' + a + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1']; return x.ip === a + '.1/24'; } },
+        { t: 'gi1/0/1: межсетевой экран отключён (ip firewall disable)', ok: function (n) { return !run(n).ifs['gi1/0/1'].fw; } },
         { t: 'Loopback 1: 8.8.8.8/32', ok: function (n) { var x = run(n).ifs.lo1; return x && x.ip === '8.8.8.8/32'; } },
-        { t: 'Саб-интерфейс gi1/0/1.50: ' + s + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && x.ip === s + '.1/24' && !x.fw; } },
+        { t: 'Саб-интерфейс gi1/0/1.50: ' + s + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && x.ip === s + '.1/24'; } },
+        { t: 'gi1/0/1.50: межсетевой экран отключён', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && !x.fw; } },
         { t: 'Пользователь master / eltex, privilege 14', ok: function (n) { var u = run(n).users.master; return u && u.pw === 'eltex' && u.priv === 14; } },
         { t: 'SSH-сервер включён', ok: function (n) { return run(n).ssh; } },
-        { t: 'banner login Router-R1 и banner exec «Connect Router R1»', ok: function (n) { var b = run(n).banner; return b.login === 'Router-R1' && b.exec === 'Connect Router R1'; } },
-        { t: 'Все изменения применены и подтверждены (commit + confirm)', ok: function (n) { var s2 = dev(n, 'R1'); return !s2.pending && !s2.unconfirmed; } },
-        { t: 'Debian (вход root / toor): ens3 = ' + a + '.2/24, шлюз ' + a + '.1', ok: function (n) { var d = dev(n, 'Debian'); return d.up && d.ip === a + '.2' && d.len === 24 && d.gw === a + '.1'; } },
-        { t: 'ping с Debian до ' + a + '.1 и до 8.8.8.8 проходит', ok: function (n) { return n.reach('Debian', a + '.1') && n.reach('Debian', '8.8.8.8'); } }]; },
+        { t: 'banner login Router-R1', ok: function (n) { return run(n).banner.login === 'Router-R1'; } },
+        { t: 'banner exec «Connect Router R1»', ok: function (n) { return run(n).banner.exec === 'Connect Router R1'; } },
+        { t: 'Все изменения применены и подтверждены (commit + confirm)', ok: function (n) { var s2 = dev(n, 'R1'); return !s2.pending && !s2.unconfirmed && (s2.commits || 0) > 0; } },
+        { t: 'Debian (вход root / toor): ens3 включён, адрес ' + a + '.2/24', ok: function (n) { var d = dev(n, 'Debian'); return d.up && d.ip === a + '.2' && d.len === 24; } },
+        { t: 'Debian: шлюз по умолчанию ' + a + '.1', ok: function (n) { return dev(n, 'Debian').gw === a + '.1'; } },
+        { t: 'ping с Debian до ' + a + '.1 проходит', ok: function (n) { return n.reach('Debian', a + '.1'); } },
+        { t: 'ping с Debian до 8.8.8.8 (Loopback R1) проходит', ok: function (n) { return n.reach('Debian', '8.8.8.8'); } }]; },
       sol: function (p) { var a = '192.168.' + p.x, s = '173.16.' + p.s; return {
         R1: ['configure', 'hostname R1', 'clock timezone gmt ' + p.tz, 'interface gigabitethernet 1/0/1', 'ip address ' + a + '.1/24', 'ip firewall disable', 'exit',
              'interface loopback 1', 'ip address 8.8.8.8/32', 'exit', 'interface gigabitethernet 1/0/1.50', 'ip address ' + s + '.1/24', 'ip firewall disable', 'exit',
@@ -11188,15 +11209,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
         [['VPC1', 140, 150, 1], ['VPC2', 140, 410, 2], ['VPC3', 700, 150, 11], ['VPC4', 700, 410, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return [
-        { t: 'VLAN ' + v[0] + ' и ' + v[1] + ' созданы', ok: function (n) { var s = dev(n, 'SW1'); return s.vlans[v[0]] && s.vlans[v[1]]; } },
-        { t: 'gi1/0/1–2 → access VLAN ' + v[0] + ', gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
-        { t: 'interface vlan ' + v[0] + ': ' + A + '.1/24, interface vlan ' + v[1] + ': ' + B + '.1/24', ok: function (n) { var s = dev(n, 'SW1');
-            return s.svi[v[0]] === A + '.1/24' && s.svi[v[1]] === B + '.1/24'; } },
-        { t: 'VPC1/VPC2 — ' + A + '.2 и .3, VPC3/VPC4 — ' + B + '.2 и .3, шлюзы — адреса SVI', ok: function (n) {
-            return dev(n, 'VPC1').ip === A + '.2' && dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC3').ip === B + '.2' && dev(n, 'VPC4').ip === B + '.3' &&
-                   dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
+        { t: 'VLAN ' + v[0] + ' создана', ok: function (n) { return !!dev(n, 'SW1').vlans[v[0]]; } },
+        { t: 'VLAN ' + v[1] + ' создана', ok: function (n) { return !!dev(n, 'SW1').vlans[v[1]]; } },
+        { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
+        { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'interface vlan ' + v[0] + ': ' + A + '.1/24', ok: function (n) { return dev(n, 'SW1').svi[v[0]] === A + '.1/24'; } },
+        { t: 'interface vlan ' + v[1] + ': ' + B + '.1/24', ok: function (n) { return dev(n, 'SW1').svi[v[1]] === B + '.1/24'; } }]
+        .concat(vpcs([['VPC1', A + '.2', A + '.1'], ['VPC2', A + '.3', A + '.1'], ['VPC3', B + '.2', B + '.1'], ['VPC4', B + '.3', B + '.1']]))
+        .concat([
         { t: 'ping VPC1 → VPC2 (внутри VLAN)', ok: function (n) { return n.reach('VPC1', A + '.3'); } },
-        { t: 'ping VPC1 → VPC3 и VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC4', A + '.3'); } }]; },
+        { t: 'ping VPC1 → VPC3 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2'); } },
+        { t: 'ping VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC4', A + '.3'); } }]); },
       sol: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return {
         SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
@@ -11213,14 +11236,15 @@ vesr(config)#         do confirm  — подтвердить</pre>
         [['VPC1', 140, 230, 1], ['VPC2', 140, 470, 2], ['VPC3', 700, 230, 11], ['VPC4', 700, 470, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return [
-        { t: 'SW1: VLAN ' + v[0] + ' (gi1/0/1–2) и VLAN ' + v[1] + ' (gi1/0/11–12) в режиме access', ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'SW1: gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
+        { t: 'SW1: gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'SW1 gi1/0/6 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 6); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
-        { t: 'R1: gi1/0/1.' + v[0] + ' = ' + A + '.1/24, gi1/0/1.' + v[1] + ' = ' + B + '.1/24, экран отключён, commit + confirm', ok: function (n) {
-            var f = dev(n, 'R1').run.ifs, x = f['gi1/0/1.' + v[0]], y = f['gi1/0/1.' + v[1]];
-            return x && y && x.ip === A + '.1/24' && y.ip === B + '.1/24' && !x.fw && !y.fw; } },
-        { t: 'VPC1/VPC2 — ' + A + '.2/.3, VPC3/VPC4 — ' + B + '.2/.3, шлюзы — адреса R1', ok: function (n) {
-            return dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC4').ip === B + '.3' && dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
-        { t: 'ping VPC1 → VPC3 и VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC2', B + '.3'); } }]; },
+        { t: 'R1: gi1/0/1.' + v[0] + ' = ' + A + '.1/24, экран отключён (после commit + confirm)', ok: function (n) { var x = dev(n, 'R1').run.ifs['gi1/0/1.' + v[0]]; return !!x && x.ip === A + '.1/24' && !x.fw; } },
+        { t: 'R1: gi1/0/1.' + v[1] + ' = ' + B + '.1/24, экран отключён (после commit + confirm)', ok: function (n) { var y = dev(n, 'R1').run.ifs['gi1/0/1.' + v[1]]; return !!y && y.ip === B + '.1/24' && !y.fw; } }]
+        .concat(vpcs([['VPC1', A + '.2', A + '.1'], ['VPC2', A + '.3', A + '.1'], ['VPC3', B + '.2', B + '.1'], ['VPC4', B + '.3', B + '.1']]))
+        .concat([
+        { t: 'ping VPC1 → VPC3 через R1', ok: function (n) { return n.reach('VPC1', B + '.2'); } },
+        { t: 'ping VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC2', B + '.3'); } }]); },
       sol: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return {
         SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
@@ -11260,7 +11284,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       },
       tasks: function (p) { var B = '172.16.' + p.b, A = '192.168.' + p.a; return [
         { t: 'VPC1 (' + A + '.2) успешно пингует VPC4 (' + B + '.3)', ok: function (n) { return n.reach('VPC1', B + '.3'); } },
-        { t: 'Остальные пары тоже работают: VPC3 → VPC2 и VPC1 → VPC3', ok: function (n) { return n.reach('VPC3', B + '.2') && n.reach('VPC1', A + '.3'); } }]; },
+        { t: 'VPC3 → VPC2 тоже работает', ok: function (n) { return n.reach('VPC3', B + '.2'); } },
+        { t: 'VPC1 → VPC3 тоже работает', ok: function (n) { return n.reach('VPC1', A + '.3'); } }]; },
       sol: function (p) { var v = p.v, B = '172.16.' + p.b;
         var fix = [
           { SW2: ['configure', 'interface gigabitethernet 1/0/11', 'switchport access vlan ' + v[1], 'end'] },
@@ -11297,7 +11322,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function ipsOk(n, name, list) { var f = run(n, name).ifs;
     return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
   function vpcOk(n, name, ip, gw) { var s = dev(n, name); return s.ip === ip.split('/')[0] && s.len === +ip.split('/')[1] && s.gw === gw; }
-  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; }); }
   function hasRoute(n, name, net, nh, ad) { return run(n, name).routes.some(function (r) { return r.net === net && r.nh === nh && (ad === undefined || (r.ad || 1) === ad); }); }
   function bestProto(n, name, net) { var d = n.byName(name), r = n.best(d.id)[net]; return r ? r.p : null; }
   function linkDown(n, a, ap) { return !n.linkUp(n.byName(a).id, 'gi1/0/' + ap); }
@@ -11306,6 +11331,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
   function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
   function vpcCmd(ip, gw) { return ['ip ' + ip + ' ' + gw]; }
+  // «одно действие — один пункт»: имя, адрес интерфейса, адрес ПК, commit на каждом маршрутизаторе — отдельными пунктами
+  function nmT(r, host) { return { t: 'Имя ' + r + ': ' + host + ' (hostname, затем commit + confirm)', ok: function (n) { return run(n, r).host === host; } }; }
+  function ifT(r, list) { return list.map(function (x) { return { t: r + ' gi1/0/' + x[0] + ': ' + x[1] + ', экран отключён', ok: function (n) { return ipsOk(n, r, [x]); } }; }); }
+  function vpcT(v, ip, gw) { return { t: v + ': ' + ip + ', шлюз ' + gw, ok: function (n) { return vpcOk(n, v, ip, gw); } }; }
+  function comT(rs) { return rs.map(function (r) { return { t: r + ': всё применено (commit + confirm)', ok: function (n) { return committed(n, [r]); } }; }); }
+  function flat(L) { return L.reduce(function (o, x) { return o.concat(x); }, []); }
 
   // треугольник R1–R2–R3 из лаб 5.2 и 5.3 (адреса — по таблице 5.2.1)
   var TRI = {
@@ -11324,16 +11355,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
     wire(net, o, [['R1', 'gi1/0/1', 'R2', 'gi1/0/2'], ['R1', 'gi1/0/2', 'R3', 'gi1/0/1'], ['R2', 'gi1/0/1', 'R3', 'gi1/0/2'],
                   ['VPC1', 'eth0', 'R1', 'gi1/0/3'], ['VPC2', 'eth0', 'R2', 'gi1/0/3'], ['VPC3', 'eth0', 'R3', 'gi1/0/3']]);
   }
-  function triBaseTasks() { return [
-    { t: 'Имена Router-left, Router-right, Router-up и адреса по таблице 5.2.1 (экран отключён)', ok: function (n) {
-        return ['R1', 'R2', 'R3'].every(function (r) { return run(n, r).host === TRI.NAME[r] && ipsOk(n, r, TRI[r]); }); } },
-    { t: 'VPC1 192.168.1.0/23 (шлюз 192.168.0.1), VPC2 10.10.1.0/23 (10.10.0.1), VPC3 172.16.1.0/23 (172.16.0.1)', ok: function (n) {
-        return Object.keys(TRI.VPC).every(function (v) { return vpcOk(n, v, TRI.VPC[v][0], TRI.VPC[v][1]); }); } }]; }
+  function triBaseTasks() { return flat(['R1', 'R2', 'R3'].map(function (r) { return [nmT(r, TRI.NAME[r])]; }))
+    .concat(flat(['R1', 'R2', 'R3'].map(function (r) { return ifT(r, TRI[r]); })))
+    .concat(Object.keys(TRI.VPC).map(function (v) { return vpcT(v, TRI.VPC[v][0], TRI.VPC[v][1]); })); }
   function triEndTasks(p) { var c = TRI.CUT[p.cut]; return [
     { t: 'Разорвите соединение ' + c[2] + ' (shutdown на ' + c[0] + ' gi1/0/' + c[1] + ' или удалите кабель)', ok: function (n) { return linkDown(n, c[0], c[1]); } },
-    { t: 'После разрыва все ПК по-прежнему пингуют друг друга (маршрут перестроился)', ok: function (n) {
-        return n.reach('VPC1', '10.10.1.0') && n.reach('VPC1', '172.16.1.0') && n.reach('VPC2', '172.16.1.0'); } },
-    { t: 'Всё применено: commit + confirm на трёх маршрутизаторах', ok: function (n) { return committed(n, ['R1', 'R2', 'R3']); } }]; }
+    { t: 'После разрыва VPC1 пингует VPC2 (маршрут перестроился)', ok: function (n) { return n.reach('VPC1', '10.10.1.0'); } },
+    { t: 'После разрыва VPC1 пингует VPC3', ok: function (n) { return n.reach('VPC1', '172.16.1.0'); } },
+    { t: 'После разрыва VPC2 пингует VPC3', ok: function (n) { return n.reach('VPC2', '172.16.1.0'); } }].concat(comT(['R1', 'R2', 'R3'])); }
   function triSol(p, proto) {
     var o = {};
     ['R1', 'R2', 'R3'].forEach(function (r, i) {
@@ -11365,19 +11394,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
         return { L: L, R: Rr, r1: [[1, '192.168.100.1/30']].concat(L.map(function (x, i) { return [i + 2, x + '.1/24']; })),
                  r2: [[1, '192.168.100.2/30']].concat(Rr.map(function (x, i) { return [i + 2, x + '.1/24']; })) }; },
       tasks: function (p) { var N = this.nets(p); return [
-        { t: 'Имена: R1 — Router-left, R2 — Router-right', ok: function (n) { return run(n, 'R1').host === 'Router-left' && run(n, 'R2').host === 'Router-right'; } },
-        { t: 'R1: gi1/0/1 192.168.100.1/30, gi1/0/2–4 — ' + N.L.map(function (x) { return x + '.1/24'; }).join(', '), ok: function (n) { return ipsOk(n, 'R1', N.r1); } },
-        { t: 'R2: gi1/0/1 192.168.100.2/30, gi1/0/2–4 — ' + N.R.map(function (x) { return x + '.1/24'; }).join(', '), ok: function (n) { return ipsOk(n, 'R2', N.r2); } },
-        { t: 'VPC1–3: ' + N.L.map(function (x, i) { return x + '.' + (i + 1) * 10; }).join(', ') + '; VPC4–6: ' + N.R.map(function (x, i) { return x + '.' + (i + 1) * 10; }).join(', ') + ' (/24, шлюз .1)',
-          ok: function (n) { return N.L.every(function (x, i) { return vpcOk(n, 'VPC' + (i + 1), x + '.' + (i + 1) * 10 + '/24', x + '.1'); }) &&
-                                     N.R.every(function (x, i) { return vpcOk(n, 'VPC' + (i + 4), x + '.' + (i + 1) * 10 + '/24', x + '.1'); }); } },
+        nmT('R1', 'Router-left'), nmT('R2', 'Router-right')].concat(ifT('R1', N.r1), ifT('R2', N.r2),
+        N.L.map(function (x, i) { return vpcT('VPC' + (i + 1), x + '.' + (i + 1) * 10 + '/24', x + '.1'); }),
+        N.R.map(function (x, i) { return vpcT('VPC' + (i + 4), x + '.' + (i + 1) * 10 + '/24', x + '.1'); }), [
         { t: 'R2: маршрут по умолчанию 0.0.0.0/0 через 192.168.100.1', ok: function (n) { return hasRoute(n, 'R2', '0.0.0.0/0', '192.168.100.1'); } },
-        { t: 'R1: маршрут по умолчанию удалён, вместо него — маршруты до ' + N.R[1] + '.0/24 и ' + N.R[2] + '.0/24, а маршрут до ' + N.R[0] + '.0/24 удалён',
-          ok: function (n) { return !hasRoute(n, 'R1', '0.0.0.0/0', '192.168.100.2') && hasRoute(n, 'R1', N.R[1] + '.0/24', '192.168.100.2') &&
-                                    hasRoute(n, 'R1', N.R[2] + '.0/24', '192.168.100.2') && !hasRoute(n, 'R1', N.R[0] + '.0/24', '192.168.100.2'); } },
-        { t: 'Проверка: VPC3 → VPC5 пингуется, VPC3 → VPC4 — нет (у R1 нет маршрута)', ok: function (n) {
-            return n.reach('VPC3', N.R[1] + '.20') && !n.reach('VPC3', N.R[0] + '.10'); } },
-        { t: 'Всё применено: commit + confirm на R1 и R2', ok: function (n) { return committed(n, ['R1', 'R2']); } }]; },
+        { t: 'R1: маршрут до ' + N.R[1] + '.0/24 через 192.168.100.2', ok: function (n) { return hasRoute(n, 'R1', N.R[1] + '.0/24', '192.168.100.2'); } },
+        { t: 'R1: маршрут до ' + N.R[2] + '.0/24 через 192.168.100.2', ok: function (n) { return hasRoute(n, 'R1', N.R[2] + '.0/24', '192.168.100.2'); } },
+        { t: 'R1: маршрута по умолчанию нет (сначала был, затем удалите), маршрута до ' + N.R[0] + '.0/24 тоже нет', ok: function (n) {
+            return !hasRoute(n, 'R1', '0.0.0.0/0', '192.168.100.2') && !hasRoute(n, 'R1', N.R[0] + '.0/24', '192.168.100.2') && hasRoute(n, 'R1', N.R[1] + '.0/24', '192.168.100.2'); } },
+        { t: 'Проверка: VPC3 → VPC5 пингуется', ok: function (n) { return n.reach('VPC3', N.R[1] + '.20'); } },
+        { t: 'Проверка: VPC3 → VPC4 не пингуется (у R1 нет маршрута)', ok: function (n) { return n.reach('VPC3', N.R[1] + '.20') && !n.reach('VPC3', N.R[0] + '.10'); } }], comT(['R1', 'R2'])); },
       sol: function (p) { var N = this.nets(p), o = {
         R1: ['configure', 'hostname Router-left'].concat(ifs(N.r1), ['ip route 0.0.0.0/0 192.168.100.2', 'do commit', 'do confirm', 'do show ip route',
              'no ip route 0.0.0.0/0 192.168.100.2'], N.R.map(function (x) { return 'ip route ' + x + '.0/24 192.168.100.2'; }),
@@ -11402,22 +11428,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
         r2: [[1, '192.168.100.2/30'], [2, X + '.10.1/24'], [3, X + '.11.1/24'], [4, '172.16.200.2/30']],
         r3: [[1, '172.16.200.1/30'], [2, X + '.100.2/30']] }; },
       tasks: function (p) { var N = this.nets(p), X = N.X; return [
-        { t: 'Имена Router-left, Router-right, Router-down; адреса R1, R2, R3 по схеме (сеть ' + X + '.x.x)', ok: function (n) {
-            return run(n, 'R1').host === 'Router-left' && run(n, 'R2').host === 'Router-right' && run(n, 'R3').host === 'Router-down' &&
-                   ipsOk(n, 'R1', N.r1) && ipsOk(n, 'R2', N.r2) && ipsOk(n, 'R3', N.r3); } },
-        { t: 'VPC1 ' + X + '.0.10, VPC2 ' + X + '.1.20, VPC3 ' + X + '.10.10, VPC4 ' + X + '.11.20 (/24, шлюз .1)', ok: function (n) {
-            return vpcOk(n, 'VPC1', X + '.0.10/24', X + '.0.1') && vpcOk(n, 'VPC2', X + '.1.20/24', X + '.1.1') &&
-                   vpcOk(n, 'VPC3', X + '.10.10/24', X + '.10.1') && vpcOk(n, 'VPC4', X + '.11.20/24', X + '.11.1'); } },
-        { t: 'Суммарные маршруты: R1 — ' + X + '.10.0/23 через 192.168.100.2, R2 — ' + X + '.0.0/23 через 192.168.100.1', ok: function (n) {
-            return hasRoute(n, 'R1', X + '.10.0/23', '192.168.100.2', 1) && hasRoute(n, 'R2', X + '.0.0/23', '192.168.100.1', 1); } },
-        { t: 'Плавающие маршруты с метрикой 10 через R3: R1 → ' + X + '.100.2, R2 → 172.16.200.1', ok: function (n) {
-            return hasRoute(n, 'R1', X + '.10.0/23', X + '.100.2', 10) && hasRoute(n, 'R2', X + '.0.0/23', '172.16.200.1', 10); } },
+        nmT('R1', 'Router-left'), nmT('R2', 'Router-right'), nmT('R3', 'Router-down')].concat(ifT('R1', N.r1), ifT('R2', N.r2), ifT('R3', N.r3), [
+        vpcT('VPC1', X + '.0.10/24', X + '.0.1'), vpcT('VPC2', X + '.1.20/24', X + '.1.1'), vpcT('VPC3', X + '.10.10/24', X + '.10.1'), vpcT('VPC4', X + '.11.20/24', X + '.11.1'),
+        { t: 'R1: суммарный маршрут ' + X + '.10.0/23 через 192.168.100.2', ok: function (n) { return hasRoute(n, 'R1', X + '.10.0/23', '192.168.100.2', 1); } },
+        { t: 'R2: суммарный маршрут ' + X + '.0.0/23 через 192.168.100.1', ok: function (n) { return hasRoute(n, 'R2', X + '.0.0/23', '192.168.100.1', 1); } },
+        { t: 'R1: плавающий маршрут ' + X + '.10.0/23 через R3 (' + X + '.100.2) с метрикой 10', ok: function (n) { return hasRoute(n, 'R1', X + '.10.0/23', X + '.100.2', 10); } },
+        { t: 'R2: плавающий маршрут ' + X + '.0.0/23 через R3 (172.16.200.1) с метрикой 10', ok: function (n) { return hasRoute(n, 'R2', X + '.0.0/23', '172.16.200.1', 10); } },
         { t: 'R3: маршруты до четырёх сетей ПК', ok: function (n) {
             return hasRoute(n, 'R3', X + '.0.0/24', X + '.100.1') && hasRoute(n, 'R3', X + '.1.0/24', X + '.100.1') &&
                    hasRoute(n, 'R3', X + '.10.0/24', '172.16.200.2') && hasRoute(n, 'R3', X + '.11.0/24', '172.16.200.2'); } },
         { t: 'Разорвите R1 — R2 (shutdown gi1/0/1 на R1 или удалите кабель)', ok: function (n) { return linkDown(n, 'R1', 1); } },
-        { t: 'VPC1 → VPC4 пингуется, и путь идёт через R3 (плавающий маршрут вступил в силу)', ok: function (n) { return via(n, 'VPC1', X + '.11.20', 'R3'); } },
-        { t: 'Всё применено: commit + confirm', ok: function (n) { return committed(n, ['R1', 'R2', 'R3']); } }]; },
+        { t: 'VPC1 → VPC4 пингуется, и путь идёт через R3 (плавающий маршрут вступил в силу)', ok: function (n) { return via(n, 'VPC1', X + '.11.20', 'R3'); } }], comT(['R1', 'R2', 'R3'])); },
       sol: function (p) { var N = this.nets(p), X = N.X; return {
         R1: ['configure', 'hostname Router-left'].concat(ifs(N.r1), ['ip route ' + X + '.10.0/23 192.168.100.2', 'ip route ' + X + '.10.0/23 ' + X + '.100.2 10',
              'do commit', 'do confirm', 'do show ip route all', 'end']),
@@ -11436,13 +11457,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Три маршрутизатора в треугольнике. Каждый анонсирует по RIP только свою сеть ПК, интерфейсы к ПК пассивные. После разрыва одного из каналов маршруты должны перестроиться сами.',
       gen: function () { return { cut: R(0, 2) }; },
       build: triBuild,
-      tasks: function (p) { return triBaseTasks().concat([
-        { t: 'RIP на каждом: router rip, network своей сети (/23), enable', ok: function (n) { return ['R1', 'R2', 'R3'].every(function (r) {
-            var c = run(n, r).rip; return c && c.on && c.nets.indexOf(TRI.LAN[r]) >= 0; }); } },
-        { t: 'gi1/0/3 (к ПК) — passive-interface на всех трёх', ok: function (n) { return ['R1', 'R2', 'R3'].every(function (r) {
-            var c = run(n, r).rip; return c && c.passive.indexOf('gi1/0/3') >= 0; }); } },
-        { t: 'В таблице R1 есть маршруты R (RIP) до 10.10.0.0/23 и 172.16.0.0/23', ok: function (n) {
-            return bestProto(n, 'R1', '10.10.0.0/23') === 'R' && bestProto(n, 'R1', '172.16.0.0/23') === 'R'; } }], triEndTasks(p)); },
+      tasks: function (p) { return triBaseTasks().concat(['R1', 'R2', 'R3'].map(function (r) { return { t: r + ': router rip, network ' + TRI.LAN[r] + ', enable', ok: function (n) { var c = run(n, r).rip; return !!c && c.on && c.nets.indexOf(TRI.LAN[r]) >= 0; } }; }),
+        ['R1', 'R2', 'R3'].map(function (r) { return { t: r + ': passive-interface gi1/0/3 (к ПК)', ok: function (n) { var c = run(n, r).rip; return !!c && c.passive.indexOf('gi1/0/3') >= 0; } }; }), [
+        { t: 'В таблице R1 есть маршрут R (RIP) до 10.10.0.0/23', ok: function (n) { return bestProto(n, 'R1', '10.10.0.0/23') === 'R'; } },
+        { t: 'В таблице R1 есть маршрут R (RIP) до 172.16.0.0/23', ok: function (n) { return bestProto(n, 'R1', '172.16.0.0/23') === 'R'; } }], triEndTasks(p)); },
       sol: function (p) { return triSol(p, 'rip'); } },
 
     // ------------------------------------------------------------ 5.3
@@ -11450,16 +11468,13 @@ vesr(config)#         do confirm  — подтвердить</pre>
       goal: 'Та же схема, что в 5.2, но OSPF: процесс 250, Router ID 1.1.1.1/2.2.2.2/3.3.3.3, область 0.0.0.0, интерфейсы привязаны к процессу, gi1/0/3 пассивный.',
       gen: function () { return { cut: R(0, 2) }; },
       build: triBuild,
-      tasks: function (p) { return triBaseTasks().concat([
-        { t: 'router ospf 250 с router-id 1.1.1.1 / 2.2.2.2 / 3.3.3.3, область 0.0.0.0 активна, процесс включён', ok: function (n) {
-            return ['R1', 'R2', 'R3'].every(function (r, i) { var o = run(n, r).ospf, k = i + 1;
-              return o && o.id === 250 && o.on && o.rid === k + '.' + k + '.' + k + '.' + k && o.areas['0.0.0.0'] && o.areas['0.0.0.0'].on; }); } },
-        { t: 'gi1/0/1–3: ip ospf instance 250, ip ospf area 0.0.0.0, ip ospf; gi1/0/3 — passive', ok: function (n) {
-            return ['R1', 'R2', 'R3'].every(function (r) { var f = run(n, r).ifs;
-              return [1, 2, 3].every(function (k) { var o = f['gi1/0/' + k].ospf; return o && o.on && o.inst === 250 && o.area === '0.0.0.0'; }) &&
-                     f['gi1/0/3'].ospf.passive; }); } },
-        { t: 'В таблице R1 есть маршруты O (OSPF) до 10.10.0.0/23 и 172.16.0.0/23', ok: function (n) {
-            return bestProto(n, 'R1', '10.10.0.0/23') === 'O' && bestProto(n, 'R1', '172.16.0.0/23') === 'O'; } }], triEndTasks(p)); },
+      tasks: function (p) { return triBaseTasks().concat(['R1', 'R2', 'R3'].map(function (r, i) { var k = i + 1, rid = k + '.' + k + '.' + k + '.' + k; return { t: r + ': router ospf 250, router-id ' + rid + ', area 0.0.0.0 enable, процесс enable', ok: function (n) {
+            var o = run(n, r).ospf; return !!o && o.id === 250 && o.on && o.rid === rid && !!o.areas['0.0.0.0'] && o.areas['0.0.0.0'].on; } }; }),
+        ['R1', 'R2', 'R3'].map(function (r) { return { t: r + ': gi1/0/1–3 — ip ospf instance 250, ip ospf area 0.0.0.0, ip ospf', ok: function (n) { var f = run(n, r).ifs;
+            return [1, 2, 3].every(function (k) { var o = f['gi1/0/' + k].ospf; return !!o && o.on && o.inst === 250 && o.area === '0.0.0.0'; }); } }; }),
+        ['R1', 'R2', 'R3'].map(function (r) { return { t: r + ': gi1/0/3 — ip ospf passive-interface', ok: function (n) { var o = run(n, r).ifs['gi1/0/3'].ospf; return !!o && !!o.passive; } }; }), [
+        { t: 'В таблице R1 есть маршрут O (OSPF) до 10.10.0.0/23', ok: function (n) { return bestProto(n, 'R1', '10.10.0.0/23') === 'O'; } },
+        { t: 'В таблице R1 есть маршрут O (OSPF) до 172.16.0.0/23', ok: function (n) { return bestProto(n, 'R1', '172.16.0.0/23') === 'O'; } }], triEndTasks(p)); },
       sol: function (p) { return triSol(p, 'ospf'); } }
   ];
 
@@ -11482,7 +11497,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function run(n, name) { return dev(n, name).run; }
   function ifs(list) { return list.reduce(function (o, x) { return o.concat(['interface gigabitethernet 1/0/' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit']); }, []); }
   function ipsOk(n, name, list) { var f = run(n, name).ifs; return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
-  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; }); }
   function hasRoute(n, name, net, nh) { return run(n, name).routes.some(function (r) { return r.net === net && r.nh === nh; }); }
   function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
   function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
@@ -11490,6 +11505,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function debStatic(ip, gw) { return ['ip link set ens3 up', 'ip addr add ' + ip + ' dev ens3', 'ip route add default via ' + gw]; }
   function debOk(n, name, ip, gw) { var s = dev(n, name); return s.up && s.ip + '/' + s.len === ip && s.gw === gw; }
   function pool(n, r, name) { var d = run(n, r).dhcp; return d && d.pools[name]; }
+  // «одно действие — один пункт»
+  function ifT(r, list) { return list.map(function (x) { return { t: r + ' gi1/0/' + x[0] + ': ' + x[1] + ', экран отключён', ok: function (n) { return ipsOk(n, r, [x]); } }; }); }
+  function comT(rs) { return rs.map(function (r) { return { t: r + ': всё применено (commit + confirm)', ok: function (n) { return committed(n, [r]); } }; }); }
+  function vpcT(v, ip, gw) { return { t: v + ': ' + ip + '/24, шлюз ' + gw, ok: function (n) { var d = dev(n, v); return d.ip === ip && d.gw === gw; } }; }
+  function debT(v, ip, gw) { return { t: v + ' (root/toor): ens3 ' + ip + ', шлюз ' + gw, ok: function (n) { return debOk(n, v, ip, gw); } }; }
 
   var LABS = [
     // ------------------------------------------------------------ 6.1
@@ -11501,15 +11521,16 @@ vesr(config)#         do confirm  — подтвердить</pre>
         wire(net, o, [['R1', 'gi1/0/1', 'SW1', 'gi1/0/1'], ['VPC1', 'eth0', 'SW1', 'gi1/0/10'], ['VPC2', 'eth0', 'SW1', 'gi1/0/11'], ['VPC3', 'eth0', 'SW1', 'gi1/0/12']]); },
       net: function (p) { var A = '192.168.' + p.x; return { A: A, a: A + '.' + p.lo, b: A + '.' + (p.lo + 100), pool: 'DHCP-' + p.x }; },
       tasks: function (p) { var N = this.net(p); return [
-        { t: 'R1: имя R1, gi1/0/1 — ' + N.A + '.1/24, экран отключён', ok: function (n) { return run(n, 'R1').host === 'R1' && ipsOk(n, 'R1', [[1, N.A + '.1/24']]); } },
-        { t: 'ip dhcp-server и пул ' + N.pool + ': network ' + N.A + '.0/24, address-range ' + N.a + '-' + N.b + ', default-router ' + N.A + '.1, аренда ' + p.lease,
-          ok: function (n) { var c = run(n, 'R1'), q = pool(n, 'R1', N.pool);
-            return c.dhcp && c.dhcp.on && q && q.net === N.A + '.0/24' && q.range && q.range[0] === N.a && q.range[1] === N.b && q.gw === N.A + '.1' && q.lease === p.lease; } },
-        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['R1']); } },
-        { t: 'VPC1–VPC3 получили адреса по DHCP (ip dhcp) из диапазона ' + N.a + '–' + N.b, ok: function (n) {
-            return ['VPC1', 'VPC2', 'VPC3'].every(function (v) { var s = dev(n, v); return s.dhcp && inPool(s.ip, N.a, N.b) && s.gw === N.A + '.1'; }); } },
-        { t: 'VPC1 пингует VPC3, VPC3 пингует шлюз ' + N.A + '.1', ok: function (n) { var v3 = dev(n, 'VPC3').ip;
-            return !!v3 && n.reach('VPC1', v3) && n.reach('VPC3', N.A + '.1'); } }]; },
+        { t: 'Имя R1 (hostname R1, затем commit + confirm)', ok: function (n) { return run(n, 'R1').host === 'R1'; } }].concat(ifT('R1', [[1, N.A + '.1/24']]), [
+        { t: 'ip dhcp-server — DHCP-сервер включён', ok: function (n) { var c = run(n, 'R1'); return !!c.dhcp && c.dhcp.on; } },
+        { t: 'Пул ' + N.pool + ': network ' + N.A + '.0/24', ok: function (n) { var q = pool(n, 'R1', N.pool); return !!q && q.net === N.A + '.0/24'; } },
+        { t: 'Пул ' + N.pool + ': address-range ' + N.a + '-' + N.b, ok: function (n) { var q = pool(n, 'R1', N.pool); return !!q && !!q.range && q.range[0] === N.a && q.range[1] === N.b; } },
+        { t: 'Пул ' + N.pool + ': default-router ' + N.A + '.1', ok: function (n) { var q = pool(n, 'R1', N.pool); return !!q && q.gw === N.A + '.1'; } },
+        { t: 'Пул ' + N.pool + ': аренда ' + p.lease, ok: function (n) { var q = pool(n, 'R1', N.pool); return !!q && q.lease === p.lease; } },
+        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['R1']); } }],
+        ['VPC1', 'VPC2', 'VPC3'].map(function (v) { return { t: v + ' получил адрес по DHCP (ip dhcp) из ' + N.a + '–' + N.b, ok: function (n) { var s = dev(n, v); return s.dhcp && inPool(s.ip, N.a, N.b) && s.gw === N.A + '.1'; } }; }), [
+        { t: 'VPC1 пингует VPC3', ok: function (n) { var v3 = dev(n, 'VPC3').ip; return !!v3 && n.reach('VPC1', v3); } },
+        { t: 'VPC3 пингует шлюз ' + N.A + '.1', ok: function (n) { return n.reach('VPC3', N.A + '.1'); } }]); },
       sol: function (p) { var N = this.net(p); return {
         R1: ['configure', 'hostname R1'].concat(ifs([[1, N.A + '.1/24']]), ['ip dhcp-server', 'ip dhcp-server pool ' + N.pool, 'network ' + N.A + '.0/24',
              'address-range ' + N.a + '-' + N.b, 'default-router ' + N.A + '.1', 'default-lease-time ' + p.lease, 'exit', 'do commit', 'do confirm', 'end']),
@@ -11524,24 +11545,23 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var o = place(net, [['VPC1', 'VPC', 90, 180], ['VPC2', 'VPC', 90, 440], ['R1', 'vESR', 330, 310], ['R2', 'vESR', 610, 310], ['R-DHCP', 'vESR', 880, 310]]);
         wire(net, o, [['VPC1', 'eth0', 'R1', 'gi1/0/2'], ['VPC2', 'eth0', 'R1', 'gi1/0/3'], ['R1', 'gi1/0/1', 'R2', 'gi1/0/1'], ['R2', 'gi1/0/2', 'R-DHCP', 'gi1/0/1']]); },
       tasks: function (p) { var a = p.lo, b = p.lo + 100; return [
-        { t: 'Адреса по таблице 6.2.1: R1 gi1/0/1–3, R2 gi1/0/1–2, R-DHCP gi1/0/1 (экран отключён)', ok: function (n) {
-            return ipsOk(n, 'R1', [[1, '192.168.10.1/30'], [2, '10.10.10.1/24'], [3, '172.16.10.1/24']]) && ipsOk(n, 'R2', [[1, '192.168.10.2/30'], [2, '192.168.100.1/30']]) &&
-                   ipsOk(n, 'R-DHCP', [[1, '192.168.100.2/30']]); } },
-        { t: 'R-DHCP: пулы DHCP-10 (10.10.10.' + a + '–' + b + ', шлюз 10.10.10.1) и DHCP-172 (172.16.10.' + a + '–' + b + ', шлюз 172.16.10.1)', ok: function (n) {
-            var c = run(n, 'R-DHCP'), x = pool(n, 'R-DHCP', 'DHCP-10'), y = pool(n, 'R-DHCP', 'DHCP-172');
-            return c.dhcp && c.dhcp.on && x && y && x.net === '10.10.10.0/24' && y.net === '172.16.10.0/24' && x.range && x.range[0] === '10.10.10.' + a &&
-                   y.range && y.range[0] === '172.16.10.' + a && x.gw === '10.10.10.1' && y.gw === '172.16.10.1'; } },
-        { t: 'R1: ip dhcp-relay и ip helper-address 192.168.100.2 на gi1/0/2 и gi1/0/3', ok: function (n) { var c = run(n, 'R1');
-            return c.relay && c.ifs['gi1/0/2'].helper === '192.168.100.2' && c.ifs['gi1/0/3'].helper === '192.168.100.2'; } },
-        { t: 'Маршруты: R1 0.0.0.0/0 → 192.168.10.2, R-DHCP 0.0.0.0/0 → 192.168.100.1, R2 до 10.10.10.0/24 и 172.16.10.0/24 → 192.168.10.1', ok: function (n) {
-            return hasRoute(n, 'R1', '0.0.0.0/0', '192.168.10.2') && hasRoute(n, 'R-DHCP', '0.0.0.0/0', '192.168.100.1') &&
-                   hasRoute(n, 'R2', '10.10.10.0/24', '192.168.10.1') && hasRoute(n, 'R2', '172.16.10.0/24', '192.168.10.1'); } },
-        { t: 'Всё применено: commit + confirm на трёх маршрутизаторах', ok: function (n) { return committed(n, ['R1', 'R2', 'R-DHCP']); } },
-        { t: 'VPC1 получил адрес из 10.10.10.' + a + '–' + b + ', VPC2 — из 172.16.10.' + a + '–' + b, ok: function (n) {
-            var v1 = dev(n, 'VPC1'), v2 = dev(n, 'VPC2');
-            return v1.dhcp && v2.dhcp && inPool(v1.ip, '10.10.10.' + a, '10.10.10.' + b) && inPool(v2.ip, '172.16.10.' + a, '172.16.10.' + b); } },
-        { t: 'VPC1 пингует VPC2, VPC2 пингует сервер 192.168.100.2', ok: function (n) { var v2 = dev(n, 'VPC2').ip;
-            return !!v2 && n.reach('VPC1', v2) && n.reach('VPC2', '192.168.100.2'); } }]; },
+        ].concat(ifT('R1', [[1, '192.168.10.1/30'], [2, '10.10.10.1/24'], [3, '172.16.10.1/24']]), ifT('R2', [[1, '192.168.10.2/30'], [2, '192.168.100.1/30']]), ifT('R-DHCP', [[1, '192.168.100.2/30']]), [
+        { t: 'R-DHCP: ip dhcp-server включён', ok: function (n) { var c = run(n, 'R-DHCP'); return !!c.dhcp && c.dhcp.on; } },
+        { t: 'R-DHCP: пул DHCP-10 — network 10.10.10.0/24, диапазон 10.10.10.' + a + '–' + b + ', шлюз 10.10.10.1', ok: function (n) { var x = pool(n, 'R-DHCP', 'DHCP-10');
+            return !!x && x.net === '10.10.10.0/24' && !!x.range && x.range[0] === '10.10.10.' + a && x.gw === '10.10.10.1'; } },
+        { t: 'R-DHCP: пул DHCP-172 — network 172.16.10.0/24, диапазон 172.16.10.' + a + '–' + b + ', шлюз 172.16.10.1', ok: function (n) { var y = pool(n, 'R-DHCP', 'DHCP-172');
+            return !!y && y.net === '172.16.10.0/24' && !!y.range && y.range[0] === '172.16.10.' + a && y.gw === '172.16.10.1'; } },
+        { t: 'R1: ip dhcp-relay', ok: function (n) { return !!run(n, 'R1').relay; } },
+        { t: 'R1 gi1/0/2: ip helper-address 192.168.100.2', ok: function (n) { return run(n, 'R1').ifs['gi1/0/2'].helper === '192.168.100.2'; } },
+        { t: 'R1 gi1/0/3: ip helper-address 192.168.100.2', ok: function (n) { return run(n, 'R1').ifs['gi1/0/3'].helper === '192.168.100.2'; } },
+        { t: 'R1: маршрут 0.0.0.0/0 через 192.168.10.2', ok: function (n) { return hasRoute(n, 'R1', '0.0.0.0/0', '192.168.10.2'); } },
+        { t: 'R-DHCP: маршрут 0.0.0.0/0 через 192.168.100.1', ok: function (n) { return hasRoute(n, 'R-DHCP', '0.0.0.0/0', '192.168.100.1'); } },
+        { t: 'R2: маршрут до 10.10.10.0/24 через 192.168.10.1', ok: function (n) { return hasRoute(n, 'R2', '10.10.10.0/24', '192.168.10.1'); } },
+        { t: 'R2: маршрут до 172.16.10.0/24 через 192.168.10.1', ok: function (n) { return hasRoute(n, 'R2', '172.16.10.0/24', '192.168.10.1'); } }], comT(['R1', 'R2', 'R-DHCP']), [
+        { t: 'VPC1 получил адрес по DHCP из 10.10.10.' + a + '–' + b, ok: function (n) { var v1 = dev(n, 'VPC1'); return v1.dhcp && inPool(v1.ip, '10.10.10.' + a, '10.10.10.' + b); } },
+        { t: 'VPC2 получил адрес по DHCP из 172.16.10.' + a + '–' + b, ok: function (n) { var v2 = dev(n, 'VPC2'); return v2.dhcp && inPool(v2.ip, '172.16.10.' + a, '172.16.10.' + b); } },
+        { t: 'VPC1 пингует VPC2', ok: function (n) { var v2 = dev(n, 'VPC2').ip; return !!v2 && n.reach('VPC1', v2); } },
+        { t: 'VPC2 пингует сервер 192.168.100.2', ok: function (n) { return n.reach('VPC2', '192.168.100.2'); } }]); },
       sol: function (p) { var a = p.lo, b = p.lo + 100; return {
         'R-DHCP': ['configure', 'hostname R-DHCP'].concat(ifs([[1, '192.168.100.2/30']]), ['ip dhcp-server',
           'ip dhcp-server pool DHCP-10', 'network 10.10.10.0/24', 'address-range 10.10.10.' + a + '-10.10.10.' + b, 'default-router 10.10.10.1', 'default-lease-time 0:0:30', 'exit',
@@ -11565,24 +11585,19 @@ vesr(config)#         do confirm  — подтвердить</pre>
                       ['Docker', 'ens3', 'SW1', 'gi1/0/3'], ['VPC1', 'eth0', 'SW1', 'gi1/0/2'], ['VPC2', 'eth0', 'SW2', 'gi1/0/2'], ['Server', 'ens3', 'SW2', 'gi1/0/12']]); },
       net: function (p) { var Y = '10.' + p.y; return { r1: Y + '.10.2', isp1: Y + '.10.1', r2: Y + '.50.2', isp2: Y + '.50.1', Y: Y }; },
       tasks: function (p) { var N = this.net(p); return [
-        { t: 'Адреса: R1 gi1/0/1 ' + N.r1 + '/30, gi1/0/3 192.168.1.1/24; R2 gi1/0/1 ' + N.r2 + '/30, gi1/0/3 192.168.1.1/24; ISP ' + N.isp1 + '/30 и ' + N.isp2 + '/30',
-          ok: function (n) { return ipsOk(n, 'R1', [[1, N.r1 + '/30'], [3, '192.168.1.1/24']]) && ipsOk(n, 'R2', [[1, N.r2 + '/30'], [3, '192.168.1.1/24']]) &&
-                                    ipsOk(n, 'ISP', [[1, N.isp1 + '/30'], [2, N.isp2 + '/30']]); } },
-        { t: 'Узлы: VPC1 192.168.1.100, Docker 192.168.1.25, VPC2 192.168.1.10, Server 192.168.1.100 (все /24, шлюз 192.168.1.1)', ok: function (n) {
-            var v1 = dev(n, 'VPC1'), v2 = dev(n, 'VPC2');
-            return v1.ip === '192.168.1.100' && v1.gw === '192.168.1.1' && v2.ip === '192.168.1.10' && v2.gw === '192.168.1.1' &&
-                   debOk(n, 'Docker', '192.168.1.25/24', '192.168.1.1') && debOk(n, 'Server', '192.168.1.100/24', '192.168.1.1'); } },
-        { t: 'R1 и R2: маршрут по умолчанию на ISP', ok: function (n) { return hasRoute(n, 'R1', '0.0.0.0/0', N.isp1) && hasRoute(n, 'R2', '0.0.0.0/0', N.isp2); } },
-        { t: 'Source NAT на R1 и R2: ruleset SNAT, to interface gi1/0/1, rule 10 — 192.168.1.1-192.168.1.254 → action source-nat interface, enable', ok: function (n) {
-            return ['R1', 'R2'].every(function (r) { var s = run(n, r).snat, x = s && s.rulesets.SNAT, q = x && x.rules[10];
-              return x && x.ifn === 'gi1/0/1' && q && q.on && q.act === 'interface' && q.src && q.src[0] === '192.168.1.1' && q.src[1] === '192.168.1.254'; }); } },
-        { t: 'VPC1 и VPC2 пингуют ISP ' + N.isp1 + ' (без NAT ответ не вернулся бы — у ISP нет маршрута в 192.168.1.0/24)', ok: function (n) {
-            return n.reach('VPC1', N.isp1) && n.reach('VPC2', N.isp1); } },
+        ].concat(ifT('R1', [[1, N.r1 + '/30'], [3, '192.168.1.1/24']]), ifT('R2', [[1, N.r2 + '/30'], [3, '192.168.1.1/24']]), ifT('ISP', [[1, N.isp1 + '/30'], [2, N.isp2 + '/30']]), [
+        vpcT('VPC1', '192.168.1.100', '192.168.1.1'), vpcT('VPC2', '192.168.1.10', '192.168.1.1'), debT('Docker', '192.168.1.25/24', '192.168.1.1'), debT('Server', '192.168.1.100/24', '192.168.1.1'),
+        { t: 'R1: маршрут по умолчанию на ISP (' + N.isp1 + ')', ok: function (n) { return hasRoute(n, 'R1', '0.0.0.0/0', N.isp1); } },
+        { t: 'R2: маршрут по умолчанию на ISP (' + N.isp2 + ')', ok: function (n) { return hasRoute(n, 'R2', '0.0.0.0/0', N.isp2); } }],
+        ['R1', 'R2'].map(function (r) { return { t: r + ': Source NAT — ruleset SNAT, to interface gi1/0/1, rule 10: 192.168.1.1-192.168.1.254 → action source-nat interface, enable', ok: function (n) {
+            var s = run(n, r).snat, x = s && s.rulesets.SNAT, q = x && x.rules[10];
+            return !!x && x.ifn === 'gi1/0/1' && !!q && q.on && q.act === 'interface' && !!q.src && q.src[0] === '192.168.1.1' && q.src[1] === '192.168.1.254'; } }; }), [
+        { t: 'VPC1 пингует ISP ' + N.isp1 + ' (без NAT ответ не вернулся бы — у ISP нет маршрута в 192.168.1.0/24)', ok: function (n) { return n.reach('VPC1', N.isp1); } },
+        { t: 'VPC2 пингует ISP ' + N.isp1, ok: function (n) { return n.reach('VPC2', N.isp1); } },
         { t: 'Destination NAT на R2: ruleset Dest_NAT from interface gi1/0/1, rule 10 — tcp, порт 80 → netmap 192.168.1.100/32, enable', ok: function (n) {
             var d = run(n, 'R2').dnat, x = d && d.rulesets.Dest_NAT, q = x && x.rules[10];
             return x && x.ifn === 'gi1/0/1' && q && q.on && q.proto === 'tcp' && q.dport && q.dport[0] === 80 && q.to === '192.168.1.100'; } },
-        { t: 'Docker открывает сайт http://' + N.r2 + ' (open http://' + N.r2 + ')', ok: function (n) { return n.http('Docker', N.r2, 80); } },
-        { t: 'Всё применено: commit + confirm на R1, R2, ISP', ok: function (n) { return committed(n, ['R1', 'R2', 'ISP']); } }]; },
+        { t: 'Docker открывает сайт http://' + N.r2 + ' (open http://' + N.r2 + ')', ok: function (n) { return n.http('Docker', N.r2, 80); } }], comT(['R1', 'R2', 'ISP'])); },
       sol: function (p) { var N = this.net(p);
         var snat = ['nat source', 'ruleset SNAT', 'to interface gigabitethernet 1/0/1', 'rule 10', 'match source-address address-range 192.168.1.1-192.168.1.254',
                     'action source-nat interface', 'enable', 'exit', 'exit', 'exit'];
@@ -11606,8 +11621,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         o.Server.st.tz = p.tz; },
       when: function (p) { return p.y + '-' + ('0' + p.m).slice(-2) + '-' + ('0' + p.d).slice(-2) + ' ' + ('0' + p.h).slice(-2) + ':00:00'; },
       tasks: function (p) { var W = this.when(p), target = Date.UTC(p.y, p.m - 1, p.d, p.h) - p.tz * 3600e3; return [
-        { t: 'vESR gi1/0/1 — 192.168.1.1/24 (экран отключён); Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
-            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        ].concat(ifT('vESR', [[1, '192.168.1.1/24']]), [debT('Server', '192.168.1.10/24', '192.168.1.1'),
         { t: 'На сервере выставьте время ' + W + ' (местное, пояс GMT+' + p.tz + '): timedatectl set-ntp false, затем set-time', ok: function (n) {
             var s = dev(n, 'Server'); return Math.abs(EL.clock.now() + s.clk - target) < 6 * 3600e3; } },
         { t: 'vESR: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4)', ok: function (n) { var c = run(n, 'vESR').ntp, x = c && c.servers['192.168.1.10'];
@@ -11615,7 +11629,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         { t: 'vESR синхронизирован с сервером (show ntp peers — звёздочка у 192.168.1.10)', ok: function (n) {
             var pr = n.ntpPeer(n.byName('vESR').id); return !!pr && pr.utc !== null; } },
         { t: 'Часовой пояс vESR совпадает с сервером: clock timezone gmt +' + p.tz + ' — тогда show date = date на сервере', ok: function (n) { return run(n, 'vESR').tz === '+' + p.tz; } },
-        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } }]; },
+        { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } }]); },
       sol: function (p) { return {
         Server: ['root', 'toor'].concat(debStatic('192.168.1.10/24', '192.168.1.1'), ['systemctl status chronyd', 'timedatectl set-ntp false',
                  "timedatectl set-time '" + this.when(p) + "'", 'timedatectl set-ntp true', 'systemctl restart chronyd', 'date']),
@@ -11638,13 +11652,18 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function run(n, name) { return dev(n, name).run; }
   function ifs(list) { return list.reduce(function (o, x) { return o.concat(['interface gigabitethernet 1/0/' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit']); }, []); }
   function ipsOk(n, name, list) { var f = run(n, name).ifs; return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
-  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; }); }
   function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
   function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
   function debOk(n, name, ip, gw) { var s = dev(n, name); return s.up && s.ip + '/' + s.len === ip && s.gw === gw; }
   function debIp(ip, gw) { return ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + ip + ' dev ens3', 'ip route add default via ' + gw]; }
   function tcp(n, src, ip, port) { var d = n.byName(src); return n.request(d.id, ip, 'tcp', port).ok; }
   function aclRule(L, k) { return L && L.rules[k]; }
+  // «одно действие — один пункт»
+  function ifT(r, list) { return list.map(function (x) { return { t: r + ' gi1/0/' + x[0] + ': ' + x[1] + ', экран отключён', ok: function (n) { return ipsOk(n, r, [x]); } }; }); }
+  function debT(v, ip, gw) { return { t: v + ' (root/toor): ens3 ' + ip + ', шлюз ' + gw, ok: function (n) { return debOk(n, v, ip, gw); } }; }
+  function vpcIp(v, ip, gw) { return { t: v + ': ' + ip + '/24' + (gw ? ', шлюз ' + gw : ''), ok: function (n) { var d = dev(n, v); return d.ip === ip && (!gw || d.gw === gw); } }; }
+
 
   var LABS = [
     // ------------------------------------------------------------ 7.1
@@ -11657,11 +11676,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
         wire(net, o, [['Debian', 'ens3', 'R1', 'gi1/0/1'], ['Debian2', 'ens3', 'R1', 'gi1/0/2'], ['Debian3', 'ens3', 'R1', 'gi1/0/3']]); },
       net: function (p) { return [10, 20, 30].map(function (x) { return '192.168.' + (x + p.o); }); },
       tasks: function (p) { var N = this.net(p); return [
-        { t: 'R1: gi1/0/1–3 — ' + N.map(function (x) { return x + '.1/24'; }).join(', ') + ' (экран отключён)', ok: function (n) {
-            return ipsOk(n, 'R1', N.map(function (x, i) { return [i + 1, x + '.1/24']; })); } },
-        { t: 'Debian (root/toor) — ' + N[0] + '.10, Debian2 — ' + N[1] + '.20, Debian3 — ' + N[2] + '.30 (/24, шлюз .1)', ok: function (n) {
-            return debOk(n, 'Debian', N[0] + '.10/24', N[0] + '.1') && debOk(n, 'Debian2', N[1] + '.20/24', N[1] + '.1') && debOk(n, 'Debian3', N[2] + '.30/24', N[2] + '.1'); } },
-        { t: 'R1: ip ssh server и ip telnet server', ok: function (n) { var c = run(n, 'R1'); return c.ssh && c.telnet; } },
+        ].concat(ifT('R1', N.map(function (x, i) { return [i + 1, x + '.1/24']; })), [
+        debT('Debian', N[0] + '.10/24', N[0] + '.1'), debT('Debian2', N[1] + '.20/24', N[1] + '.1'), debT('Debian3', N[2] + '.30/24', N[2] + '.1'),
+        { t: 'R1: ip ssh server', ok: function (n) { return !!run(n, 'R1').ssh; } },
+        { t: 'R1: ip telnet server', ok: function (n) { return !!run(n, 'R1').telnet; } },
         { t: 'Test1: rule 10 deny tcp 23, rule 20 permit tcp 22, rule 30 permit icmp (все enable)', ok: function (n) { var L = (run(n, 'R1').acls || {}).Test1;
             var a = aclRule(L, 10), b = aclRule(L, 20), c = aclRule(L, 30);
             return a && a.on && a.act === 'deny' && a.proto === 'tcp' && a.dport && a.dport[0] === 23 && b && b.on && b.act === 'permit' && b.dport && b.dport[0] === 22 &&
@@ -11677,7 +11695,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
             return !tcp(n, 'Debian', N[0] + '.1', 23) && tcp(n, 'Debian', N[0] + '.1', 22) && n.reach('Debian', N[0] + '.1'); } },
         { t: 'Проверка Debian2: telnet и ssh к ' + N[1] + '.1 — нет; ping Debian → Debian2 после разрешения ICMP — да', ok: function (n) {
             return !tcp(n, 'Debian2', N[1] + '.1', 23) && !tcp(n, 'Debian2', N[1] + '.1', 22) && n.reach('Debian', N[1] + '.20'); } },
-        { t: 'Проверка Debian3: telnet к ' + N[2] + '.1 работает — на gi1/0/3 списка нет', ok: function (n) { return tcp(n, 'Debian3', N[2] + '.1', 23); } }]; },
+        { t: 'Проверка Debian3: telnet к ' + N[2] + '.1 работает — на gi1/0/3 списка нет', ok: function (n) { return tcp(n, 'Debian3', N[2] + '.1', 23); } }]); },
       sol: function (p) { var N = this.net(p); return {
         R1: ['configure', 'hostname R1'].concat(ifs(N.map(function (x, i) { return [i + 1, x + '.1/24']; })), ['ip ssh server', 'ip telnet server',
           'ip access-list extended Test1', 'rule 10', 'action deny', 'match protocol tcp', 'match destination-port port-range 23', 'enable', 'exit',
@@ -11705,15 +11723,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
         net.list().forEach(function (d) { if (d.type === 'mes') d.st.stp = { on: false, mode: 'mst', prio: 32768 }; });   // старт: STP выключен — студент включает
       },
       tasks: function (p) { var M = ['vMES1', 'vMES2', 'vMES3', 'vMES4', 'vMES5'], rt = 'vMES' + p.root; return [
-        { t: 'Имена vMES1…vMES5 (hostname)', ok: function (n) { return M.every(function (m) { return dev(n, m).host === m; }); } },
-        { t: 'VPC1 192.168.1.1/24 и VPC2 192.168.1.2/24; сейчас ping не проходит — в кольце петля без STP (смотрите трассу)', ok: function (n) {
-            return dev(n, 'VPC1').ip === '192.168.1.1' && dev(n, 'VPC2').ip === '192.168.1.2'; } },
-        { t: 'На всех коммутаторах: spanning-tree и spanning-tree mode rstp', ok: function (n) { return M.every(function (m) { var s = dev(n, m).stp; return s && s.on && s.mode === 'rst'; }); } },
+        ].concat(M.map(function (m) { return { t: 'Имя ' + m + ' (hostname ' + m + ')', ok: function (n) { return dev(n, m).host === m; } }; }), [
+        vpcIp('VPC1', '192.168.1.1'), { t: 'VPC2: 192.168.1.2/24 — сейчас ping не проходит: в кольце петля без STP (смотрите трассу)', ok: function (n) { return dev(n, 'VPC2').ip === '192.168.1.2'; } }],
+        M.map(function (m) { return { t: m + ': spanning-tree и spanning-tree mode rstp', ok: function (n) { var s = dev(n, m).stp; return !!s && s.on && s.mode === 'rst'; } }; }), [
         { t: 'Корнем сделайте ' + rt + ': spanning-tree priority 16384', ok: function (n) { var d = n.byName(rt); n.stp();
             return dev(n, rt).stp.prio === 16384 && n._stp.root[d.id] === d.id; } },
         { t: 'В кольце ровно один порт в роли Alternate (заблокирован), ping VPC1 → VPC2 проходит', ok: function (n) { var t = n.stp(), c = 0;
             Object.keys(t).forEach(function (id) { Object.keys(t[id]).forEach(function (k) { if (!t[id][k].fwd) c++; }); });
-            return c === 1 && n.reach('VPC1', '192.168.1.2'); } }]; },
+            return c === 1 && n.reach('VPC1', '192.168.1.2'); } }]); },
       sol: function (p) { var o = {};
         ['vMES1', 'vMES2', 'vMES3', 'vMES4', 'vMES5'].forEach(function (m, i) {
           o[m] = ['enable', 'configure', 'hostname ' + m, 'spanning-tree', 'spanning-tree mode rstp'].concat(i + 1 === p.root ? ['spanning-tree priority 16384'] : [], ['end', 'show spanning-tree']); });
@@ -11729,16 +11746,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
         for (var i = 1; i <= p.k; i++) net.connect(o.vMES1.id, 'gi1/0/' + i, o.vMES2.id, 'gi1/0/' + i);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/10'], ['VPC2', 'eth0', 'vMES2', 'gi1/0/10']]); },
       tasks: function (p) { var K = p.k, rng = 'gi1/0/1-' + K; return [
-        { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
-        { t: 'vMES1 и vMES2: interface port-channel 1, порты ' + rng + ' — channel-group 1 mode auto (LACP)',
-          ok: function (n) { return [['vMES1', 'active'], ['vMES2', 'active']].every(function (x) { var s = dev(n, x[0]);
-            if (!s.pos || !s.pos.po1) return false;
-            for (var i = 1; i <= K; i++) { var c = s.ports['gi1/0/' + i].cg; if (!c || c.id !== 1 || c.mode !== x[1]) return false; } return true; }); } },
+        vpcIp('VPC1', '192.168.10.10'), vpcIp('VPC2', '192.168.10.20')].concat(['vMES1', 'vMES2'].map(function (m) { return { t: m + ': interface port-channel 1, порты ' + rng + ' — channel-group 1 mode auto (LACP)',
+          ok: function (n) { var s = dev(n, m); if (!s.pos || !s.pos.po1) return false;
+            for (var i = 1; i <= K; i++) { var c = s.ports['gi1/0/' + i].cg; if (!c || c.id !== 1 || c.mode !== 'active') return false; } return true; } }; }), [
         { t: 'Отключите на vMES1 все кабели агрегата, кроме одного (shutdown на gi1/0/1-' + (K - 1) + ')', ok: function (n) { var s = dev(n, 'vMES1');
             for (var i = 1; i < K; i++) if (!s.ports['gi1/0/' + i].shut) return false; return !s.ports['gi1/0/' + K].shut; } },
         { t: 'Port-channel 1 собран на оставшемся канале, ping VPC1 → VPC2 проходит (show interfaces channel-group)', ok: function (n) {
             var L = n.lports(n.byName('vMES1').id).filter(function (l) { return l.name === 'po1'; })[0];
-            return !!L && L.members.length === 1 && n.reach('VPC1', '192.168.10.20'); } }]; },
+            return !!L && L.members.length === 1 && n.reach('VPC1', '192.168.10.20'); } }]); },
       sol: function (p) { var K = p.k, o = {};
         ['vMES1', 'vMES2'].forEach(function (m) {
           o[m] = ['enable', 'configure', 'hostname ' + m, 'interface port-channel 1', 'exit', 'interface range gigabitethernet 1/0/1-' + K,
@@ -11755,15 +11770,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var o = place(net, [['vESR1', 'vESR', 250, 120], ['vESR2', 'vESR', 750, 120], ['vMES', 'MES2300-24', 500, 330], ['VPC1', 'VPC', 270, 540], ['VPC2', 'VPC', 730, 540]]);
         wire(net, o, [['vESR1', 'gi1/0/1', 'vMES', 'gi1/0/1'], ['vESR2', 'gi1/0/1', 'vMES', 'gi1/0/2'], ['VPC1', 'eth0', 'vMES', 'gi1/0/3'], ['VPC2', 'eth0', 'vMES', 'gi1/0/4']]); },
       tasks: function (p) { var ID = p.id; return [
-        { t: 'vESR1 gi1/0/1 — 10.10.10.1/30, vESR2 gi1/0/1 — 10.10.10.2/30 (экран отключён); VPC1 192.168.10.10, VPC2 192.168.10.11, шлюз 192.168.10.1', ok: function (n) {
-            return ipsOk(n, 'vESR1', [[1, '10.10.10.1/30']]) && ipsOk(n, 'vESR2', [[1, '10.10.10.2/30']]) && dev(n, 'VPC1').gw === '192.168.10.1' && dev(n, 'VPC2').ip === '192.168.10.11'; } },
-        { t: 'На обоих: vrrp id ' + ID + ', vrrp ip 192.168.10.1/24, vrrp', ok: function (n) { return ['vESR1', 'vESR2'].every(function (r) {
-            var v = run(n, r).ifs['gi1/0/1'].vrrp; return v && v.on && v.id === ID && v.ip === '192.168.10.1/24'; }); } },
+        ].concat(ifT('vESR1', [[1, '10.10.10.1/30']]), ifT('vESR2', [[1, '10.10.10.2/30']]), [vpcIp('VPC1', '192.168.10.10', '192.168.10.1'), vpcIp('VPC2', '192.168.10.11', '192.168.10.1')],
+        ['vESR1', 'vESR2'].map(function (r) { return { t: r + ' gi1/0/1: vrrp id ' + ID + ', vrrp ip 192.168.10.1/24, vrrp', ok: function (n) {
+            var v = run(n, r).ifs['gi1/0/1'].vrrp; return !!v && v.on && v.id === ID && v.ip === '192.168.10.1/24'; } }; }), [
         { t: 'Приоритеты: vESR2 — 200 (мастер), vESR1 сначала 210 (становится мастером), затем 180', ok: function (n) {
             return run(n, 'vESR2').ifs['gi1/0/1'].vrrp.prio === 200 && run(n, 'vESR1').ifs['gi1/0/1'].vrrp.prio === 180; } },
         { t: 'Разорвите связь мастера с сетью (shutdown на vMES gi1/0/2) — мастером должен стать vESR1, ping VPC1 → 192.168.10.1 не прерывается', ok: function (n) {
             var v = n.vrrp()[n.byName('vESR1').id]; return dev(n, 'vMES').ports['gi1/0/2'].shut && v && v['gi1/0/1'].master && n.reach('VPC1', '192.168.10.1'); } },
-        { t: 'Применено: commit + confirm на обоих', ok: function (n) { return committed(n, ['vESR1', 'vESR2']); } }]; },
+        { t: 'Применено: commit + confirm на обоих', ok: function (n) { return committed(n, ['vESR1', 'vESR2']); } }]); },
       sol: function (p) { var ID = p.id; function r(nm, ip, pr) { return ['configure', 'hostname ' + nm].concat(ifs([[1, ip]]), ['interface gigabitethernet 1/0/1',
           'vrrp id ' + ID, 'vrrp ip 192.168.10.1/24'].concat(pr ? ['vrrp priority ' + pr] : [], ['vrrp', 'exit', 'do commit', 'do confirm', 'end'])); }
         return { vESR2: r('vESR2', '10.10.10.2/30', 200), vESR1: r('vESR1', '10.10.10.1/30', 210).concat(['show vrrp', 'configure', 'interface gigabitethernet 1/0/1',
@@ -11786,9 +11800,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function run(n, name) { return dev(n, name).run; }
   function ifs(list) { return list.reduce(function (o, x) { return o.concat(['interface gigabitethernet 1/0/' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit']); }, []); }
   function ipsOk(n, name, list) { var f = run(n, name).ifs; return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
-  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; }); }
   function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
   function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
+  function vpcIp(v, ip) { return { t: v + ': ' + ip + '/24', ok: function (n) { return dev(n, v).ip === ip; } }; }
   function debOk(n, name, ip, gw) { var s = dev(n, name); return s.up && s.ip + '/' + s.len === ip && s.gw === gw; }
   function debIp(ip, gw) { return ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + ip + ' dev ens3', 'ip route add default via ' + gw]; }
   function srvLab(net) { var o = place(net, [['vESR', 'vESR', 330, 320], ['Server', 'Debian-server', 700, 320]]); wire(net, o, [['vESR', 'gi1/0/1', 'Server', 'ens3']]); }
@@ -11801,10 +11816,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { return { a: R(1, 2) }; },
       build: function (net) { var o = place(net, [['vESR1', 'vESR', 300, 320], ['vESR2', 'vESR', 700, 320]]); wire(net, o, [['vESR1', 'gi1/0/1', 'vESR2', 'gi1/0/1']]); },
       tasks: function (p) { var A = 'vESR' + p.a, B = 'vESR' + (3 - p.a), RA = 'R' + p.a; return [
-        { t: 'На обоих: lldp enable; на gi1/0/1 — lldp receive' + ' и lldp transmit (на ' + A + ' рассылку потом выключите)', ok: function (n) {
-            return [A, B].every(function (r) { var c = run(n, r); return c.lldp && c.ifs['gi1/0/1'].lldpRx; }) && run(n, B).ifs['gi1/0/1'].lldpTx; } },
+        { t: A + ': lldp enable', ok: function (n) { return !!run(n, A).lldp; } }, { t: B + ': lldp enable', ok: function (n) { return !!run(n, B).lldp; } },
+        { t: A + ' gi1/0/1: lldp receive', ok: function (n) { return !!run(n, A).ifs['gi1/0/1'].lldpRx; } },
+        { t: B + ' gi1/0/1: lldp receive и lldp transmit', ok: function (n) { var f = run(n, B).ifs['gi1/0/1']; return !!f.lldpRx && !!f.lldpTx; } },
         { t: 'Смените имя ' + A + ' на ' + RA + ' — в show lldp neighbors на ' + B + ' появится новое имя', ok: function (n) { return run(n, A).host === RA; } },
-        { t: 'На ' + RA + ' (gi1/0/1): no lldp transmit', ok: function (n) { return !run(n, A).ifs['gi1/0/1'].lldpTx; } },
+        { t: 'На ' + RA + ' (gi1/0/1): no lldp transmit', ok: function (n) { var c = run(n, A), f = c.ifs['gi1/0/1']; return !!c.lldp && !!f.lldpRx && !f.lldpTx; } },
         { t: 'Итог: ' + RA + ' видит соседа ' + B + ', а ' + B + ' соседей не видит', ok: function (n) {
             return n.lldpText(n.byName(A).id).indexOf(run(n, B).host) >= 0 && /Соседей нет/.test(n.lldpText(n.byName(B).id)); } },
         { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, [A, B]); } }]; },
@@ -11820,10 +11836,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { return { h: PK(['SERVER', 'LOGSRV', 'SYSLOG']), sev: PK(['info', 'notice', 'debug']) }; },
       build: srvLab,
       tasks: function (p) { return [
-        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
-            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
-        { t: 'NTP: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4), clock timezone gmt +7', ok: function (n) { var c = run(n, 'vESR'), s = c.ntp && c.ntp.servers['192.168.1.10'];
-            return c.ntp && c.ntp.on && s && s.minpoll === 1 && s.maxpoll === 4 && c.tz === '+7'; } },
+        { t: 'vESR gi1/0/1: 192.168.1.1/24', ok: function (n) { return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]); } },
+        { t: 'Server (root/toor): 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) { return debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        { t: 'NTP: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4)', ok: function (n) { var c = run(n, 'vESR'), s = c.ntp && c.ntp.servers['192.168.1.10'];
+            return !!c.ntp && c.ntp.on && !!s && s.minpoll === 1 && s.maxpoll === 4; } },
+        { t: 'Часовой пояс: clock timezone gmt +7', ok: function (n) { return run(n, 'vESR').tz === '+7'; } },
         { t: 'syslog host ' + p.h + ': source-address 192.168.1.1, remote-address 192.168.1.10, transport udp, port 514, severity ' + p.sev, ok: function (n) {
             var x = (run(n, 'vESR').syslog || {})[p.h]; return x && x.src === '192.168.1.1' && x.ip === '192.168.1.10' && x.proto === 'udp' && x.port === 514 && x.sev === p.sev; } },
         { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } },
@@ -11845,7 +11862,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var o = place(net, [['vMES1', 'MES2300-24', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/1'], ['VPC2', 'eth0', 'vMES1', 'gi1/0/2'], ['Sniffer', 'ens3', 'vMES1', 'gi1/0/12']]); },
       tasks: function (p) { var S = 'gi1/0/' + p.src; return [
-        { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
+        vpcIp('VPC1', '192.168.10.10'), vpcIp('VPC2', '192.168.10.20'),
         { t: 'monitor session 1 destination interface gi1/0/12', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1]; return m && m.dst === 'gi1/0/12'; } },
         { t: 'monitor session 1 source interface ' + S + ' both (зеркалим порт VPC' + p.src + ')', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1];
             return m && m.src[S] === 'both'; } },
@@ -11861,8 +11878,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
       gen: function () { return { f: 'run' + R(1, 99) + '.cfg', b: 'Backup_' + PK(['run', 'cfg', 'R1']) + '.cfg', ban: PK(['Router R1', 'Eltex vESR', 'Lab router']) }; },
       build: srvLab,
       tasks: function (p) { return [
-        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1; служба tftpd-hpa запущена', ok: function (n) {
-            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1') && dev(n, 'Server').svc['tftpd-hpa']; } },
+        { t: 'vESR gi1/0/1: 192.168.1.1/24', ok: function (n) { return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]); } },
+        { t: 'Server (root/toor): 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) { return debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        { t: 'Server: служба tftpd-hpa запущена', ok: function (n) { return !!dev(n, 'Server').svc['tftpd-hpa']; } },
         { t: 'copy system:running-config tftp://192.168.1.10:/' + p.f + ' — файл появился в /tftp', ok: function (n) { return !!file(n, '/tftp/' + p.f); } },
         { t: 'archive: type remote, path tftp://192.168.1.10:/' + p.b + ', by-commit', ok: function (n) { var a = run(n, 'vESR').archive;
             return a && a.type === 'remote' && a.path === 'tftp://192.168.1.10:/' + p.b && a.byCommit; } },
@@ -11974,40 +11992,43 @@ vesr(config)#         do confirm  — подтвердить</pre>
             var x = rs.rules[q]; return x.on && x.act === 'interface' && x.src && x.src[0] === a && x.src[1] === b; }); }); }
         function hasRoute(n, r, net, nh) { return run(n, r).routes.some(function (x) { return x.net === net && x.nh === nh; }); }
         var ntpR = RS.filter(function (r) { return r !== 'R7'; });
-        return [
-          { t: '1. Имена student-' + X + '-R1 … student-' + X + '-R7', ok: function (n) { return RS.every(function (r) { return run(n, r).host === name(p, r); }); } },
-          { t: '2. IP-адреса по таблице на R1–R7, межсетевой экран отключён', ok: function (n) { return RS.every(function (r) { return ipOk(n, r); }); } },
-          { t: '3. Пользователь student' + X + ' / studentpass' + X + ', privilege 14 на всех', ok: function (n) { return RS.every(function (r) {
-              var u = run(n, r).users['student' + X]; return u && u.pw === 'studentpass' + X && u.priv === 14; }); } },
+        // пункты билета разбиты по маршрутизаторам: «1. R3 — имя student-X-R3» и т.д. — одно действие, один пункт
+        function each(L, f) { return L.map(f); }
+        return [].concat(
+          each(RS, function (r) { return { t: '1. ' + r + ': имя ' + name(p, r), ok: function (n) { return run(n, r).host === name(p, r); } }; }),
+          each(RS, function (r) { return { t: '2. ' + r + ': IP-адреса по таблице, межсетевой экран отключён', ok: function (n) { return ipOk(n, r); } }; }),
+          each(RS, function (r) { return { t: '3. ' + r + ': пользователь student' + X + ' / studentpass' + X + ', privilege 14', ok: function (n) {
+              var u = run(n, r).users['student' + X]; return !!u && u.pw === 'studentpass' + X && u.priv === 14; } }; }), [
           { t: '4. R1: VLAN 100, gi1/0/3 — mode switchport, access VLAN 100', ok: function (n) { var c = run(n, 'R1'), x = c.ifs['gi1/0/3'];
               return (c.vlans || {})[100] && x.sw && x.sw.vlan === 100 && x.sw.mode === 'access'; } },
           { t: '5. R1: Bridge 100 — VLAN 100, 192.168.220.1/24, экран отключён, enable', ok: function (n) { var b = (run(n, 'R1').bridges || {})[100];
               return b && b.vlan === 100 && b.ip === '192.168.220.1/24' && !b.fw && b.on; } },
           { t: '6. R1: маршрут по умолчанию через ' + P.r1gw, ok: function (n) { return hasRoute(n, 'R1', '0.0.0.0/0', P.r1gw); } },
-          { t: '7. Часовой пояс GMT +7 на всех', ok: function (n) { return RS.every(function (r) { return run(n, r).tz === '+7'; }); } },
-          { t: '8. NTP на R1–R6: сервер 10.10.100.100, minpoll 5 (2⁵ = 32 с), синхронизация есть', ok: function (n) { return ntpR.every(function (r) {
+          ], each(RS, function (r) { return { t: '7. ' + r + ': часовой пояс GMT +7', ok: function (n) { return run(n, r).tz === '+7'; } }; }),
+          each(ntpR, function (r) { return { t: '8. ' + r + ': NTP — сервер 10.10.100.100, minpoll 5 (2⁵ = 32 с), синхронизация есть', ok: function (n) {
               var c = run(n, r).ntp, s = c && c.servers['10.10.100.100']; if (!c || !c.on || !s || s.minpoll !== 5) return false;
-              var pr = n.ntpPeer(n.byName(r).id); return pr && pr.utc !== null; }); } },
+              var pr = n.ntpPeer(n.byName(r).id); return !!pr && pr.utc !== null; } }; }), [
           { t: '9. R1: Source NAT на gi1/0/1 для 192.168.220.1–192.168.220.254', ok: function (n) { return snatOk(run(n, 'R1'), 'gi1/0/1', '192.168.220.1', '192.168.220.254'); } },
-          { t: '10. OSPF 250, область 0.0.0.0 на ' + P.wan.join(', ') + ': Router ID N.N.N.N, все рабочие интерфейсы в процессе, пассивные — к R1, к ' + B + ' и к серверу',
-            ok: function (n) { return P.wan.every(function (r) { return ospfOk(n, r); }); } },
-          { t: '11. ' + P.adjB.map(function (a) { return a[0]; }).join(' и ') + ': маршрут 192.168.200.0/24 через ' + P.adjB.map(function (a) { return a[1]; }).join(' / '),
-            ok: function (n) { return P.adjB.every(function (a) { return hasRoute(n, a[0], '192.168.200.0/24', a[1]); }); } },
+          ], each(P.wan, function (r) { return { t: '10. ' + r + ': OSPF 250, область 0.0.0.0, Router ID ' + [1, 1, 1, 1].map(function () { return r.slice(1); }).join('.') + ', рабочие интерфейсы в процессе, пассивные — к R1, к ' + B + ' и к серверу',
+            ok: function (n) { return ospfOk(n, r); } }; }),
+          each(P.adjB, function (a) { return { t: '11. ' + a[0] + ': маршрут 192.168.200.0/24 через ' + a[1], ok: function (n) { return hasRoute(n, a[0], '192.168.200.0/24', a[1]); } }; }), [
           { t: '12. ' + B + ': DHCP-сервер, пул DHCP-C200 — 192.168.200.0/24, 192.168.200.10–40, аренда 15 минут (0:0:15), шлюз 192.168.200.1', ok: function (n) {
               var c = run(n, B), q = c.dhcp && c.dhcp.pools['DHCP-C200'];
               return c.dhcp && c.dhcp.on && q && q.net === '192.168.200.0/24' && q.range && q.range[0] === '192.168.200.10' && q.range[1] === '192.168.200.40' &&
                      q.lease === '0:0:15' && q.gw === '192.168.200.1'; } },
-          { t: '13. ' + B + ': маршрут по умолчанию через ' + P.bGw + ' и 192.168.200.0/24 через 10.10.200.2', ok: function (n) {
-              return hasRoute(n, B, '0.0.0.0/0', P.bGw) && hasRoute(n, B, '192.168.200.0/24', '10.10.200.2'); } },
+          { t: '13. ' + B + ': маршрут по умолчанию через ' + P.bGw, ok: function (n) { return hasRoute(n, B, '0.0.0.0/0', P.bGw); } },
+          { t: '13. ' + B + ': маршрут 192.168.200.0/24 через 10.10.200.2', ok: function (n) { return hasRoute(n, B, '192.168.200.0/24', '10.10.200.2'); } },
           { t: '14. ' + B + ': Source NAT на gi1/0/' + P.bUp[0] + ' для 192.168.200.1–192.168.200.254', ok: function (n) {
               return snatOk(run(n, B), 'gi1/0/' + P.bUp[0], '192.168.200.1', '192.168.200.254'); } },
-          { t: '15. R7: DHCP relay (helper 10.10.200.1 на gi1/0/' + P.lan7 + '), маршрут по умолчанию через 10.10.200.1', ok: function (n) { var c = run(n, 'R7');
-              return c.relay && c.ifs['gi1/0/' + P.lan7].helper === '10.10.200.1' && hasRoute(n, 'R7', '0.0.0.0/0', '10.10.200.1'); } },
-          { t: '16. VPC2 получил адрес по DHCP (192.168.200.10–40); VPC1 — 192.168.220.2/24', ok: function (n) { var v = dev(n, 'VPC2'), a = EL.ip.ip2n(v.ip || '0.0.0.0');
-              return v.dhcp && a >= EL.ip.ip2n('192.168.200.10') && a <= EL.ip.ip2n('192.168.200.40') && dev(n, 'VPC1').ip === '192.168.220.2'; } },
-          { t: 'Проверка: VPC1 и VPC2 пингуют NTP-сервер 10.10.100.100; всё применено (commit + confirm)', ok: function (n) {
-              return n.reach('VPC1', '10.10.100.100') && n.reach('VPC2', '10.10.100.100') &&
-                     RS.every(function (r) { var s = dev(n, r); return !s.pending && !s.unconfirmed; }); } }]; },
+          { t: '15. R7: DHCP relay — ip dhcp-relay, helper 10.10.200.1 на gi1/0/' + P.lan7, ok: function (n) { var c = run(n, 'R7');
+              return !!c.relay && c.ifs['gi1/0/' + P.lan7].helper === '10.10.200.1'; } },
+          { t: '15. R7: маршрут по умолчанию через 10.10.200.1', ok: function (n) { return hasRoute(n, 'R7', '0.0.0.0/0', '10.10.200.1'); } },
+          { t: '16. VPC2 получил адрес по DHCP (192.168.200.10–40)', ok: function (n) { var v = dev(n, 'VPC2'), a = EL.ip.ip2n(v.ip || '0.0.0.0');
+              return v.dhcp && a >= EL.ip.ip2n('192.168.200.10') && a <= EL.ip.ip2n('192.168.200.40'); } },
+          { t: '16. VPC1: 192.168.220.2/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.220.2'; } },
+          { t: 'Проверка: VPC1 пингует NTP-сервер 10.10.100.100', ok: function (n) { return n.reach('VPC1', '10.10.100.100'); } },
+          { t: 'Проверка: VPC2 пингует NTP-сервер 10.10.100.100', ok: function (n) { return n.reach('VPC2', '10.10.100.100'); } }],
+          each(RS, function (r) { return { t: r + ': всё применено (commit + confirm)', ok: function (n) { var s = dev(n, r); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; } }; })); },
       sol: function (p) { var P = plan(k), X = p.x, B = P.B, o = {};
         RS.forEach(function (r) {
           var c = ['configure', 'hostname ' + name(p, r), 'username student' + X, 'password studentpass' + X, 'privilege 14', 'exit', 'clock timezone gmt +7'];
@@ -12246,6 +12267,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     renderSide(); renderLab(false);
   }
   $('mode').addEventListener('click', function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); });
+  var labTick = 0;
   function advance(dt, jump) {
     net.onReload = function (rid) { boot(rid, true); };   // reload system in/at — по модельному времени
     var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
@@ -12254,6 +12276,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
     stpMarks(); pollEv();
+    if (lab && ++labTick % 3 === 0) renderLab(false);        // пункты, которые выполняются со временем (NTP, OSPF, STP), загораются сами
     return gone.length;
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
@@ -12889,12 +12912,12 @@ vesr(config)#         do confirm  — подтвердить</pre>
     net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
-    lab = EL.labs.byId(id); lab._done = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
     report({ type: 'lab', lab: id, title: lab.title, mode: mode });
   }
   // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
   function report(ev) {
-    if (location.protocol === 'file:' || !window.fetch) return;
+    if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;      // только на сайте курса
     try { fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(ev) }).catch(function () {}); } catch (err) { /* без сайта курса */ }
   }
   if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
@@ -12911,20 +12934,35 @@ vesr(config)#         do confirm  — подтвердить</pre>
   }
   window.addEventListener('hashchange', labFromHash);
   setTimeout(function () { var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
+  // проверка пунктов по фактическому состоянию сети — при каждой команде и раз в 3 с модельного времени, даже если окно задания закрыто
+  function labCheck() {
+    var ts = lab.tasks(labP), was = lab._done || {}, now = {}, fresh = [], ok = 0, first = !lab._done;
+    ts.forEach(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); } });
+    if (!first && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
+    lab._done = now; labReport(ts, now);
+    return { ts: ts, now: now, was: was, ok: ok, first: first };
+  }
+  // прогресс на сайт курса: {type:'task', lab, mode, total, done:[номера с 1], tasks:[тексты]} — только когда набор выполненных изменился
+  var labSent = null;
+  function labReport(ts, now) {
+    var done = Object.keys(now).map(Number).sort(function (a, b) { return a - b; }).map(function (i) { return i + 1; }), key = lab.id + '|' + mode + '|' + done.join(',');
+    if (key === labSent) return; labSent = key;
+    var ev = { type: 'task', lab: lab.id, mode: mode, total: ts.length, done: done, tasks: ts.map(function (t) { return String(t.t).replace(/<[^>]*>/g, '').slice(0, 300); }) };
+    report(ev);
+    if (window.parent && window.parent !== window) try { window.parent.postMessage({ source: 'eltex-lab', lab: ev.lab, mode: ev.mode, total: ev.total, done: ev.done, tasks: ev.tasks }, location.origin); } catch (e) { /* не во фрейме сайта */ }
+  }
   function renderLab(open) {
     if (!lab) return;
-    var body = $('labbody');
-    if (!wins.lab) { if (!open) return; body = document.createElement('div'); body.className = 'pad'; body.id = 'labbody';
-      makeWin('lab', 'Задание ' + lab.id, lab.title, body, { x: 30, y: 80, w: 470, h: Math.min(620, innerHeight - 160) });
-      body.addEventListener('click', labClick); }
+    var c = labCheck(), ts = c.ts, ok = c.ok, was = c.was, now = c.now, body = $('labmain');
+    if (!wins.lab) { if (!open) return; var box = document.createElement('div'); box.className = 'pad'; box.id = 'labbody';
+      box.innerHTML = '<div id="labmain"></div><div id="labquiz"></div>';
+      makeWin('lab', 'Задание ' + lab.id, lab.title, box, { x: 30, y: 80, w: 470, h: Math.min(620, innerHeight - 160) });
+      box.addEventListener('click', labClick); body = $('labmain'); quizLab = null; }
     else if (open) minWin('lab', false);
-    var ts = lab.tasks(labP), ok = 0;
+    if (quizLab !== lab.id) quizLoad();
     // каждый пункт (в «Работе» и «Тесте») — с «лампочкой»: серая, пока не сделано; загорается зелёным со вспышкой в момент выполнения
-    var was = lab._done || {}, now = {}, fresh = [];
-    var li = ts.map(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); }
-      return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && lab._done ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
-    if (lab._done && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
-    lab._done = now;
+    var li = ts.map(function (t, i) { var y = !!now[i];
+      return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && !c.first ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
     if (mode === 'work') {   // как методичка: текст задания с лампочками пунктов, без решения и подсказок
       body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol class="tasks">' + li + '</ol>' +
         '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
@@ -12938,6 +12976,41 @@ vesr(config)#         do confirm  — подтвердить</pre>
       (lab.hint && labShow === 'hint' ? '<div class="hint">' + esc(lab.hint(labP)) + '</div>' : '') +
       '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
       '<button data-a="sol">' + (labShow === true ? 'Скрыть решение' : 'Решение') + '</button><button data-a="reset">Сбросить лабу</button></div>' + sol;
+  }
+  // ---------------------------------------------------------------- «Тест» в окне лабы: вопросы с сайта курса (вне сайта блока нет)
+  var quizLab = null;
+  function quizLoad() {
+    var box = $('labquiz'); if (!box || !lab) return; quizLab = lab.id; box.innerHTML = '';
+    if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;
+    var id = lab.id;
+    fetch('/api/quiz?lab=' + encodeURIComponent(id), { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var qs = j && (j.questions || j.items) || []; if (!qs.length || !lab || lab.id !== id || !$('labquiz')) return; quizRender($('labquiz'), id, qs, j.title);
+    }).catch(function () { /* теста нет */ });
+  }
+  function qid(q, i) { return String(q.id !== undefined && q.id !== null ? q.id : 'q' + (i + 1)); }
+  function quizRender(box, id, qs, title) {
+    box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(title || 'Проверьте себя') + '</h3>' + qs.map(function (q, i) {
+      var k = qid(q, i), tp = q.type === 'multi' || q.type === 'text' ? q.type : 'single', opts = q.options || q.choices || [];
+      var inp = tp === 'text' ? '<input type="text" class="qin" data-q="' + esc(k) + '" placeholder="Ваш ответ">'
+        : opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '" data-q="' + esc(k) + '"> ' + esc(o) + '</label>'; }).join('');
+      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (i + 1) + '. ' + esc(q.text || q.question || q.q || '') + (tp === 'multi' ? ' <i>(несколько ответов)</i>' : '') +
+        ' <b class="qr"></b></div>' + inp + '</div>'; }).join('') + '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
+    [].forEach.call(box.querySelectorAll('input'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    box.querySelector('[data-qa="send"]').addEventListener('click', function () {
+      var answers = {}, btn = this, out = box.querySelector('.qs');
+      [].forEach.call(box.querySelectorAll('.qq'), function (el) { var k = el.dataset.qid, tp = el.dataset.tp;
+        if (tp === 'text') answers[k] = (el.querySelector('input').value || '').trim();
+        else if (tp === 'multi') answers[k] = [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
+        else { var c = el.querySelector('input:checked'); answers[k] = c ? +c.value : null; } });
+      btn.disabled = true; out.textContent = 'Проверяем…';
+      fetch('/api/quiz/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ lab: id, answers: answers }) })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(function (j) {
+          var res = j.results || j.correct || {}; btn.disabled = false;
+          [].forEach.call(box.querySelectorAll('.qq'), function (el, i) { var v = Array.isArray(res) ? res[i] : res[el.dataset.qid], m = el.querySelector('.qr');
+            el.classList.toggle('good', v === true); el.classList.toggle('bad', v === false); m.textContent = v === true ? '✓' : v === false ? '✗' : ''; });
+          out.textContent = (j.score !== undefined ? 'Балл: ' + j.score + (j.max !== undefined ? ' из ' + j.max : '') : 'Ответ принят') + (j.comment ? ' — ' + j.comment : '');
+        }).catch(function () { btn.disabled = false; out.textContent = 'Не удалось отправить ответы — проверьте вход на сайт курса'; });
+    });
   }
   // методичка лабы — PDF курса рядом с эмулятором (labs/<id>.pdf на сайте курса); в репозиторий и в HTML не входит
   function hasDoc(L) { return /^(\d+\.\d+|E\.\d+)$/.test(L.id); }

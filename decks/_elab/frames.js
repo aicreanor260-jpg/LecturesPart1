@@ -119,7 +119,7 @@
     var d = this.devs[id], st = d.st, root = this._stp && this.devs[this._stp.root[id]], rs = root ? root.st : st;
     var mode = (st.stp || {}).mode || 'mst', ver = mode === 'stp' ? 0 : mode === 'mst' ? 3 : 2;
     var num = (lname.match(/(\d+)$/) || [0, 1])[1];
-    this.capFrame({ li: pr.li, from: id, to: pr.dev, tag: null }, { type: 'stp', smac: EL.mac(d.name + port), dmac: '01:80:c2:00:00:00', smacB: st.bmac, ver: ver,
+    this.capFrame({ li: pr.li, from: id, to: pr.dev, tag: null }, { type: 'stp', smac: EL.mac(EL.macKey(d) + port), dmac: '01:80:c2:00:00:00', smacB: st.bmac, ver: ver,
       rprio: (rs.stp || { prio: 32768 }).prio, rmac: rs.bmac, bprio: (st.stp || { prio: 32768 }).prio, cost: this._stp ? this._stp.dist[id] || 0 : 0, port: 0x8000 + +num }, 64);
   };
 

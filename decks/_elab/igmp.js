@@ -45,14 +45,14 @@
   function hostIf(s, id) { var d = s.devs[id]; return d.type === 'vpc' ? { name: 'eth0', port: 'eth0', tag: null, ip: d.st.ip } : { name: 'ens3', port: 'ens3', tag: null, ip: d.st.ip }; }
   P.igmpReport = function (id, group, join) {
     var s = this, f = hostIf(s, id), steps = s.stepLog();
-    s._igmp = { group: group, join: join }; var fl; try { fl = s.flood(id, f, EL.mac(s.devs[id].name + f.port)); } finally { s._igmp = null; }
+    s._igmp = { group: group, join: join }; var fl; try { fl = s.flood(id, f, EL.mac(EL.macKey(s.devs[id]) + f.port)); } finally { s._igmp = null; }
     steps.push({ k: 'arp', segs: fl.segs, t: s.devs[id].name + ': IGMP ' + (join ? 'Membership Report' : 'Leave Group') + ' ' + group + ' — коммутаторы со snooping запомнили порт',
-      f: { type: 'ip', mcast: true, smac: EL.mac(s.devs[id].name + f.port), dmac: mmac(join ? group : '224.0.0.2'), src: f.ip || '0.0.0.0', dst: join ? group : '224.0.0.2', proto: 'igmp', ttl: 1 } });
+      f: { type: 'ip', mcast: true, smac: EL.mac(EL.macKey(s.devs[id]) + f.port), dmac: mmac(join ? group : '224.0.0.2'), src: f.ip || '0.0.0.0', dst: join ? group : '224.0.0.2', proto: 'igmp', ttl: 1 } });
     if (s.countSteps) s.countSteps(steps, 'udp');
     return steps;
   };
   P.mcastSend = function (id, group) {
-    var s = this, f = hostIf(s, id), steps = s.stepLog(), mac = EL.mac(s.devs[id].name + f.port);
+    var s = this, f = hostIf(s, id), steps = s.stepLog(), mac = EL.mac(EL.macKey(s.devs[id]) + f.port);
     s._mc = group; var fl; try { fl = s.flood(id, f, mac); } finally { s._mc = null; }
     var got = fl.eps.filter(function (e) { var h = s.devs[e.dev]; return h.type === 'deb' && (h.st.mgroups || []).indexOf(group) >= 0; }).map(function (e) { return s.devs[e.dev].name; });
     var all = fl.eps.map(function (e) { return s.devs[e.dev].name; }).filter(function (x, i, A) { return A.indexOf(x) === i; });

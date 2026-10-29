@@ -85,7 +85,7 @@
   cmd('config', 'hostname <w>', function (st, a) { st.cand.host = a[0]; touch(st); }, 'Имя устройства');
   cmd('config', 'clock timezone gmt <w>', function (st, a) {
     if (!/^[+-]?\d{1,2}$/.test(a[0])) return '% Неверный часовой пояс (пример: +7)';
-    st.cand.tz = (/^[+-]/.test(a[0]) ? '' : '+') + a[0]; touch(st); }, 'Часовой пояс');
+    var h = parseInt(a[0], 10); if (h < -12 || h > 14) return '% Неверный часовой пояс (от -12 до +14)'; st.cand.tz = (h < 0 ? '-' : '+') + Math.abs(h); touch(st); }, 'Часовой пояс');
   cmd('priv', 'set date <w> <n> <w> <n>', function (st, a) {
     if (!/^\d{1,2}:\d{2}:\d{2}$/.test(a[0])) return '% Формат: set date ЧЧ:ММ:СС ДД Месяц ГГГГ';
     var M = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];

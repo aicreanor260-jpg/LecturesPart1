@@ -7,9 +7,10 @@
   function run(n, name) { return dev(n, name).run; }
   function ifs(list) { return list.reduce(function (o, x) { return o.concat(['interface gigabitethernet 1/0/' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit']); }, []); }
   function ipsOk(n, name, list) { var f = run(n, name).ifs; return list.every(function (x) { var y = f['gi1/0/' + x[0]]; return y && y.ip === x[1] && !y.fw; }); }
-  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed; }); }
+  function committed(n, names) { return names.every(function (x) { var s = dev(n, x); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; }); }
   function place(net, items) { var o = {}; items.forEach(function (x) { o[x[0]] = net.add(x[1], x[0], x[2], x[3]); }); return o; }
   function wire(net, o, links) { links.forEach(function (l) { net.connect(o[l[0]].id, l[1], o[l[2]].id, l[3]); }); }
+  function vpcIp(v, ip) { return { t: v + ': ' + ip + '/24', ok: function (n) { return dev(n, v).ip === ip; } }; }
   function debOk(n, name, ip, gw) { var s = dev(n, name); return s.up && s.ip + '/' + s.len === ip && s.gw === gw; }
   function debIp(ip, gw) { return ['root', 'toor', 'ip link set ens3 up', 'ip addr add ' + ip + ' dev ens3', 'ip route add default via ' + gw]; }
   function srvLab(net) { var o = place(net, [['vESR', 'vESR', 330, 320], ['Server', 'Debian-server', 700, 320]]); wire(net, o, [['vESR', 'gi1/0/1', 'Server', 'ens3']]); }
@@ -22,10 +23,11 @@
       gen: function () { return { a: R(1, 2) }; },
       build: function (net) { var o = place(net, [['vESR1', 'vESR', 300, 320], ['vESR2', 'vESR', 700, 320]]); wire(net, o, [['vESR1', 'gi1/0/1', 'vESR2', 'gi1/0/1']]); },
       tasks: function (p) { var A = 'vESR' + p.a, B = 'vESR' + (3 - p.a), RA = 'R' + p.a; return [
-        { t: 'На обоих: lldp enable; на gi1/0/1 — lldp receive' + ' и lldp transmit (на ' + A + ' рассылку потом выключите)', ok: function (n) {
-            return [A, B].every(function (r) { var c = run(n, r); return c.lldp && c.ifs['gi1/0/1'].lldpRx; }) && run(n, B).ifs['gi1/0/1'].lldpTx; } },
+        { t: A + ': lldp enable', ok: function (n) { return !!run(n, A).lldp; } }, { t: B + ': lldp enable', ok: function (n) { return !!run(n, B).lldp; } },
+        { t: A + ' gi1/0/1: lldp receive', ok: function (n) { return !!run(n, A).ifs['gi1/0/1'].lldpRx; } },
+        { t: B + ' gi1/0/1: lldp receive и lldp transmit', ok: function (n) { var f = run(n, B).ifs['gi1/0/1']; return !!f.lldpRx && !!f.lldpTx; } },
         { t: 'Смените имя ' + A + ' на ' + RA + ' — в show lldp neighbors на ' + B + ' появится новое имя', ok: function (n) { return run(n, A).host === RA; } },
-        { t: 'На ' + RA + ' (gi1/0/1): no lldp transmit', ok: function (n) { return !run(n, A).ifs['gi1/0/1'].lldpTx; } },
+        { t: 'На ' + RA + ' (gi1/0/1): no lldp transmit', ok: function (n) { var c = run(n, A), f = c.ifs['gi1/0/1']; return !!c.lldp && !!f.lldpRx && !f.lldpTx; } },
         { t: 'Итог: ' + RA + ' видит соседа ' + B + ', а ' + B + ' соседей не видит', ok: function (n) {
             return n.lldpText(n.byName(A).id).indexOf(run(n, B).host) >= 0 && /Соседей нет/.test(n.lldpText(n.byName(B).id)); } },
         { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, [A, B]); } }]; },
@@ -41,10 +43,11 @@
       gen: function () { return { h: PK(['SERVER', 'LOGSRV', 'SYSLOG']), sev: PK(['info', 'notice', 'debug']) }; },
       build: srvLab,
       tasks: function (p) { return [
-        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) {
-            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
-        { t: 'NTP: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4), clock timezone gmt +7', ok: function (n) { var c = run(n, 'vESR'), s = c.ntp && c.ntp.servers['192.168.1.10'];
-            return c.ntp && c.ntp.on && s && s.minpoll === 1 && s.maxpoll === 4 && c.tz === '+7'; } },
+        { t: 'vESR gi1/0/1: 192.168.1.1/24', ok: function (n) { return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]); } },
+        { t: 'Server (root/toor): 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) { return debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        { t: 'NTP: ntp enable, ntp server 192.168.1.10 (minpoll 1, maxpoll 4)', ok: function (n) { var c = run(n, 'vESR'), s = c.ntp && c.ntp.servers['192.168.1.10'];
+            return !!c.ntp && c.ntp.on && !!s && s.minpoll === 1 && s.maxpoll === 4; } },
+        { t: 'Часовой пояс: clock timezone gmt +7', ok: function (n) { return run(n, 'vESR').tz === '+7'; } },
         { t: 'syslog host ' + p.h + ': source-address 192.168.1.1, remote-address 192.168.1.10, transport udp, port 514, severity ' + p.sev, ok: function (n) {
             var x = (run(n, 'vESR').syslog || {})[p.h]; return x && x.src === '192.168.1.1' && x.ip === '192.168.1.10' && x.proto === 'udp' && x.port === 514 && x.sev === p.sev; } },
         { t: 'Применено: commit + confirm', ok: function (n) { return committed(n, ['vESR']); } },
@@ -66,7 +69,7 @@
         var o = place(net, [['vMES1', 'MES2300-24', 500, 300], ['VPC1', 'VPC', 220, 520], ['VPC2', 'VPC', 780, 520], ['Sniffer', 'Debian', 500, 90]]);
         wire(net, o, [['VPC1', 'eth0', 'vMES1', 'gi1/0/1'], ['VPC2', 'eth0', 'vMES1', 'gi1/0/2'], ['Sniffer', 'ens3', 'vMES1', 'gi1/0/12']]); },
       tasks: function (p) { var S = 'gi1/0/' + p.src; return [
-        { t: 'VPC1 192.168.10.10/24, VPC2 192.168.10.20/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.10.10' && dev(n, 'VPC2').ip === '192.168.10.20'; } },
+        vpcIp('VPC1', '192.168.10.10'), vpcIp('VPC2', '192.168.10.20'),
         { t: 'monitor session 1 destination interface gi1/0/12', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1]; return m && m.dst === 'gi1/0/12'; } },
         { t: 'monitor session 1 source interface ' + S + ' both (зеркалим порт VPC' + p.src + ')', ok: function (n) { var m = (dev(n, 'vMES1').mon || {})[1];
             return m && m.src[S] === 'both'; } },
@@ -82,8 +85,9 @@
       gen: function () { return { f: 'run' + R(1, 99) + '.cfg', b: 'Backup_' + PK(['run', 'cfg', 'R1']) + '.cfg', ban: PK(['Router R1', 'Eltex vESR', 'Lab router']) }; },
       build: srvLab,
       tasks: function (p) { return [
-        { t: 'vESR gi1/0/1 — 192.168.1.1/24; Server (root/toor) — 192.168.1.10/24, шлюз 192.168.1.1; служба tftpd-hpa запущена', ok: function (n) {
-            return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]) && debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1') && dev(n, 'Server').svc['tftpd-hpa']; } },
+        { t: 'vESR gi1/0/1: 192.168.1.1/24', ok: function (n) { return ipsOk(n, 'vESR', [[1, '192.168.1.1/24']]); } },
+        { t: 'Server (root/toor): 192.168.1.10/24, шлюз 192.168.1.1', ok: function (n) { return debOk(n, 'Server', '192.168.1.10/24', '192.168.1.1'); } },
+        { t: 'Server: служба tftpd-hpa запущена', ok: function (n) { return !!dev(n, 'Server').svc['tftpd-hpa']; } },
         { t: 'copy system:running-config tftp://192.168.1.10:/' + p.f + ' — файл появился в /tftp', ok: function (n) { return !!file(n, '/tftp/' + p.f); } },
         { t: 'archive: type remote, path tftp://192.168.1.10:/' + p.b + ', by-commit', ok: function (n) { var a = run(n, 'vESR').archive;
             return a && a.type === 'remote' && a.path === 'tftp://192.168.1.10:/' + p.b && a.byCommit; } },

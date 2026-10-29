@@ -118,6 +118,7 @@
     renderSide(); renderLab(false);
   }
   $('mode').addEventListener('click', function (e) { var b = e.target.closest('[data-m]'); if (b) setMode(b.dataset.m); });
+  var labTick = 0;
   function advance(dt, jump) {
     net.onReload = function (rid) { boot(rid, true); };   // reload system in/at — по модельному времени
     var gone = net.tick(dt); EL.clock.warp += (jump ? dt : dt - 1) * 1000;
@@ -126,6 +127,7 @@
       $('clk').classList.add('flash'); setTimeout(function () { $('clk').classList.remove('flash'); }, 700); }
     if (Object.keys(wins).some(function (k) { return k.indexOf('tb') === 0; })) refreshTables();
     stpMarks(); pollEv();
+    if (lab && ++labTick % 3 === 0) renderLab(false);        // пункты, которые выполняются со временем (NTP, OSPF, STP), загораются сами
     return gone.length;
   }
   setInterval(function () { if (speed) advance(speed, false); else EL.clock.warp -= 1000; }, 1000);   // пауза останавливает и часы устройств
@@ -761,12 +763,12 @@
     net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
-    lab = EL.labs.byId(id); lab._done = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
     report({ type: 'lab', lab: id, title: lab.title, mode: mode });
   }
   // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
   function report(ev) {
-    if (location.protocol === 'file:' || !window.fetch) return;
+    if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;      // только на сайте курса
     try { fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(ev) }).catch(function () {}); } catch (err) { /* без сайта курса */ }
   }
   if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
@@ -783,20 +785,35 @@
   }
   window.addEventListener('hashchange', labFromHash);
   setTimeout(function () { var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
+  // проверка пунктов по фактическому состоянию сети — при каждой команде и раз в 3 с модельного времени, даже если окно задания закрыто
+  function labCheck() {
+    var ts = lab.tasks(labP), was = lab._done || {}, now = {}, fresh = [], ok = 0, first = !lab._done;
+    ts.forEach(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); } });
+    if (!first && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
+    lab._done = now; labReport(ts, now);
+    return { ts: ts, now: now, was: was, ok: ok, first: first };
+  }
+  // прогресс на сайт курса: {type:'task', lab, mode, total, done:[номера с 1], tasks:[тексты]} — только когда набор выполненных изменился
+  var labSent = null;
+  function labReport(ts, now) {
+    var done = Object.keys(now).map(Number).sort(function (a, b) { return a - b; }).map(function (i) { return i + 1; }), key = lab.id + '|' + mode + '|' + done.join(',');
+    if (key === labSent) return; labSent = key;
+    var ev = { type: 'task', lab: lab.id, mode: mode, total: ts.length, done: done, tasks: ts.map(function (t) { return String(t.t).replace(/<[^>]*>/g, '').slice(0, 300); }) };
+    report(ev);
+    if (window.parent && window.parent !== window) try { window.parent.postMessage({ source: 'eltex-lab', lab: ev.lab, mode: ev.mode, total: ev.total, done: ev.done, tasks: ev.tasks }, location.origin); } catch (e) { /* не во фрейме сайта */ }
+  }
   function renderLab(open) {
     if (!lab) return;
-    var body = $('labbody');
-    if (!wins.lab) { if (!open) return; body = document.createElement('div'); body.className = 'pad'; body.id = 'labbody';
-      makeWin('lab', 'Задание ' + lab.id, lab.title, body, { x: 30, y: 80, w: 470, h: Math.min(620, innerHeight - 160) });
-      body.addEventListener('click', labClick); }
+    var c = labCheck(), ts = c.ts, ok = c.ok, was = c.was, now = c.now, body = $('labmain');
+    if (!wins.lab) { if (!open) return; var box = document.createElement('div'); box.className = 'pad'; box.id = 'labbody';
+      box.innerHTML = '<div id="labmain"></div><div id="labquiz"></div>';
+      makeWin('lab', 'Задание ' + lab.id, lab.title, box, { x: 30, y: 80, w: 470, h: Math.min(620, innerHeight - 160) });
+      box.addEventListener('click', labClick); body = $('labmain'); quizLab = null; }
     else if (open) minWin('lab', false);
-    var ts = lab.tasks(labP), ok = 0;
+    if (quizLab !== lab.id) quizLoad();
     // каждый пункт (в «Работе» и «Тесте») — с «лампочкой»: серая, пока не сделано; загорается зелёным со вспышкой в момент выполнения
-    var was = lab._done || {}, now = {}, fresh = [];
-    var li = ts.map(function (t, i) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } if (y) { ok++; now[i] = 1; if (!was[i]) fresh.push(i + 1); }
-      return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && lab._done ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
-    if (lab._done && fresh.length) toast('✓ Выполнено: пункт ' + fresh.join(', ') + (ok === ts.length ? ' — вся работа готова!' : ''));
-    lab._done = now;
+    var li = ts.map(function (t, i) { var y = !!now[i];
+      return '<li class="task' + (y ? ' ok' : '') + (y && !was[i] && !c.first ? ' lit' : '') + '"><span class="lamp"></span><span>' + t.t + '</span></li>'; }).join('');
     if (mode === 'work') {   // как методичка: текст задания с лампочками пунктов, без решения и подсказок
       body.innerHTML = '<div class="k">Лабораторная ' + lab.id + '</div><h2>' + esc(lab.title) + '</h2><p>' + esc(lab.goal) + '</p><ol class="tasks">' + li + '</ol>' +
         '<div class="sum ' + (ok === ts.length ? 'ok' : '') + '">' + (ok === ts.length ? 'РАБОТА ВЫПОЛНЕНА ✓' : 'Выполнено ' + ok + ' из ' + ts.length) + '</div>' +
@@ -810,6 +827,41 @@
       (lab.hint && labShow === 'hint' ? '<div class="hint">' + esc(lab.hint(labP)) + '</div>' : '') +
       '<div class="row"><button data-a="new" class="pri">Новый вариант</button>' + (hasDoc(lab) ? '<button data-a="doc">Методичка</button>' : '') + (lab.hint ? '<button data-a="hint">Подсказка</button>' : '') +
       '<button data-a="sol">' + (labShow === true ? 'Скрыть решение' : 'Решение') + '</button><button data-a="reset">Сбросить лабу</button></div>' + sol;
+  }
+  // ---------------------------------------------------------------- «Тест» в окне лабы: вопросы с сайта курса (вне сайта блока нет)
+  var quizLab = null;
+  function quizLoad() {
+    var box = $('labquiz'); if (!box || !lab) return; quizLab = lab.id; box.innerHTML = '';
+    if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;
+    var id = lab.id;
+    fetch('/api/quiz?lab=' + encodeURIComponent(id), { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var qs = j && (j.questions || j.items) || []; if (!qs.length || !lab || lab.id !== id || !$('labquiz')) return; quizRender($('labquiz'), id, qs, j.title);
+    }).catch(function () { /* теста нет */ });
+  }
+  function qid(q, i) { return String(q.id !== undefined && q.id !== null ? q.id : 'q' + (i + 1)); }
+  function quizRender(box, id, qs, title) {
+    box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(title || 'Проверьте себя') + '</h3>' + qs.map(function (q, i) {
+      var k = qid(q, i), tp = q.type === 'multi' || q.type === 'text' ? q.type : 'single', opts = q.options || q.choices || [];
+      var inp = tp === 'text' ? '<input type="text" class="qin" data-q="' + esc(k) + '" placeholder="Ваш ответ">'
+        : opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '" data-q="' + esc(k) + '"> ' + esc(o) + '</label>'; }).join('');
+      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (i + 1) + '. ' + esc(q.text || q.question || q.q || '') + (tp === 'multi' ? ' <i>(несколько ответов)</i>' : '') +
+        ' <b class="qr"></b></div>' + inp + '</div>'; }).join('') + '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
+    [].forEach.call(box.querySelectorAll('input'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    box.querySelector('[data-qa="send"]').addEventListener('click', function () {
+      var answers = {}, btn = this, out = box.querySelector('.qs');
+      [].forEach.call(box.querySelectorAll('.qq'), function (el) { var k = el.dataset.qid, tp = el.dataset.tp;
+        if (tp === 'text') answers[k] = (el.querySelector('input').value || '').trim();
+        else if (tp === 'multi') answers[k] = [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
+        else { var c = el.querySelector('input:checked'); answers[k] = c ? +c.value : null; } });
+      btn.disabled = true; out.textContent = 'Проверяем…';
+      fetch('/api/quiz/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ lab: id, answers: answers }) })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }).then(function (j) {
+          var res = j.results || j.correct || {}; btn.disabled = false;
+          [].forEach.call(box.querySelectorAll('.qq'), function (el, i) { var v = Array.isArray(res) ? res[i] : res[el.dataset.qid], m = el.querySelector('.qr');
+            el.classList.toggle('good', v === true); el.classList.toggle('bad', v === false); m.textContent = v === true ? '✓' : v === false ? '✗' : ''; });
+          out.textContent = (j.score !== undefined ? 'Балл: ' + j.score + (j.max !== undefined ? ' из ' + j.max : '') : 'Ответ принят') + (j.comment ? ' — ' + j.comment : '');
+        }).catch(function () { btn.disabled = false; out.textContent = 'Не удалось отправить ответы — проверьте вход на сайт курса'; });
+    });
   }
   // методичка лабы — PDF курса рядом с эмулятором (labs/<id>.pdf на сайте курса); в репозиторий и в HTML не входит
   function hasDoc(L) { return /^(\d+\.\d+|E\.\d+)$/.test(L.id); }

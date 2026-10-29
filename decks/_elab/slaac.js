@@ -22,7 +22,7 @@
 
   // Router Solicitation → Router Advertisement: найти маршрутизатор в сегменте узла
   P.slaac = function (id) {
-    var s = this, d = s.devs[id], port = d.type === 'vpc' ? 'eth0' : 'ens3', mac = EL.mac(d.name + port), steps = s.stepLog();
+    var s = this, d = s.devs[id], port = d.type === 'vpc' ? 'eth0' : 'ens3', mac = EL.mac(EL.macKey(d) + port), steps = s.stepLog();
     var ll = A.eui64(mac), fl = s.flood(id, { name: port, port: port, tag: null }, mac), ra = null;
     steps.push({ k: 'arp', segs: fl.segs, t: d.name + ': Router Solicitation на ff02::2 (все маршрутизаторы)',
       f: { type: 'ip6', icmp6: 'rs', mcast: true, smac: mac, dmac: '33:33:00:00:00:02', src: ll, dst: 'ff02::2', hlim: 255, proto: 'icmp6' } });

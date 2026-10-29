@@ -19,6 +19,11 @@
     return errs;
   }
   var V10 = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+  // по пункту на каждый ПК: [[имя, адрес, шлюз(, длина)]] — «одно действие — один пункт»
+  function vpcs(L) { return L.map(function (x) { return { t: x[0] + ': ' + x[1] + '/' + (x[3] || 24) + ', шлюз ' + x[2], ok: function (n) { var d = dev(n, x[0]); return !!d && d.ip === x[1] && (d.len === undefined || d.len === (x[3] || 24)) && d.gw === x[2]; } }; }); }
+  // по пункту на каждое имя: [[устройство, имя]] — для ESR смотрим применённую конфигурацию (после commit), для MES — текущую
+  function names(L) { return L.map(function (x) { return { t: 'Имя ' + x[0] + ': ' + x[1] + ' (hostname ' + x[1] + ')', ok: function (n) { var d = dev(n, x[0]); return !!d && (d.run ? d.run.host : d.host) === x[1]; } }; }); }
+  EL.labH = { vpcs: vpcs, names: names, dev: dev };
 
   var LABS = [
     // ------------------------------------------------------------ 2.1
@@ -27,12 +32,12 @@
       gen: function () { var v = distinct(5, V10).sort(function (a, b) { return a - b; }); return { v: v }; },
       build: function (net) { net.add('MES2300-24', 'SW1', 420, 260); },
       tasks: function (p) { var v = p.v; return [
-        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config)', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
+        { t: 'Создайте VLAN ' + v.join(', ') + ' (vlan ' + v.join(',') + ' в режиме config) — все пять сразу или по одной', ok: function (n) { var s = dev(n, 'SW1'); return [v[0], v[1], v[2], v[4]].every(function (x) { return s.vlans[x]; }); } },
         { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
         { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'gi1/0/4–6 → access VLAN ' + v[2], ok: function (n) { return acc(n, 'SW1', [4, 5, 6], v[2]); } },
         { t: 'gi1/0/8–9 → access VLAN ' + v[4], ok: function (n) { return acc(n, 'SW1', [8, 9], v[4]); } },
-        { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
+        { t: 'Порт gi1/0/7 сначала в VLAN ' + v[3] + ', затем удалите VLAN ' + v[3] + ' — порт вернётся в VLAN 1', ok: function (n) { var s = dev(n, 'SW1'); return !!s.vlans[v[0]] && !s.vlans[v[3]] && port(n, 'SW1', 7).access === 1; } },
         { t: 'gi1/0/3 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 3); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
         { t: 'Сохраните конфигурацию (write)', ok: function (n) { return !!dev(n, 'SW1').startup; } }]; },
       sol: function (p) { var v = p.v; return { SW1: ['enable', 'configure', 'vlan ' + v.join(','), 'exit', 'do show vlan',
@@ -54,15 +59,20 @@
         return [
         { t: 'Имя маршрутизатора R1 (не забудьте do commit и do confirm)', ok: function (n) { return run(n).host === 'R1'; } },
         { t: 'Часовой пояс GMT ' + p.tz + ' (clock timezone gmt ' + p.tz + ')', ok: function (n) { return run(n).tz === p.tz; } },
-        { t: 'gi1/0/1: ' + a + '.1/24, межсетевой экран отключён', ok: function (n) { var x = run(n).ifs['gi1/0/1']; return x.ip === a + '.1/24' && !x.fw; } },
+        { t: 'gi1/0/1: IP-адрес ' + a + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1']; return x.ip === a + '.1/24'; } },
+        { t: 'gi1/0/1: межсетевой экран отключён (ip firewall disable)', ok: function (n) { return !run(n).ifs['gi1/0/1'].fw; } },
         { t: 'Loopback 1: 8.8.8.8/32', ok: function (n) { var x = run(n).ifs.lo1; return x && x.ip === '8.8.8.8/32'; } },
-        { t: 'Саб-интерфейс gi1/0/1.50: ' + s + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && x.ip === s + '.1/24' && !x.fw; } },
+        { t: 'Саб-интерфейс gi1/0/1.50: ' + s + '.1/24', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && x.ip === s + '.1/24'; } },
+        { t: 'gi1/0/1.50: межсетевой экран отключён', ok: function (n) { var x = run(n).ifs['gi1/0/1.50']; return x && !x.fw; } },
         { t: 'Пользователь master / eltex, privilege 14', ok: function (n) { var u = run(n).users.master; return u && u.pw === 'eltex' && u.priv === 14; } },
         { t: 'SSH-сервер включён', ok: function (n) { return run(n).ssh; } },
-        { t: 'banner login Router-R1 и banner exec «Connect Router R1»', ok: function (n) { var b = run(n).banner; return b.login === 'Router-R1' && b.exec === 'Connect Router R1'; } },
-        { t: 'Все изменения применены и подтверждены (commit + confirm)', ok: function (n) { var s2 = dev(n, 'R1'); return !s2.pending && !s2.unconfirmed; } },
-        { t: 'Debian (вход root / toor): ens3 = ' + a + '.2/24, шлюз ' + a + '.1', ok: function (n) { var d = dev(n, 'Debian'); return d.up && d.ip === a + '.2' && d.len === 24 && d.gw === a + '.1'; } },
-        { t: 'ping с Debian до ' + a + '.1 и до 8.8.8.8 проходит', ok: function (n) { return n.reach('Debian', a + '.1') && n.reach('Debian', '8.8.8.8'); } }]; },
+        { t: 'banner login Router-R1', ok: function (n) { return run(n).banner.login === 'Router-R1'; } },
+        { t: 'banner exec «Connect Router R1»', ok: function (n) { return run(n).banner.exec === 'Connect Router R1'; } },
+        { t: 'Все изменения применены и подтверждены (commit + confirm)', ok: function (n) { var s2 = dev(n, 'R1'); return !s2.pending && !s2.unconfirmed && (s2.commits || 0) > 0; } },
+        { t: 'Debian (вход root / toor): ens3 включён, адрес ' + a + '.2/24', ok: function (n) { var d = dev(n, 'Debian'); return d.up && d.ip === a + '.2' && d.len === 24; } },
+        { t: 'Debian: шлюз по умолчанию ' + a + '.1', ok: function (n) { return dev(n, 'Debian').gw === a + '.1'; } },
+        { t: 'ping с Debian до ' + a + '.1 проходит', ok: function (n) { return n.reach('Debian', a + '.1'); } },
+        { t: 'ping с Debian до 8.8.8.8 (Loopback R1) проходит', ok: function (n) { return n.reach('Debian', '8.8.8.8'); } }]; },
       sol: function (p) { var a = '192.168.' + p.x, s = '173.16.' + p.s; return {
         R1: ['configure', 'hostname R1', 'clock timezone gmt ' + p.tz, 'interface gigabitethernet 1/0/1', 'ip address ' + a + '.1/24', 'ip firewall disable', 'exit',
              'interface loopback 1', 'ip address 8.8.8.8/32', 'exit', 'interface gigabitethernet 1/0/1.50', 'ip address ' + s + '.1/24', 'ip firewall disable', 'exit',
@@ -79,15 +89,17 @@
         [['VPC1', 140, 150, 1], ['VPC2', 140, 410, 2], ['VPC3', 700, 150, 11], ['VPC4', 700, 410, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return [
-        { t: 'VLAN ' + v[0] + ' и ' + v[1] + ' созданы', ok: function (n) { var s = dev(n, 'SW1'); return s.vlans[v[0]] && s.vlans[v[1]]; } },
-        { t: 'gi1/0/1–2 → access VLAN ' + v[0] + ', gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
-        { t: 'interface vlan ' + v[0] + ': ' + A + '.1/24, interface vlan ' + v[1] + ': ' + B + '.1/24', ok: function (n) { var s = dev(n, 'SW1');
-            return s.svi[v[0]] === A + '.1/24' && s.svi[v[1]] === B + '.1/24'; } },
-        { t: 'VPC1/VPC2 — ' + A + '.2 и .3, VPC3/VPC4 — ' + B + '.2 и .3, шлюзы — адреса SVI', ok: function (n) {
-            return dev(n, 'VPC1').ip === A + '.2' && dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC3').ip === B + '.2' && dev(n, 'VPC4').ip === B + '.3' &&
-                   dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
+        { t: 'VLAN ' + v[0] + ' создана', ok: function (n) { return !!dev(n, 'SW1').vlans[v[0]]; } },
+        { t: 'VLAN ' + v[1] + ' создана', ok: function (n) { return !!dev(n, 'SW1').vlans[v[1]]; } },
+        { t: 'gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
+        { t: 'gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'interface vlan ' + v[0] + ': ' + A + '.1/24', ok: function (n) { return dev(n, 'SW1').svi[v[0]] === A + '.1/24'; } },
+        { t: 'interface vlan ' + v[1] + ': ' + B + '.1/24', ok: function (n) { return dev(n, 'SW1').svi[v[1]] === B + '.1/24'; } }]
+        .concat(vpcs([['VPC1', A + '.2', A + '.1'], ['VPC2', A + '.3', A + '.1'], ['VPC3', B + '.2', B + '.1'], ['VPC4', B + '.3', B + '.1']]))
+        .concat([
         { t: 'ping VPC1 → VPC2 (внутри VLAN)', ok: function (n) { return n.reach('VPC1', A + '.3'); } },
-        { t: 'ping VPC1 → VPC3 и VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC4', A + '.3'); } }]; },
+        { t: 'ping VPC1 → VPC3 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC1', B + '.2'); } },
+        { t: 'ping VPC4 → VPC2 (между VLAN через SW1)', ok: function (n) { return n.reach('VPC4', A + '.3'); } }]); },
       sol: function (p) { var A = '10.' + p.n[0] + '.' + p.n[0], B = '10.' + p.n[1] + '.' + p.n[1], v = p.v; return {
         SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
@@ -104,14 +116,15 @@
         [['VPC1', 140, 230, 1], ['VPC2', 140, 470, 2], ['VPC3', 700, 230, 11], ['VPC4', 700, 470, 12]].forEach(function (x) {
           var v = net.add('VPC', x[0], x[1], x[2]); net.connect(v.id, 'eth0', s.id, 'gi1/0/' + x[3]); }); },
       tasks: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return [
-        { t: 'SW1: VLAN ' + v[0] + ' (gi1/0/1–2) и VLAN ' + v[1] + ' (gi1/0/11–12) в режиме access', ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]) && acc(n, 'SW1', [11, 12], v[1]); } },
+        { t: 'SW1: gi1/0/1–2 → access VLAN ' + v[0], ok: function (n) { return acc(n, 'SW1', [1, 2], v[0]); } },
+        { t: 'SW1: gi1/0/11–12 → access VLAN ' + v[1], ok: function (n) { return acc(n, 'SW1', [11, 12], v[1]); } },
         { t: 'SW1 gi1/0/6 → trunk, разрешены VLAN ' + v[0] + ' и ' + v[1], ok: function (n) { var q = port(n, 'SW1', 6); return q.mode === 'trunk' && q.allowed.indexOf(v[0]) >= 0 && q.allowed.indexOf(v[1]) >= 0; } },
-        { t: 'R1: gi1/0/1.' + v[0] + ' = ' + A + '.1/24, gi1/0/1.' + v[1] + ' = ' + B + '.1/24, экран отключён, commit + confirm', ok: function (n) {
-            var f = dev(n, 'R1').run.ifs, x = f['gi1/0/1.' + v[0]], y = f['gi1/0/1.' + v[1]];
-            return x && y && x.ip === A + '.1/24' && y.ip === B + '.1/24' && !x.fw && !y.fw; } },
-        { t: 'VPC1/VPC2 — ' + A + '.2/.3, VPC3/VPC4 — ' + B + '.2/.3, шлюзы — адреса R1', ok: function (n) {
-            return dev(n, 'VPC2').ip === A + '.3' && dev(n, 'VPC4').ip === B + '.3' && dev(n, 'VPC1').gw === A + '.1' && dev(n, 'VPC3').gw === B + '.1'; } },
-        { t: 'ping VPC1 → VPC3 и VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC1', B + '.2') && n.reach('VPC2', B + '.3'); } }]; },
+        { t: 'R1: gi1/0/1.' + v[0] + ' = ' + A + '.1/24, экран отключён (после commit + confirm)', ok: function (n) { var x = dev(n, 'R1').run.ifs['gi1/0/1.' + v[0]]; return !!x && x.ip === A + '.1/24' && !x.fw; } },
+        { t: 'R1: gi1/0/1.' + v[1] + ' = ' + B + '.1/24, экран отключён (после commit + confirm)', ok: function (n) { var y = dev(n, 'R1').run.ifs['gi1/0/1.' + v[1]]; return !!y && y.ip === B + '.1/24' && !y.fw; } }]
+        .concat(vpcs([['VPC1', A + '.2', A + '.1'], ['VPC2', A + '.3', A + '.1'], ['VPC3', B + '.2', B + '.1'], ['VPC4', B + '.3', B + '.1']]))
+        .concat([
+        { t: 'ping VPC1 → VPC3 через R1', ok: function (n) { return n.reach('VPC1', B + '.2'); } },
+        { t: 'ping VPC2 → VPC4 через R1', ok: function (n) { return n.reach('VPC2', B + '.3'); } }]); },
       sol: function (p) { var A = '192.168.' + p.a, B = '172.16.' + p.b, v = p.v; return {
         SW1: ['enable', 'configure', 'vlan ' + v[0] + ',' + v[1], 'exit',
               'interface range gigabitethernet 1/0/1-2', 'switchport mode access', 'switchport access vlan ' + v[0], 'exit',
@@ -151,7 +164,8 @@
       },
       tasks: function (p) { var B = '172.16.' + p.b, A = '192.168.' + p.a; return [
         { t: 'VPC1 (' + A + '.2) успешно пингует VPC4 (' + B + '.3)', ok: function (n) { return n.reach('VPC1', B + '.3'); } },
-        { t: 'Остальные пары тоже работают: VPC3 → VPC2 и VPC1 → VPC3', ok: function (n) { return n.reach('VPC3', B + '.2') && n.reach('VPC1', A + '.3'); } }]; },
+        { t: 'VPC3 → VPC2 тоже работает', ok: function (n) { return n.reach('VPC3', B + '.2'); } },
+        { t: 'VPC1 → VPC3 тоже работает', ok: function (n) { return n.reach('VPC1', A + '.3'); } }]; },
       sol: function (p) { var v = p.v, B = '172.16.' + p.b;
         var fix = [
           { SW2: ['configure', 'interface gigabitethernet 1/0/11', 'switchport access vlan ' + v[1], 'end'] },

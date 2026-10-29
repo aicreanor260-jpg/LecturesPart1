@@ -41,7 +41,10 @@
     return d;
   };
   Net.seq = 0;
-  P.byName = function (n) { var s = this; return s.order.map(function (i) { return s.devs[i]; }).filter(function (d) { return d.name === n; })[0] || null; };
+  // по имени на схеме; если устройство переименовали (hostname → подпись), находится и по исходному имени — для проверок лаб
+  EL.macKey = function (d) { return (d.st && d.st._name0) || d.name; };   // MAC не меняется, когда устройство переименовали
+  P.byName = function (n, exact) { var s = this, L = s.order.map(function (i) { return s.devs[i]; });
+    return L.filter(function (d) { return d.name === n; })[0] || (exact ? null : L.filter(function (d) { return d.st && d.st._name0 === n; })[0]) || null; };
   P.list = function () { var s = this; return s.order.map(function (i) { return s.devs[i]; }); };
   P.remove = function (id) {
     this.gen++;
@@ -686,9 +689,9 @@
   P.dhcp = function (id) {
     var s = this, d = this.devs[id], steps = this.stepLog(), ct = [];
     var port = d.type === 'vpc' ? 'eth0' : (d.st.port || 'ens3'), cname = d.name;   // st.port — точка доступа (порт LAN)
-    var fl = this.flood(id, { port: port, tag: null }, EL.mac(cname + port));
+    var fl = this.flood(id, { port: port, tag: null }, EL.mac(EL.macKey(d) + port));
     steps.push({ k: 'arp', segs: fl.segs, t: cname + ': DHCPDISCOVER — широковещательно, src 0.0.0.0 → 255.255.255.255:67', notes: fl.notes,
-      f: { type: 'ip', smac: EL.mac(cname + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
+      f: { type: 'ip', smac: EL.mac(EL.macKey(d) + port), dmac: 'ff:ff:ff:ff:ff:ff', src: '0.0.0.0', dst: '255.255.255.255', proto: 'udp', sport: 68, dport: 67, ttl: 64, dhcp: 'Discover' } });
     var lease = null, lpath = null;
     fl.eps.some(function (ep) {
       var rd = s.devs[ep.dev]; if (rd.type !== 'esr') return false;
@@ -716,7 +719,7 @@
     });
     if (!lease) { steps.push({ k: 'drop', t: 'DHCPOFFER не пришёл: в этом широковещательном домене нет DHCP-сервера или ретранслятора' });
       return { ok: false, steps: steps }; }
-    if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(cname + port), lease.ip);
+    if (s.snoopBind && lpath) s.snoopBind(lpath, EL.mac(EL.macKey(d) + port), lease.ip);
     steps.push({ k: 'ok', t: (lease.via ? lease.via + ' → ' : '') + cname + ': DHCPOFFER ' + lease.ip + '/' + lease.len + ', шлюз ' + (lease.gw || '—') + ' (сервер ' + lease.server + ')' });
     steps.push({ k: 'ok', t: cname + ': DHCPREQUEST → ' + lease.server + ': DHCPACK — адрес закреплён' });
     return { ok: true, steps: steps, ip: lease.ip, len: lease.len, gw: lease.gw, pool: lease.pool, server: lease.server, sip: lease.sip };   // pool — опции пула (WLC: опция 43)
@@ -910,7 +913,7 @@
     var d = this.devs[id];
     if (f.vrrp) { var v = (this.vrrp()[id] || {})[f.name.split(':')[0]];      // виртуальный MAC VRRP: 00:00:5e:00:01:ID
       return '00:00:5e:00:01:' + ('0' + (v ? v.id : 0).toString(16)).slice(-2); }
-    return EL.mac(d.name + (f.port || f.name.split(':')[0]));
+    return EL.mac(EL.macKey(d) + (f.port || f.name.split(':')[0]));
   };
   P.learn = function (path, mac) {
     var s = this, viol = null;
@@ -971,8 +974,8 @@
   P.rename = function (id, name) {
     name = String(name || '').trim();
     if (!/^[\w.-]{1,24}$/.test(name)) return 'Имя: латиница, цифры, - _ . (до 24 символов)';
-    var o = this.byName(name); if (o && o.id !== id) return 'Имя ' + name + ' уже занято';
-    var d = this.devs[id]; d.name = name; if (d.st.kind === 'vpc') d.st.name = name; return null;
+    var o = this.byName(name, true); if (o && o.id !== id) return 'Имя ' + name + ' уже занято';
+    var d = this.devs[id]; if (d.st && d.st._name0 === undefined && d.name !== name) d.st._name0 = d.name; d.name = name; if (d.st.kind === 'vpc') d.st.name = name; return null;
   };
   P.toJSON = function () {
     var s = this;

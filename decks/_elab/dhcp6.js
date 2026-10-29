@@ -49,7 +49,7 @@
     if (d.on) o.push('ipv6 dhcp-server'); });
   // ---------------------------------------------------------------- выдача адреса
   P.dhcp6 = function (id) {
-    var s = this, d = s.devs[id], port = d.st.port || 'ens3', mac = EL.mac(d.name + port), steps = s.stepLog(), fl = s.flood(id, { name: port, port: port, tag: null }, mac), hit = null;
+    var s = this, d = s.devs[id], port = d.st.port || 'ens3', mac = EL.mac(EL.macKey(d) + port), steps = s.stepLog(), fl = s.flood(id, { name: port, port: port, tag: null }, mac), hit = null;
     steps.push({ k: 'arp', segs: fl.segs, t: d.name + ': DHCPv6 Solicit на ff02::1:2 (все DHCPv6-серверы и ретрансляторы), UDP 546 → 547',
       f: { type: 'ip6', mcast: true, smac: mac, dmac: '33:33:00:01:00:02', src: A.eui64(mac), dst: 'ff02::1:2', hlim: 1, proto: 'udp', sport: 546, dport: 547 } });
     fl.reach.some(function (e) { var rd = s.devs[e.dev]; if (rd.type !== 'esr') return false; var c = rd.st.run, d6 = c.dhcp6; if (!d6 || !d6.on) return false;

@@ -18,12 +18,19 @@ function runLab(L) {
     total++;
     var net = new EL.Net(), p = L.gen(); L.build(net, p); net.tick(31);   // STP: порты к узлам и между мостами переходят в forwarding
     var tasks = L.tasks(p);
+    if (i === 0) {                                // до работы студента пункты не горят (кроме проверки уже работающей службы)
+      var pre = tasks.filter(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } return y && !/tftpd-hpa запущена/.test(t.t); });
+      if (L.id.charAt(0) !== 'T' && pre.length) { fail++; console.error('✗ ' + L.id + ' горит без действий: ' + pre.map(function (t) { return t.t; }).join(' | ')); }
+    }
     if (L.id.charAt(0) === 'T') {                 // поиск неисправности: до исправления ping не должен проходить
       if (tasks[0].ok(net)) { fail++; console.error('✗ ' + L.id + ' неисправность ' + p.fault + ' не ломает сеть'); continue; }
     }
     var errs = EL.labs.apply(net, L.sol(p));
     net.tick(60);                                 // протоколам нужно время: OSPF ждёт выбора DR (wait timer 40 с)
     var bad = tasks.filter(function (t) { return !t.ok(net); });
+    // как в интерфейсе: hostname переименовывает устройство на схеме (syncHost) — проверки лаб должны находить его по исходному имени
+    net.list().forEach(function (d) { var h = net.hostOf(d.id); if (h && h !== d.name) net.rename(d.id, h); });
+    tasks.forEach(function (t) { if (bad.indexOf(t) < 0 && !t.ok(net)) bad.push({ t: t.t + ' (после переименования по hostname)' }); });
     if (errs.length || bad.length) {
       fail++;
       console.error('✗ ' + L.id + ' вариант ' + JSON.stringify(p));
@@ -34,6 +41,38 @@ function runLab(L) {
   console.log((fail ? '' : '✓ ') + L.id + ' — ' + L.title);
 }
 EL.labs.LABS.forEach(runLab);
+
+// пункты лабы загораются по одному действию: имя, часовой пояс, IP — каждое отдельно, только после commit + confirm
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Пункты лаб: ' + name + (extra ? ' — ' + extra : '')); } }
+  function lit(L, p, net) { return L.tasks(p).map(function (t, k) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } return y ? k + 1 : 0; }).filter(Boolean); }
+  var L = EL.labs.byId('3.1'), p = L.gen(); p.tz = '+3'; var net = new EL.Net(); L.build(net, p); var r = net.byName('R1'), T = L.tasks(p);
+  function idx(re) { for (var k = 0; k < T.length; k++) if (re.test(T[k].t)) return k + 1; return -1; }
+  net.exec(r.id, 'configure'); net.exec(r.id, 'hostname R1');
+  chk('3.1: hostname без commit — пункт не горит', lit(L, p, net).indexOf(idx(/^Имя маршрутизатора/)) < 0);
+  net.exec(r.id, 'do commit'); net.exec(r.id, 'do confirm');
+  chk('3.1: hostname R1 + commit + confirm — горит только пункт «Имя» (и «применено»)', lit(L, p, net).join() === [idx(/^Имя маршрутизатора/), idx(/^Все изменения применены/)].join(), lit(L, p, net).join());
+  net.rename(r.id, 'R1');
+  net.exec(r.id, 'clock timezone gmt 3'); net.exec(r.id, 'do commit'); net.exec(r.id, 'do confirm');
+  chk('3.1: clock timezone gmt 3 (без плюса) — пункт «Часовой пояс GMT +3» горит', lit(L, p, net).indexOf(idx(/^Часовой пояс/)) >= 0);
+  net.exec(r.id, 'clock timezone gmt +03'); net.exec(r.id, 'do commit'); net.exec(r.id, 'do confirm');
+  chk('3.1: clock timezone gmt +03 — тоже засчитано', lit(L, p, net).indexOf(idx(/^Часовой пояс/)) >= 0 && r.st.run.tz === '+3');
+  net.exec(r.id, 'interface gigabitethernet 1/0/1'); net.exec(r.id, 'ip address 192.168.' + p.x + '.1/24'); net.exec(r.id, 'exit'); net.exec(r.id, 'do commit'); net.exec(r.id, 'do confirm');
+  chk('3.1: IP на gi1/0/1 — горит «IP-адрес», а «экран отключён» ещё нет', lit(L, p, net).indexOf(idx(/^gi1\/0\/1: IP-адрес/)) >= 0 && lit(L, p, net).indexOf(idx(/^gi1\/0\/1: межсетевой/)) < 0);
+  // интерфейс: hostname переименовывает устройство на схеме — пункт и связь не теряются
+  var L2 = EL.labs.byId('4.3'), p2 = L2.gen(), n2 = new EL.Net(); L2.build(n2, p2); n2.tick(31);
+  var R1 = n2.byName('R1'); n2.exec(R1.id, 'configure'); n2.exec(R1.id, 'hostname Router-left'); n2.exec(R1.id, 'do commit'); n2.exec(R1.id, 'do confirm');
+  n2.rename(R1.id, 'Router-left');
+  var l2 = lit(L2, p2, n2), T2 = L2.tasks(p2);
+  chk('4.3: имя R1 горит отдельно от имени R2, даже когда на схеме R1 уже «Router-left»', T2[l2[0] - 1] && /^Имя R1: Router-left/.test(T2[l2[0] - 1].t) && !l2.some(function (k) { return /^Имя R2/.test(T2[k - 1].t); }), l2.join());
+  chk('переименованное устройство находится и по исходному имени', n2.byName('R1') === R1 && n2.byName('R1', true) === null);
+  // экзамен: имя одного маршрутизатора — один пункт
+  var LE = EL.labs.byId('E.1'), pe = LE.gen(), ne = new EL.Net(); LE.build(ne, pe); var TE = LE.tasks(pe), r3 = ne.byName('R3'), nm = TE.filter(function (t) { return /^1\. R3: имя /.test(t.t); })[0];
+  ne.exec(r3.id, 'configure'); ne.exec(r3.id, 'hostname ' + nm.t.split('имя ')[1]); ne.exec(r3.id, 'do commit'); ne.exec(r3.id, 'do confirm');
+  var le = lit(LE, pe, ne).filter(function (k) { return !/всё применено/.test(TE[k - 1].t); });
+  chk('E.1: имя R3 — загорелся ровно один пункт «1. R3: имя …»', le.length === 1 && TE[le[0] - 1] === TE[TE.indexOf(nm)] || (le.length === 1 && /^1\. R3/.test(TE[le[0] - 1].t)), le.map(function (k) { return TE[k - 1].t; }).join(' | '));
+  console.log('✓ Пункты лаб — по одному действию');
+})();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

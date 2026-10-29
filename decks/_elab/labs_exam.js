@@ -91,40 +91,43 @@
             var x = rs.rules[q]; return x.on && x.act === 'interface' && x.src && x.src[0] === a && x.src[1] === b; }); }); }
         function hasRoute(n, r, net, nh) { return run(n, r).routes.some(function (x) { return x.net === net && x.nh === nh; }); }
         var ntpR = RS.filter(function (r) { return r !== 'R7'; });
-        return [
-          { t: '1. Имена student-' + X + '-R1 … student-' + X + '-R7', ok: function (n) { return RS.every(function (r) { return run(n, r).host === name(p, r); }); } },
-          { t: '2. IP-адреса по таблице на R1–R7, межсетевой экран отключён', ok: function (n) { return RS.every(function (r) { return ipOk(n, r); }); } },
-          { t: '3. Пользователь student' + X + ' / studentpass' + X + ', privilege 14 на всех', ok: function (n) { return RS.every(function (r) {
-              var u = run(n, r).users['student' + X]; return u && u.pw === 'studentpass' + X && u.priv === 14; }); } },
+        // пункты билета разбиты по маршрутизаторам: «1. R3 — имя student-X-R3» и т.д. — одно действие, один пункт
+        function each(L, f) { return L.map(f); }
+        return [].concat(
+          each(RS, function (r) { return { t: '1. ' + r + ': имя ' + name(p, r), ok: function (n) { return run(n, r).host === name(p, r); } }; }),
+          each(RS, function (r) { return { t: '2. ' + r + ': IP-адреса по таблице, межсетевой экран отключён', ok: function (n) { return ipOk(n, r); } }; }),
+          each(RS, function (r) { return { t: '3. ' + r + ': пользователь student' + X + ' / studentpass' + X + ', privilege 14', ok: function (n) {
+              var u = run(n, r).users['student' + X]; return !!u && u.pw === 'studentpass' + X && u.priv === 14; } }; }), [
           { t: '4. R1: VLAN 100, gi1/0/3 — mode switchport, access VLAN 100', ok: function (n) { var c = run(n, 'R1'), x = c.ifs['gi1/0/3'];
               return (c.vlans || {})[100] && x.sw && x.sw.vlan === 100 && x.sw.mode === 'access'; } },
           { t: '5. R1: Bridge 100 — VLAN 100, 192.168.220.1/24, экран отключён, enable', ok: function (n) { var b = (run(n, 'R1').bridges || {})[100];
               return b && b.vlan === 100 && b.ip === '192.168.220.1/24' && !b.fw && b.on; } },
           { t: '6. R1: маршрут по умолчанию через ' + P.r1gw, ok: function (n) { return hasRoute(n, 'R1', '0.0.0.0/0', P.r1gw); } },
-          { t: '7. Часовой пояс GMT +7 на всех', ok: function (n) { return RS.every(function (r) { return run(n, r).tz === '+7'; }); } },
-          { t: '8. NTP на R1–R6: сервер 10.10.100.100, minpoll 5 (2⁵ = 32 с), синхронизация есть', ok: function (n) { return ntpR.every(function (r) {
+          ], each(RS, function (r) { return { t: '7. ' + r + ': часовой пояс GMT +7', ok: function (n) { return run(n, r).tz === '+7'; } }; }),
+          each(ntpR, function (r) { return { t: '8. ' + r + ': NTP — сервер 10.10.100.100, minpoll 5 (2⁵ = 32 с), синхронизация есть', ok: function (n) {
               var c = run(n, r).ntp, s = c && c.servers['10.10.100.100']; if (!c || !c.on || !s || s.minpoll !== 5) return false;
-              var pr = n.ntpPeer(n.byName(r).id); return pr && pr.utc !== null; }); } },
+              var pr = n.ntpPeer(n.byName(r).id); return !!pr && pr.utc !== null; } }; }), [
           { t: '9. R1: Source NAT на gi1/0/1 для 192.168.220.1–192.168.220.254', ok: function (n) { return snatOk(run(n, 'R1'), 'gi1/0/1', '192.168.220.1', '192.168.220.254'); } },
-          { t: '10. OSPF 250, область 0.0.0.0 на ' + P.wan.join(', ') + ': Router ID N.N.N.N, все рабочие интерфейсы в процессе, пассивные — к R1, к ' + B + ' и к серверу',
-            ok: function (n) { return P.wan.every(function (r) { return ospfOk(n, r); }); } },
-          { t: '11. ' + P.adjB.map(function (a) { return a[0]; }).join(' и ') + ': маршрут 192.168.200.0/24 через ' + P.adjB.map(function (a) { return a[1]; }).join(' / '),
-            ok: function (n) { return P.adjB.every(function (a) { return hasRoute(n, a[0], '192.168.200.0/24', a[1]); }); } },
+          ], each(P.wan, function (r) { return { t: '10. ' + r + ': OSPF 250, область 0.0.0.0, Router ID ' + [1, 1, 1, 1].map(function () { return r.slice(1); }).join('.') + ', рабочие интерфейсы в процессе, пассивные — к R1, к ' + B + ' и к серверу',
+            ok: function (n) { return ospfOk(n, r); } }; }),
+          each(P.adjB, function (a) { return { t: '11. ' + a[0] + ': маршрут 192.168.200.0/24 через ' + a[1], ok: function (n) { return hasRoute(n, a[0], '192.168.200.0/24', a[1]); } }; }), [
           { t: '12. ' + B + ': DHCP-сервер, пул DHCP-C200 — 192.168.200.0/24, 192.168.200.10–40, аренда 15 минут (0:0:15), шлюз 192.168.200.1', ok: function (n) {
               var c = run(n, B), q = c.dhcp && c.dhcp.pools['DHCP-C200'];
               return c.dhcp && c.dhcp.on && q && q.net === '192.168.200.0/24' && q.range && q.range[0] === '192.168.200.10' && q.range[1] === '192.168.200.40' &&
                      q.lease === '0:0:15' && q.gw === '192.168.200.1'; } },
-          { t: '13. ' + B + ': маршрут по умолчанию через ' + P.bGw + ' и 192.168.200.0/24 через 10.10.200.2', ok: function (n) {
-              return hasRoute(n, B, '0.0.0.0/0', P.bGw) && hasRoute(n, B, '192.168.200.0/24', '10.10.200.2'); } },
+          { t: '13. ' + B + ': маршрут по умолчанию через ' + P.bGw, ok: function (n) { return hasRoute(n, B, '0.0.0.0/0', P.bGw); } },
+          { t: '13. ' + B + ': маршрут 192.168.200.0/24 через 10.10.200.2', ok: function (n) { return hasRoute(n, B, '192.168.200.0/24', '10.10.200.2'); } },
           { t: '14. ' + B + ': Source NAT на gi1/0/' + P.bUp[0] + ' для 192.168.200.1–192.168.200.254', ok: function (n) {
               return snatOk(run(n, B), 'gi1/0/' + P.bUp[0], '192.168.200.1', '192.168.200.254'); } },
-          { t: '15. R7: DHCP relay (helper 10.10.200.1 на gi1/0/' + P.lan7 + '), маршрут по умолчанию через 10.10.200.1', ok: function (n) { var c = run(n, 'R7');
-              return c.relay && c.ifs['gi1/0/' + P.lan7].helper === '10.10.200.1' && hasRoute(n, 'R7', '0.0.0.0/0', '10.10.200.1'); } },
-          { t: '16. VPC2 получил адрес по DHCP (192.168.200.10–40); VPC1 — 192.168.220.2/24', ok: function (n) { var v = dev(n, 'VPC2'), a = EL.ip.ip2n(v.ip || '0.0.0.0');
-              return v.dhcp && a >= EL.ip.ip2n('192.168.200.10') && a <= EL.ip.ip2n('192.168.200.40') && dev(n, 'VPC1').ip === '192.168.220.2'; } },
-          { t: 'Проверка: VPC1 и VPC2 пингуют NTP-сервер 10.10.100.100; всё применено (commit + confirm)', ok: function (n) {
-              return n.reach('VPC1', '10.10.100.100') && n.reach('VPC2', '10.10.100.100') &&
-                     RS.every(function (r) { var s = dev(n, r); return !s.pending && !s.unconfirmed; }); } }]; },
+          { t: '15. R7: DHCP relay — ip dhcp-relay, helper 10.10.200.1 на gi1/0/' + P.lan7, ok: function (n) { var c = run(n, 'R7');
+              return !!c.relay && c.ifs['gi1/0/' + P.lan7].helper === '10.10.200.1'; } },
+          { t: '15. R7: маршрут по умолчанию через 10.10.200.1', ok: function (n) { return hasRoute(n, 'R7', '0.0.0.0/0', '10.10.200.1'); } },
+          { t: '16. VPC2 получил адрес по DHCP (192.168.200.10–40)', ok: function (n) { var v = dev(n, 'VPC2'), a = EL.ip.ip2n(v.ip || '0.0.0.0');
+              return v.dhcp && a >= EL.ip.ip2n('192.168.200.10') && a <= EL.ip.ip2n('192.168.200.40'); } },
+          { t: '16. VPC1: 192.168.220.2/24', ok: function (n) { return dev(n, 'VPC1').ip === '192.168.220.2'; } },
+          { t: 'Проверка: VPC1 пингует NTP-сервер 10.10.100.100', ok: function (n) { return n.reach('VPC1', '10.10.100.100'); } },
+          { t: 'Проверка: VPC2 пингует NTP-сервер 10.10.100.100', ok: function (n) { return n.reach('VPC2', '10.10.100.100'); } }],
+          each(RS, function (r) { return { t: r + ': всё применено (commit + confirm)', ok: function (n) { var s = dev(n, r); return !s.pending && !s.unconfirmed && (s.commits || 0) > 0; } }; })); },
       sol: function (p) { var P = plan(k), X = p.x, B = P.B, o = {};
         RS.forEach(function (r) {
           var c = ['configure', 'hostname ' + name(p, r), 'username student' + X, 'password studentpass' + X, 'privilege 14', 'exit', 'clock timezone gmt +7'];

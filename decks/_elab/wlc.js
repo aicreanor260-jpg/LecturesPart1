@@ -202,7 +202,7 @@
     if (cmd === 'show-config') return Object.keys(st.apCfg).map(function (k) { return k + ' ' + st.apCfg[k]; }).join('\n');
     if (!c.cfg && !c.path.length) {
       if (cmd === 'configure') { c.cfg = true; return ''; }
-      if (line.trim() === 'monitoring wan-status') return ['Common information:', 'interface | br0', 'mac | ' + EL.mac(d.name + 'LAN'), 'IPv4 information:', 'protocol | ' + (st.apMode === 'dhcp' ? 'dhcp' : 'static-ip'),
+      if (line.trim() === 'monitoring wan-status') return ['Common information:', 'interface | br0', 'mac | ' + EL.mac(EL.macKey(d) + 'LAN'), 'IPv4 information:', 'protocol | ' + (st.apMode === 'dhcp' ? 'dhcp' : 'static-ip'),
         'ip-address | ' + (st.ip || ''), 'netmask | ' + (st.ip ? IP.len2mask(st.len) : ''), 'gateway | ' + (st.gw || '')].join('\n');
       return 'Unknown command';
     }
@@ -238,7 +238,7 @@
   P.apSync = function () {
     var s = this;
     this.list().filter(isAp).forEach(function (d) {
-      var st = d.st, mac = EL.mac(d.name + 'LAN');
+      var st = d.st, mac = EL.mac(EL.macKey(d) + 'LAN');
       if (d.off || !s.linkUp(d.id, 'LAN')) { s.list().filter(isWlc).forEach(function (w) { var a = w.st.aps[mac]; if (a && a.status === 'Active') a.status = 'Lost'; }); return; }
       if (st.apMode === 'dhcp' && !st.ip) { var r = s.dhcp(d.id); if (!r.ok) return; st.ip = r.ip; st.len = r.len; st.gw = r.gw || null; st.up = true;
         st.opt43 = r.pool && r.pool.vs ? EL.clone(r.pool.vs) : {}; }
