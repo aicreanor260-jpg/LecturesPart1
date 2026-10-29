@@ -238,7 +238,7 @@
   function sp(p) { return p.replace(/^([a-z]+)/, '$1 '); }
   EL.evX = EL.evX || [];                       // [{snap(s, o), ev(q, было, стало, s, d)}] — свои ключи снимка и сообщения
   function fmt(d, ev) {
-    if (d.sub === 'olt' || d.sub === 'ont' || d.sub === 'ap') return null;   // формат сообщений OLT/ONT/ТД в источниках не приведён
+    if (d.sub === 'olt' || d.sub === 'ont' || d.sub === 'ap' || d.sub === 'lte' || d.sub === 'eont') return null;   // формат сообщений OLT/ONT/ТД в источниках не приведён
     var b = d.type === 'mes' ? d.st.dialect : 'esr', p = ev.port;
     if (ev.k === 'link') return b === '10' || b === '8' ? (ev.up ? 'CFA-6-Interface ' + sp(p) + ' link status UP' : 'CFA-4-Interface ' + sp(p) + ' link status DOWN')
                                                           : (ev.up ? '%LINK-I-Up:  ' + p : '%LINK-W-Down:  ' + p);

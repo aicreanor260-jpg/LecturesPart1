@@ -16,7 +16,7 @@
   // Иконки можно заменить своими SVG: ICONS[тип] = function (g, d) {...}
   var ICONS = {
     mes: function (g, d) { var m = EL.MODELS[d.model] || {}, big = /агрегации|ЦОД/.test(m.group || '');
-      if (m.kind === 'olt') { use(g, 'ic-olt', 104); return; } if (m.kind === 'ont') { use(g, 'ic-ont', 70); return; }   // OLT и ONT
+      if (m.kind === 'olt' || m.kind === 'lte') { use(g, 'ic-olt', 104); return; } if (m.kind === 'ont' || m.kind === 'eont') { use(g, 'ic-ont', 70); return; }   // OLT и ONT
       use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
     esr: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; use(g, k === 'scs' ? 'ic-console' : k === 'wlc' ? 'ic-wlc' : k === 'me' ? 'ic-me' : 'ic-router', k ? 100 : 96); },   // SCS-32, WLC, ME — свои иконки
     vpc: function (g) { use(g, 'ic-pc', 78); },
@@ -359,7 +359,7 @@
   // ================================================================== терминалы
   function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
   // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
-  function needLogin(d) { return (d.type === 'mes' && d.sub !== 'ont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
+  function needLogin(d) { return (d.type === 'mes' && d.sub !== 'ont' && d.sub !== 'eont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
     var aa = net.aaaLogin ? net.aaaLogin(d.id, 'console', u, p, function (uu, pp) { return localLogin(d, uu, pp); }) : null;   // RADIUS/TACACS+ (aaa.js)

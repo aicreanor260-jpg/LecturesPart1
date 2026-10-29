@@ -141,6 +141,14 @@ def main():
                 models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ma5000", "slots": 16 if k == "MA5160" else 2, "ports": len(names), "portList": names,
                              "group": "OLT GPON / XGS-PON", "host": k, "pon": "gpon", "sw": "ПО " + sv,
                              "note": "шасси MA5000: FC + LC16G (16 × GPON) · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k in ("LTE-8X", "LTE-2X"):   # OLT Turbo GEPON (РЭ и Quick guide 3.16.7): front-port 0–7 / 0–3, pon-port 0–7 / 0–1 — нумерация с нуля, как в CLI
+                fr, pn = (8, 8) if k == "LTE-8X" else (4, 2)
+                names = ["front-port %d" % i for i in range(fr)] + ["pon-port %d" % i for i in range(pn)]
+                models[k] = {"type": "mes", "kind": "lte", "ports": len(names), "portList": names, "group": "OLT GPON / XGS-PON", "host": k, "pon": "epon", "sw": "ПО " + sv,
+                             "note": "OLT Turbo GEPON: %d × EPON, встроенный коммутатор, ONT по MAC и профили правил" % pn, "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k == "NTE-2 (B+)":   # абонентский EPON-терминал для LTE: PON и LAN (имя условное), настраивается с OLT
+                models[k] = {"type": "mes", "kind": "eont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": "epon", "swv": sv, "sw": "ПО " + sv,
+                             "note": (m.get("summary") or "") + " · EPON, настраивается с OLT LTE по MAC", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
             elif k == "MA4000-PX":   # крейт MA4000-PX (CLI 3.38.1): PP4X-1 и PP4X-2 (front-port 1/0–1/5, 2/0–2/5) + PLC8 в слотах 0 и 1 (gpon-port S/0–7) — допущение эмулятора
                 names = ["front-port %d/%d" % (u, i) for u in (1, 2) for i in range(6)] + ["gpon-port %d/%d" % (sl, i) for sl in (0, 1) for i in range(8)]
                 models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ma4000", "slots": 16, "ports": len(names), "portList": names,

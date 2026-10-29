@@ -583,6 +583,14 @@ tunnel l2tpv3 1
 - `commit` запускает таймер (`… has to be confirmed within: 5 minutes`), `confirm` подтверждает и сохраняет в NVRAM — отдельного `save` нет; `commit confirm` — сразу оба;
 - `show interface ont 4 unactivated` — по всем pon-port слота 4.
 
+**OLT Turbo GEPON LTE-8X / LTE-2X и EPON-терминал NTE-2 (B+)** (руководство и Quick guide 3.16.7) — один сценарий подключения абонента. Порты: `front-port 0`–`7` (LTE-2X — 0–3), `pon-port 0`–`7` (0–1); вход admin / password, приглашение `LTE-8X#`.
+- VLAN во встроенном коммутаторе: `switch` → `configure` → `vlan 2000` → `tagged front-port 0 – 7`, `tagged pon-port 0 – 7`, `name Data` → `exit` → `reconfig` (без `reconfig` правки не действуют);
+- `show ont list all` — подключённая ONT без конфигурации в состоянии AUTHFAILED (видно её MAC 02:00:4B:…);
+- профиль правил: `add profile rules 2`, `profile rules 2` → `(profile-rules)#` → `rule add uni0 0: if (Always) then AddTagVID = 2000; forward` (абонент без тега → VLAN 2000) и `rule add pon 0: if (VID == 2000) then DeleteTag; forward` (VLAN 2000 к абоненту без тега); `rule show uni0|pon`, `rule delete`;
+- ONT: `ont_mac MAC` → `(ONT-x/x/MAC)#` → `add config`, `set description …`, `set profile rules 2`, `reconfigure` → состояние OK;
+- `save` — сохранить; `reboot` загружает сохранённое; `set management ip address A/L`, `set management vid`, `set default gateway`, `show system information`.
+Упрощения: одна ONT на pon-port, линки LLID, DBA, шейперы, IPMC, PPPoE/DHCP snooping не моделируются; ReplaceTagVID — абонент с тегом без подмены номера.
+
 **OLT-крейт MA4000-PX** (справочник CLI и руководство 3.38.1) — модули PP4X (коммутатор, uplink `front-port 1/0`–`1/5`, `2/0`–`2/5`) и PLC8 (8 × GPON, `gpon-port S/0`–`S/7`, слоты 0–15); в эмуляторе установлены PLC8 в слотах 0 и 1 (допущение, чтобы не перегружать схему). Приглашение `ma4000#`, `configure terminal` → `ma4000(config)#`.
 - карта работает после `slot 0 type plc8` и `commit`; `show shelf` — что настроено и что обнаружено;
 - VLAN — в коммутаторе PP4X: `vlan 100` → `ma4000(vlan-100)#` → `name …`, `tagged front-port 1/0`, `untagged front-port 1/1` (`vlan allow` на front-port, как у LTP-N, здесь нет); `interface front-port 1/0` → `ma4000(front-port-1/0)#` (`pvid`, `shutdown`);

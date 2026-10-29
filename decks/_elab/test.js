@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -163,6 +163,49 @@ EL.labs.LABS.forEach(runLab);
   var rc = n.exec(o.id, 'show running-config');
   chk('running-config: slot 0 type plc8, vlan 100 untagged front-port 1/0, interface ont 0/2/0', /slot 0 type plc8/.test(rc) && /vlan 100\n    name inet\n    untagged front-port 1\/0/.test(rc) && /interface ont 0\/2\/0\n    serial ELTX/.test(rc), rc);
   console.log('✓ MA4000-PX');
+})();
+// OLT Turbo GEPON LTE-8X и ONT NTE-2 (B+): сценарий Quick guide 3.16.7 — VLAN в коммутаторе, ONT по MAC, профиль правил, reconfigure, save
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ LTE: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('LTE-8X', 'OLT'), t = n.add('NTE-2 (B+)', 'ONT1'), pc = n.add('VPC', 'PC1'), sw = n.add('MES2300-24', 'SW1'), sv = n.add('VPC', 'SRV');
+  n.connect(o.id, 'front-port 0', sw.id, 'gi1/0/24'); n.connect(t.id, 'PON', o.id, 'pon-port 3'); n.connect(pc.id, 'eth0', t.id, 'LAN'); n.connect(sv.id, 'eth0', sw.id, 'gi1/0/1');
+  EL.labs.apply(n, { SW1: ['enable', 'configure', 'vlan database', 'vlan 2000', 'exit', 'interface gi1/0/24', 'switchport mode trunk', 'switchport trunk allowed vlan add 2000', 'exit',
+    'interface gi1/0/1', 'switchport access vlan 2000', 'end'], PC1: ['ip 10.20.0.1/24'], SRV: ['ip 10.20.0.2/24'] });
+  function x(l) { return n.exec(o.id, l); }
+  chk('приглашение LTE-8X#', n.prompt(o.id) === 'LTE-8X#');
+  var L = x('show ont list all');
+  chk('show ont list all: ONT без конфигурации — AUTHFAILED, MAC 02:00:4B:…', new RegExp(t.st.mac.replace(/:/g, ':') + '\\s+AUTHFAILED').test(L) && /^02:00:4B:/.test(t.st.mac), L);
+  x('switch'); x('configure'); x('vlan 2000');
+  chk('приглашения (switch)(config-vlan)#', n.prompt(o.id) === 'LTE-8X(switch)(config-vlan)#');
+  chk('tagged front-port 0 – 7 и pon-port 0 – 7 (с длинным тире, как в Quick guide)', !/Unknown/.test(x('tagged front-port 0 – 7') + x('tagged pon-port 0 – 7') + x('name Data')));
+  x('exit');
+  chk('без reconfig VLAN коммутатора не действует', (x('exit'), x('exit'), !n.ping(pc.id, '10.20.0.2').ok));
+  x('switch'); x('configure'); x('reconfig'); x('exit'); x('exit');
+  chk('профиль правил: add profile rules 2 → Profile 2 created', /Profile 2 created/.test(x('add profile rules 2')));
+  x('profile rules 2'); chk('приглашение (profile-rules)#', n.prompt(o.id) === 'LTE-8X(profile-rules)#');
+  x('set description NTE-2');
+  var e1 = x('rule add pon 0: if (VID == 2000) then DeleteTag; forward') + x('rule add uni0 0: if (Always) then AddTagVID = 2000; forward');
+  chk('правила pon и uni0 приняты', !e1, e1);
+  chk('rule show uni0', /0: if \(Always\) then AddTagVID = 2000; forward/.test(x('rule show uni0')));
+  chk('неверный формат правила — ошибка', /Wrong rule format/.test(x('rule add uni0 1: AddTagVID 5')));
+  x('exit');
+  x('ont_mac ' + t.st.mac.toLowerCase());
+  chk('ont_mac → LTE-8X(ONT-x/x/MAC)#', n.prompt(o.id) === 'LTE-8X(ONT-x/x/' + t.st.mac + ')#', n.prompt(o.id));
+  chk('set description без add config — ошибка', /not found/.test(x('set description Test')));
+  chk('add config', /Config for ONT-.* created/.test(x('add config')));
+  x('set description Test NTE-2'); x('set profile rules 2');
+  chk('до reconfigure трафика нет', !n.ping(pc.id, '10.20.0.2').ok);
+  chk('reconfigure — successfull', /reconfiguration successfull/.test(x('reconfigure')));
+  x('exit');
+  chk('show ont list all: состояние OK и описание', new RegExp(t.st.mac + '\\s+OK\\s+Test NTE-2').test(x('show ont list all')), x('show ont list all'));
+  chk('ПК за ONT достаёт сервер через VLAN 2000', n.ping(pc.id, '10.20.0.2').ok);
+  chk('reboot без save — всё пропало', (x('reboot'), !n.ping(pc.id, '10.20.0.2').ok));
+  // повторить и сохранить
+  ['switch', 'configure', 'vlan 2000', 'tagged front-port 0', 'tagged pon-port 3', 'exit', 'reconfig', 'exit', 'exit', 'add profile rules 2', 'profile rules 2',
+   'rule add pon 0: if (VID == 2000) then DeleteTag; forward', 'rule add uni0 0: if (Always) then AddTagVID = 2000; forward', 'exit', 'ont_mac ' + t.st.mac, 'add config', 'set profile rules 2', 'reconfigure', 'exit'].forEach(x);
+  chk('save → после reboot работает', /saved/.test(x('save')) && (x('reboot'), n.ping(pc.id, '10.20.0.2').ok));
+  chk('VLAN не tagged на pon-port ONT — трафика нет', (['switch', 'configure', 'vlan 2000', 'no tagged pon-port 3', 'exit', 'reconfig', 'exit', 'exit'].forEach(x), !n.ping(pc.id, '10.20.0.2').ok));
+  console.log('✓ LTE-8X (Turbo GEPON)');
 })();
 
 // случайные задания движка: решение на одном коммутаторе MES
