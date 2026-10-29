@@ -18,7 +18,7 @@
     mes: function (g, d) { var m = EL.MODELS[d.model] || {}, big = /агрегации|ЦОД/.test(m.group || '');
       if (m.kind === 'olt' || m.kind === 'lte') { use(g, 'ic-olt', 104); return; } if (m.kind === 'ont' || m.kind === 'eont') { use(g, 'ic-ont', 70); return; }   // OLT и ONT
       use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
-    esr: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; use(g, k === 'scs' ? 'ic-console' : k === 'wlc' ? 'ic-wlc' : k === 'me' ? 'ic-me' : 'ic-router', k ? 100 : 96); },   // SCS-32, WLC, ME — свои иконки
+    esr: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; if (k === 'isp') { use(g, 'ic-cloud', 120); return; } use(g, k === 'scs' ? 'ic-console' : k === 'wlc' ? 'ic-wlc' : k === 'me' ? 'ic-me' : 'ic-router', k ? 100 : 96); },   // SCS-32, WLC, ME — свои иконки
     vpc: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; if (k === 'tau') { use(g, 'ic-ont', 80); return; } if (k === 'smg') { use(g, 'ic-server', 80); return; } if (k === 'phone') { use(g, 'ic-phone', 64); return; } use(g, 'ic-pc', 78); },   // TAU, SMG, телефон
     deb: function (g, d) { if ((EL.MODELS[d.model] || {}).kind === 'ap') { use(g, 'ic-ap', 84); return; }
       use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);

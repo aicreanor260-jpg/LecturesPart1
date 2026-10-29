@@ -23,7 +23,7 @@
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
   // скорость и дуплекс кабеля сегмента
   function linkInfo(net, sg) { var l = net.links[sg.li]; if (!l) return null; var ph = net.phys ? net.phys(l.a.dev, l.a.port) : { up: true, speed: 1000, dup: {} };
-    return { l: l, mbps: Math.min(ph.speed || 1000, l.mbps || 1e9), mismatch: !!ph.mismatch, len: l.len || DEF.len, prop: EL.propSpeed ? EL.propSpeed(net.cabOf ? net.cabOf(l) : l.cab) : DEF.prop, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
+    return { l: l, mbps: Math.min(ph.speed || 1000, net.linkCap ? net.linkCap(l) : l.mbps || 1e9), mismatch: !!ph.mismatch, len: l.len || DEF.len, prop: EL.propSpeed ? EL.propSpeed(net.cabOf ? net.cabOf(l) : l.cab) : DEF.prop, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
   /* flows: [{kind:'ping'|'udp', src, dst, size, count, interval, df, rate, dur, start}]; opt: {len, qcap, until}
      → {events:[{t, kind:'tx'|'drop'|'rx'|'deliver', flow, pkt, seg, t0, t1}], stats} */
   P.simulate = function (flows, opt) {
@@ -86,7 +86,8 @@
       var lp = s.linkLoss ? s.linkLoss(li.l, e.bytes) : 0;           // параметры канала (linkprops.js): потери %, BER, длина сверх нормы
       if (lp && rand() < lp) { var wl = (li.l.ber && !li.l.loss ? 'битовые ошибки (BER ' + li.l.ber + ') на ' : 'потери на ') + L.name; st.drops[wl] = (st.drops[wl] || 0) + 1;
         ev.push({ t: t1, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: wl, t1: t1, t2: t3 }); continue; }
-      if (li.l.jit) t3 += rand() * li.l.jit / 1000;                 // джиттер канала: случайная добавка к задержке 0…jit мс
+      if (li.l.jit) t3 += rand() * li.l.jit / 1000;
+      if (s.extraDelay) t3 += s.extraDelay(li.l);                    // облако провайдера (isp.js): половина задержки на каждом кабеле к облаку                 // джиттер канала: случайная добавка к задержке 0…jit мс
       ev.push({ t: t1, kind: 'tx', flow: e.flow, pkt: e.pkt, seg: sg, t1: t1, t2: t3, tx: tx, dir: e.dir, frag: e.frag, bytes: e.bytes, q: P2.wait.length, port: P2.name });
       push({ t: t3, kind: 'arrive', flow: e.flow, pkt: e.pkt, frag: e.frag, dir: e.dir, i: e.i + 1, bytes: e.bytes, born: e.born, dscp: e.dscp });
     }

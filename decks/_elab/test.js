@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -543,6 +543,27 @@ EL.labs.LABS.forEach(runLab);
     chk('10GBASE-LR 9 км — норма 10 км, линк есть', n.linkUp(s1.id, 'te1/0/1') && !/длиннее/.test(n.ledOf(s1.id, 'te1/0/1').why));
     chk('канал связи — без нормы длины', !EL.LENNORM.wan && /не задаётся/.test(EL.lenNorm(n, { cab: 'wan', a: { dev: a.id }, b: { dev: b.id }, len: 3e6 })));
     console.log('✓ Длина кабеля: нормы IEEE 802.3, ошибки и обрыв');
+  })();
+  // Облако провайдера: адреса портов, маршруты, задержка, скорость, потери
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Облако провайдера: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), c = n.add('Облако провайдера', 'ISP'), r1 = n.add('vESR', 'R1'), r2 = n.add('vESR', 'R2'), a = n.add('VPC', 'A'), b = n.add('VPC', 'B');
+    n.connect(r1.id, 'gi1/0/1', c.id, 'gi1/0/1'); n.connect(r2.id, 'gi1/0/1', c.id, 'gi1/0/2'); n.connect(a.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(b.id, 'eth0', r2.id, 'gi1/0/2');
+    var errs = n.ispApply(c.id, { ports: { 'gi1/0/1': { ip: '203.0.113.1', len: 30 }, 'gi1/0/2': { ip: '198.51.100.1', len: 30 } },
+      routes: [{ net: '192.168.1.0/24', nh: '203.0.113.2' }, { net: '192.168.2.0/24', nh: '198.51.100.2' }], delay: 30, mbps: 10, loss: 0 });
+    chk('облако настроено без ошибок', !errs.length, errs.join('; '));
+    EL.labs.apply(n, { R1: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 203.0.113.2/30', 'ip firewall disable', 'exit', 'interface gigabitethernet 1/0/2', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit',
+      'ip route 0.0.0.0/0 203.0.113.1', 'end', 'commit', 'confirm'], R2: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 198.51.100.2/30', 'ip firewall disable', 'exit', 'interface gigabitethernet 1/0/2',
+      'ip address 192.168.2.1/24', 'ip firewall disable', 'exit', 'ip route 0.0.0.0/0 198.51.100.1', 'end', 'commit', 'confirm'] });
+    n.exec(a.id, 'ip 192.168.1.10/24 192.168.1.1'); n.exec(b.id, 'ip 192.168.2.10/24 192.168.2.1');
+    var p = n.exec(a.id, 'ping 192.168.2.10'), ms = +(p.match(/time=([\d.]+) ms/) || [])[1];
+    chk('офис 1 ↔ офис 2 через облако: ping, RTT ≈ 60 мс (задержка 30 мс туда и обратно)', ms > 60 && ms < 62, p.split('\n')[0]);
+    var f = n.simulate([{ kind: 'udp', src: a.id, dst: '192.168.2.10', size: 1000, rate: 2000, dur: 0.5 }]).flows[0];
+    chk('скорость облака 10 Мбит/с: 16 Мбит/с UDP — потери в очереди', f.loss > 20, f.loss);
+    chk('консоль облака — подсказка про окно', /окне «Облако провайдера»/.test(n.exec(c.id, 'show ip route')) && n.prompt(c.id) === 'isp> ');
+    chk('ошибка в маршруте ловится', /маршрут/.test(n.ispCheck({ ports: {}, routes: [{ net: '10.0.0.0', nh: 'x' }], delay: 1, mbps: 1, loss: 0 })));
+    chk('после перезагрузки настройки облака на месте', (n.reboot(c.id), /time=/.test(n.exec(a.id, 'ping 192.168.2.10'))));
+    console.log('✓ Облако провайдера');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES
