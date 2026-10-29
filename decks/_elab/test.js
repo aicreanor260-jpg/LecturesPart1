@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -206,6 +206,40 @@ EL.labs.LABS.forEach(runLab);
   chk('save → после reboot работает', /saved/.test(x('save')) && (x('reboot'), n.ping(pc.id, '10.20.0.2').ok));
   chk('VLAN не tagged на pon-port ONT — трафика нет', (['switch', 'configure', 'vlan 2000', 'no tagged pon-port 3', 'exit', 'reconfig', 'exit', 'exit'].forEach(x), !n.ping(pc.id, '10.20.0.2').ok));
   console.log('✓ LTE-8X (Turbo GEPON)');
+})();
+// VoIP: TAU-72.IP + SMG-1016M + телефоны — регистрация портов FXS на SMG и звонок 101 → 202 через два TAU
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ VoIP: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), sw = n.add('MES2300-24', 'SW1'), sm = n.add('SMG-1016M', 'SMG'), t1 = n.add('TAU-72.IP', 'TAU1'), t2 = n.add('TAU-72.IP', 'TAU2'),
+      a = n.add('Телефон', 'Tel101'), b = n.add('Телефон', 'Tel202');
+  n.connect(sm.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(t1.id, 'eth0', sw.id, 'gi1/0/2'); n.connect(t2.id, 'eth0', sw.id, 'gi1/0/3');
+  n.connect(a.id, 'Line', t1.id, 'fxs 1'); n.connect(b.id, 'Line', t2.id, 'fxs 3');
+  function tau(ip, port, num) { return ['admin', 'rootpasswd', 'config', 'network', 'ipaddr ' + ip, 'netmask 255.255.255.0', 'exit', 'sip profile 1', 'proxy address 1 10.0.0.1',
+    'regristrar address 1 10.0.0.1', 'regristrar enable 1', 'domain voip.local', 'exit', 'voice port ' + port, 'username ' + num, 'authname ' + num, 'password p' + num, 'exit', 'exit', 'commit', 'confirm']; }
+  var e = EL.labs.apply(n, { SMG: ['admin', 'rootpasswd', 'config', 'network', 'set interface ipaddr 0 10.0.0.1', 'set interface netmask 0 255.255.255.0', 'exit', 'sip users',
+      'add user 0', 'set user number 0 101', 'set login 0 101 p101', 'set authorization 0 register', 'add user 1', 'set user number 1 202', 'set login 1 202 p202', 'set authorization 1 register', 'exit', 'save'],
+    TAU1: tau('10.0.0.11', 1, '101'), TAU2: tau('10.0.0.12', 3, '202') });
+  chk('настройка SMG и двух TAU без ошибок', !e.length, e.join('; '));
+  chk('приглашения tau-72# и SMG>', n.prompt(t1.id) === 'tau-72#' && n.prompt(sm.id) === 'SMG-[CONFIG]> ', n.prompt(t1.id) + ' / ' + n.prompt(sm.id));
+  var vs = n.exec(t1.id, 'show voiceport status');
+  chk('show voiceport status: порт 1 — 101 registered, телефон положен', /^1\s+101\s+registered\s+onhook/m.test(vs) && /^2\s+-\s+not configured\s+no phone/m.test(vs), vs);
+  n.exec(sm.id, 'sip users');
+  chk('SMG show list: оба номера зарегистрированы', /101\s+register\s+registered 10\.0\.0\.11 port 1/.test(n.exec(sm.id, 'show list')) && /202\s+register\s+registered 10\.0\.0\.12 port 3/.test(n.exec(sm.id, 'show list')), n.exec(sm.id, 'show list'));
+  var r = n.exec(a.id, 'dial 202');
+  chk('звонок 101 → 202: разговор, у 202 звонок и снятая трубка', /разговор с 202/.test(r) && /Звонок от 101/.test(n.exec(b.id, 'status') + (b.st.phone.call === '101' ? 'Звонок от 101' : '')) && b.st.phone.call === '101', r);
+  chk('show voiceport status: talk', /^1\s+101\s+registered\s+talk/m.test(n.exec(t1.id, 'show voiceport status 1')));
+  chk('второй вызов на занятый — 486 Busy', (n.exec(a.id, 'hangup'), b.st.phone.call === null) && true);
+  var tr = EL.voip.call(n, a, '202').steps.map(function (x) { return x.t; }).join(' | ');
+  chk('трасса: INVITE, 180 Ringing, RTP', /SIP INVITE sip:202@voip\.local от 101/.test(tr) && /180 Ringing/.test(tr) && /RTP 10\.0\.0\.11 ↔ 10\.0\.0\.12/.test(tr), tr);
+  chk('несуществующий номер — 404', /404/.test(n.exec(a.id, 'dial 303')));
+  // неверный пароль на TAU2 — не регистрируется
+  ['config', 'voice port 3', 'password wrong', 'exit', 'exit', 'commit'].forEach(function (l) { n.exec(t2.id, l); });
+  chk('неверный password — not registered, звонок на 202 — 404', /^3\s+202\s+not registered/m.test(n.exec(t2.id, 'show voiceport status')) && /404/.test(n.exec(a.id, 'dial 202')), n.exec(t2.id, 'show voiceport status'));
+  n.exec(sm.id, 'set authorization 1 none');
+  chk('authorization none — регистрируется без пароля', /^3\s+202\s+registered/m.test(n.exec(t2.id, 'show voiceport status')));
+  chk('reload TAU без confirm — неподтверждённое теряется', (n.reboot(t2.id), n.exec(t2.id, 'admin'), n.exec(t2.id, 'rootpasswd'), /password p202/.test(n.exec(t2.id, 'show configuration running'))));
+  chk('неверный вход на TAU — Login incorrect', (n.reboot(t1.id), n.exec(t1.id, 'admin'), n.exec(t1.id, 'bad') === 'Login incorrect'));
+  console.log('✓ VoIP: TAU-72.IP + SMG-1016M');
 })();
 
 // случайные задания движка: решение на одном коммутаторе MES

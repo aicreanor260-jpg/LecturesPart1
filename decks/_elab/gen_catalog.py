@@ -157,6 +157,20 @@ def main():
             elif k in ONT:
                 models[k] = {"type": "mes", "kind": "ont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": ONT[k], "swv": sv,
                              "sw": "ПО " + sv, "note": (m.get("summary") or "") + " · мост, настраивается с OLT (OMCI)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    # VoIP: TAU-72.IP (РЭ 2.23.8) и SMG-1016M (РЭ 3.411.0) из voip.json — один сценарий: телефоны на FXS, регистрация на SMG, вызов; аналоговый телефон — условная модель
+    vsrc = os.path.join(os.path.dirname(SRC), "voip.json")
+    if os.path.exists(vsrc):
+        for m in json.load(open(vsrc, encoding="utf-8")):
+            k, sv = m["model"], m.get("sw_version") or "?"
+            if k == "TAU-72.IP":
+                names = ["eth0"] + ["fxs %d" % i for i in range(1, 9)]
+                models[k] = {"type": "vpc", "kind": "tau", "ports": len(names), "portList": names, "group": "VoIP-шлюзы", "host": "tau-72", "sw": "ПО " + sv,
+                             "note": "абонентский шлюз: eth0 + FXS 1–8 (у TAU-72 их 72) · admin / rootpasswd · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k == "SMG-1016M":
+                models[k] = {"type": "vpc", "kind": "smg", "ports": 1, "portList": ["eth0"], "group": "VoIP-шлюзы", "sw": "ПО " + sv,
+                             "note": "цифровой шлюз с SIP-регистратором (sip users) · admin / rootpasswd", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+    models["Телефон"] = {"type": "vpc", "kind": "phone", "ports": 1, "portList": ["Line"], "group": "VoIP-шлюзы", "sw": "—",
+                        "note": "аналоговый телефон (условная модель): dial НОМЕР, hangup", "full": "Аналоговый телефон к порту FXS шлюза TAU"}
     # маршрутизаторы ME (me.json): порты 0/0/N по скорости (10G te, 25G twe — допущение для ME2001, 100G hu), MGMT 0/fmc0/1; шасси без портов — пропуск
     msrc = os.path.join(os.path.dirname(SRC), "me.json")
     if os.path.exists(msrc):

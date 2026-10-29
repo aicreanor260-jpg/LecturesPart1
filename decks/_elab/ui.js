@@ -19,7 +19,7 @@
       if (m.kind === 'olt' || m.kind === 'lte') { use(g, 'ic-olt', 104); return; } if (m.kind === 'ont' || m.kind === 'eont') { use(g, 'ic-ont', 70); return; }   // OLT и ONT
       use(g, big ? 'ic-stack' : 'ic-switch', big ? 84 : 104); },
     esr: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; use(g, k === 'scs' ? 'ic-console' : k === 'wlc' ? 'ic-wlc' : k === 'me' ? 'ic-me' : 'ic-router', k ? 100 : 96); },   // SCS-32, WLC, ME — свои иконки
-    vpc: function (g) { use(g, 'ic-pc', 78); },
+    vpc: function (g, d) { var k = (EL.MODELS[d.model] || {}).kind; if (k === 'tau') { use(g, 'ic-ont', 80); return; } if (k === 'smg') { use(g, 'ic-server', 80); return; } if (k === 'phone') { use(g, 'ic-phone', 64); return; } use(g, 'ic-pc', 78); },   // TAU, SMG, телефон
     deb: function (g, d) { if ((EL.MODELS[d.model] || {}).kind === 'ap') { use(g, 'ic-ap', 84); return; }
       use(g, d.model === 'Debian-server' ? 'ic-server' : d.model === 'Docker' ? 'ic-docker' : 'ic-pc', d.model === 'Debian-server' ? 74 : 78);
       if (d.model === 'Debian') el('path', { d: 'M24 -26a7 7 0 1 0 0 10', fill: 'none', stroke: '#d4574f', 'stroke-width': 3 }, g); }
@@ -388,6 +388,8 @@
   }
   function banner(d) {
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
+    if (d.sub === 'phone') return 'Аналоговый телефон · dial НОМЕР — набрать, hangup — положить трубку, status — состояние';
+    if (d.sub === 'tau' || d.sub === 'smg') return 'Eltex ' + d.model + '\n';
     if (d.type === 'vpc') return 'Welcome to Virtual PC Simulator, version 0.8.3' + (mode === 'test' ? ' · введите ? для справки' : '');
     if (d.type === 'esr') return d.sub ? 'Eltex ' + d.model + '\n' : 'Eltex ' + d.model + ' · software version 1.24.2\n';   // SCS, WLC, ME — без версии ESR
     return d.model + '\n';

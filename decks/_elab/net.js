@@ -19,7 +19,7 @@
 
   P.portsOf = function (d) {
     var m = MODELS[d.model];
-    if (d.type === 'vpc') return ['eth0'];
+    if (d.type === 'vpc') return m && m.portList ? m.portList.slice() : ['eth0'];   // TAU/SMG/телефон — свои порты
     if (d.type === 'deb') return [d.st.port || 'ens3'];
     if (m.portList) return m.portList.slice();
     var o = []; for (var i = 1; i <= m.ports; i++) o.push('gi1/0/' + i); return o;
