@@ -583,6 +583,13 @@ tunnel l2tpv3 1
 - `commit` запускает таймер (`… has to be confirmed within: 5 minutes`), `confirm` подтверждает и сохраняет в NVRAM — отдельного `save` нет; `commit confirm` — сразу оба;
 - `show interface ont 4 unactivated` — по всем pon-port слота 4.
 
+**OLT-крейт MA4000-PX** (справочник CLI и руководство 3.38.1) — модули PP4X (коммутатор, uplink `front-port 1/0`–`1/5`, `2/0`–`2/5`) и PLC8 (8 × GPON, `gpon-port S/0`–`S/7`, слоты 0–15); в эмуляторе установлены PLC8 в слотах 0 и 1 (допущение, чтобы не перегружать схему). Приглашение `ma4000#`, `configure terminal` → `ma4000(config)#`.
+- карта работает после `slot 0 type plc8` и `commit`; `show shelf` — что настроено и что обнаружено;
+- VLAN — в коммутаторе PP4X: `vlan 100` → `ma4000(vlan-100)#` → `name …`, `tagged front-port 1/0`, `untagged front-port 1/1` (`vlan allow` на front-port, как у LTP-N, здесь нет); `interface front-port 1/0` → `ma4000(front-port-1/0)#` (`pvid`, `shutdown`);
+- ONT: `interface ont 0/2/0` (слот/GPON-порт/ONT, ONT 0–63) → `ma4000(config)(if-ont-0/2/0)#` → `serial ELTX…`, `service 0 profile cross-connect ИМЯ`; профиль — `profile cross-connect ИМЯ` → `ma4000(config-cross-connect)("ИМЯ")#` → `outer vid`, `user vid`;
+- управление: `hostname`, `management ip A МАСКА`, `management gateway`, `management vlan`;
+- `commit` с таймером подтверждения, `confirm` — подтвердить и сохранить, `restore` — вернуться к последней подтверждённой конфигурации.
+
 Палитра → «OLT GPON / XGS-PON» (LTP-4N/8N/16N, LTX-8/16, rev.B, C) и «ONT (абонентские терминалы)» (NTU-1L, NTU-1LC, NTU-1D, NTX-1, NTX-1F). Порты OLT: `front-port N` (к ядру сети), `pon-port N`, `port-oob`; у ONT — `PON` и `LAN`. Кабель «Оптика PON» соединяет pon-port с PON ONT.
 - **CLI OLT:** `LTP-16N#` → `configure` → `LTP-16N(configure)#` → `interface front-port 1` → `LTP-16N(config)(if-front-1)#`, `interface ont 2/1` → `(config)(if-ont-2/1)#`, `profile cross-connect | ports | dba | management N`, `vlan N`. Правки копятся в candidate: `commit` (из подрежима — `do commit`) делает их действующими, `save` пишет в NVRAM — после перезагрузки грузится NVRAM; `show candidate-config` — что не применено, `rollback candidate-config`, `restore running-config`. Вход — `admin` / `password`.
 - **Uplink:** на front-port по умолчанию запрещены все VLAN — `vlan allow 1100,30`; на MES — trunk с теми же VLAN.

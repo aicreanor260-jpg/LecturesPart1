@@ -133,6 +133,37 @@ EL.labs.LABS.forEach(runLab);
   chk('8.x: команда применилась к 4 портам', [1, 2, 3, 4].every(function (p) { return s8.st.ports['1/0/' + p].shut; }) && !s8.st.ports['1/0/5'].shut);
   console.log('✓ Диапазоны и списки портов');
 })();
+// OLT-крейт MA4000-PX (CLI 3.38.1): slot N type plc8, VLAN PP4X (tagged/untagged front-port S/P), ONT слот/порт/ONT (0–63), commit + confirm
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ MA4000: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('MA4000-PX', 'OLT'), t = n.add('NTU-1L', 'ONT1'), pc = n.add('VPC', 'PC1'), sv = n.add('VPC', 'SRV');
+  n.connect(o.id, 'front-port 1/0', sv.id, 'eth0'); n.connect(t.id, 'PON', o.id, 'gpon-port 0/2'); n.connect(pc.id, 'eth0', t.id, 'LAN');
+  EL.labs.apply(n, { PC1: ['ip 10.0.0.1/24'], SRV: ['ip 10.0.0.2/24'] });
+  chk('приглашение ma4000#', n.prompt(o.id) === 'ma4000#', n.prompt(o.id));
+  chk('show shelf — PLC8 в слоте 0 обнаружена, не настроена', /^0\s+none\s+PLC8\s+not configured/m.test(n.exec(o.id, 'show shelf')), n.exec(o.id, 'show shelf'));
+  var cfg = ['configure terminal', 'vlan 100', 'name inet', 'untagged front-port 1/0', 'exit', 'profile cross-connect inet', 'outer vid 100', 'exit',
+    'interface ont 0/2/0', 'serial ' + t.st.serial, 'service 0 profile cross-connect inet', 'exit'];
+  var bad = cfg.filter(function (l) { return /%/.test(n.exec(o.id, l) || ''); });
+  chk('настройка без ошибок', !bad.length, bad.join('; '));
+  chk('приглашения: (vlan-100)#, (config-cross-connect)("inet")#, (config)(if-ont-0/2/0)#', (n.exec(o.id, 'vlan 100'), n.prompt(o.id) === 'ma4000(vlan-100)#') && (n.exec(o.id, 'exit'),
+    n.exec(o.id, 'profile cross-connect inet'), n.prompt(o.id) === 'ma4000(config-cross-connect)("inet")#') && (n.exec(o.id, 'exit'), n.exec(o.id, 'interface ont 0/2/0'), n.prompt(o.id) === 'ma4000(config)(if-ont-0/2/0)#'), n.prompt(o.id));
+  chk('ONT 64 — вне диапазона 0–63', /%/.test((n.exec(o.id, 'exit'), n.exec(o.id, 'interface ont 0/2/64'))));
+  chk('vlan allow на front-port — нет в MA4000', (n.exec(o.id, 'interface front-port 1/0'), /%/.test(n.exec(o.id, 'vlan allow 100'))) && n.prompt(o.id) === 'ma4000(front-port-1/0)#');
+  n.exec(o.id, 'exit'); n.exec(o.id, 'exit');
+  chk('commit — с таймером подтверждения', /confirmed within: 5 minutes\nConfiguration committed successfully/.test(n.exec(o.id, 'commit')));
+  chk('без slot 0 type plc8 ONT не работает', !n.ping(pc.id, '10.0.0.2').ok);
+  n.exec(o.id, 'confirm');                       // подтверждена настройка без типа карты
+  n.exec(o.id, 'configure terminal'); chk('slot 0 type plc8', !/%/.test(n.exec(o.id, 'slot 0 type plc8') || '')); chk('slot 3 type lc16g — ошибка', /%/.test(n.exec(o.id, 'slot 3 type lc16g')));
+  n.exec(o.id, 'exit'); n.exec(o.id, 'commit');
+  chk('после slot 0 type plc8 + commit — ПК за ONT достаёт сервер', n.ping(pc.id, '10.0.0.2').ok);
+  chk('show interface ont 0/2 online', /GPON-port 0\/2 ONT online list[\s\S]*\b0 0\/2 OK|OK/.test(n.exec(o.id, 'show interface ont 0/2 online')), n.exec(o.id, 'show interface ont 0/2 online'));
+  chk('restore без confirm — откат к последнему подтверждённому', (n.exec(o.id, 'restore'), !n.ping(pc.id, '10.0.0.2').ok));
+  n.exec(o.id, 'configure terminal'); n.exec(o.id, 'slot 0 type plc8'); n.exec(o.id, 'exit'); n.exec(o.id, 'commit');
+  chk('confirm — сохранено, после перезагрузки работает', /confirmed/.test(n.exec(o.id, 'confirm')) && (n.reboot(o.id), n.ping(pc.id, '10.0.0.2').ok));
+  var rc = n.exec(o.id, 'show running-config');
+  chk('running-config: slot 0 type plc8, vlan 100 untagged front-port 1/0, interface ont 0/2/0', /slot 0 type plc8/.test(rc) && /vlan 100\n    name inet\n    untagged front-port 1\/0/.test(rc) && /interface ont 0\/2\/0\n    serial ELTX/.test(rc), rc);
+  console.log('✓ MA4000-PX');
+})();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

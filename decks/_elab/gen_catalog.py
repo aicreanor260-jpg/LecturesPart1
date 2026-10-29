@@ -141,6 +141,11 @@ def main():
                 models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ma5000", "slots": 16 if k == "MA5160" else 2, "ports": len(names), "portList": names,
                              "group": "OLT GPON / XGS-PON", "host": k, "pon": "gpon", "sw": "ПО " + sv,
                              "note": "шасси MA5000: FC + LC16G (16 × GPON) · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k == "MA4000-PX":   # крейт MA4000-PX (CLI 3.38.1): PP4X-1 и PP4X-2 (front-port 1/0–1/5, 2/0–2/5) + PLC8 в слотах 0 и 1 (gpon-port S/0–7) — допущение эмулятора
+                names = ["front-port %d/%d" % (u, i) for u in (1, 2) for i in range(6)] + ["gpon-port %d/%d" % (sl, i) for sl in (0, 1) for i in range(8)]
+                models[k] = {"type": "mes", "kind": "olt", "oltDialect": "ma4000", "slots": 16, "ports": len(names), "portList": names,
+                             "group": "OLT GPON / XGS-PON", "host": "ma4000", "pon": "gpon", "sw": "ПО " + sv,
+                             "note": "крейт MA4000: 2 × PP4X + 2 × PLC8 (16 × GPON) · slot N type plc8 · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
             elif k in ONT:
                 models[k] = {"type": "mes", "kind": "ont", "ports": 2, "portList": ["PON", "LAN"], "group": "ONT (абонентские терминалы)", "pon": ONT[k], "swv": sv,
                              "sw": "ПО " + sv, "note": (m.get("summary") or "") + " · мост, настраивается с OLT (OMCI)", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
