@@ -33,17 +33,18 @@
   function bad() { return 'Syntax error: Illegal parameter'; }
 
   // ---------------------------------------------------------------- ESR: ключи через TFTP
-  function store(st) { return st.crypto || (st.crypto = { 'private-key': {}, 'public-key': {} }); }
+  function store(st) { var c = st.crypto || (st.crypto = {}); ['cert', 'private-key', 'public-key', 'crl', 'dh', 'ta'].forEach(function (k) { c[k] = c[k] || {}; }); return c; }
+  EL.cryptoStore = store;
   var cp = S.T.filter(function (c) { return c.pat.join(' ') === 'copy <w> <w>'; })[0];
   if (cp) { var cp0 = cp.run; cp.run = function (st, a) {
-    var m = String(a[1]).match(/^crypto:(private-key|public-key)\/([\w.\-]{1,31})$/); if (!m) return cp0.apply(this, arguments);
+    var m = String(a[1]).match(/^crypto:(cert|private-key|public-key|crl|dh|ta)\/([\w.\-]{1,31})$/); if (!m) return cp0.apply(this, arguments);
     var u = String(a[0]).match(/^tftp:\/\/(\d+\.\d+\.\d+\.\d+):?\/(.+)$/); if (!u) return '% Источник: tftp://A.B.C.D:/имя_файла';
     if (!st.net) return ''; var r = st.net.request(st.dev, u[1], 'udp', 69);
     if (!r.ok) return '% Ошибка передачи по TFTP: ' + (r.why === 'Connection refused' ? 'на ' + u[1] + ' не запущен TFTP-сервер' : 'сервер ' + u[1] + ' недоступен');
     var f = st.net.devs[r.dev].st.files['/tftp/' + u[2]]; if (f === undefined) return '% Ошибка передачи по TFTP: File not found';
     store(st)[m[1]][m[2]] = String(f).trim(); st.net.gen++;
     return '|******************************************| 100% (' + f.length + 'B)\nSuccess!'; }; }
-  S.cmd('priv', 'delete <w>', function (st, a) { var m = String(a[0]).match(/^crypto:(private-key|public-key)\/(.+)$/); if (!m) return '% Удалить можно crypto:private-key/ИМЯ или crypto:public-key/ИМЯ';
+  S.cmd('priv', 'delete <w>', function (st, a) { var m = String(a[0]).match(/^crypto:(cert|private-key|public-key|crl|dh|ta)\/(.+)$/); if (!m) return '% Удалить можно crypto:private-key/ИМЯ или crypto:public-key/ИМЯ';
     var L = store(st)[m[1]]; if (!(m[2] in L)) return '% Файл ' + a[0] + ' не найден'; delete L[m[2]]; }, 'Удалить файл ключа');
   function key(st, kind, name) { var v = name && store(st)[kind][name]; return v ? String(v).trim() : null; }
 

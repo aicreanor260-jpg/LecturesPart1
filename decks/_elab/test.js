@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -705,6 +705,79 @@ EL.labs.LABS.forEach(runLab);
   chk('нет файла на сервере', /No such file or directory/.test(x('scp user@10.0.0.20:/home/user/none.txt .')));
   chk('нет локального файла', /nope\.txt: No such file or directory/.test(x('scp nope.txt user@10.0.0.20:')));
   console.log('✓ scp');
+})();
+// OpenVPN: CA easy-rsa на Debian, сервер remote-access openvpn на ESR, клиенты — ESR (tunnel openvpn) и Debian (openvpn-client@)
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ OpenVPN: ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r1 = n.add('vESR', 'R1'), isp = n.add('vESR', 'ISP'), r2 = n.add('vESR', 'R2'), a = n.add('VPC', 'A'), ks = n.add('Debian-server', 'KS'), lap = n.add('Debian', 'LAP');
+  n.connect(a.id, 'eth0', r1.id, 'gi1/0/1'); n.connect(ks.id, 'ens3', r1.id, 'gi1/0/3'); n.connect(r1.id, 'gi1/0/2', isp.id, 'gi1/0/1');
+  n.connect(isp.id, 'gi1/0/2', r2.id, 'gi1/0/2'); n.connect(lap.id, 'ens3', isp.id, 'gi1/0/3');
+  function ifs(L) { var o = ['configure']; L.forEach(function (x) { o.push('interface ' + x[0], 'ip address ' + x[1], 'ip firewall disable', 'exit'); }); return o; }
+  function k(l) { return n.exec(ks.id, l); }
+  var e = EL.labs.apply(n, {
+    KS: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 192.168.3.5/24 dev ens3', 'ip route add default via 192.168.3.1'],
+    ISP: ifs([['gi1/0/1', '100.0.0.1/30'], ['gi1/0/2', '100.0.1.1/30'], ['gi1/0/3', '100.0.2.1/24']]).concat(['ip route 192.168.3.0/24 100.0.0.2', 'end', 'commit', 'confirm']),
+    R1: ifs([['gi1/0/1', '192.168.1.1/24'], ['gi1/0/2', '100.0.0.2/30'], ['gi1/0/3', '192.168.3.1/24']]).concat(['ip route 0.0.0.0/0 100.0.0.1', 'end', 'commit', 'confirm']),
+    R2: ifs([['gi1/0/2', '100.0.1.2/30']]).concat(['ip route 0.0.0.0/0 100.0.1.1', 'end', 'commit', 'confirm']),
+    A: ['ip 192.168.1.10/24 192.168.1.1'], LAP: ['root', 'toor', 'ip link set ens3 up', 'ip addr add 100.0.2.10/24 dev ens3', 'ip route add default via 100.0.2.1'] });
+  chk('сеть без ошибок', !e.length, e.join('; '));
+  // удостоверяющий центр
+  k('make-cadir ~/ca'); k('cd ~/ca');
+  chk('cd и приглашение с каталогом', /root@\S+:~\/ca# $/.test(n.prompt(ks.id)) && k('pwd') === '/root/ca', n.prompt(ks.id));
+  chk('без init-pki — ошибка', /EASYRSA_PKI does not exist/.test(k('./easyrsa build-ca nopass')));
+  chk('init-pki', /init-pki complete/.test(k('./easyrsa init-pki')));
+  k('./easyrsa build-ca nopass'); chk('build-ca: вопрос Common Name', /Common Name .*\[Easy-RSA CA\]/.test(n.prompt(ks.id)), n.prompt(ks.id));
+  chk('CA создан', /CA creation complete/.test(k('Office CA')) && ks.st.files['/root/ca/pki/ca.crt'] !== undefined);
+  chk('build-server-full server', /Certificate created at: \/root\/ca\/pki\/issued\/server\.crt/.test(k('./easyrsa build-server-full server nopass')));
+  k('./easyrsa gen-req r2 nopass'); k(''); var sr = k('./easyrsa sign-req client r2');
+  chk('gen-req + sign-req: вопрос подтверждения', /to be signed as a client certificate/.test(sr) && /Confirm request details/.test(n.prompt(ks.id)), sr);
+  chk('sign-req yes — сертификат', /Data Base Updated/.test(k('yes')) && ks.st.files['/root/ca/pki/issued/r2.crt'] !== undefined);
+  k('./easyrsa build-client-full lap nopass'); k('./easyrsa gen-dh'); k('openvpn --genkey secret ta.key');
+  chk('openssl x509 -subject -issuer', /subject=CN = server\nissuer=CN = Office CA/.test(k('openssl x509 -in pki/issued/server.crt -noout -subject -issuer')), k('openssl x509 -in pki/issued/server.crt -noout -subject -issuer'));
+  ['pki/ca.crt', 'pki/issued/server.crt', 'pki/private/server.key', 'pki/dh.pem', 'ta.key', 'pki/issued/r2.crt', 'pki/private/r2.key'].forEach(function (f) { k('cp ' + f + ' /tftp/'); });
+  chk('cp в /tftp', ks.st.files['/tftp/server.key'] !== undefined && ks.st.files['/tftp/ta.key'] !== undefined);
+  // сервер
+  function cp(f, kind) { return 'copy tftp://192.168.3.5:/' + f + ' crypto:' + kind + '/' + f; }
+  e = EL.labs.apply(n, { R1: [cp('ca.crt', 'cert'), cp('server.crt', 'cert'), cp('server.key', 'private-key'), cp('dh.pem', 'dh'), cp('ta.key', 'ta'), 'configure', 'security zone trusted', 'exit',
+    'remote-access openvpn OV', 'network 10.8.0.0/24', 'protocol udp', 'tunnel ip', 'crypto ca ca.crt', 'crypto cert server.crt', 'crypto private-key server.key', 'crypto dh dh.pem', 'crypto ta ta.key',
+    'encryption algorithm aes128', 'route 192.168.1.0/24', 'security-zone trusted', 'enable', 'exit', 'end', 'commit', 'confirm'],
+    R2: [cp('ca.crt', 'cert'), cp('r2.crt', 'cert'), cp('r2.key', 'private-key'), cp('ta.key', 'ta'), 'configure', 'tunnel openvpn 1', 'remote address 100.0.0.2', 'protocol udp', 'tunnel ip',
+      'crypto ca ca.crt', 'crypto cert r2.crt', 'crypto private-key r2.key', 'crypto ta ta.key', 'encryption algorithm aes128', 'ip firewall disable', 'enable', 'exit', 'end', 'commit', 'confirm'] });
+  chk('сервер и клиент ESR: без ошибок', !e.length, e.join('; '));
+  var p = n.ping(r2.id, '192.168.1.10');
+  chk('R2 → офис через OpenVPN', p.ok && p.steps.some(function (x) { return /openvpn1 — пакет 10\.8\.0\.2 → 192\.168\.1\.10 зашифрован \(AES-128-CBC\) и упакован в UDP/.test(x.t); }), p.steps.map(function (x) { return x.t; }).join(' | '));
+  chk('show remote-access status openvpn', /r2\s+10\.8\.0\.2\s+openvpn\(OV\)/.test(n.exec(r1.id, 'show remote-access status openvpn')));
+  chk('show tunnels status: openvpn 1 Up', /openvpn 1\s+Up\s+\d+\s+10\.8\.0\.2/.test(n.exec(r2.id, 'show tunnels status')));
+  var lg = n.ovSess()[r2.id]['openvpn 1'].log.map(function (x) { return x.t; }).join(' | ');
+  chk('журнал: проверка сертификатов, PUSH', /сертификат сервера CN=server проверен/.test(lg) && /сертификат клиента CN=r2 проверен/.test(lg) && /PUSH_REPLY: адрес 10\.8\.0\.2\/24/.test(lg), lg);
+  chk('running-config сервера', /remote-access openvpn OV\n  security-zone trusted\n  network 10\.8\.0\.0\/24\n  protocol udp\n  tunnel ip\n  crypto ca ca\.crt\n  crypto cert server\.crt\n  crypto private-key server\.key\n  crypto dh dh\.pem\n  crypto ta ta\.key\n  encryption algorithm aes128\n  route 192\.168\.1\.0\/24\n  enable/.test(n.exec(r1.id, 'show running-config')));
+  // ошибки клиента ESR
+  EL.labs.apply(n, { R2: ['configure', 'tunnel openvpn 1', 'no crypto ta', 'end', 'commit', 'confirm'] });
+  chk('нет ta у клиента — HMAC, сервер молчит', /openvpn 1\s+Down.*tls-auth/.test(n.exec(r2.id, 'show tunnels status')));
+  EL.labs.apply(n, { R2: ['configure', 'tunnel openvpn 1', 'crypto ta ta.key', 'encryption algorithm aes256', 'end', 'commit', 'confirm'] });
+  chk('шифр не совпал', /openvpn 1\s+Down.*шифрование: у сервера AES-128-CBC, у клиента AES-256-CBC/.test(n.exec(r2.id, 'show tunnels status')));
+  EL.labs.apply(n, { R2: ['configure', 'tunnel openvpn 1', 'encryption algorithm aes128', 'end', 'commit', 'confirm'] });
+  // ноутбук Debian
+  var F = lap.st.files; ['ca.crt', 'ta.key'].forEach(function (f) { F['/etc/openvpn/client/' + f] = ks.st.files['/tftp/' + f]; });
+  F['/etc/openvpn/client/lap.crt'] = ks.st.files['/root/ca/pki/issued/lap.crt']; F['/etc/openvpn/client/lap.key'] = ks.st.files['/root/ca/pki/private/lap.key'];
+  F['/etc/openvpn/client/lap.conf'] = 'client\ndev tun\nproto udp\nremote 100.0.0.2 1194\nca ca.crt\ncert lap.crt\nkey lap.key\ntls-auth ta.key 1\nremote-cert-tls server\ncipher AES-128-CBC\n';
+  n.exec(lap.id, 'systemctl start openvpn-client@lap');
+  var lp = n.ping(lap.id, '192.168.1.10');
+  chk('ноутбук → офис, маршрут из PUSH', lp.ok && /Initialization Sequence Completed/.test(n.exec(lap.id, 'journalctl -u openvpn-client@lap')), lp.steps.map(function (x) { return x.t; }).join(' | ') + ' || ' + n.exec(lap.id, 'journalctl -u openvpn-client@lap'));
+  chk('ip addr: tun0 с адресом 10.8.0.3', /tun0: <POINTOPOINT[\s\S]*inet 10\.8\.0\.3\/24/.test(n.exec(lap.id, 'ip addr')));
+  // отзыв сертификата
+  k('./easyrsa revoke lap'); k('yes'); k('./easyrsa gen-crl'); k('cp pki/crl.pem /tftp/');
+  EL.labs.apply(n, { R1: [cp('crl.pem', 'crl'), 'configure', 'remote-access openvpn OV', 'crypto crl crl.pem', 'end', 'commit', 'confirm'] });
+  chk('отозванный lap — отказ, r2 работает', !n.ping(lap.id, '192.168.1.10').ok && n.ping(r2.id, '192.168.1.10').ok &&
+      /отозван/.test((n.ovSess()[lap.id]['openvpn-client@lap'] || {}).err || ''), JSON.stringify((n.ovSess()[lap.id] || {})['openvpn-client@lap'] && n.ovSess()[lap.id]['openvpn-client@lap'].err));
+  // remote-cert-tls: клиентский сертификат вместо серверного
+  F['/etc/openvpn/client/lap.conf'] = F['/etc/openvpn/client/lap.conf'].replace('cipher AES-128-CBC', 'cipher AES-256-CBC');
+  n.exec(lap.id, 'systemctl restart openvpn-client@lap');
+  chk('journalctl: ошибка шифра в логе OpenVPN', /Authenticate\/Decrypt packet error|TLS Error|AUTH|VERIFY/.test(n.exec(lap.id, 'journalctl -u openvpn-client@lap')), n.exec(lap.id, 'journalctl -u openvpn-client@lap'));
+  // redirect-gateway
+  EL.labs.apply(n, { R1: ['configure', 'remote-access openvpn OV', 'redirect-gateway', 'end', 'commit', 'confirm'] });
+  chk('redirect-gateway: у R2 маршрут по умолчанию в туннель', /S\s+\*\s+0\.0\.0\.0\/0\s+\[1\/0\]\s+via 10\.8\.0\.1 on openvpn1/.test(n.exec(r2.id, 'show ip route')), n.exec(r2.id, 'show ip route'));
+  console.log('✓ OpenVPN');
 })();
 
 // таблицы: ARP у обеих сторон, MAC-обучение коммутатора, кэш ARP, устаревание записи, разные VLAN
