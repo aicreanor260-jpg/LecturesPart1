@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'huawei_ce.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'huawei_ce.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'huawei_usg.js', 'huawei_wlan.js', 'huawei_olt.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js', 'labs_huawei.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3272,6 +3272,137 @@ EL.labs.LABS.forEach(runLab);
   n.exec(c.id, 'commit'); n.tick(40);
   chk('CE: после commit — [~SwitchA-10GE1/0/3], порт access VLAN 2 (тип по умолчанию) ↔ S5700 по транку', n.prompt(c.id) === '[~SwitchA-10GE1/0/3]' && n.ping(a.id, '10.2.0.2').ok);
   console.log('✓ Huawei CloudEngine (VRP8): commit, 10GE');
+})();
+// Huawei USG6510E (spec/usg.md): зоны с приоритетами, security-policy, nat-policy Easy IP, nat server, service-manage, сессии
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), f = n.add('USG6510E', 'FW'), pc = n.add('VPC', 'PC'), o = n.add('vESR', 'ISP'), w = n.add('VPC', 'WEB'), sv = n.add('Debian-server', 'SRV');
+  n.connect(f.id, 'GE0/0/1', pc.id, 'eth0'); n.connect(f.id, 'GE0/0/2', o.id, 'gi1/0/1'); n.connect(w.id, 'eth0', o.id, 'gi1/0/2'); n.connect(f.id, 'GE0/0/3', sv.id, 'ens3');
+  chk('USG: <FW>, заводской GE0/0/0 192.168.0.1/24, зоны local 100 / trust 85 / dmz 50 / untrust 5', n.prompt(f.id) === '<FW>' && /GigabitEthernet0\/0\/0\s+192\.168\.0\.1\/24/.test(n.exec(f.id, 'display ip interface brief')) &&
+    /local\n priority is 100[\s\S]*trust\n priority is 85[\s\S]*untrust\n priority is 5[\s\S]*dmz\n priority is 50/.test(n.exec(f.id, 'display zone')));
+  var bad = ['system-view', 'interface GigabitEthernet 0/0/1', 'ip address 10.1.1.1 24', 'quit', 'interface GigabitEthernet 0/0/2', 'ip address 1.1.1.1 24', 'quit',
+    'interface GigabitEthernet 0/0/3', 'ip address 10.2.0.1 24', 'quit', 'firewall zone trust', 'add interface GigabitEthernet 0/0/1', 'quit', 'firewall zone untrust', 'add interface GigabitEthernet 0/0/2', 'quit',
+    'firewall zone dmz', 'add interface GigabitEthernet 0/0/3', 'quit', 'ip route-static 0.0.0.0 0.0.0.0 1.1.1.254']
+    .filter(function (l) { return /Error/.test(n.exec(f.id, l)); });
+  EL.labs.apply(n, { ISP: ['configure', 'interface gi1/0/1', 'ip address 1.1.1.254/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 198.51.100.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    WEB: ['ip 198.51.100.10/24 198.51.100.1'], PC: ['ip 10.1.1.10/24 10.1.1.1'] });
+  n.ipSet(sv.id, { mode: 'static', ip: '10.2.0.7', mask: '255.255.255.0', gw: '10.2.0.1' }); n.tick(3);
+  chk('USG: настройка без ошибок; между зонами по умолчанию deny — PC не пингует ISP', !bad.length && !n.ping(pc.id, '1.1.1.254').ok, bad.join('; '));
+  chk('USG: ping на интерфейс МЭ из trust — запрещён (service-manage ping не разрешён на не управляющем порту)', !n.ping(pc.id, '10.1.1.1').ok);
+  n.exec(f.id, 'interface GigabitEthernet 0/0/1'); n.exec(f.id, 'service-manage ping permit'); n.exec(f.id, 'quit');
+  chk('USG: service-manage ping permit — PC пингует 10.1.1.1', n.ping(pc.id, '10.1.1.1').ok && /service-manage ping permit/.test(n.exec(f.id, 'display current-configuration')));
+  ['security-policy', 'rule name policy1', 'source-zone trust', 'destination-zone untrust', 'source-address 10.1.1.0 24', 'action permit', 'quit', 'quit',
+    'nat-policy', 'rule name policy_nat1', 'source-zone trust', 'destination-zone untrust', 'source-address 10.1.1.0 24', 'action source-nat easy-ip', 'quit', 'quit'].forEach(function (l) { n.exec(f.id, l); });
+  chk('USG: security-policy trust→untrust + nat-policy easy-ip — PC пингует WEB через 1.1.1.1', n.ping(pc.id, '198.51.100.10').ok && (n.ctLast || []).some(function (c) { return c.kind === 's' && c.pub === '1.1.1.1'; }));
+  chk('USG: dmz → trust правила нет — SRV не пингует PC', !n.ping(sv.id, '10.1.1.10').ok);
+  chk('USG: display firewall session table — icmp [1.1.1.1:…]', /Current Total Sessions : [1-9][\s\S]*icmp  VPN:public --> public 10\.1\.1\.10:\d+\[1\.1\.1\.1:\d+\]-->198\.51\.100\.10:2048/.test(n.exec(f.id, 'display firewall session table')));
+  chk('USG: display security-policy rule all — policy1 permit, default deny', /1       policy1\s+enable     permit     [1-9]/.test(n.exec(f.id, 'display security-policy rule all')) && /0       default\s+enable     deny/.test(n.exec(f.id, 'display security-policy rule all')));
+  chk('USG: display nat-policy rule all — Total:2, policy_nat1 source-nat', /Total:2[\s\S]*1        policy_nat1\s+enable       source-nat/.test(n.exec(f.id, 'display nat-policy rule all')));
+  n.tick(30);
+  chk('USG: сессия icmp живёт 20 с', /Current Total Sessions : 0/.test(n.exec(f.id, 'display firewall session table')));
+  sv.st.svc.apache2 = true;
+  ['nat server policy_web protocol tcp global 1.1.1.10 www inside 10.2.0.7 www', 'security-policy', 'rule name policy_web', 'source-zone untrust', 'destination-zone dmz', 'destination-address 10.2.0.0 24', 'action permit', 'quit', 'quit']
+    .forEach(function (l) { n.exec(f.id, l); });
+  chk('USG: nat server 1.1.1.10:80 → 10.2.0.7 + политика untrust→dmz — WEB открывает сайт', n.request(w.id, '1.1.1.10', 'tcp', 80).ok && /global-start-addr : 1\.1\.1\.10/.test(n.exec(f.id, 'display nat server')));
+  n.exec(f.id, 'security-policy');
+  chk('USG: trust → dmz без правила запрещён; default action permit — предупреждение [Y/N], затем разрешён', !n.ping(pc.id, '10.2.0.7').ok && /Are you sure you want to continue\?\[Y\/N\]/.test(n.exec(f.id, 'default action permit')) && (n.exec(f.id, 'y'), n.ping(pc.id, '10.2.0.7').ok));
+  n.exec(f.id, 'return');
+  var cfg = n.exec(f.id, 'display current-configuration');
+  chk('USG: конфигурация — firewall zone trust / set priority 85 / add interface, security-policy, nat-policy', /firewall zone trust\n set priority 85\n add interface GigabitEthernet0\/0\/1/.test(cfg) &&
+    /security-policy\n default action permit\n rule name policy1\n  source-zone trust\n  destination-zone untrust\n  source-address 10\.1\.1\.0 24\n  action permit/.test(cfg) && /nat-policy\n rule name policy_nat1[\s\S]*action source-nat easy-ip/.test(cfg), cfg);
+  var n2 = new EL.Net(), f2 = n2.add('USG6510E', 'FW2');
+  n2.exec(f2.id, 'system-view'); n2.exec(f2.id, 'firewall zone trust');
+  chk('USG: set priority у зарезервированной зоны — ошибка; приглашение [FW-zone-trust]', n2.prompt(f2.id) === '[FW-zone-trust]' && /Error/.test(n2.exec(f2.id, 'set priority 60')));
+  n2.exec(f2.id, 'quit'); n2.exec(f2.id, 'firewall zone name userzone');
+  chk('USG: firewall zone name userzone + set priority 60 → display zone userzone', (n2.exec(f2.id, 'set priority 60'), /userzone\n priority is 60/.test(n2.exec(f2.id, 'display zone userzone'))));
+  console.log('✓ Huawei USG6510E: зоны, security-policy, nat-policy, nat server, service-manage, сессии');
+})();
+// Huawei WLAN (spec/wlan.md): AC6005 + Fit AP — DHCP с AC, broadcast-обнаружение, mac-auth / ap-confirm, профили, VAP; L3 — relay и опция 43
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), ac = n.add('AC6005', 'AC'), sw = n.add('S5700', 'S1'), a1 = n.add('AP5030DN', 'AP1'), a2 = n.add('AP2050DN', 'AP2');
+  n.connect(ac.id, 'GE0/0/1', sw.id, 'GE0/0/24'); n.connect(a1.id, 'LAN', sw.id, 'GE0/0/1'); n.connect(a2.id, 'LAN', sw.id, 'GE0/0/2');
+  var m1 = EL.hwlan.apMac(a1), m2 = EL.hwlan.apMac(a2);
+  chk('AC: приглашение <AC6005>, вид wlan → [AC6005-wlan-view]', n.prompt(ac.id) === '<AC6005>' && (n.exec(ac.id, 'system-view'), n.exec(ac.id, 'wlan'), n.prompt(ac.id) === '[AC6005-wlan-view]'));
+  n.exec(ac.id, 'return');
+  EL.labs.apply(n, { S1: ['system-view', 'vlan batch 100 101', 'interface GigabitEthernet0/0/24', 'port link-type trunk', 'port trunk allow-pass vlan 100 101',
+    'interface GigabitEthernet0/0/1', 'port link-type trunk', 'port trunk pvid vlan 100', 'port trunk allow-pass vlan 100 101',
+    'interface GigabitEthernet0/0/2', 'port link-type trunk', 'port trunk pvid vlan 100', 'port trunk allow-pass vlan 100 101', 'return'] });
+  var bad = ['system-view', 'sysname AC', 'vlan batch 100 101', 'interface GigabitEthernet 0/0/1', 'port link-type trunk', 'port trunk allow-pass vlan 100 101', 'quit',
+    'dhcp enable', 'interface vlanif 100', 'ip address 10.23.100.1 24', 'dhcp select interface', 'quit', 'wlan', 'ap-group name ap-group1', 'quit',
+    'regulatory-domain-profile name default', 'country-code cn', 'quit', 'quit', 'capwap source interface vlanif 100']
+    .filter(function (l) { return /Error/.test(n.exec(ac.id, l)); });
+  n.tick(31);
+  var t = n.exec(ac.id, 'display ap all');
+  chk('AC: без ap-id AP не допущены (mac-auth) — в списке неавторизованных', !bad.length && /Total: 0/.test(t) && new RegExp('AP MAC address: ' + m1).test(n.exec(ac.id, 'display ap unauthorized record')), bad.join('; ') + t);
+  chk('AP1 получила адрес по DHCP с AC (10.23.100.0/24)', /^10\.23\.100\./.test(a1.st.ip || ''), a1.st.ip);
+  ['wlan', 'ap auth-mode mac-auth', 'ap-id 0 ap-mac ' + m1, 'ap-name area_1'].forEach(function (l) { n.exec(ac.id, l); });
+  chk('AC: ap-group в виде AP — предупреждение [Y/N]', /Whether to continue\? \[Y\/N\]:/.test(n.exec(ac.id, 'ap-group ap-group1')) && (n.exec(ac.id, 'y'), true));
+  n.exec(ac.id, 'quit');
+  ['security-profile name wlan-net', 'security wpa-wpa2 psk pass-phrase a1234567 aes', 'quit', 'ssid-profile name wlan-net', 'ssid wlan-net', 'quit',
+    'vap-profile name wlan-net', 'service-vlan vlan-id 101', 'security-profile wlan-net', 'ssid-profile wlan-net', 'quit', 'ap-group name ap-group1', 'vap-profile wlan-net wlan 1 radio all', 'quit']
+    .forEach(function (l) { n.exec(ac.id, l); });
+  t = n.exec(ac.id, 'display ap all');
+  chk('AC: AP1 (ap-id 0, area_1, ap-group1, AP5030DN) — nor', new RegExp('0    ' + m1 + ' area_1 ap-group1 10\\.23\\.100\\.\\d+\\s+AP5030DN\\s+nor').test(t) && /nor  : normal          \[1\]/.test(t), t);
+  t = n.exec(ac.id, 'display vap ssid wlan-net');
+  chk('AC: display vap — два радио, ON, WPA/WPA2-PSK, wlan-net', /Total: 2/.test(t) && /area_1  0    1     [0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4} ON      WPA\/WPA2-PSK  0     wlan-net/.test(t), t);
+  n.exec(ac.id, 'ap-confirm all');
+  t = n.exec(ac.id, 'display ap all');
+  chk('AC: ap-confirm all — AP2 допущена (ap-id 1, группа default)', new RegExp('1    ' + m2 + ' ' + m2 + ' default').test(t) && /Total: 2/.test(t), t);
+  n.exec(ac.id, 'return');
+  var cfg = n.exec(ac.id, 'display current-configuration');
+  chk('AC: конфигурация — dhcp select interface, capwap source interface vlanif100, wlan / ap-id 0 type-id 35 ap-mac …', /interface Vlanif100\n ip address 10\.23\.100\.1 255\.255\.255\.0\n dhcp select interface/.test(cfg) &&
+    /capwap source interface vlanif100/.test(cfg) && /vap-profile name wlan-net\n  service-vlan vlan-id 101\n  ssid-profile wlan-net\n  security-profile wlan-net/.test(cfg) &&
+    /ap-group name ap-group1\n  radio 0\n   vap-profile wlan-net wlan 1\n  radio 1\n   vap-profile wlan-net wlan 1/.test(cfg) && new RegExp(' ap-id 0 type-id 35 ap-mac ' + m1 + '\\n  ap-name area_1\\n  ap-group ap-group1').test(cfg), cfg);
+  chk('AC: display capwap configuration — Source interface : vlanif100', /Source interface\s+: vlanif100/.test(n.exec(ac.id, 'display capwap configuration')));
+  // без capwap source interface AC не отвечает
+  n.exec(ac.id, 'system-view'); n.exec(ac.id, 'undo capwap source interface'); n.exec(ac.id, 'return');
+  chk('AC: undo capwap source interface — AP не в сети (idle)', /area_1 ap-group1 -\s+AP5030DN\s+idle/.test(n.exec(ac.id, 'display ap all')));
+  // L3: AP в другой подсети — релей на AR и опция 43
+  var n3 = new EL.Net(), c3 = n3.add('AC6005', 'AC'), r3 = n3.add('AR2220', 'R1'), p3 = n3.add('AP5030DN', 'AP');
+  n3.connect(c3.id, 'GE0/0/1', r3.id, 'GE0/0/0'); n3.connect(p3.id, 'LAN', r3.id, 'GE0/0/1');
+  EL.labs.apply(n3, { R1: ['system-view', 'dhcp enable', 'interface GigabitEthernet0/0/0', 'ip address 10.23.100.2 24', 'interface GigabitEthernet0/0/1', 'ip address 10.23.10.1 24',
+    'dhcp select relay', 'dhcp relay server-ip 10.23.100.1', 'return'],
+    AC: ['system-view', 'interface vlanif 1', 'ip address 10.23.100.1 24', 'quit', 'ip route-static 10.23.10.0 24 10.23.100.2', 'dhcp enable', 'ip pool huawei', 'network 10.23.10.0 mask 24',
+      'gateway-list 10.23.10.1', 'option 43 sub-option 3 ascii 10.23.100.1', 'quit', 'interface vlanif 1', 'dhcp select global', 'quit', 'capwap source interface vlanif 1', 'wlan', 'ap auth-mode no-auth', 'return'] });
+  n3.tick(31);
+  t = n3.exec(c3.id, 'display ap all');
+  chk('L3: AP получила 10.23.10.x через relay, опция 43 → AC, no-auth — nor', /^10\.23\.10\./.test(p3.st.ip || '') && p3.st.o43 === '10.23.100.1' && /AP5030DN\s+nor/.test(t), (p3.st.ip || '') + t);
+  chk('AR: option 43 в ip pool — в конфигурации AC', /ip pool huawei[\s\S]*option 43 sub-option 3 ascii 10\.23\.100\.1/.test(n3.exec(c3.id, 'display current-configuration')));
+  console.log('✓ Huawei WLAN: AC6005 + Fit AP — DHCP, обнаружение AC, допуск, VAP, L3 с опцией 43');
+})();
+// Huawei MA5600T + ONT EG8145V5 (spec/olt.md, HCIA-Access LG): платы, профили DBA/line/srv, autofind, ont add/confirm, native-vlan, service-port
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), o = n.add('MA5600T', 'OLT'), t = n.add('EG8145V5', 'ONT1'), sw = n.add('S5700', 'S1'), pc = n.add('VPC', 'PC'), r = n.add('VPC', 'BRAS');
+  n.connect(o.id, '0/5/0', t.id, 'PON'); n.connect(t.id, 'ETH1', pc.id, 'eth0'); n.connect(o.id, '0/19/0', sw.id, 'GE0/0/1'); n.connect(sw.id, 'GE0/0/2', r.id, 'eth0');
+  var sn = t.st.hwSn;
+  chk('OLT: MA5600T> → enable → # → config → (config)#; sysname huawei', n.prompt(o.id) === 'MA5600T>' && (n.exec(o.id, 'enable'), n.prompt(o.id) === 'MA5600T#') &&
+    (n.exec(o.id, 'sysname huawei'), n.exec(o.id, 'config'), n.prompt(o.id) === 'huawei(config)#'));
+  chk('OLT: display board 0 — 5 H802GPBD Auto_find; board confirm 0 → Normal', /5       H802GPBD   Auto_find/.test(n.exec(o.id, 'display board 0')) && (n.exec(o.id, 'board confirm 0'), /5       H802GPBD   Normal/.test(n.exec(o.id, 'display board 0'))));
+  chk('OLT: dba-profile add — Adding a DBA profile succeeded', /Adding a DBA profile succeeded\n  Profile ID  : 15/.test(n.exec(o.id, 'dba-profile add profile-id 15 type4 max 4096')));
+  var bad = ['ont-lineprofile gpon profile-id 10 profile-name ftth_hsi', 'tcont 10 dba-profile-id 15', 'gem add 10 eth tcont 10', 'mapping-mode vlan', 'gem mapping 10 1 vlan 35', 'commit', 'quit',
+    'ont-srvprofile gpon profile-id 10 profile-name HG824x', 'ont-port catv 1 eth 4 pots 2', 'port vlan eth 1 35', 'commit', 'quit', 'interface gpon 0/5', 'port 0 ont-auto-find enable']
+    .filter(function (l) { return /^\{/.test(n.exec(o.id, l)); });
+  chk('OLT: приглашения профилей и gpon — (config-gpon-lineprofile-10)#, (config-if-gpon-0/5)#', !bad.length && n.prompt(o.id) === 'huawei(config-if-gpon-0/5)#', bad.join('; '));
+  chk('OLT: display ont autofind 0 — SN ONT, VendorID HWTC', new RegExp('Ont SN              : ' + sn).test(n.exec(o.id, 'display ont autofind 0')) && /VendorID            : HWTC/.test(n.exec(o.id, 'display ont autofind 0')));
+  chk('OLT: ont confirm — Number of ONTs that can be added: 1, success: 1', /success: 1\n  PortID :0, ONTID :3/.test(n.exec(o.id, 'ont confirm 0 ontid 3 sn-auth ' + sn + ' omci ont-lineprofile-id 10 ont-srvprofile-id 10')));
+  chk('OLT: display ont info 0 all — active online normal match', new RegExp('0/ 5/0    3  ' + sn + '  active      online   normal   match').test(n.exec(o.id, 'display ont info 0 all')), n.exec(o.id, 'display ont info 0 all'));
+  ['ont port native-vlan 0 3 eth 1 vlan 35', 'quit', 'vlan 2000 smart', 'vlan attrib 2000 q-in-q', 'port vlan 2000 0/19 0'].forEach(function (l) { n.exec(o.id, l); });
+  EL.labs.apply(n, { S1: ['system-view', 'vlan batch 2000', 'interface GigabitEthernet0/0/1', 'port link-type trunk', 'port trunk allow-pass vlan 2000', 'interface GigabitEthernet0/0/2', 'port link-type access', 'port default vlan 2000', 'return'],
+    PC: ['ip 10.35.0.10/24'], BRAS: ['ip 10.35.0.1/24'] });
+  chk('OLT: без service-port ПК за ONT не видит BRAS', !n.ping(pc.id, '10.35.0.1').ok);
+  n.exec(o.id, 'service-port 10 vlan 2000 gpon 0/5/0 ont 3 gemport 10 multi-service user-vlan 35 rx-cttr 10 tx-cttr 10');
+  chk('OLT: service-port 10 — ПК за ONT пингует BRAS (S-VLAN 2000 через uplink 0/19/0)', n.ping(pc.id, '10.35.0.1').ok);
+  chk('OLT: display service-port all — up, Total 1 (Up/Down 1/0)', /      10 2000 common   gpon 0\/5 \/0  3    10    vlan  35/.test(n.exec(o.id, 'display service-port all')) && /Up\/Down :    1\/0/.test(n.exec(o.id, 'display service-port all')));
+  n.exec(o.id, 'interface gpon 0/5'); n.exec(o.id, 'port 0 laser-switch off'); n.exec(o.id, 'quit');
+  chk('OLT: laser-switch off — ONT offline, связи нет', !n.ping(pc.id, '10.35.0.1').ok && /offline/.test(n.exec(o.id, 'display ont info 0 5 0 3')));
+  n.exec(o.id, 'interface gpon 0/5'); n.exec(o.id, 'port 0 laser-switch on'); n.exec(o.id, 'quit');
+  chk('OLT: неизвестная/неполная команда — подсказка { …<K> }:', /^\{ .*add<K>.*\}:$/.test(n.exec(o.id, 'dba-profile')));
+  chk('OLT: save → после reboot конфигурация на месте', /saved successfully/.test(n.exec(o.id, 'save')) && (n.reboot(o.id), n.exec(o.id, 'enable'), n.ping(pc.id, '10.35.0.1').ok));
+  chk('OLT: display current-configuration — ont add, service-port', /ont add 0 3 sn-auth [0-9A-F]{16} omci ont-lineprofile-id 10 ont-srvprofile-id 10/.test(n.exec(o.id, 'display current-configuration')) &&
+    /service-port 10 vlan 2000 gpon 0\/5\/0 ont 3 gemport 10 multi-service user-vlan 35 rx-cttr 10 tx-cttr 10/.test(n.exec(o.id, 'display current-configuration')));
+  console.log('✓ Huawei MA5600T + EG8145V5: платы, профили, autofind, ont confirm, native-vlan, service-port');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

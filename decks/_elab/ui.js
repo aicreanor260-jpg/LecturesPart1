@@ -267,6 +267,8 @@
     if (m.kind === 'cs-asa' || m.usg) return 'Межсетевые экраны';
     if (m.ac) return 'Контроллеры Wi-Fi';
     if (m.kind === 'hwap') return 'Точки доступа Wi-Fi';
+    if (m.kind === 'hwolt') return 'OLT GPON / XGS-PON';
+    if (m.kind === 'ont') return 'ONT (абонентские терминалы)';
     if (m.ce) return 'Коммутаторы агрегации и ЦОД';
     if (m.type === 'mes' ) return 'Коммутаторы доступа';
     return 'Маршрутизаторы';
