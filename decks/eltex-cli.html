@@ -20908,7 +20908,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   WS.on('room.note', function (m) { U.toast(m.text || ''); });
   WS.on('room.view', function (m) { var first = !R.id; R.id = m.id; R.code = m.code; R.name = m.name; R.owner = m.owner; R.members = m.members || []; R.vis = m.vis || R.vis || 'open';
     if (m.link) R.link = linkOf(m.link); R.watch = !!m.watch || /^room:/.test(WS.watch || '');
-    if (first) { U.setAutoOff(true); if (R.watch) U.setReadOnly(true); ['rooms', 'roomnew', 'rwait'].forEach(function (k) { U.closeWin(k, true); }); R.waiting = null;
+    if (first) { createDone(); U.setAutoOff(true); if (R.watch) U.setReadOnly(true); ['rooms', 'roomnew', 'rwait'].forEach(function (k) { U.closeWin(k, true); }); R.waiting = null;
       if (ROOMHASH) history.replaceState(null, '', location.pathname + location.search); if (!R.watch) WS.send({ t: 'room.link', id: m.id }); }
     sync(m.view || {}); paintBtn(); if (first) { U.toast((R.watch ? 'Просмотр комнаты «' : 'Вы в комнате «') + (m.name || m.code) + '»'); openRoom(); } });
   WS.on('room.patch', function (m) { if (!inRoom()) return; if (m.patch && m.patch.view) sync(m.patch.view); out(m.out); });
@@ -20923,7 +20923,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     U.ask('Открыть схему комнаты «' + nm + '» как свою свободную схему? Текущая свободная схема будет заменена.', function () { U.loadScheme(m.data); U.draw(); U.toast('Схема комнаты «' + nm + '» открыта'); }, 'Открыть'); });
   WS.on('room.local', function (m) { (m.out || []).forEach(function (o) { var id = S2L[o.dev]; if (!id || o.tab === undefined || o.tab === null) return;   // ответ на Tab — в строку ввода этой консоли
     var tw = U.wins['t' + id] || U.wins.cons, x = tw && tw.el.querySelector('.inp input'); if (x) x.value = o.tab; }); });
-  WS.on('room.err', function (m) { U.closeWin('rwait', true); if (ROOMHASH && !inRoom()) { U.toast(m.error || 'Ссылка на комнату недействительна'); leaveLocal(); return; }   // к своей работе
+  WS.on('room.err', function (m) { createDone(m.error || 'ошибка'); U.closeWin('rwait', true); if (ROOMHASH && !inRoom()) { U.toast(m.error || 'Ссылка на комнату недействительна'); leaveLocal(); return; }   // к своей работе
     U.toast('Комната: ' + (m.error || 'ошибка')); [].forEach.call(document.querySelectorAll('.roomw .cs, .roomsw .cs'), function (c) { c.textContent = m.error || 'ошибка'; }); });
   WS.on('room.closed', function (m) { U.toast('Комната закрыта' + (m.why ? ': ' + m.why : '') + (m.saved ? ' — схема сохранена владельцу (окно «Комнаты»)' : '')); if (inRoom() && (!m.id || m.id === R.id)) leaveLocal(); });
 
@@ -20944,6 +20944,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function labOpts() { return '<option value="">Пустая схема</option>' + EL.labs.LABS.map(function (l) { return '<option value="' + esc(l.id) + '">' + esc(l.id + ' — ' + l.title) + '</option>'; }).join(''); }
 
   // ---------------------------------------------------------------- «Создать комнату»
+  // ответ на room.create: room.view (вход) или room.err — разблокировать; room.created (комната создана без входа) — закрыть окно
+  function createDone(msg) { clearTimeout(R.createT); R.createT = null; var w = U.wins.roomnew; if (!w) return;
+    var b = w.el.querySelector('[data-r="create"]'), c = w.el.querySelector('.cs'); if (b) b.disabled = false; if (c && msg) c.textContent = msg; }
+  WS.on('room.created', function (m) { createDone(); U.closeWin('roomnew', true); U.toast('Комната «' + (m.name || '') + '» создана'); });
   function openNew() {
     var body = document.createElement('div'); body.className = 'pad roomw';
     body.innerHTML = '<div class="k">Совместная схема</div><p>Несколько студентов собирают одну схему и видят изменения и консоли друг друга вживую. Ваша работа перед входом сохраняется.</p>' +
@@ -20955,8 +20959,10 @@ vesr(config)#         do confirm  — подтвердить</pre>
     body.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('[data-r="create"]').click(); });
     body.addEventListener('click', function (e) { if (!e.target.closest('[data-r="create"]')) return; var nm = body.querySelector('[data-f="name"]').value.trim();
       if (!nm) { body.querySelector('.cs').textContent = 'Укажите название'; return; }
+      var btn = body.querySelector('[data-r="create"]'); if (btn.disabled) return; btn.disabled = true;
       enter({ t: 'room.create', name: nm.slice(0, 60), lab: body.querySelector('[data-f="lab"]').value, vis: body.querySelector('[name="rvis"]:checked').value });
-      body.querySelector('.cs').textContent = 'Создаю…'; });
+      body.querySelector('.cs').textContent = 'Создаю…';
+      clearTimeout(R.createT); R.createT = setTimeout(function () { R.createT = null; createDone('Сервер не ответил, попробуйте ещё раз'); }, 10000); });
     U.makeWin('roomnew', 'Новая комната', 'совместная схема', body, { w: 440, h: 430 });
   }
 
