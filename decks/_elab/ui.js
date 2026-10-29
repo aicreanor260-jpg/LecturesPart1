@@ -844,27 +844,44 @@
     }).catch(function () { /* теста нет */ });
   }
   function qid(q, i) { return String(q.id !== undefined && q.id !== null ? q.id : 'q' + (i + 1)); }
-  function qType(t) { return t === 'many' || t === 'multi' ? 'multi' : t === 'text' ? 'text' : 'single'; }
+  var QT = { many: 'multi', multi: 'multi', text: 'text', match: 'match', gaps: 'gaps', essay: 'essay', info: 'info' };
+  function qType(t) { return QT[t] || 'single'; }
+  // поле ответа по типу: single/multi — варианты, text — строка, match — список для каждой строки, gaps — текст с пропусками, essay — textarea
+  function qInput(x, k, tp) {
+    var opts = x.options || x.choices || [], sel = function (L, cls) { return '<select class="' + cls + '"><option value="">—</option>' + L.map(function (o, n) { return '<option value="' + n + '">' + esc(o) + '</option>'; }).join('') + '</select>'; };
+    if (tp === 'text') return '<input type="text" class="qin" placeholder="Ваш ответ">';
+    if (tp === 'essay') return '<textarea class="qin qes" rows="4" placeholder="Ваш ответ"></textarea>';
+    if (tp === 'match') return '<div class="qmt">' + (x.left || []).map(function (l) { return '<label class="qml"><span>' + esc(l) + '</span>' + sel(x.right || [], 'qsel') + '</label>'; }).join('') + '</div>';
+    if (tp === 'gaps') { var P = x.parts || [], Gs = x.gaps || [];
+      return '<div class="qgp">' + P.map(function (t, i) { var g = Gs[i]; return esc(t) + (!g ? '' : g.kind === 'select' ? sel(g.options || [], 'qsel qg') : '<input type="text" class="qin qg" size="10">'); }).join('') + '</div>'; }
+    return opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '"> ' + esc(o) + '</label>'; }).join('');
+  }
+  function qAnswer(el, tp) {
+    var v = function (x) { return x.tagName === 'SELECT' ? (x.value === '' ? null : +x.value) : (x.value || '').trim(); };
+    if (tp === 'text' || tp === 'essay') return (el.querySelector('.qin').value || '').trim();
+    if (tp === 'match') return [].map.call(el.querySelectorAll('.qmt select'), v);
+    if (tp === 'gaps') return [].map.call(el.querySelectorAll('.qg'), v);
+    if (tp === 'multi') return [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
+    var c = el.querySelector('input:checked'); return c ? +c.value : null;
+  }
   function pctTxt(b) { return b ? b.score + ' из ' + b.max + (b.pct !== undefined && b.pct !== null ? ' (' + b.pct + '%)' : '') : ''; }
   function quizRender(box, id, q, qs) {
     var meta = [q.pass_pct ? 'зачёт от ' + q.pass_pct + '%' : '', q.attempts_left !== undefined && q.attempts_left !== null ? 'осталось попыток: ' + q.attempts_left : '',
       q.best ? 'лучший результат: ' + pctTxt(q.best) : ''].filter(Boolean).join(' · ');
     if (!qs.length) { box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(q.title || 'Проверьте себя') + '</h3><p>Попытки закончились' + (q.best ? '. Лучший результат: ' + esc(pctTxt(q.best)) : '') + '</p></div>'; return; }
+    var num = 0;
     box.innerHTML = '<div class="quiz"><div class="k">Тест</div><h3>' + esc(q.title || 'Проверьте себя') + '</h3>' + (meta ? '<p class="qm">' + esc(meta) + '</p>' : '') + qs.map(function (x, i) {
-      var k = qid(x, i), tp = qType(x.type), opts = x.options || x.choices || [];
-      var inp = tp === 'text' ? '<input type="text" class="qin" data-q="' + esc(k) + '" placeholder="Ваш ответ">'
-        : opts.map(function (o, n) { return '<label class="qo"><input type="' + (tp === 'multi' ? 'checkbox' : 'radio') + '" name="qz-' + esc(k) + '" value="' + n + '"> ' + esc(o) + '</label>'; }).join('');
-      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (i + 1) + '. ' + esc(x.text || x.question || x.q || '') + (tp === 'multi' ? ' <i>(несколько ответов)</i>' : '') +
-        (x.points ? ' <i>· ' + x.points + ' б.</i>' : '') + ' <b class="qr"></b></div>' + inp + '<div class="qa"></div></div>'; }).join('') +
+      var k = qid(x, i), tp = qType(x.type), txt = esc(x.text || x.question || x.q || '');
+      if (tp === 'info') return '<div class="qinfo">' + txt + '</div>';
+      var hint = tp === 'multi' ? ' <i>(несколько ответов)</i>' : tp === 'match' ? ' <i>(сопоставьте)</i>' : tp === 'essay' ? ' <i>(проверяет преподаватель)</i>' : '';
+      return '<div class="qq" data-qid="' + esc(k) + '" data-tp="' + tp + '"><div class="qt">' + (++num) + '. ' + txt + hint +
+        (x.points ? ' <i>· ' + x.points + ' б.</i>' : '') + ' <b class="qr"></b></div>' + qInput(x, k, tp) + '<div class="qa"></div></div>'; }).join('') +
       '<div class="row"><button class="pri" data-qa="send">Ответить</button><span class="qs"></span></div></div>';
-    [].forEach.call(box.querySelectorAll('input'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
+    [].forEach.call(box.querySelectorAll('input, textarea, select'), function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); });
     box.querySelector('[data-qa="send"]').addEventListener('click', function () {
       var answers = {}, btn = this, out = box.querySelector('.qs');
       if (btn.dataset.again) { quizLoad(); return; }
-      [].forEach.call(box.querySelectorAll('.qq'), function (el) { var k = el.dataset.qid, tp = el.dataset.tp;
-        if (tp === 'text') answers[k] = (el.querySelector('input').value || '').trim();
-        else if (tp === 'multi') answers[k] = [].filter.call(el.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return +x.value; });
-        else { var c = el.querySelector('input:checked'); answers[k] = c ? +c.value : null; } });
+      [].forEach.call(box.querySelectorAll('.qq'), function (el) { answers[el.dataset.qid] = qAnswer(el, el.dataset.tp); });
       btn.disabled = true; out.textContent = 'Проверяем…';
       fetch('/api/quiz/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ lab: id, aid: q.aid, answers: answers }) })
         .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Ошибка сервера (' + r.status + ')' }; }); }).then(function (j) {
@@ -875,12 +892,14 @@
           [].forEach.call(box.querySelectorAll('.qq'), function (el, i) { var k = el.dataset.qid, it = items[k], v = Array.isArray(res) ? res[i] : res[k];
             var mark = it && typeof it.mark === 'number' ? it.mark : v === true ? 1 : v === false ? 0 : null, m = el.querySelector('.qr'), a = el.querySelector('.qa');
             el.classList.toggle('good', mark === 1); el.classList.toggle('bad', mark === 0); el.classList.toggle('part', mark !== null && mark > 0 && mark < 1);
-            m.textContent = mark === 1 ? '✓' : mark === 0 ? '✗' : mark !== null ? Math.round(mark * 100) + '%' : '';
-            a.textContent = it && it.right ? 'Правильно: ' + it.right : '';
-            [].forEach.call(el.querySelectorAll('input'), function (x) { x.disabled = true; }); });
+            var wait = mark === null && (el.dataset.tp === 'essay' || (R.pending && v === null));
+            el.classList.toggle('wait', wait);
+            m.textContent = mark === 1 ? '✓' : mark === 0 ? '✗' : mark !== null ? Math.round(mark * 100) + '%' : wait ? '⏳' : '';
+            a.textContent = wait ? 'На проверке у преподавателя' : it && it.right ? 'Правильно: ' + it.right : '';
+            [].forEach.call(el.querySelectorAll('input, textarea, select'), function (x) { x.disabled = true; }); });
           var score = j.score !== undefined ? j.score : R.score, max = j.max !== undefined ? j.max : R.max, pct = R.pct !== undefined ? R.pct : j.pct;
           out.textContent = 'Балл: ' + score + (max !== undefined ? ' из ' + max : '') + (pct !== undefined && pct !== null ? ' (' + pct + '%)' : '') +
-            (R.passed === true ? ' — зачтено' : R.passed === false ? ' — не зачтено' : '') + (R.best ? ' · лучший: ' + pctTxt(R.best) : '') +
+            (R.passed === true ? ' — зачтено' : R.passed === false ? ' — не зачтено' : '') + (R.pending ? ' · есть ответы на проверке у преподавателя' : '') + (R.best ? ' · лучший: ' + pctTxt(R.best) : '') +
             (R.attempts_left !== undefined && R.attempts_left !== null ? ' · осталось попыток: ' + R.attempts_left : '') + (j.comment ? ' — ' + j.comment : '');
           if (R.attempts_left === undefined || R.attempts_left === null || R.attempts_left > 0) { btn.textContent = 'Новая попытка'; btn.dataset.again = '1'; } else btn.hidden = true;
         }).catch(function () { btn.disabled = false; out.textContent = 'Не удалось отправить ответы — проверьте вход на сайт курса'; });
