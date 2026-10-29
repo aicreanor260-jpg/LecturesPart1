@@ -66,6 +66,9 @@
   // ---------------------------------------------------------------- сообщения сервера
   var ROOMHASH = (location.hash.match(/^#room=([\w-]+)$/) || [])[1] || null;     // вход по ссылке приглашения: #room=<код>
   EL.roomHash = ROOMHASH;
+  // ссылка #room= или #watch= вставлена в адрес уже открытого эмулятора (меняется только хэш) — сохранить свою работу и перезагрузить: вход как с нуля
+  window.addEventListener('hashchange', function () { if (!/^#(room|watch)=/.test(location.hash)) return;
+    U.toast('Открываю по ссылке…'); Promise.resolve(EL.serverSave ? EL.serverSave() : null).then(function () { location.reload(); }); });
   WS.on('welcome', function (m) { R.invites = m.invites || []; R.list = m.rooms || R.list || null; R.saved = (m.saved || []).filter(function (s) { return /^room-/.test(s.lab); });
     paintBtn(); if (/^room:/.test(WS.watch || '')) R.watch = true;
     if (ROOMHASH && !R.id && !R.tried) { R.tried = true; enter({ t: 'room.join', code: ROOMHASH }); } });
@@ -129,7 +132,7 @@
       if (!nm) { body.querySelector('.cs').textContent = 'Укажите название'; return; }
       enter({ t: 'room.create', name: nm.slice(0, 60), lab: body.querySelector('[data-f="lab"]').value, vis: body.querySelector('[name="rvis"]:checked').value });
       body.querySelector('.cs').textContent = 'Создаю…'; });
-    U.makeWin('roomnew', 'Создать комнату', 'совместная схема', body, { w: 440, h: 430 });
+    U.makeWin('roomnew', 'Новая комната', 'совместная схема', body, { w: 440, h: 430 });
   }
 
   // ---------------------------------------------------------------- «Комнаты»: список, приглашения, сохранённые схемы
