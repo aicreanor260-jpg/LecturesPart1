@@ -346,6 +346,26 @@
       return [hn(st, k) + ' | Virtual Router ' + v.id, '    State : ' + (!v.up ? 'Initialize' : v.master ? 'Master' : 'Backup'), '    Virtual IP : ' + v.vip.split('/')[0], '    Master IP : ' + mi,
         '    PriorityRun : ' + v.prio, '    PriorityConfig : ' + v.prio, '    MasterPriority : ' + mp, '    Preempt : YES   Delay Time : 0 s', '    TimerRun : 1 s', '    TimerConfig : 1 s',
         '    Auth type : NONE', '    Virtual MAC : 0000-5e00-01' + ('0' + (+v.id).toString(16)).slice(-2), '    Check TTL : YES', '    Config type : normal-vrrp'].join('\n'); }).join('\n'); });
+  // ---------------------------------------------------------------- совместимость соседств с Huawei (AR-CR)
+  // RIP: «By default, an interface sends only RIP-1 packets, and receives both RIP-1 and RIP-2 packets» (version_rip);
+  //   с version 1 / version 2 в процессе — шлёт и принимает только эту версию. ESR в модели шлёт v2 и принимает обе.
+  // OSPF: тип сети на концах линка должен совпадать — «both ends of the link must be identical» (ospf_network-type_1);
+  //   проверяется, если хотя бы один из концов — Huawei (поведение Eltex при несовпадении в спецификациях не описано).
+  function ripVer(net, id) { var d = net.devs[id]; return d && Vr.isVrp(d) && d.st.vrp.c.rip ? d.st.vrp.c.rip.ver || null : 'esr'; }
+  var tl0 = EL.Net.prototype.timeLayer;
+  EL.Net.prototype.timeLayer = function (proto, rs, info, tab) {
+    var s = this;
+    rs.forEach(function (id) { var I = info[id]; if (!I) return;
+      I.nb = I.nb.filter(function (nb) {
+        if (proto === 'R') { var mine = ripVer(s, id), his = ripVer(s, nb.dev), sent = his === 'esr' ? 2 : his || 1;
+          return mine === 'esr' || !mine || mine === sent; }
+        if (proto === 'O' && (Vr.isVrp(s.devs[id]) || Vr.isVrp(s.devs[nb.dev]))) {
+          var a = (s.devs[id].st.run.ifs[nb.ifn] || {}).ospf || {}, nf = (s.ifaces(nb.dev).filter(function (f) { return f.ip === nb.nh; })[0] || {}).name,
+            b = nf ? (s.devs[nb.dev].st.run.ifs[nf] || {}).ospf || {} : {};
+          return (a.net || 'broadcast') === (b.net || 'broadcast'); }
+        return true; }); });
+    return tl0 ? tl0.apply(this, arguments) : undefined;
+  };
   // имена интерфейсов в выводах ядра (маршруты): подынтерфейс — номер из конфигурации
   var ifn0 = Vr.ifn; Vr.ifn = function (n, st) { return st && st.vrp && st.vrp.sub && st.vrp.sub[n] ? full(st.vrp.sub[n]) : ifn0(n); };
 })(typeof window !== 'undefined' ? window : global);

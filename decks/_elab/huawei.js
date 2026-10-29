@@ -357,6 +357,8 @@
   P.help = function (id, line) { var d = this.devs[id]; return isVrp(d) ? help(d.st, line) : he0.apply(this, arguments); };
   var tb0 = P.tab;
   P.tab = function (id, line) { var d = this.devs[id]; return isVrp(d) ? tab(d.st, line) : tb0.apply(this, arguments); };
+  var sh0 = P.setHost;                           // «Свойства» → имя: у VRP это sysname
+  P.setHost = function (id, name) { var d = this.devs[id]; if (!isVrp(d)) return sh0.apply(this, arguments); d.st.vrp.c.sysname = name; compile(d.st); };
   var rb0 = P.reboot;
   P.reboot = function (id) { var d = this.devs[id]; if (!isVrp(d)) return rb0.apply(this, arguments);
     var x = d.st.vrp; x.c = x.saved ? EL.clone(x.saved) : fresh(x.kind); x.stack = []; x.ask = null; compile(d.st);

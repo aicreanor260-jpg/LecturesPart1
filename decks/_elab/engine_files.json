@@ -82,7 +82,8 @@
   "labs_l2.js",
   "labs_ops.js",
   "labs_exam.js",
-  "labs_faults.js"
+  "labs_faults.js",
+  "labs_mixed.js"
  ],
  "note": "ядро эмулятора без DOM: загружать по порядку в vm с global.window = global (как test.js)"
 }

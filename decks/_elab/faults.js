@@ -161,5 +161,7 @@
   }
   function spofAll(net, opt) { var S = spof(net, opt); while (S.step()) { /* перебор целиком (автотест) */ } return S; }
 
-  EL.faults = { copy: copy, warm: warm, nodes: nodes, matrix: matrix, analyze: analyze, spof: spof, spofAll: spofAll, elements: elements, cfgFor: cfgFor, CFG: CFG, apply: apply, CONV: CONV };
+  // связь src → dst после отказа F и схождения (для проверок лаб: «шлюз переживает отказ маршрутизатора»)
+  function reach(net, F, src, dst) { var c = warm(net); if (F) { apply(c, F); observe(c); run(c, CONV); } var d = c.byName(src, true); return !!d && !d.off && c.ping(d.id, dst).ok; }
+  EL.faults = { reach: reach, copy: copy, warm: warm, nodes: nodes, matrix: matrix, analyze: analyze, spof: spof, spofAll: spofAll, elements: elements, cfgFor: cfgFor, CFG: CFG, apply: apply, CONV: CONV };
 })(typeof window !== 'undefined' ? window : global);
