@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3080,6 +3080,28 @@ EL.labs.LABS.forEach(runLab);
   v.tick(40);
   chk('VRRP Huawei (120) + ESR (100): Master — AR, шлюз 10.0.0.1 отвечает', /1     Master/.test(v.exec(RA.id, 'display vrrp brief')) && v.ping(pc.id, '10.0.0.1').ok);
   console.log('✓ Huawei VRP: S5700, AR2220, AR1220 в смешанных схемах');
+})();
+// «Отказы» (faults.js): матрица связности до/после, перестроение путей, единые точки отказа — на смешанной схеме Huawei + Eltex
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), s1 = n.add('S5700', 'S1'), s2 = n.add('MES2428', 'SW2'), s3 = n.add('MES2428', 'SW3'), a = n.add('VPC', 'PC1'), b = n.add('VPC', 'PC2');
+  n.connect(s1.id, 'GE0/0/23', s2.id, 'gi1/0/23'); n.connect(s2.id, 'gi1/0/24', s3.id, 'gi1/0/24'); n.connect(s3.id, 'gi1/0/22', s1.id, 'GE0/0/22');
+  n.connect(a.id, 'eth0', s1.id, 'GE0/0/1'); n.connect(b.id, 'eth0', s3.id, 'gi1/0/1');
+  EL.labs.apply(n, { S1: ['sys', 'stp mode rstp', 'return'], SW2: ['enable', 'configure', 'spanning-tree mode rstp', 'end'], SW3: ['enable', 'configure', 'spanning-tree mode rstp', 'end'],
+    PC1: ['ip 10.0.0.1/24'], PC2: ['ip 10.0.0.2/24'] });
+  n.tick(40);
+  var arp0 = JSON.stringify(n.arp), now0 = n.now, L0 = n.links.length;
+  var R = EL.faults.analyze(n, { k: 'link', key: 'S1:GE0/0/22—SW3:gi1/0/22' });
+  chk('Отказы: обрыв S1–SW3 в кольце RSTP — связь есть, путь через SW2, корневой порт SW3 сменился', R.pairs.length === 2 && R.pairs.every(function (p) { return p.after === 'reroute'; }) &&
+    R.pairs[0].path2.indexOf('SW2') >= 0 && R.changes.some(function (c) { return c.what === 'SW3 gi1/0/24' && c.after === 'Root'; }));
+  chk('Отказы: исходная схема не меняется (кабели, ARP, часы)', n.links.length === L0 && JSON.stringify(n.arp) === arp0 && n.now === now0);
+  var S = EL.faults.spofAll(n), sp = S.res.filter(function (r) { return r.spof; }).map(function (r) { return r.fault.key; }).sort();
+  chk('Единые точки отказа: S1, SW3 и кабели к ПК; кольцо и SW2 — нет', JSON.stringify(sp) === JSON.stringify(['PC1:eth0—S1:GE0/0/1', 'PC2:eth0—SW3:gi1/0/1', 'S1', 'SW3']), sp.join(', '));
+  var md0 = n.byName('SW2').st.stp.mode, C = EL.faults.analyze(n, { k: 'cfg', cfg: 'stp-mode', dev: 'SW2' });
+  chk('Ошибка конфигурации на копии (STP 802.1D на SW2) не трогает исходный SW2', n.byName('SW2').st.stp.mode === md0 && md0 !== 'stp' && C.fault.cfg === 'stp-mode');
+  var D = EL.faults.analyze(n, { k: 'cfg', cfg: 'gw', dev: 'PC1' });
+  chk('Список ошибок конфигурации строится по устройству (Huawei S1 — STP, регион MSTP)', EL.faults.cfgFor(n, 'S1').some(function (x) { return x.cfg === 'mst-name'; }) && !!D);
+  console.log('✓ Отказы: матрица связности, перестроение, единые точки отказа');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

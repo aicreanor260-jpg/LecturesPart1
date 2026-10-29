@@ -71,6 +71,7 @@
   "huawei.js",
   "huawei_s.js",
   "huawei_ar.js",
+  "faults.js",
   "mes10.js",
   "sim.js",
   "qos.js",
