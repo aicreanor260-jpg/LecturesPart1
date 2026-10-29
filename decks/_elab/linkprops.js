@@ -25,7 +25,7 @@
   // задержка пути пакета (шаги трассы ip): передача + распространение по каждому сегменту + обработка в узлах
   P.pathDelay = function (r, bytes) { var s = this, t = 0, b = (bytes || 84) + 18;
     (r && r.steps || []).forEach(function (x) { if (x.k !== 'ip') return; (x.segs || []).forEach(function (g) { var l = s.links[g.li]; if (!l) return;
-      var ph = s.phys(l.a.dev, l.a.port), mb = l.mbps || ph.speed || 1000; t += b * 8 / (mb * 1e6) + s.propDelay(l) + 10e-6; }); });
+      var ph = s.phys(l.a.dev, l.a.port), mb = Math.min(ph.speed || 1000, l.mbps || 1e9); t += b * 8 / (mb * 1e6) + s.propDelay(l) + 10e-6; }); });
     return t; };
   // добавка к выводу ping, мс: только заметная, от 0,2 мс (каналы, длинные кабели, медленные линии) — короткий LAN остаётся как был
   P.rttExtra = function (r, bytes) { var ms = this.pathDelay(r, bytes) * 1000; return ms >= 0.2 ? ms : 0; };

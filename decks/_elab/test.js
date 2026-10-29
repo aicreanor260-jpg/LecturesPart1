@@ -498,6 +498,29 @@ EL.labs.LABS.forEach(runLab);
     chk('медь: 5,05 мкс/км', Math.abs(n.propDelay({ len: 1000, cab: 'cu' }) * 1e6 - 5.05) < 0.05);
     console.log('✓ Каналы: расстояние, задержка распространения, RTT');
   })();
+  // Параметры канала: скорость, потери, джиттер, BER — в ping и симуляции
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Параметры канала: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), a = n.add('VPC', 'A'), b = n.add('VPC', 'B'); n.connect(a.id, 'eth0', b.id, 'eth0');
+    n.exec(a.id, 'ip 10.0.0.1/24'); n.exec(b.id, 'ip 10.0.0.2/24');
+    var f0 = n.simulate([{ kind: 'udp', src: a.id, dst: '10.0.0.2', size: 1000, rate: 1000, dur: 1 }]).flows[0];
+    chk('1 Гбит/с: 1000 п/с по 1000 байт без потерь', f0.loss === 0, f0.loss);
+    n.setLink(0, { mbps: 2 });
+    var r = n.simulate([{ kind: 'udp', src: a.id, dst: '10.0.0.2', size: 1000, rate: 1000, dur: 1 }]), f1 = r.flows[0];
+    chk('канал 2 Мбит/с: очередь переполняется, потери и рост задержки', f1.loss > 50 && f1.max > 0.03 && r.queues.length > 0, JSON.stringify({ loss: f1.loss, max: f1.max }));
+    n.setLink(0, { mbps: 0, loss: 30 });
+    var f2 = n.simulate([{ kind: 'ping', src: a.id, dst: '10.0.0.2', count: 100, interval: 0.01, size: 56 }]).flows[0];
+    chk('потери 30 % на канале: в ping туда-обратно теряется ≈ половина', f2.loss > 35 && f2.loss < 65, f2.loss);
+    chk('ping в консоли тоже теряет эхо', /timeout/.test(n.exec(a.id, 'ping 10.0.0.2')));
+    n.setLink(0, { loss: 0, ber: 1e-4 });
+    var f3 = n.simulate([{ kind: 'udp', src: a.id, dst: '10.0.0.2', size: 1400, rate: 100, dur: 1 }]).flows[0];
+    chk('BER 10⁻⁴ при кадрах 1400 байт: теряется большинство', f3.loss > 50 && Object.keys(f3.drops).some(function (k) { return /битовые ошибки/.test(k); }), JSON.stringify(f3.drops));
+    n.setLink(0, { ber: 0, jit: 20 });
+    var f4 = n.simulate([{ kind: 'ping', src: a.id, dst: '10.0.0.2', count: 30, interval: 0.1, size: 56 }]).flows[0];
+    chk('джиттер 20 мс: разброс RTT растёт', f4.jitter > 0.004 && f4.max > 0.015, JSON.stringify({ j: f4.jitter, max: f4.max }));
+    chk('параметры канала сохраняются в схеме', EL.Net.fromJSON(n.toJSON()).links[0].jit === 20);
+    console.log('✓ Параметры канала: скорость, потери, BER, джиттер');
+  })();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

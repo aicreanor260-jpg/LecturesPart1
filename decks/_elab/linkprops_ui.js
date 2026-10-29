@@ -79,5 +79,17 @@
   var od = X.onDraw; X.onDraw = function () { od(); var n = net(), g = document.getElementById('gp'); if (!g) return;
     n.links.forEach(function (l, i) { if (n.lenOf(l) < 1000 && n.cabOf(l) !== 'wan') return; var a = n.devs[l.a.dev], b = n.devs[l.b.dev], o = U.linkOff(i);
       var t = U.el('text', { 'class': 'lkm', x: (a.x + b.x) / 2 + o.x, y: (a.y + b.y) / 2 + o.y - 8 }, g); t.textContent = km(n.lenOf(l)); }); };
+  // ---------------------------------------------------------------- параметры канала (учитываются в ping и в симуляции во времени)
+  var SPEEDS = [[0, 'как у портов'], [2, '2 Мбит/с (E1)'], [10, '10 Мбит/с'], [100, '100 Мбит/с'], [1000, '1 Гбит/с'], [10000, '10 Гбит/с']];
+  var BERS = [[0, 'нет'], [1e-9, '10⁻⁹'], [1e-7, '10⁻⁷'], [1e-6, '10⁻⁶'], [1e-5, '10⁻⁵ — «плохая линия»'], [1e-4, '10⁻⁴']];
+  EL.linkParams = function (l) { function opt(L, v) { return L.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === (v || 0) ? ' selected' : '') + '>' + x[1] + '</option>'; }).join(''); }
+    return '<h2>Параметры канала</h2><label>Скорость канала</label><select class="q" data-f="mbps">' + opt(SPEEDS, l.mbps) + '</select>' +
+      '<div class="row"><label style="margin:0">Потери, %</label><input class="q" data-f="loss" type="number" min="0" max="100" step="0.1" value="' + (l.loss || 0) + '">' +
+      '<label style="margin:0">Джиттер, мс</label><input class="q" data-f="jit" type="number" min="0" max="1000" step="0.1" value="' + (l.jit || 0) + '"></div>' +
+      '<label>Битовые ошибки (BER)</label><select class="q" data-f="ber">' + opt(BERS, l.ber) + '</select>' +
+      '<p class="cs2">Скорость — не выше скорости портов; потери и BER — доля потерянных кадров (BER: кадр из N бит теряется с вероятностью 1 − (1 − BER)^N); джиттер — случайная добавка 0…J мс к задержке каждого кадра. Всё действует в ping и в симуляции (очереди растут на медленном канале).</p>'; };
+  EL.linkParamsRead = function (body, o) { var g = function (k) { return parseFloat(String(body.querySelector('[data-f="' + k + '"]').value).replace(',', '.')) || 0; };
+    o.mbps = g('mbps'); o.loss = g('loss'); o.jit = g('jit'); o.ber = g('ber');
+    if (o.loss < 0 || o.loss > 100) return 'Потери — от 0 до 100 %'; if (o.jit < 0 || o.jit > 1000) return 'Джиттер — от 0 до 1000 мс'; return null; };
   EL.openMap = openMap; EL.openLinkProps = openLink;
 })();
