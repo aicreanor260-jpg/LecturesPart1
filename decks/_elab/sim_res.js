@@ -58,7 +58,7 @@
   function open(r) {
     R = r || null; cur = -1; stop();
     var body = document.createElement('div'); body.className = 'pad simres';
-    body.innerHTML = '<div class="row" data-tabs>' + [['log', 'Журнал событий'], ['vec', 'Векторы'], ['his', 'Гистограммы'], ['sca', 'Скаляры'], ['net', 'События сети']].map(function (t) {
+    body.innerHTML = '<div class="row" data-tabs>' + [['log', 'Журнал событий'], ['vec', 'Векторы'], ['his', 'Гистограммы'], ['sca', 'Скаляры'], ['net', 'События сети']].concat(EL.simPyPane ? [['py', 'Анализ на Python']] : []).map(function (t) {
       return '<button data-t="' + t[0] + '"' + (t[0] === tab ? ' class="pri"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div>' +
       (R ? '<div class="row exp"><span>Экспорт как в OMNeT++:</span><button data-x="vec">.vec</button><button data-x="sca">.sca</button><button data-x="csv">CSV (Excel)</button>' + (EL.simNotebook ? '<button data-x="ipynb">Скачать тетрадку .ipynb</button>' : '') + '</div>' : '') + '<div data-v></div>';
     U.makeWin('simres', 'Результаты', 'как в OMNeT++: события, векторы, гистограммы, скаляры', body, { w: Math.min(760, innerWidth - 40), h: Math.min(620, innerHeight - 120), x: Math.max(20, innerWidth - 800), y: 70 });
@@ -88,6 +88,7 @@
   function paint(body) {
     var v = body.querySelector('[data-v]'), h = '';
     if (tab !== 'net' && !R) { v.innerHTML = '<p>Запустите «Симуляцию трафика» (ПКМ по полю или вкладка «Файл») — здесь появятся результаты прогона. Вкладка «События сети» работает и без неё.</p>'; return; }
+    if (tab === 'py') { EL.simPyPane(v); return; }
     if (tab === 'log') {
       var E = evRows();
       h = '<div class="row"><button data-k="first">⏮ К началу</button><button data-k="step">⏭ Шаг</button><button data-k="run">' + (timer ? '❚❚ Пауза' : '▶ Запуск') + '</button>' +
