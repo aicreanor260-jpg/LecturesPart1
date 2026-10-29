@@ -11,7 +11,7 @@
   function C(st) { return st.vrp.c; }
   function top(st) { return Vr.top(st); }
   function cur(st) { return Vr.cur(st); }
-  function isPhys(n) { return /^(GE|Eth)\d+\/\d+\/\d+$/.test(n); }
+  function isPhys(n) { return /^(\d*GE|Eth)\d+\/\d+\/\d+$/.test(n); }
   function curNames(st) { var t = top(st); return t.v === 'if' ? t.names || [t.name] : []; }
   var INFO = 'Info: This operation may take a few seconds. Please wait for a moment...done.';
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }).sort(function (x, y) { return x - y; }); }
@@ -36,7 +36,7 @@
   sc('if', 'port link-type <w>', function (st, a) { var t = a[0].toLowerCase(); if (['access', 'trunk', 'hybrid'].indexOf(t) < 0 || !l2(st)) return null;
     return each(st, function (x) { if (x.et) return false; if (x.type !== t) { ['pvid', 'tpvid', 'allow', 'allowAll', 'hpvid', 'htag', 'huntag'].forEach(function (k) { delete x[k]; }); } x.type = t; }); }, 'Set the link type of the port');
   sc('if', 'undo port link-type', function (st) { return each(st, function (x) { ['type', 'pvid', 'tpvid', 'allow', 'allowAll', 'hpvid', 'htag', 'huntag'].forEach(function (k) { delete x[k]; }); }); });
-  function need(t, f) { return function (st, a) { return each(st, function (x) { if ((x.type || 'hybrid') !== t) return false; return f(x, a); }); }; }
+  function need(t, f) { return function (st, a) { return each(st, function (x) { if ((x.type || (st.vrp.ce ? 'access' : 'hybrid')) !== t) return false; return f(x, a); }); }; }
   sc('if', 'port default vlan <n>', need('access', function (x, a) { if (a[0] < 1 || a[0] > 4094) return false; x.pvid = a[0]; }), 'Set the default VLAN of the port');
   sc('if', 'undo port default vlan', need('access', function (x) { delete x.pvid; }));
   sc('if', 'port trunk allow-pass vlan all', need('trunk', function (x) { x.allowAll = true; }));
@@ -125,8 +125,8 @@
     return 'Warning: This command will delete the configurations of LLDP on all the ports.Continue?[Y/N]:'; }).cfg = false;
 
   // ---------------------------------------------------------------- compile: настройки VRP → модель MES
-  function port(P, x) {
-    var t = x.type || 'hybrid';
+  function port(P, x, ce) {
+    var t = x.type || (ce ? 'access' : 'hybrid');   // CE: тип порта по умолчанию access (ES j03y)
     P.shut = !!x.shut; if (x.desc) P.desc = x.desc; else delete P.desc;
     P.mode = t === 'access' ? 'access' : t === 'trunk' ? 'trunk' : 'general';
     P.access = x.pvid || 1;
@@ -143,11 +143,11 @@
     var c = C(st), net = st.net, d = net && net.devs[st.dev], ports = d ? EL.vrp.dports(net, d) : Object.keys(st.ports);
     st.host = c.sysname || 'Huawei';
     st.vlans = { 1: '-' }; Object.keys(c.vlans || {}).forEach(function (v) { st.vlans[v] = (c.vlans[v].name) || '-'; });
-    ports.forEach(function (p) { var x = c.ifs[p] || {}, P = port(st.ports[p] || (st.ports[p] = {}), x);
+    ports.forEach(function (p) { var x = c.ifs[p] || {}, P = port(st.ports[p] || (st.ports[p] = {}), x, st.vrp.ce);
       if (x.et && c.ifs['Eth-Trunk' + x.et]) P.cg = { id: x.et, mode: c.ifs['Eth-Trunk' + x.et].mode ? 'active' : 'on' }; else delete P.cg; });
     st.pos = {}; st.svi = {}; st.sviShut = {};
     Object.keys(c.ifs).forEach(function (k) { var m;
-      if ((m = k.match(/^Eth-Trunk(\d+)$/))) st.pos['po' + m[1]] = port({}, c.ifs[k]);
+      if ((m = k.match(/^Eth-Trunk(\d+)$/))) st.pos['po' + m[1]] = port({}, c.ifs[k], st.vrp.ce);
       if ((m = k.match(/^Vlanif(\d+)$/)) && c.ifs[k].ip) { st.svi[m[1]] = c.ifs[k].ip[0] + '/' + c.ifs[k].ip[1]; if (c.ifs[k].shut) st.sviShut[m[1]] = true; } });
     st.routes = (c.routes || []).map(function (r) { return { net: r.net, nh: r.nh, ad: EL.vrp.adOf(r.pref), pref: r.pref }; }); st.gw = null;
     var s = c.stp || {}, pr = s.prio || {}, rt = s.root || {}, rp = function (k) { return rt[k] === 'primary' ? 0 : rt[k] === 'secondary' ? 4096 : pr[k] !== undefined ? pr[k] : 32768; };

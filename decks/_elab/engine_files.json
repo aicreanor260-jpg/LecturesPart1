@@ -71,6 +71,7 @@
   "huawei.js",
   "huawei_s.js",
   "huawei_ar.js",
+  "huawei_ce.js",
   "faults.js",
   "cisco.js",
   "cisco_sw.js",

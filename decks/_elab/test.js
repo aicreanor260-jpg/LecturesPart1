@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'huawei_ce.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'dlink.js', 'dlink_ios.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js', 'labs_dlink.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3257,6 +3257,21 @@ EL.labs.LABS.forEach(runLab);
   chk('DGS-1510: copy running-config startup-config — вопрос [y/n] и сохранение', /\[y\/n\]/.test(m.exec(g.id, 'copy running-config startup-config')) && /Saving all configurations to NV-RAM/.test(m.exec(g.id, 'y')));
   chk('DGS-1510: STP по умолчанию выключен (spanning-tree global state)', m.exec(g.id, 'show spanning-tree') === 'Spanning Tree: Disabled');
   console.log('✓ D-Link: DES-3200 (старый CLI), DGS-1510 (Cisco-подобный)');
+})();
+// Huawei CloudEngine (VRP8, spec/ce.md): двухэтапная конфигурация (~ / *, commit), порты 10GE, access по умолчанию
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), c = n.add('CE6881-48S6CQ', 'CE1'), s = n.add('S5700', 'S1'), a = n.add('VPC', 'PC1'), b = n.add('VPC', 'PC2');
+  n.connect(c.id, '10GE1/0/3', s.id, 'GE0/0/24'); n.connect(a.id, 'eth0', c.id, '10GE1/0/1'); n.connect(b.id, 'eth0', s.id, 'GE0/0/1');
+  chk('CE: system-view → [~HUAWEI]; sysname — [*HUAWEI] до commit', (n.exec(c.id, 'system-view'), n.prompt(c.id) === '[~HUAWEI]') && (n.exec(c.id, 'sysname SwitchA'), n.prompt(c.id) === '[*HUAWEI]'));
+  ['vlan batch 2 3', 'interface 10ge 1/0/1', 'port default vlan 2', 'quit', 'interface 10ge 1/0/3', 'port link-type trunk', 'port trunk allow-pass vlan 2 3'].forEach(function (l) { n.exec(c.id, l); });
+  chk('CE: Error: Incomplete command found at \'^\' position.', /Error: Incomplete command found at '\^' position\./.test(n.exec(c.id, 'port link-type')));
+  ['sys', 'vlan batch 2', 'int g0/0/1', 'port link-type access', 'port default vlan 2', 'int g0/0/24', 'port link-type trunk', 'port trunk allow-pass vlan 2', 'return'].forEach(function (l) { n.exec(s.id, l); });
+  n.exec(a.id, 'ip 10.2.0.1/24'); n.exec(b.id, 'ip 10.2.0.2/24'); n.tick(40);
+  chk('CE: до commit настройки в сеть не попали', !n.ping(a.id, '10.2.0.2').ok);
+  n.exec(c.id, 'commit'); n.tick(40);
+  chk('CE: после commit — [~SwitchA-10GE1/0/3], порт access VLAN 2 (тип по умолчанию) ↔ S5700 по транку', n.prompt(c.id) === '[~SwitchA-10GE1/0/3]' && n.ping(a.id, '10.2.0.2').ok);
+  console.log('✓ Huawei CloudEngine (VRP8): commit, 10GE');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);

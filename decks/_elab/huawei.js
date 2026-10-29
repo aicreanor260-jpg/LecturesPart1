@@ -22,7 +22,7 @@
     m.login = [{ u: '—', p: '—', a: 'консоль без пароля (как в eNSP)' }]; EL.MODELS[x[0]] = m; });
 
   function isVrp(d) { return !!d && d.sub === 'vrp'; }
-  function dports(net, d) { return net.portsOf(d).filter(function (p) { return /^(GE|Eth)\d/.test(p); }); }   // порты данных (без console/aux)
+  function dports(net, d) { return net.portsOf(d).filter(function (p) { return /^(\d*GE|Eth)\d/.test(p); }); }   // порты данных (без console/aux); CE — 10GE1/0/1, 100GE1/0/1
   // ---------------------------------------------------------------- имена интерфейсов
   var FULL = { GE: 'GigabitEthernet', Eth: 'Ethernet' };
   function full(n) { var m = String(n).match(/^(GE|Eth)(\d.*)$/); if (m) return FULL[m[1]] + m[2];
@@ -36,6 +36,8 @@
     for (var i = 0; i < t.length; i++) {
       var w = t[i], low = w.toLowerCase(), m = low.match(/^([a-z]+)(\d+\/\d+\/\d+(?:\.\d+)?)$/), nx = t[i + 1];
       var ifCtx = o.length && pre(o[o.length - 1].toLowerCase(), 'interface', 2);
+      var mx = low.match(/^(\d+ge)(\d+\/\d+\/\d+(?:\.\d+)?)$/); if (mx) { o.push(mx[1].toUpperCase() + mx[2]); continue; }   // CE: 10ge1/0/1
+      if (/^\d+ge$/.test(low) && nx && /^\d+\/\d+\/\d+(\.\d+)?$/.test(nx)) { o.push(low.toUpperCase() + nx); i++; continue; }   // CE: 10ge 1/0/1
       if (m && (pre(m[1], 'gigabitethernet') || m[1] === 'ge')) { o.push('GE' + m[2]); continue; }
       if (m && pre(m[1], 'ethernet')) { o.push('Eth' + m[2]); continue; }
       if (/^[a-z]+$/.test(low) && nx && /^\d+\/\d+\/\d+(\.\d+)?$/.test(nx) && (pre(low, 'gigabitethernet') || low === 'ge')) { o.push('GE' + nx); i++; continue; }
@@ -58,7 +60,7 @@
   // <if> интерфейс (GE0/0/1, Eth0/0/1, Vlanif10, Eth-Trunk1, LoopBack0, GE0/0/1.10), <vl> список VLAN «2 to 3 10» до конца строки, <rest> остаток
   var T = [];
   function cmd(views, pat, run, d) { var e = { v: views.split(' '), p: pat.split(' '), run: run, d: d || '' }; T.push(e); return e; }
-  function isIf(t) { return /^(GE|Eth)\d+\/\d+\/\d+(\.\d+)?$|^(Vlanif|Eth-Trunk|LoopBack)\d+$/.test(t); }
+  function isIf(t) { return /^(\d*GE|Eth)\d+\/\d+\/\d+(\.\d+)?$|^(Vlanif|Eth-Trunk|LoopBack)\d+$/.test(t); }
   function vlist(toks) { var o = [], i = 0; if (!toks.length) return null;
     while (i < toks.length) { var a = toks[i]; if (!/^\d+$/.test(a)) return null; a = +a;
       if (toks[i + 1] && pre(toks[i + 1].toLowerCase(), 'to', 1) && /^\d+$/.test(toks[i + 2] || '')) { for (var v = a; v <= +toks[i + 2]; v++) o.push(v); i += 3; }
@@ -104,14 +106,14 @@
   // ---------------------------------------------------------------- виды и приглашения
   function V(st) { return st.vrp; }
   function top(st) { var s = V(st).stack; return s[s.length - 1] || { v: 'user' }; }
-  function host(st) { return V(st).c.sysname || 'Huawei'; }
+  function host(st) { var x = V(st); return ((x.ce ? x.run : x.c) || x.c).sysname || (x.ce ? 'HUAWEI' : 'Huawei'); }   // CE: имя — из действующей конфигурации (после commit)
   var VP = { sys: '', 'if': null, vlan: 'vlan', mst: 'mst-region', ui: null, aaa: 'aaa', ospf: null, area: null, rip: null, acl: null, pool: null, group: 'port-group' };
   function prompt(st) {
     var x = V(st); if (x.ask) return '';
     var t = top(st), h = host(st);
     if (t.v === 'user') return '<' + h + '>';
     var s = t.v === 'sys' ? '' : t.v === 'if' ? full(t.name) : t.v === 'vlan' ? 'vlan' + t.id : t.tag || VP[t.v];
-    return '[' + h + (s ? '-' + s : '') + ']';
+    return '[' + (x.ce ? (JSON.stringify(x.c) === JSON.stringify(x.run) ? '~' : '*') : '') + h + (s ? '-' + s : '') + ']';   // VRP8: ~ — изменений нет, * — есть незакоммиченные (BC j005)
   }
   function push(st, f) { V(st).stack.push(f); }
   // ---------------------------------------------------------------- исполнение строки
@@ -125,13 +127,17 @@
     if (!hit && v !== 'user' && v !== 'sys') {             // intelligent rollback: команда верхнего вида выполняется, вид меняется на него
       for (var i = x.stack.length - 2; i >= 0 && !hit; i--) { var h2 = find(st, x.stack[i].v, toks); if (h2 && h2.e.v.indexOf('*') < 0) { x.stack = x.stack.slice(0, i + 1); hit = h2; } }
     }
+    if (!hit && x.ce && partial(st, v, toks)) return errText(st, line, toks, toks.length).replace('Unrecognized', 'Incomplete');   // CE CR j00a
     if (!hit) return errText(st, line, toks, errAt(st, v, toks));
     var r = hit.e.run(st, hit.r.a, toks);
     if (r === null) return errText(st, line, toks, toks.length - 1);        // параметр вне допустимого — ошибка под последним словом
     if (hit.e.cfg !== false && v !== 'user') compile(st);
     return r === undefined || r === null ? '' : r;
   }
-  function compile(st) { var k = V(st).kind; (k === 'ar' ? EL.vrp.compileAr : EL.vrp.compileS)(st); if (st.net) st.net.gen++; }
+  function compile(st) { var x = V(st), k = x.kind, c0 = x.c; if (x.ce) x.c = x.run;   // CE: в сеть идёт только закоммиченная конфигурация
+    try { (k === 'ar' ? EL.vrp.compileAr : EL.vrp.compileS)(st); } finally { x.c = c0; } if (st.net) st.net.gen++; }
+  function partial(st, v, toks) { return T.some(function (e) { if (!inView(e, v) || toks.length >= e.p.length || (e.ok && !e.ok(st))) return false;
+    for (var k = 0; k < toks.length; k++) { if (e.p[k] === '<rest>' || e.p[k] === '<vl>') return false; if (!tokOk(e.p[k], toks[k])) return false; } return true; }); }
   // «?» — варианты следующего слова (после пробела) или слова с этим началом
   var PH = { '<n>': 'INTEGER', '<w>': 'STRING', '<ip>': 'IP_ADDR<X.X.X.X>', '<mask>': 'INTEGER<0-32>', '<if>': 'Interface', '<vl>': 'INTEGER<1-4094>', '<rest>': 'STRING' };
   function cands(st, txt) {
@@ -216,7 +222,8 @@
   cmd('sys', 'undo ip route-static <ip> <mask>', function (st, a) { var c = V(st).c, n = IP.netOf(a[0], a[1]); c.routes = (c.routes || []).filter(function (r) { return r.net !== n; }); });
 
   // ---------------------------------------------------------------- конфигурация: display, save, reboot
-  function cfgText(st, only) {
+  function cfgText(st, only, cand) {
+    var x0 = V(st); if (x0.ce && !cand) { var c1 = x0.c; x0.c = x0.run; try { return cfgText(st, only, true); } finally { x0.c = c1; } }
     var x = V(st), c = x.c, o = [], blk = function (L) { o.push('#'); L.forEach(function (l) { o.push(l); }); };
     if (!only) { blk(['sysname ' + host(st)]); }
     var parts = (x.kind === 'ar' ? EL.vrp.renderAr : EL.vrp.renderS)(st);
