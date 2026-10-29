@@ -12042,6 +12042,1046 @@ vesr(config)#         do confirm  — подтвердить</pre>
         var e = j + 1; while (e < o.length && o[e] !== '    enable' && o[e] !== '  exit') e++; o.splice.apply(o, [e, 0].concat(r.cmds.map(function (l) { return '    ' + l; }))); }); }); });
 })(typeof window !== 'undefined' ? window : global);
 
+/* Huawei VRP в эмуляторе (спецификации sources/huawei/spec: vrp-common, s-switch, ar-router; главный источник —
+   HCIA-Datacom Lab Guide (рус.), снят на S5731-H/AR651C, недостающее — справочники Huawei S/AR V200R0xx).
+   Устройства Huawei живут в общей модели сети: коммутатор S — тип 'mes' (те же поля ports/vlans/svi/stp/mst/pos, что у MES),
+   маршрутизатор AR — тип 'esr' (тот же st.run, что у ESR). Поэтому кадры, STP, LACP, RIP/OSPF, VRRP, NAT, захват и трасса
+   работают и в смешанных схемах Eltex + Huawei. Здесь — общее VRP: виды и приглашения (<Huawei>, [Huawei], [Huawei-GigabitEthernet0/0/1]),
+   сокращения слов, «?» и Tab, undo, quit/return, intelligent rollback (команда system view из вида интерфейса), display, save с вопросом [Y/N],
+   reboot, ping/tracert в формате VRP. Настройки хранятся в своей схеме st.vrp.c; после каждой команды compile переносит их в модель сети.
+   Команды применяются сразу (commit нет); save — загрузочная конфигурация, её же поднимает reboot.
+   Ошибки ввода: в документации есть только «Error: Unrecognized command found at '^' position.» — он и выводится
+   (тексты Incomplete/Ambiguous/Wrong parameter в собранных источниках не найдены). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype, IP = EL.ip;
+  var GROUP = 'Huawei (как в eNSP)';
+  function range(pre, a, b) { var o = []; for (var i = a; i <= b; i++) o.push(pre + i); return o; }
+  // порты — нумерация по документации Huawei (слот/подкарта/порт, своя для каждой скорости); набор как в eNSP (по методичкам, у Huawei не описан)
+  [['S5700', { type: 'mes', kind: 'hw-s', portList: range('GE0/0/', 1, 24), note: 'Коммутатор Huawei S5700 (VRP): 24 × GigabitEthernet0/0/1–24, как в eNSP' }],
+   ['S3700', { type: 'mes', kind: 'hw-s', portList: range('Eth0/0/', 1, 22).concat(range('GE0/0/', 1, 2)), note: 'Коммутатор Huawei S3700 (VRP): 22 × Ethernet0/0/1–22 + 2 × GigabitEthernet0/0/1–2, как в eNSP' }],
+   ['AR2220', { type: 'esr', kind: 'hw-ar', portList: range('GE0/0/', 0, 2), note: 'Маршрутизатор Huawei AR2220 (VRP): GigabitEthernet0/0/0–2, как в eNSP' }],
+   ['AR1220', { type: 'esr', kind: 'hw-ar', portList: range('GE0/0/', 0, 1).concat(range('Eth0/0/', 0, 7)), note: 'Маршрутизатор Huawei AR1220 (VRP): 2 × GE0/0/0–1 (L3) + 8 × Ethernet0/0/0–7 (L2, в L3 — undo portswitch)' }]
+  ].forEach(function (x) { var m = x[1]; m.ports = m.portList.length; m.group = GROUP; m.vendor = 'huawei'; m.host = 'Huawei';
+    m.login = [{ u: '—', p: '—', a: 'консоль без пароля (как в eNSP)' }]; EL.MODELS[x[0]] = m; });
+
+  function isVrp(d) { return !!d && d.sub === 'vrp'; }
+  function dports(net, d) { return net.portsOf(d).filter(function (p) { return /^(GE|Eth)\d/.test(p); }); }   // порты данных (без console/aux)
+  // ---------------------------------------------------------------- имена интерфейсов
+  var FULL = { GE: 'GigabitEthernet', Eth: 'Ethernet' };
+  function full(n) { var m = String(n).match(/^(GE|Eth)(\d.*)$/); if (m) return FULL[m[1]] + m[2];
+    if (/^po\d+$/.test(n)) return 'Eth-Trunk' + n.slice(2); if (/^lo\d+$/.test(n)) return 'LoopBack' + n.slice(2);
+    if (/^vlan\d+$/.test(n)) return 'Vlanif' + n.slice(4); return n; }
+  function short(n) { return String(n).replace(/^GigabitEthernet/, 'GE').replace(/^Ethernet/, 'Eth'); }
+  function pre(w, kw, min) { return w.length >= (min || 1) && kw.indexOf(w) === 0; }
+  // строка → токены; «GigabitEthernet 0/0/1», «g0/0/1», «GE0/0/1» → GE0/0/1; после interface — Vlanif10, Eth-Trunk1, LoopBack0
+  function norm(line) {
+    var t = String(line).trim().split(/\s+/).filter(Boolean), o = [];
+    for (var i = 0; i < t.length; i++) {
+      var w = t[i], low = w.toLowerCase(), m = low.match(/^([a-z]+)(\d+\/\d+\/\d+(?:\.\d+)?)$/), nx = t[i + 1];
+      var ifCtx = o.length && pre(o[o.length - 1].toLowerCase(), 'interface', 2);
+      if (m && (pre(m[1], 'gigabitethernet') || m[1] === 'ge')) { o.push('GE' + m[2]); continue; }
+      if (m && pre(m[1], 'ethernet')) { o.push('Eth' + m[2]); continue; }
+      if (/^[a-z]+$/.test(low) && nx && /^\d+\/\d+\/\d+(\.\d+)?$/.test(nx) && (pre(low, 'gigabitethernet') || low === 'ge')) { o.push('GE' + nx); i++; continue; }
+      if (/^[a-z]+$/.test(low) && nx && /^\d+\/\d+\/\d+(\.\d+)?$/.test(nx) && pre(low, 'ethernet')) { o.push('Eth' + nx); i++; continue; }
+      if ((m = low.match(/^vlanif(\d+)$/))) { o.push('Vlanif' + m[1]); continue; }
+      if ((m = low.match(/^eth-trunk(\d+)$/))) { o.push('Eth-Trunk' + m[1]); continue; }
+      if ((m = low.match(/^loopback(\d+)$/))) { o.push('LoopBack' + m[1]); continue; }
+      if (ifCtx && nx && /^\d+$/.test(nx)) {
+        if (pre(low, 'vlanif', 5)) { o.push('Vlanif' + nx); i++; continue; }
+        if (/^eth-t/.test(low) && pre(low, 'eth-trunk')) { o.push('Eth-Trunk' + nx); i++; continue; }
+        if (pre(low, 'loopback', 4)) { o.push('LoopBack' + nx); i++; continue; }
+      }
+      o.push(w);
+    }
+    return o;
+  }
+
+  // ---------------------------------------------------------------- таблица команд
+  // шаблон: слова — ключевые (сокращаются до любого однозначного начала), <n> число, <w> слово, <ip> адрес, <mask> маска или длина,
+  // <if> интерфейс (GE0/0/1, Eth0/0/1, Vlanif10, Eth-Trunk1, LoopBack0, GE0/0/1.10), <vl> список VLAN «2 to 3 10» до конца строки, <rest> остаток
+  var T = [];
+  function cmd(views, pat, run, d) { var e = { v: views.split(' '), p: pat.split(' '), run: run, d: d || '' }; T.push(e); return e; }
+  function isIf(t) { return /^(GE|Eth)\d+\/\d+\/\d+(\.\d+)?$|^(Vlanif|Eth-Trunk|LoopBack)\d+$/.test(t); }
+  function vlist(toks) { var o = [], i = 0; if (!toks.length) return null;
+    while (i < toks.length) { var a = toks[i]; if (!/^\d+$/.test(a)) return null; a = +a;
+      if (toks[i + 1] && pre(toks[i + 1].toLowerCase(), 'to', 1) && /^\d+$/.test(toks[i + 2] || '')) { for (var v = a; v <= +toks[i + 2]; v++) o.push(v); i += 3; }
+      else { o.push(a); i++; } }
+    return o.every(function (v) { return v >= 1 && v <= 4094; }) ? o : null; }
+  function tokOk(p, t) {
+    if (p === '<n>') return /^\d+$/.test(t); if (p === '<w>') return true; if (p === '<ip>') return IP.ip2n(t) !== null;
+    if (p === '<mask>') return /^\d{1,2}$/.test(t) && +t <= 32 || IP.mask2len(t) !== null;
+    if (p === '<if>') return isIf(t);
+    return pre(t.toLowerCase(), p);
+  }
+  function match(p, toks) {
+    var a = [], ex = 0;
+    for (var k = 0; k < p.length; k++) {
+      if (p[k] === '<rest>') { if (k >= toks.length) return null; a.push(toks.slice(k).join(' ')); return { a: a, ex: ex }; }
+      if (p[k] === '<vl>') { var l = vlist(toks.slice(k)); if (!l) return null; a.push(l); return { a: a, ex: ex }; }
+      var t = toks[k]; if (t === undefined || !tokOk(p[k], t)) return null;
+      if (p[k].charAt(0) === '<') a.push(p[k] === '<n>' ? +t : p[k] === '<mask>' ? (/^\d+$/.test(t) ? +t : IP.mask2len(t)) : t);
+      else if (t.toLowerCase() === p[k]) ex++;
+    }
+    return toks.length === p.length ? { a: a, ex: ex } : null;
+  }
+  function inView(e, v) { return e.v.indexOf(v) >= 0 || e.v.indexOf('*') >= 0 || (e.v.indexOf('cfg') >= 0 && v !== 'user'); }
+  function find(st, v, toks) {
+    var best = null;
+    T.forEach(function (e) { if (!inView(e, v) || (e.ok && !e.ok(st))) return; var r = match(e.p, toks); if (r && (!best || r.ex > best.r.ex)) best = { e: e, r: r }; });
+    return best;
+  }
+  // на каком слове ошибка: самое длинное начало строки, которое подходит хоть к одному шаблону вида
+  function errAt(st, v, toks) {
+    var k = 0;
+    T.forEach(function (e) { if (!inView(e, v)) return; var i = 0; while (i < toks.length && i < e.p.length && e.p[i] !== '<rest>' && e.p[i] !== '<vl>' && tokOk(e.p[i], toks[i])) i++;
+      if (e.p[i] === '<rest>' || e.p[i] === '<vl>') i = toks.length; if (i > k) k = i; });
+    return k;
+  }
+  function errText(st, raw, toks, k) {
+    var pr = prompt(st), pos = 0, s = String(raw), at = 0;
+    for (var i = 0; i < toks.length && i <= k; i++) { var w = s.slice(at).match(/\S+/); if (!w) break; pos = at + w.index; at = pos + w[0].length; }
+    if (k >= toks.length) pos = s.replace(/\s+$/, '').length + 1;
+    return new Array(pr.length + pos + 1).join(' ') + '^\nError: Unrecognized command found at \'^\' position.';
+  }
+
+  // ---------------------------------------------------------------- виды и приглашения
+  function V(st) { return st.vrp; }
+  function top(st) { var s = V(st).stack; return s[s.length - 1] || { v: 'user' }; }
+  function host(st) { return V(st).c.sysname || 'Huawei'; }
+  var VP = { sys: '', 'if': null, vlan: 'vlan', mst: 'mst-region', ui: null, aaa: 'aaa', ospf: null, area: null, rip: null, acl: null, pool: null, group: 'port-group' };
+  function prompt(st) {
+    var x = V(st); if (x.ask) return '';
+    var t = top(st), h = host(st);
+    if (t.v === 'user') return '<' + h + '>';
+    var s = t.v === 'sys' ? '' : t.v === 'if' ? full(t.name) : t.v === 'vlan' ? 'vlan' + t.id : t.tag || VP[t.v];
+    return '[' + h + (s ? '-' + s : '') + ']';
+  }
+  function push(st, f) { V(st).stack.push(f); }
+  // ---------------------------------------------------------------- исполнение строки
+  function exec(st, raw) {
+    var x = V(st);
+    if (x.ask) { var a = x.ask; x.ask = null; return /^y(es)?$/i.test(String(raw).trim()) ? a.yes() : (a.no ? a.no() : ''); }
+    var line = String(raw).replace(/\s+$/, '');
+    if (!line.trim()) return '';
+    if (/\?$/.test(line)) return help(st, line.slice(0, -1));
+    var toks = norm(line), v = top(st).v, hit = find(st, v, toks);
+    if (!hit && v !== 'user' && v !== 'sys') {             // intelligent rollback: команда верхнего вида выполняется, вид меняется на него
+      for (var i = x.stack.length - 2; i >= 0 && !hit; i--) { var h2 = find(st, x.stack[i].v, toks); if (h2 && h2.e.v.indexOf('*') < 0) { x.stack = x.stack.slice(0, i + 1); hit = h2; } }
+    }
+    if (!hit) return errText(st, line, toks, errAt(st, v, toks));
+    var r = hit.e.run(st, hit.r.a, toks);
+    if (r === null) return errText(st, line, toks, toks.length - 1);        // параметр вне допустимого — ошибка под последним словом
+    if (hit.e.cfg !== false && v !== 'user') compile(st);
+    return r === undefined || r === null ? '' : r;
+  }
+  function compile(st) { var k = V(st).kind; (k === 'ar' ? EL.vrp.compileAr : EL.vrp.compileS)(st); if (st.net) st.net.gen++; }
+  // «?» — варианты следующего слова (после пробела) или слова с этим началом
+  var PH = { '<n>': 'INTEGER', '<w>': 'STRING', '<ip>': 'IP_ADDR<X.X.X.X>', '<mask>': 'INTEGER<0-32>', '<if>': 'Interface', '<vl>': 'INTEGER<1-4094>', '<rest>': 'STRING' };
+  function cands(st, txt) {
+    var ends = /\s$/.test(txt) || !txt.trim(), toks = txt.trim() ? norm(txt) : [], part = ends ? null : toks.pop(), v = top(st).v, out = [], seen = {}, cr = false;
+    T.forEach(function (e) { if (!inView(e, v) || (e.ok && !e.ok(st))) return;
+      for (var k = 0; k < toks.length; k++) { if (e.p[k] === '<rest>' || e.p[k] === '<vl>') return; if (k >= e.p.length || !tokOk(e.p[k], toks[k])) return; }
+      if (toks.length === e.p.length && ends) { cr = true; return; }
+      var p = e.p[toks.length]; if (!p) return;
+      if (p.charAt(0) === '<') { if (part === null && !seen[p]) { seen[p] = 1; out.push([PH[p] || p, e.d && toks.length === e.p.length - 1 ? e.d : '']); } return; }
+      if (part !== null && !pre(part.toLowerCase(), p)) return;
+      if (!seen[p]) { seen[p] = 1; out.push([p, toks.length === 0 ? e.d : '']); } });
+    if (cr) out.push(['<cr>', '']);
+    return { list: out, part: part };
+  }
+  function help(st, txt) {
+    var c = cands(st, txt);
+    if (!c.list.length) return errText(st, txt, norm(txt), errAt(st, top(st).v, norm(txt)));
+    return c.list.map(function (x) { return '  ' + (x[0] + '                        ').slice(0, Math.max(24, x[0].length + 2)) + x[1]; }).join('\n');
+  }
+  function tab(st, txt) {
+    var c = cands(st, txt), kw = c.list.filter(function (x) { return x[0].charAt(0) !== '<' && !/^[A-Z_]+/.test(x[0]); });
+    if (c.part === null || kw.length !== 1) return null;
+    return txt.replace(/\S+$/, kw[0][0]) + ' ';
+  }
+
+  // ---------------------------------------------------------------- общие команды
+  function vlTxt(a) {                            // [2,3,10] → «2 to 3 10»
+    a = a.slice().sort(function (x, y) { return x - y; }).filter(function (x, i, s) { return s.indexOf(x) === i; });
+    var r = [], i = 0; while (i < a.length) { var j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; r.push(j > i ? a[i] + ' to ' + a[j] : '' + a[i]); i = j + 1; }
+    return r.join(' ');
+  }
+  function ifc(st, n) { var c = V(st).c; return c.ifs[n] || (c.ifs[n] = {}); }
+  function cur(st) { var t = top(st); return t.v === 'if' ? (t.names || [t.name]).map(function (n) { return ifc(st, n); }) : []; }
+  cmd('user', 'system-view', function (st) { push(st, { v: 'sys' }); return 'Enter system view, return user view with Ctrl+Z.'; }, 'Enter the system view');
+  cmd('*', 'quit', function (st) { var x = V(st); if (x.stack.length) x.stack.pop(); }, 'Exit from current mode and enter prior mode');
+  cmd('*', 'return', function (st) { V(st).stack = []; }, 'Enter the privileged mode');
+  cmd('sys', 'sysname <w>', function (st, a) { V(st).c.sysname = a[0]; }, 'Set the name of the host');
+  cmd('sys', 'undo sysname', function (st) { delete V(st).c.sysname; });
+  cmd('if', 'description <rest>', function (st, a) { cur(st).forEach(function (x) { x.desc = a[0]; }); }, 'Describe the interface');
+  cmd('if', 'undo description', function (st) { cur(st).forEach(function (x) { delete x.desc; }); });
+  cmd('if', 'shutdown', function (st) { cur(st).forEach(function (x) { x.shut = true; }); }, 'Shut down this interface');
+  cmd('if', 'undo shutdown', function (st) { cur(st).forEach(function (x) { delete x.shut; }); });
+  cmd('sys', 'interface <if>', function (st, a) {
+    var n = a[0], x = V(st), ports = st.net ? EL.vrp.dports(st.net, st.net.devs[st.dev]) : [], ph = n.split('.')[0];
+    if (/^(GE|Eth)\d/.test(n) && ports.indexOf(ph) < 0) return null;
+    if (n.indexOf('.') > 0 && x.kind !== 'ar') return null;
+    if (/^Vlanif/.test(n) && (x.kind !== 's' || +n.slice(6) < 1 || +n.slice(6) > 4094)) return null;
+    ifc(st, n); push(st, { v: 'if', name: n });
+  }, 'Specify the interface configuration view');
+  cmd('sys', 'interface range <if> to <if>', function (st, a) {
+    var ports = st.net ? EL.vrp.dports(st.net, st.net.devs[st.dev]) : [], i = ports.indexOf(a[0]), j = ports.indexOf(a[1]);
+    if (i < 0 || j < i) return null; var L = ports.slice(i, j + 1); L.forEach(function (n) { ifc(st, n); }); push(st, { v: 'if', name: L[0], names: L, tag: 'port-group' });
+  });
+  cmd('sys', 'undo interface <if>', function (st, a) { if (/^(GE|Eth)\d+\/\d+\/\d+$/.test(a[0])) return null; delete V(st).c.ifs[a[0]]; });
+  // AAA, консоль и VTY: хранятся и показываются в конфигурации (вход по Telnet в модели не проверяется)
+  cmd('sys', 'user-interface console 0', function (st) { push(st, { v: 'ui', key: 'console 0', tag: 'ui-console0' }); });
+  cmd('sys', 'user-interface vty <n> <n>', function (st, a) { push(st, { v: 'ui', key: 'vty ' + a[0] + ' ' + a[1], tag: 'ui-vty' + a[0] + '-' + a[1] }); });
+  function ui(st) { var c = V(st).c, k = top(st).key; c.ui = c.ui || {}; return c.ui[k] || (c.ui[k] = {}); }
+  cmd('ui', 'authentication-mode <w>', function (st, a) { var m = a[0].toLowerCase(); if (['aaa', 'password', 'none'].indexOf(m) < 0) return null; ui(st).auth = m;
+    if (m === 'password') return 'Warning: The "password" authentication mode is not secure, and it is strongly re\ncommended to use "aaa" authentication mode.'; });
+  cmd('ui', 'set authentication password cipher <w>', function (st, a) { ui(st).pw = a[0]; });
+  cmd('ui', 'user privilege level <n>', function (st, a) { if (a[0] > 15) return null; ui(st).lvl = a[0]; });
+  cmd('ui', 'idle-timeout <n>', function (st, a) { ui(st).idle = a[0]; });
+  cmd('ui', 'protocol inbound <w>', function (st, a) { ui(st).proto = a[0].toLowerCase(); });
+  cmd('sys', 'aaa', function (st) { push(st, { v: 'aaa' }); });
+  function lu(st, u) { var c = V(st).c; c.users = c.users || {}; return c.users[u] || (c.users[u] = {}); }
+  cmd('aaa', 'local-user <w> password cipher <w>', function (st, a) { var n = !(V(st).c.users || {})[a[0]]; lu(st, a[0]).pw = a[1]; if (n) return 'Info: Add a new user.'; });
+  cmd('aaa', 'local-user <w> service-type <rest>', function (st, a) { lu(st, a[0]).svc = a[1]; });
+  cmd('aaa', 'local-user <w> privilege level <n>', function (st, a) { lu(st, a[0]).lvl = a[1]; });
+  cmd('sys', 'telnet server enable', function (st) { V(st).c.telnet = true; return 'Info: TELNET server has been enabled.'; });
+  cmd('sys', 'undo telnet server enable', function (st) { V(st).c.telnet = false; });
+  cmd('user', 'undo terminal monitor', function () { return 'Info: Current terminal monitor is off.'; }).cfg = false;
+  cmd('sys', 'undo info-center enable', function (st) { V(st).c.noInfo = true; });
+  cmd('sys', 'info-center enable', function (st) { delete V(st).c.noInfo; return 'Info: Information center is enabled.'; });
+  // статика: preference по умолчанию 60
+  function rt(st, a, pref) { var nh = a[2]; if (!IP.ip2n(nh) && nh !== undefined) return null; var c = V(st).c; c.routes = (c.routes || []).filter(function (r) { return !(r.net === IP.netOf(a[0], a[1]) && r.nh === nh); });
+    c.routes.push({ net: IP.netOf(a[0], a[1]), nh: nh, pref: pref || 60 }); }
+  cmd('sys', 'ip route-static <ip> <mask> <ip>', function (st, a) { return rt(st, a); }, 'Establish static routes');
+  cmd('sys', 'ip route-static <ip> <mask> <ip> preference <n>', function (st, a) { if (a[3] < 1 || a[3] > 255) return null; return rt(st, a, a[3]); });
+  cmd('sys', 'ip route-static <ip> <mask> <if> <ip>', function (st, a) { return rt(st, [a[0], a[1], a[3]]); });
+  cmd('sys', 'undo ip route-static <ip> <mask> <ip>', function (st, a) { var c = V(st).c, n = IP.netOf(a[0], a[1]); c.routes = (c.routes || []).filter(function (r) { return !(r.net === n && r.nh === a[2]); }); });
+  cmd('sys', 'undo ip route-static <ip> <mask>', function (st, a) { var c = V(st).c, n = IP.netOf(a[0], a[1]); c.routes = (c.routes || []).filter(function (r) { return r.net !== n; }); });
+
+  // ---------------------------------------------------------------- конфигурация: display, save, reboot
+  function cfgText(st, only) {
+    var x = V(st), c = x.c, o = [], blk = function (L) { o.push('#'); L.forEach(function (l) { o.push(l); }); };
+    if (!only) { blk(['sysname ' + host(st)]); }
+    var parts = (x.kind === 'ar' ? EL.vrp.renderAr : EL.vrp.renderS)(st);
+    parts.forEach(function (p) { if (!only || p.h === only) blk(p.L); });
+    if (!only) {
+      if (c.telnet) blk(['telnet server enable']);
+      if (c.users) blk(['aaa'].concat([].concat.apply([], Object.keys(c.users).map(function (u) { var y = c.users[u];
+        return [' local-user ' + u + ' password cipher ' + (y.pw || '')].concat(y.lvl !== undefined ? [' local-user ' + u + ' privilege level ' + y.lvl] : [], y.svc ? [' local-user ' + u + ' service-type ' + y.svc] : []); }))));
+      var U = c.ui || {}; o.push('#');
+      ['console 0', 'vty 0 4'].concat(Object.keys(U).filter(function (k) { return k !== 'console 0' && k !== 'vty 0 4'; })).forEach(function (k) { var y = U[k] || {};
+        o.push('user-interface ' + (k === 'console 0' ? 'con 0' : k));
+        if (y.auth) o.push(' authentication-mode ' + y.auth); if (y.pw) o.push(' set authentication password cipher ' + y.pw);
+        if (y.lvl !== undefined) o.push(' user privilege level ' + y.lvl); if (y.idle !== undefined) o.push(' idle-timeout ' + y.idle);
+        if (y.proto) o.push(' protocol inbound ' + y.proto); });
+    }
+    o.push('#'); o.push('return');
+    return o.join('\n');
+  }
+  function thisText(st) { var t = top(st);
+    if (t.v === 'if') return cfgText(st, 'interface ' + full(t.name)).replace(/\nreturn$/, '\nreturn');
+    if (t.v === 'sys' || t.v === 'user') return cfgText(st);
+    var hd = { ospf: 'ospf', rip: 'rip', acl: 'acl', pool: 'pool', aaa: 'aaa', mst: 'mst' }[t.v]; return hd ? cfgText(st, t.key || hd) : '#\nreturn'; }
+  cmd('*', 'display current-configuration', function (st) { return cfgText(st); }, 'Current configuration');
+  cmd('*', 'display current-configuration | include <rest>', function (st, a) { var re = a[0]; return cfgText(st).split('\n').filter(function (l) { return l.indexOf(re) >= 0; }).join('\n'); });
+  cmd('*', 'display saved-configuration', function (st) { var x = V(st); if (!x.saved) return ''; var c0 = x.c; x.c = x.saved; try { return cfgText(st); } finally { x.c = c0; } });
+  cmd('*', 'display this', function (st) { return thisText(st); }, 'Display the current view configuration');
+  cmd('*', 'display version', function (st) {
+    var d = st.net && st.net.devs[st.dev], m = d ? d.model : '', ar = V(st).kind === 'ar';
+    return 'Huawei Versatile Routing Platform Software\nVRP (R) software, Version 5.' + (ar ? '1' : '') + '\nCopyright (C) 2000-2017 HUAWEI TECH Co., Ltd.\n' +
+      'Huawei ' + m + (ar ? ' Router' : ' Routing Switch') + ' uptime is 0 week, 0 day, 0 hour, ' + Math.floor(((st.net && st.net.now) || 0) / 60) + ' minutes';
+  });
+  cmd('user', 'save', function (st) { var x = V(st), ar = x.kind === 'ar';
+    x.ask = { yes: function () { x.saved = EL.clone(x.c);
+      return ar ? '  It will take several minutes to save configuration file, please wait.......\n  Configuration file had been saved successfully\n  Note: The configuration file will take effect after being activated'
+                : 'Now saving the current configuration to the slot 0..\nSave the configuration successfully.'; } };
+    return ar ? '  The current configuration will be written to the device.\n  Are you sure to continue? .(y/n)[n]:' : 'The current configuration will be written to the device.\nAre you sure to continue?[Y/N]';
+  }, 'Save the current configuration').cfg = false;
+  cmd('user', 'compare configuration', function (st) { var x = V(st);
+    return JSON.stringify(x.c) === JSON.stringify(x.saved || fresh(x.kind)) ? ' The current configuration is the same as the next startup configuration file.' : ' The current configuration is NOT the same as the next startup configuration file.'; }).cfg = false;
+  cmd('user', 'reset saved-configuration', function (st) { var x = V(st), ar = x.kind === 'ar';
+    x.ask = { yes: function () { x.saved = null; return ar ? ' Clear the configuration in the device successfully.' : 'Warning: Now clearing the configuration in the device.\nInfo: Succeeded in clearing the configuration in the device.'; } };
+    return ar ? 'This will delete the configuration in the flash memory.\nThe device configurations will be erased to reconfigure.\nAre you sure? (y/n)[n]:'
+              : 'Warning: The action will delete the saved configuration in the device.\nThe configuration will be erased to reconfigure. Continue? [Y/N]:';
+  }).cfg = false;
+  cmd('user', 'reboot', function (st) { var x = V(st), ar = x.kind === 'ar';
+    x.ask = { yes: function () { if (st.net) st.net.reboot(st.dev); return ar ? 'Info: system is rebooting ,please wait...\nThe system is restarting.' : ''; } };
+    return ar ? 'Info: The system is comparing the configuration, please wait.\nSystem will reboot! Continue ? [y/n]:' : 'Info: The system is now comparing the configuration, please wait........\nSystem will reboot! Continue?[Y/N]:';
+  }).cfg = false;
+
+  // ---------------------------------------------------------------- ping / tracert (CR j04u, HCIA-LG с. 26, 76)
+  function ms(seed, i) { return 1 + ((seed * 7 + i * 13) % 29); }
+  function ping(st, dst, n) {
+    var net = st.net; if (!net) return '';
+    if (IP.ip2n(dst) === null) return null;
+    var r = net.ping(st.dev, dst), o = ['  PING ' + dst + ': 56  data bytes, press CTRL_C to break'], got = 0, cnt = n || 5;
+    if (net.onTrace) net.onTrace(r, st.dev, dst);
+    var rd = r.ok && r.dev && net.devs[r.dev], ttl = (rd && isVrp(rd) ? 255 : 64) - ((r.hops || []).length);
+    for (var i = 1; i <= cnt; i++) { var ok = r.ok && !(net.lossHit && net.lossHit(r, i - 1));
+      if (ok) { got++; o.push('    Reply from ' + dst + ': bytes=56 Sequence=' + i + ' ttl=' + ttl + ' time=' + ms(dst.length, i) + ' ms'); } else o.push('    Request time out'); }
+    o.push('', '  --- ' + dst + ' ping statistics ---', '    ' + cnt + ' packet(s) transmitted', '    ' + got + ' packet(s) received', '    ' + ((cnt - got) * 100 / cnt).toFixed(2) + '% packet loss');
+    if (got) o.push('    round-trip min/avg/max = 1/' + ms(dst.length, 2) + '/' + ms(dst.length, 4) + ' ms');
+    return o.join('\n');
+  }
+  cmd('*', 'ping <ip>', function (st, a) { return ping(st, a[0]); }, 'Ping function').cfg = false;
+  cmd('*', 'ping -c <n> <ip>', function (st, a) { return ping(st, a[1], Math.min(a[0], 20)); }).cfg = false;
+  cmd('*', 'ping -a <ip> <ip>', function (st, a) { return ping(st, a[1]); }).cfg = false;
+  cmd('*', 'tracert <ip>', function (st, a) {
+    var net = st.net; if (!net) return ''; var r = net.ping(st.dev, a[0]), ar = V(st).kind === 'ar', o = [];
+    o.push(ar ? ' traceroute to  ' + a[0] + '(' + a[0] + '), max hops: 30 ,packet length: 40,press CTRL_C to break' : 'traceroute to ' + a[0] + ' (' + a[0] + '), max hops: 30, packet length: 40, press CTRL_C to break');
+    var hops = (r.hops || []).map(function (h) { return h.ip; }); if (r.ok) hops.push(a[0]);
+    hops.forEach(function (ip, i) { o.push((ar ? '\n ' : '') + (i + 1) + ' ' + ip + ' ' + ms(i, 1) + ' ms  ' + ms(i, 2) + ' ms  ' + ms(i, 3) + ' ms'); });
+    if (!r.ok) for (var k = hops.length + 1; k <= 30; k++) o.push((ar ? ' ' : '') + k + ' * * *');
+    return o.join('\n');
+  }, 'Trace route function').cfg = false;
+
+  // ---------------------------------------------------------------- display: интерфейсы и маршруты (общие для S и AR)
+  function pad(s, n) { s = String(s); return s.length >= n ? s + ' ' : (s + new Array(n + 1).join(' ')).slice(0, n); }
+  function phyUp(st, port) { var net = st.net; return !!net && net.linkUp(st.dev, port) && (!net.phys || net.phys(st.dev, port).up); }
+  cmd('*', 'display interface brief', function (st) {
+    var net = st.net, d = net && net.devs[st.dev], c = V(st).c, o = ['PHY: Physical', '*down: administratively down', '(l): loopback', '(s): spoofing', '(b): BFD down',
+      'InUti/OutUti: input utility/output utility', 'Interface                   PHY   Protocol InUti OutUti   inErrors  outErrors'];
+    if (!d) return o.join('\n');
+    Object.keys(c.ifs).filter(function (k) { return /^(Eth-Trunk|Vlanif|LoopBack)/.test(k); }).concat(EL.vrp.dports(net, d)).forEach(function (k) {
+      var x = c.ifs[k] || {}, up = /^LoopBack/.test(k) ? true : /^Vlanif/.test(k) ? !!net.ifaces(st.dev).filter(function (f) { return f.name === 'vlan' + k.slice(6); }).length :
+        /^Eth-Trunk/.test(k) ? (net.lports(st.dev).filter(function (L) { return L.name === 'po' + k.slice(9); })[0] || { members: [] }).members.length > 0 : phyUp(st, k);
+      var phy = x.shut ? '*down' : up ? 'up' : 'down', pr = x.shut || !up ? 'down' : /^LoopBack/.test(k) ? 'up(s)' : 'up';
+      o.push(pad(full(k), 28) + pad(phy, 6) + pad(pr, 9) + pad('0%', 6) + pad('0%', 9) + pad('0', 10) + '0'); });
+    return o.join('\n');
+  });
+  cmd('*', 'display ip interface brief', function (st) {
+    var net = st.net, c = V(st).c, o = ['*down: administratively down', '^down: standby', '(l): loopback', '(s): spoofing', '(E): E-Trunk down',
+      'Interface                         IP Address/Mask      Physical   Protocol'];
+    Object.keys(c.ifs).sort().forEach(function (k) { var x = c.ifs[k]; if (!x.ip) return;
+      var up = net && net.ifaces(st.dev).some(function (f) { return f.ip === x.ip[0]; }), phy = x.shut ? '*down' : up ? 'up' : 'down';
+      o.push(pad(full(k), 34) + pad(x.ip[0] + '/' + x.ip[1], 21) + pad(phy, 11) + (up ? (/^LoopBack/.test(k) ? 'up(s)' : 'up') : 'down')); });
+    return o.join('\n');
+  });
+  // имена интерфейсов модели → VRP: vlan10 → Vlanif10, lo0 → LoopBack0, GE0/0/1.10 → GigabitEthernet0/0/1.10
+  function ifn(n) { return n ? full(String(n).split(':')[0]) : 'NULL0'; }
+  var PROTO = { C: 'Direct', S: 'Static', R: 'RIP', O: 'OSPF', B: 'EBGP' };
+  function hwPref(r) { return r.p === 'S' ? (r.pref || 60) : r.p === 'O' ? (r.ase ? 150 : 10) : r.p === 'R' ? 100 : r.p === 'C' ? 0 : r.ad; }
+  cmd('*', 'display ip routing-table', function (st) {
+    var net = st.net; if (!net) return '';
+    var all = net.routes(st.dev), by = net.best(st.dev, all), rows = [];
+    all.forEach(function (r) { if (r.dead || by[r.net] !== r && !(by[r.net] && by[r.net].p === r.p && by[r.net].ad === r.ad && by[r.net].m === r.m && r.p !== 'C')) return;
+      if (r.p === 'C') { var me = net.ifaces(st.dev).filter(function (f) { return f.name === r.ifn; })[0];
+        rows.push([r.net, 'Direct', 0, 0, me ? me.ip : '0.0.0.0', EL.vrp.ifn(r.ifn, st)]); if (me) rows.push([me.ip + '/32', 'Direct', 0, 0, '127.0.0.1', EL.vrp.ifn(r.ifn, st)]); return; }
+      rows.push([r.net, PROTO[r.p] || r.p, hwPref(r), r.m || 0, r.nh || '0.0.0.0', EL.vrp.ifn(r.ifn, st)]); });
+    rows.push(['127.0.0.0/8', 'Direct', 0, 0, '127.0.0.1', 'InLoopBack0'], ['127.0.0.1/32', 'Direct', 0, 0, '127.0.0.1', 'InLoopBack0']);
+    rows.sort(function (a, b) { var x = IP.ip2n(a[0].split('/')[0]) - IP.ip2n(b[0].split('/')[0]); return x || +a[0].split('/')[1] - +b[0].split('/')[1]; });
+    var dests = rows.map(function (x) { return x[0]; }).filter(function (x, i, s) { return s.indexOf(x) === i; }).length, o = ['Route Flags: R - relay, D - download to fib',
+      '------------------------------------------------------------------------------', 'Routing Tables: Public', '         Destinations : ' + dests + '        Routes : ' + rows.length, '',
+      'Destination/Mask    Proto   Pre  Cost      Flags NextHop         Interface', ''], prev = null;
+    rows.forEach(function (x) { var dst = x[0] === prev ? '' : x[0]; prev = x[0];
+      o.push(('                 ' + dst).slice(-17) + '   ' + pad(x[1], 8) + pad(x[2], 5) + pad(x[3], 12) + (x[1] === 'RIP' || x[1] === 'OSPF' && x[4] !== '0.0.0.0' ? 'D' : 'D') + '   ' + pad(x[4], 16) + x[5]); });
+    return o.join('\n');
+  });
+
+  // ---------------------------------------------------------------- устройство в модели сети
+  function fresh(kind) { return { ifs: {} }; }
+  var add0 = P.add;
+  P.add = function (model) {
+    var d = add0.apply(this, arguments), m = EL.MODELS[model] || {};
+    if (m.vendor !== 'huawei') return d;
+    var st = d.st, kind = m.kind === 'hw-ar' ? 'ar' : 's';
+    d.sub = 'vrp'; st.mode = 'vrp';
+    var n = +String(d.id).slice(1) || 1;
+    if (kind === 's') st.bmac = '4c:1f:cc:' + ('0' + ((n * 37) & 255).toString(16)).slice(-2) + ':' + ('0' + ((n * 101) & 255).toString(16)).slice(-2) + ':' + ('0' + (n & 255).toString(16)).slice(-2);
+    st.vrp = { kind: kind, stack: [], c: fresh(kind), saved: null, ask: null };
+    compile(st);
+    return d;
+  };
+  var ex0 = P.exec;
+  P.exec = function (id, line) { var d = this.devs[id]; if (!isVrp(d)) return ex0.apply(this, arguments); this.gen++; return d.off ? '' : exec(d.st, line); };
+  var pr0 = P.prompt;
+  P.prompt = function (id) { var d = this.devs[id]; return isVrp(d) ? prompt(d.st) : pr0.apply(this, arguments); };
+  var he0 = P.help;
+  P.help = function (id, line) { var d = this.devs[id]; return isVrp(d) ? help(d.st, line) : he0.apply(this, arguments); };
+  var tb0 = P.tab;
+  P.tab = function (id, line) { var d = this.devs[id]; return isVrp(d) ? tab(d.st, line) : tb0.apply(this, arguments); };
+  var rb0 = P.reboot;
+  P.reboot = function (id) { var d = this.devs[id]; if (!isVrp(d)) return rb0.apply(this, arguments);
+    var x = d.st.vrp; x.c = x.saved ? EL.clone(x.saved) : fresh(x.kind); x.stack = []; x.ask = null; compile(d.st);
+    this.mac[id] = {}; this.arp[id] = {}; d.off = false; this.gen++; };
+  // конфигурация текстом (frames.js): вывод display current-configuration и вставка его же — по отступам видов (1 пробел — вид блока, 2 — вложенный)
+  if (EL.cfgText) { var ct0 = EL.cfgText; EL.cfgText = function (d) { return isVrp(d) ? cfgText(d.st) : ct0.apply(this, arguments); }; }
+  if (EL.applyConfig) { var ap0 = EL.applyConfig; EL.applyConfig = function (n, id, text) { var d = n.devs[id]; if (!isVrp(d)) return ap0.apply(this, arguments);
+    var errs = [], x = d.st.vrp; x.ask = null; x.stack = []; n.exec(id, 'system-view');
+    String(text).split('\n').forEach(function (l) { if (!l.trim() || /^\s*(#|return\s*$)/.test(l)) return; var dep = l.match(/^ */)[0].length;
+      while (x.stack.length > dep + 1) x.stack.pop();
+      var r = n.exec(id, l.trim()); if (/Error/.test(r)) errs.push(d.name + ' «' + l.trim() + '» → ' + r.split('\n').pop()); });
+    x.stack = []; return errs; }; }
+
+  EL.vrp = { dports: dports, cmd: cmd, T: T, exec: exec, prompt: prompt, norm: norm, full: full, short: short, isVrp: isVrp, vlTxt: vlTxt, ifc: ifc, cur: cur, top: top, push: push,
+    pad: pad, phyUp: phyUp, cfgText: cfgText, ifn: ifn, compile: compile, compileS: function () {}, compileAr: function () {}, renderS: function () { return []; }, renderAr: function () { return []; } };
+})(typeof window !== 'undefined' ? window : global);
+
+/* Коммутаторы Huawei S (S5700, S3700) — спецификация sources/huawei/spec/s-switch.md (HCIA-LG гл. 3, CR S V200R011C10, CG V200R005).
+   Настройки VRP (st.vrp.c) → поля модели MES: ports (access/trunk/general = hybrid), vlans, svi (Vlanif), pos + cg (Eth-Trunk), stp, mst, routes.
+   Значения по умолчанию по документации: порт hybrid, PVID 1, untagged VLAN 1 (до V200R005 — как у образов eNSP);
+   trunk пропускает VLAN 1, пока не дано undo port trunk allow-pass vlan 1; STP — MSTP, имя региона = MAC моста (каждый Huawei — свой регион),
+   приоритет 32768, стоимость 802.1t (GE — 20000), порты не edge; Eth-Trunk — manual load-balance, LACP — mode lacp (mode lacp-static — старое имя);
+   LLDP выключен (до V200R011C10SPC200). Статика — preference 60. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip, Vr = EL.vrp, cmd = Vr.cmd, pad = Vr.pad, full = Vr.full;
+  function S(st) { return st.vrp.kind === 's'; }
+  function C(st) { return st.vrp.c; }
+  function top(st) { return Vr.top(st); }
+  function cur(st) { return Vr.cur(st); }
+  function isPhys(n) { return /^(GE|Eth)\d+\/\d+\/\d+$/.test(n); }
+  function curNames(st) { var t = top(st); return t.v === 'if' ? t.names || [t.name] : []; }
+  var INFO = 'Info: This operation may take a few seconds. Please wait for a moment...done.';
+  function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }).sort(function (x, y) { return x - y; }); }
+  function minus(a, b) { return a.filter(function (x) { return b.indexOf(x) < 0; }); }
+  // preference VRP → AD модели: сохраняется порядок Huawei (OSPF 10 < static 60 < RIP 100), шкала модели — OSPF 110, RIP 120
+  EL.vrp.adOf = function (p) { return p <= 10 ? p * 11 : p <= 100 ? 110 + (p - 10) / 9 : 120 + (p - 100); };
+  function sw(st) { return S(st); }
+  function only(f) { return function (st) { return sw(st) && f(st); }; }
+  function l2(st) { return curNames(st).every(function (n) { return isPhys(n) || /^Eth-Trunk/.test(n); }); }
+  function each(st, f) { var bad = false, N = curNames(st); cur(st).forEach(function (x, i) { if (f(x, N[i]) === false) bad = true; }); return bad ? null : undefined; }   // false у одного из портов — ошибка
+  function sc(views, pat, run, d) { var e = cmd(views, pat, run, d); e.ok = sw; return e; }
+
+  // ---------------------------------------------------------------- VLAN
+  function vl(st) { var c = C(st); return c.vlans || (c.vlans = {}); }
+  sc('sys', 'vlan <n>', function (st, a) { if (a[0] < 1 || a[0] > 4094) return null; if (a[0] !== 1) vl(st)[a[0]] = vl(st)[a[0]] || {}; Vr.push(st, { v: 'vlan', id: a[0] }); }, 'Configure VLAN');
+  sc('sys', 'vlan batch <vl>', function (st, a) { a[0].forEach(function (v) { if (v !== 1) vl(st)[v] = vl(st)[v] || {}; }); return INFO; });
+  sc('sys', 'undo vlan <n>', function (st, a) { if (a[0] === 1) return null; delete vl(st)[a[0]]; });
+  sc('sys', 'undo vlan batch <vl>', function (st, a) { a[0].forEach(function (v) { delete vl(st)[v]; }); return INFO; });
+  sc('vlan', 'name <w>', function (st, a) { var t = top(st); if (t.id !== 1) vl(st)[t.id].name = a[0]; });
+  sc('vlan', 'description <rest>', function (st, a) { var t = top(st); if (t.id !== 1) vl(st)[t.id].desc = a[0]; });
+  // ---------------------------------------------------------------- тип порта и VLAN на порту
+  sc('if', 'port link-type <w>', function (st, a) { var t = a[0].toLowerCase(); if (['access', 'trunk', 'hybrid'].indexOf(t) < 0 || !l2(st)) return null;
+    return each(st, function (x) { if (x.et) return false; if (x.type !== t) { ['pvid', 'tpvid', 'allow', 'allowAll', 'hpvid', 'htag', 'huntag'].forEach(function (k) { delete x[k]; }); } x.type = t; }); }, 'Set the link type of the port');
+  sc('if', 'undo port link-type', function (st) { return each(st, function (x) { ['type', 'pvid', 'tpvid', 'allow', 'allowAll', 'hpvid', 'htag', 'huntag'].forEach(function (k) { delete x[k]; }); }); });
+  function need(t, f) { return function (st, a) { return each(st, function (x) { if ((x.type || 'hybrid') !== t) return false; return f(x, a); }); }; }
+  sc('if', 'port default vlan <n>', need('access', function (x, a) { if (a[0] < 1 || a[0] > 4094) return false; x.pvid = a[0]; }), 'Set the default VLAN of the port');
+  sc('if', 'undo port default vlan', need('access', function (x) { delete x.pvid; }));
+  sc('if', 'port trunk allow-pass vlan all', need('trunk', function (x) { x.allowAll = true; }));
+  sc('if', 'port trunk allow-pass vlan <vl>', need('trunk', function (x, a) { x.allow = uniq((x.allow || [1]).concat(a[0])); }), 'Allow VLANs on the trunk port');
+  sc('if', 'undo port trunk allow-pass vlan all', need('trunk', function (x) { delete x.allowAll; x.allow = []; }));
+  sc('if', 'undo port trunk allow-pass vlan <vl>', need('trunk', function (x, a) { x.allow = minus(x.allow || [1], a[0]); if (x.allowAll) { delete x.allowAll; x.allow = minus(range(1, 4094), a[0]); } }));
+  sc('if', 'port trunk pvid vlan <n>', need('trunk', function (x, a) { x.tpvid = a[0]; }));
+  sc('if', 'undo port trunk pvid vlan', need('trunk', function (x) { delete x.tpvid; }));
+  sc('if', 'port hybrid tagged vlan <vl>', need('hybrid', function (x, a) { x.htag = uniq((x.htag || []).concat(a[0])); x.huntag = minus(x.huntag || [1], a[0]); }));
+  sc('if', 'port hybrid untagged vlan <vl>', need('hybrid', function (x, a) { x.huntag = uniq((x.huntag || [1]).concat(a[0])); x.htag = minus(x.htag || [], a[0]); }));
+  sc('if', 'undo port hybrid vlan <vl>', need('hybrid', function (x, a) { x.htag = minus(x.htag || [], a[0]); x.huntag = minus(x.huntag || [1], a[0]); }));
+  sc('if', 'undo port hybrid tagged vlan <vl>', need('hybrid', function (x, a) { x.htag = minus(x.htag || [], a[0]); }));
+  sc('if', 'undo port hybrid untagged vlan <vl>', need('hybrid', function (x, a) { x.huntag = minus(x.huntag || [1], a[0]); }));
+  sc('if', 'port hybrid pvid vlan <n>', need('hybrid', function (x, a) { x.hpvid = a[0]; }));
+  sc('if', 'undo port hybrid pvid vlan', need('hybrid', function (x) { delete x.hpvid; }));
+  function range(a, b) { var o = []; for (var i = a; i <= b; i++) o.push(i); return o; }
+  // ---------------------------------------------------------------- Vlanif
+  sc('if', 'ip address <ip> <mask>', function (st, a) { var n = top(st).name; if (!/^Vlanif/.test(n) || a[1] < 1 || a[1] > 32) return null; cur(st)[0].ip = [a[0], a[1]]; }, 'Configure the IP address of an interface');
+  sc('if', 'undo ip address', function (st) { var n = top(st).name; if (!/^Vlanif/.test(n)) return null; delete cur(st)[0].ip; });
+  // ---------------------------------------------------------------- STP / RSTP / MSTP
+  function stp(st) { var c = C(st); return c.stp || (c.stp = {}); }
+  sc('sys', 'stp mode <w>', function (st, a) { var m = a[0].toLowerCase(); if (['stp', 'rstp', 'mstp'].indexOf(m) < 0) return null; stp(st).mode = m; return INFO; }, 'Configure the STP mode');
+  sc('sys', 'undo stp mode', function (st) { delete stp(st).mode; return INFO; });
+  sc('sys', 'stp enable', function (st) { delete stp(st).off; });
+  sc('sys', 'stp disable', function (st) { stp(st).off = true; });
+  sc('sys', 'undo stp enable', function (st) { stp(st).off = true; });
+  function prio(st, k, p) { if (p > 61440 || p % 4096) return null; var s = stp(st); s.prio = s.prio || {}; s.prio[k] = p; s.root = s.root || {}; delete s.root[k]; }
+  sc('sys', 'stp priority <n>', function (st, a) { return prio(st, 0, a[0]); }, 'Set the bridge priority');
+  sc('sys', 'stp instance <n> priority <n>', function (st, a) { return prio(st, a[0], a[1]); });
+  function root(st, k, w) { w = w.toLowerCase(); if (['primary', 'secondary'].indexOf(w) < 0) return null; var s = stp(st); s.root = s.root || {}; s.root[k] = w; if (s.prio) delete s.prio[k]; }
+  sc('sys', 'stp root <w>', function (st, a) { return root(st, 0, a[0]); }, 'Configure the switch as a root bridge');
+  sc('sys', 'stp instance <n> root <w>', function (st, a) { return root(st, a[0], a[1]); });
+  sc('sys', 'undo stp priority', function (st) { var s = stp(st); if (s.prio) delete s.prio[0]; });
+  sc('sys', 'undo stp root', function (st) { var s = stp(st); if (s.root) delete s.root[0]; });
+  sc('sys', 'stp region-configuration', function (st) { var s = stp(st); s.reg = s.reg || { inst: {} }; Vr.push(st, { v: 'mst', key: 'mst' }); }, 'Enter MST region view');
+  function reg(st) { return stp(st).reg; }
+  sc('mst', 'region-name <w>', function (st, a) { reg(st).name = a[0]; });
+  sc('mst', 'undo region-name', function (st) { delete reg(st).name; });
+  sc('mst', 'revision-level <n>', function (st, a) { if (a[0] > 65535) return null; reg(st).rev = a[0]; });
+  sc('mst', 'instance <n> vlan <vl>', function (st, a) { if (a[0] < 1 || a[0] > 48) return null; var R = reg(st).inst;
+    Object.keys(R).forEach(function (k) { R[k] = minus(R[k], a[1]); }); R[a[0]] = uniq((R[a[0]] || []).concat(a[1])); });
+  sc('mst', 'undo instance <n>', function (st, a) { delete reg(st).inst[a[0]]; });
+  sc('mst', 'active region-configuration', function (st) { stp(st).act = EL.clone(reg(st)); return INFO; });
+  sc('mst', 'check region-configuration', function (st) { var r = reg(st); return ' Admin configuration\n   Format selector    :0\n   Region name        :' + (r.name || mac(st)) + '\n   Revision level     :' + (r.rev || 0); }).cfg = false;
+  function eachP(st, f) { if (!l2(st)) return null; return each(st, f); }
+  sc('if', 'stp disable', function (st) { return eachP(st, function (x) { x.stpOff = true; }); });
+  sc('if', 'stp enable', function (st) { return eachP(st, function (x) { delete x.stpOff; }); });
+  sc('if', 'stp edged-port enable', function (st) { return eachP(st, function (x) { x.edged = true; }); }, 'Configure the port as an edge port');
+  sc('if', 'stp edged-port disable', function (st) { return eachP(st, function (x) { delete x.edged; }); });
+  sc('if', 'undo stp edged-port', function (st) { return eachP(st, function (x) { delete x.edged; }); });
+  sc('if', 'stp cost <n>', function (st, a) { if (a[0] < 1 || a[0] > 200000000) return null; return eachP(st, function (x) { x.cost = a[0]; }); }, 'Set the path cost of the port');
+  sc('if', 'stp instance <n> cost <n>', function (st, a) { if (a[1] < 1 || a[1] > 200000000) return null;
+    return eachP(st, function (x) { if (a[0] === 0) x.cost = a[1]; else (x.mcost = x.mcost || {})[a[0]] = a[1]; }); });
+  sc('if', 'undo stp cost', function (st) { return eachP(st, function (x) { delete x.cost; }); });
+  sc('if', 'undo stp instance <n> cost', function (st, a) { return eachP(st, function (x) { if (a[0] === 0) delete x.cost; else if (x.mcost) delete x.mcost[a[0]]; }); });
+  // ---------------------------------------------------------------- Eth-Trunk
+  function trunkOf(st, n) { return C(st).ifs['Eth-Trunk' + n]; }
+  function members(st, n) { var c = C(st); return Object.keys(c.ifs).filter(function (k) { return c.ifs[k].et === n; }); }
+  sc('if', 'mode lacp', function (st) { var n = top(st).name; if (!/^Eth-Trunk/.test(n) || members(st, +n.slice(9)).length) return null; cur(st)[0].mode = 'lacp'; }, 'Set the working mode of the Eth-Trunk');
+  sc('if', 'mode lacp-static', function (st) { var n = top(st).name; if (!/^Eth-Trunk/.test(n) || members(st, +n.slice(9)).length) return null; cur(st)[0].mode = 'lacp-static'; });
+  sc('if', 'mode manual load-balance', function (st) { var n = top(st).name; if (!/^Eth-Trunk/.test(n) || members(st, +n.slice(9)).length) return null; delete cur(st)[0].mode; });
+  sc('if', 'undo mode', function (st) { var n = top(st).name; if (!/^Eth-Trunk/.test(n) || members(st, +n.slice(9)).length) return null; delete cur(st)[0].mode; });
+  sc('if', 'eth-trunk <n>', function (st, a) { if (!trunkOf(st, a[0]) || !curNames(st).every(isPhys)) return null;
+    var r = each(st, function (x) { if (x.type) return false; x.et = a[0]; }); return r === null ? null : INFO; }, 'Add the port to an Eth-Trunk');
+  sc('if', 'undo eth-trunk', function (st) { if (!curNames(st).every(isPhys)) return null; each(st, function (x) { delete x.et; delete x.lacpPrio; }); return INFO; });
+  function tports(st, rest) {                     // trunkport GE0/0/10 to 0/0/12 | GE0/0/10 GE0/0/11
+    var t = rest.split(/\s+/), o = [], ports = st.net ? EL.vrp.dports(st.net, st.net.devs[st.dev]) : [];
+    for (var i = 0; i < t.length; i++) { var a = t[i]; if (!isPhys(a)) return null;
+      if (t[i + 1] && /^to$/i.test(t[i + 1]) && t[i + 2]) { var b = a.replace(/\d+\/\d+\/\d+$/, '') + t[i + 2].replace(/^[A-Za-z]+/, ''), x = ports.indexOf(a), y = ports.indexOf(b);
+        if (x < 0 || y < x) return null; o = o.concat(ports.slice(x, y + 1)); i += 2; } else { if (ports.indexOf(a) < 0) return null; o.push(a); } }
+    return o;
+  }
+  sc('if', 'trunkport <rest>', function (st, a) { var n = top(st).name, L = /^Eth-Trunk/.test(n) && tports(st, a[0]); if (!L) return null;
+    L.forEach(function (p) { var x = Vr.ifc(st, p); x.et = +n.slice(9); delete x.type; }); return INFO; });
+  sc('if', 'undo trunkport <rest>', function (st, a) { var n = top(st).name, L = /^Eth-Trunk/.test(n) && tports(st, a[0]); if (!L) return null;
+    L.forEach(function (p) { var x = Vr.ifc(st, p); if (x.et === +n.slice(9)) delete x.et; }); return INFO; });
+  ['max active-linknumber', 'least active-linknumber'].forEach(function (k) {
+    sc('if', k + ' <n>', function (st, a) { if (!/^Eth-Trunk/.test(top(st).name) || a[0] < 1 || a[0] > 8) return null; cur(st)[0][k] = a[0]; }); });
+  sc('if', 'load-balance <w>', function (st, a) { if (!/^Eth-Trunk/.test(top(st).name)) return null; cur(st)[0].lb = a[0].toLowerCase(); });
+  sc('if', 'lacp preempt enable', function (st) { if (!/^Eth-Trunk/.test(top(st).name)) return null; cur(st)[0].preempt = true; });
+  sc('if', 'lacp priority <n>', function (st, a) { if (!curNames(st).every(isPhys) || a[0] > 65535) return null; each(st, function (x) { x.lacpPrio = a[0]; }); });
+  sc('sys', 'lacp priority <n>', function (st, a) { if (a[0] > 65535) return null; C(st).lacpPrio = a[0]; });
+  // ---------------------------------------------------------------- LLDP
+  sc('sys', 'lldp enable', function (st) { C(st).lldp = true; });
+  sc('sys', 'undo lldp enable', function (st) { var x = st.vrp; x.ask = { yes: function () { delete C(st).lldp; EL.vrp.compile(st); return ''; } };
+    return 'Warning: This command will delete the configurations of LLDP on all the ports.Continue?[Y/N]:'; }).cfg = false;
+
+  // ---------------------------------------------------------------- compile: настройки VRP → модель MES
+  function port(P, x) {
+    var t = x.type || 'hybrid';
+    P.shut = !!x.shut; if (x.desc) P.desc = x.desc; else delete P.desc;
+    P.mode = t === 'access' ? 'access' : t === 'trunk' ? 'trunk' : 'general';
+    P.access = x.pvid || 1;
+    P.allowed = x.allow ? x.allow.slice() : [1]; P.allAll = !!x.allowAll;
+    var tp = x.tpvid || 1; P.native = t === 'trunk' && (P.allAll || P.allowed.indexOf(tp) >= 0) ? tp : t === 'trunk' ? 0 : 1;
+    P.pvid = x.hpvid || 1; P.gtag = (x.htag || []).slice(); P.guntag = (x.huntag || [1]).slice();
+    if (x.cost) P.stpCost = x.cost; else delete P.stpCost;
+    if (x.mcost) P.mstCost = EL.clone(x.mcost); else delete P.mstCost;
+    P.stpOff = !!x.stpOff; P.portfast = !!x.edged; P.noAutoEdge = true;
+    return P;
+  }
+  function mac(st) { var m = String(st.bmac || '').replace(/:/g, ''); return m.slice(0, 4) + '-' + m.slice(4, 8) + '-' + m.slice(8, 12); }
+  EL.vrp.compileS = function (st) {
+    var c = C(st), net = st.net, d = net && net.devs[st.dev], ports = d ? EL.vrp.dports(net, d) : Object.keys(st.ports);
+    st.host = c.sysname || 'Huawei';
+    st.vlans = { 1: '-' }; Object.keys(c.vlans || {}).forEach(function (v) { st.vlans[v] = (c.vlans[v].name) || '-'; });
+    ports.forEach(function (p) { var x = c.ifs[p] || {}, P = port(st.ports[p] || (st.ports[p] = {}), x);
+      if (x.et && c.ifs['Eth-Trunk' + x.et]) P.cg = { id: x.et, mode: c.ifs['Eth-Trunk' + x.et].mode ? 'active' : 'on' }; else delete P.cg; });
+    st.pos = {}; st.svi = {}; st.sviShut = {};
+    Object.keys(c.ifs).forEach(function (k) { var m;
+      if ((m = k.match(/^Eth-Trunk(\d+)$/))) st.pos['po' + m[1]] = port({}, c.ifs[k]);
+      if ((m = k.match(/^Vlanif(\d+)$/)) && c.ifs[k].ip) { st.svi[m[1]] = c.ifs[k].ip[0] + '/' + c.ifs[k].ip[1]; if (c.ifs[k].shut) st.sviShut[m[1]] = true; } });
+    st.routes = (c.routes || []).map(function (r) { return { net: r.net, nh: r.nh, ad: EL.vrp.adOf(r.pref), pref: r.pref }; }); st.gw = null;
+    var s = c.stp || {}, pr = s.prio || {}, rt = s.root || {}, rp = function (k) { return rt[k] === 'primary' ? 0 : rt[k] === 'secondary' ? 4096 : pr[k] !== undefined ? pr[k] : 32768; };
+    st.stp = { on: !s.off, mode: { stp: 'stp', rstp: 'rst', mstp: 'mst' }[s.mode || 'mstp'], prio: rp(0) };
+    var A = s.act || {}, inst = {};
+    Object.keys(A.inst || {}).forEach(function (k) { inst[k] = { vlans: A.inst[k].slice(), prio: rp(+k) }; });
+    st.mst = { name: A.name || mac(st), rev: A.rev || 0, inst: inst };   // имя региона по умолчанию — MAC моста (CR j015 → region-name)
+  };
+
+  // ---------------------------------------------------------------- display current-configuration (части коммутатора)
+  function ifLines(x, n) {
+    var o = [], t = x.type;
+    if (x.desc) o.push(' description ' + x.desc);
+    if (x.shut) o.push(' shutdown');
+    if (/^Eth-Trunk/.test(n) && x.mode) o.push(' mode ' + x.mode);
+    if (t) o.push(' port link-type ' + t);
+    if (t === 'access' && x.pvid && x.pvid !== 1) o.push(' port default vlan ' + x.pvid);
+    if (t === 'trunk') { if (x.tpvid) o.push(' port trunk pvid vlan ' + x.tpvid);
+      var al = x.allow || [1]; if (al.indexOf(1) < 0 && !x.allowAll) o.push(' undo port trunk allow-pass vlan 1');
+      if (x.allowAll) o.push(' port trunk allow-pass vlan 2 to 4094'); else if (minus(al, [1]).length) o.push(' port trunk allow-pass vlan ' + Vr.vlTxt(minus(al, [1]))); }
+    if (t === 'hybrid') { if (x.hpvid) o.push(' port hybrid pvid vlan ' + x.hpvid);
+      var hu = x.huntag || [1]; if (hu.indexOf(1) < 0) o.push(' undo port hybrid vlan 1');
+      if ((x.htag || []).length) o.push(' port hybrid tagged vlan ' + Vr.vlTxt(x.htag)); if (minus(hu, [1]).length) o.push(' port hybrid untagged vlan ' + Vr.vlTxt(minus(hu, [1]))); }
+    if (x.ip) o.push(' ip address ' + x.ip[0] + ' ' + IP.len2mask(x.ip[1]));
+    ['least active-linknumber', 'max active-linknumber'].forEach(function (k) { if (x[k]) o.push(' ' + k + ' ' + x[k]); });
+    if (x.lb) o.push(' load-balance ' + x.lb); if (x.preempt) o.push(' lacp preempt enable');
+    if (x.stpOff) o.push(' stp disable'); if (x.edged) o.push(' stp edged-port enable');
+    if (x.cost) o.push(' stp instance 0 cost ' + x.cost);
+    Object.keys(x.mcost || {}).forEach(function (k) { o.push(' stp instance ' + k + ' cost ' + x.mcost[k]); });
+    if (x.et) o.push(' eth-trunk ' + x.et); if (x.lacpPrio) o.push(' lacp priority ' + x.lacpPrio);
+    return o;
+  }
+  EL.vrp.ifLines = ifLines;
+  EL.vrp.renderS = function (st) {
+    var c = C(st), net = st.net, d = net && net.devs[st.dev], out = [], vs = Object.keys(c.vlans || {}).map(Number);
+    if (vs.length) out.push({ h: 'vlan', L: ['vlan batch ' + Vr.vlTxt(vs)] });
+    vs.forEach(function (v) { var y = c.vlans[v]; if (y.name || y.desc) out.push({ h: 'vlan ' + v, L: ['vlan ' + v].concat(y.desc ? [' description ' + y.desc] : [], y.name ? [' name ' + y.name] : []) }); });
+    var s = c.stp || {}, L = [];
+    if (s.off) L.push('stp disable'); if (s.mode) L.push('stp mode ' + s.mode);
+    Object.keys(s.root || {}).forEach(function (k) { L.push('stp instance ' + k + ' root ' + s.root[k]); });
+    Object.keys(s.prio || {}).forEach(function (k) { L.push('stp instance ' + k + ' priority ' + s.prio[k]); });
+    if (c.lacpPrio) L.push('lacp priority ' + c.lacpPrio);
+    if (L.length) out.push({ h: 'stp', L: L });
+    if (s.reg) { var R = s.reg; out.push({ h: 'mst', L: ['stp region-configuration'].concat(R.name ? [' region-name ' + R.name] : [], R.rev ? [' revision-level ' + R.rev] : [],
+      Object.keys(R.inst).map(function (k) { return ' instance ' + k + ' vlan ' + Vr.vlTxt(R.inst[k]); }), s.act ? [' active region-configuration'] : []) }); }
+    if (c.lldp) out.push({ h: 'lldp', L: ['lldp enable'] });
+    var ks = Object.keys(c.ifs), byN = function (re) { return ks.filter(function (k) { return re.test(k); }).sort(function (a, b) { return +a.replace(/\D/g, '') - +b.replace(/\D/g, ''); }); };
+    byN(/^Vlanif/).concat(byN(/^Eth-Trunk/)).concat(d ? EL.vrp.dports(net, d) : []).forEach(function (k) {
+      out.push({ h: 'interface ' + full(k), L: ['interface ' + full(k)].concat(ifLines(c.ifs[k] || {}, k)) }); });
+    out.push({ h: 'interface NULL0', L: ['interface NULL0'] });
+    if ((c.routes || []).length) out.push({ h: 'route', L: c.routes.map(function (r) { var p = r.net.split('/');
+      return 'ip route-static ' + p[0] + ' ' + IP.len2mask(+p[1]) + ' ' + r.nh + (r.pref !== 60 ? ' preference ' + r.pref : ''); }) });
+    return out;
+  };
+
+  // ---------------------------------------------------------------- display (коммутатор)
+  function lname(n) { return /^po\d+$/.test(n) ? 'Eth-Trunk' + n.slice(2) : n; }
+  function upTxt(st, L) { return L.members && L.members.length && Vr.phyUp(st, L.members[0]) ? 'U' : 'D'; }
+  function inVlan(cfg, v) { if (cfg.mode === 'access') return cfg.access === v ? 'UT' : null;
+    if (cfg.mode === 'trunk') return cfg.native === v ? 'UT' : cfg.allAll || cfg.allowed.indexOf(v) >= 0 ? 'TG' : null;
+    return cfg.guntag.indexOf(v) >= 0 ? 'UT' : cfg.gtag.indexOf(v) >= 0 ? 'TG' : null; }
+  function allL(st) { var net = st.net, d = net.devs[st.dev], o = [];
+    EL.vrp.dports(net, d).forEach(function (p) { var P = st.ports[p]; if (!P.cg) o.push({ name: p, cfg: P, members: [p] }); });
+    Object.keys(st.pos).forEach(function (k) { var L = net.lports(st.dev).filter(function (x) { return x.name === k; })[0]; o.push({ name: k, cfg: st.pos[k], members: L ? L.members : [] }); });
+    return o; }
+  sc('*', 'display vlan', function (st) {
+    if (!st.net) return ''; var vs = Object.keys(st.vlans).map(Number).sort(function (a, b) { return a - b; }), Ls = allL(st);
+    var o = ['The total number of VLANs is : ' + vs.length, new Array(81).join('-'), 'U: Up;         D: Down;         TG: Tagged;         UT: Untagged;',
+      'MP: Vlan-mapping;               ST: Vlan-stacking;', '#: ProtocolTransparent-vlan;    *: Management-vlan;', new Array(81).join('-'), '', 'VID  Type    Ports', new Array(81).join('-')];
+    vs.forEach(function (v) { var first = true;
+      ['UT', 'TG'].forEach(function (k) { var ps = Ls.filter(function (L) { return inVlan(L.cfg, v) === k; }).map(function (L) { return Vr.short(full(lname(L.name))) + '(' + upTxt(st, L) + ')'; });
+        for (var i = 0; i < ps.length; i += 4) { var row = ps.slice(i, i + 4).map(function (p, j) { return pad((i === 0 && j === 0 ? k + ':' : '') + p, 19); }).join('').replace(/\s+$/, '');
+          o.push((first ? pad(v, 5) + pad('common', 8) : new Array(14).join(' ') + (i === 0 ? '' : '   ')) + row); first = false; } });
+      if (first) o.push(pad(v, 5) + 'common'); });
+    o.push('', 'VID  Status  Property      MAC-LRN Statistics Description', new Array(81).join('-'));
+    vs.forEach(function (v) { o.push(pad(v, 5) + pad('enable', 8) + pad('default', 14) + pad('enable', 8) + pad('disable', 11) + 'VLAN ' + ('000' + v).slice(-4)); });
+    return o.join('\n');
+  });
+  sc('*', 'display port vlan', function (st) {
+    if (!st.net) return ''; var o = ['Port                    Link Type    PVID  Trunk VLAN List', new Array(80).join('-')], c = C(st);
+    EL.vrp.dports(st.net, st.net.devs[st.dev]).concat(Object.keys(st.pos)).forEach(function (p) {
+      var P = st.ports[p] || st.pos[p], x = c.ifs[/^po/.test(p) ? lname(p) : p] || {}, mem = st.ports[p] && P.cg;
+      var t = mem ? '-' : x.type || 'hybrid', pv = mem ? 0 : t === 'access' ? P.access : t === 'trunk' ? (x.tpvid || 1) : P.pvid;
+      var tl = t === 'trunk' ? (P.allAll ? '1-4094' : Vr.vlTxt(P.allowed).replace(/ to /g, '-')) || '-' : '-';
+      o.push(pad(full(lname(p)), 24) + pad(t, 13) + pad(pv, 6) + tl); });
+    return o.join('\n');
+  });
+  var ROLE = { Root: 'ROOT', Desg: 'DESI', Altn: 'ALTE', Back: 'BACK' }, STATE = { Frw: 'FORWARDING', Lrn: 'LEARNING', Dsc: 'DISCARDING', Blk: 'DISCARDING', Lsn: 'DISCARDING' };
+  function insts(st) { return st.stp.mode === 'mst' ? [0].concat(Object.keys(st.mst.inst).map(Number)) : [0]; }
+  sc('*', 'display stp brief', function (st) {
+    var net = st.net; if (!net || !st.stp.on) return ''; var o = [' MSTID   Port                        Role  STP State     Protection'];
+    insts(st).forEach(function (k) { var t = net.stp(k)[st.dev] || {};
+      net.lports(st.dev).forEach(function (L) { var r = t[L.name]; if (!r || r.nostp) return;
+        o.push('    ' + pad(k, 5) + pad(full(lname(L.name)), 28) + pad(ROLE[r.role] || 'DESI', 6) + pad(STATE[net.stpSts(st.dev, L.name, k)] || 'FORWARDING', 16) + 'NONE'); }); });
+    return o.join('\n');
+  }, 'Display STP brief information');
+  function bidTxt(p, m) { return pad(p, 5) + '.' + m; }
+  sc('*', 'display stp', function (st) {
+    var net = st.net; if (!net) return '';
+    if (!st.stp.on) return ' Protocol Status       :Disabled\n Protocol Standard     :IEEE 802.1s\n Version               :3\n CIST Bridge Priority  :' + st.stp.prio + '\n MAC address           :' + mac(st) +
+      '\n Max age(s)            :20\n Forward delay(s)      :15\n Hello time(s)         :2\n Max hops              :20';
+    var t = net.stp(0)[st.dev] || {}, R = net._stp.root[st.dev], rs = net.devs[R].st, rm = EL.vrp.isVrp(net.devs[R]) ? mac(rs) : macOf(rs), dist = net._stp.dist[st.dev];
+    var rpL = Object.keys(t).filter(function (k) { return t[k].role === 'Root'; })[0], c = C(st), s = c.stp || {};
+    var o = ['-------[CIST Global Info][Mode ' + { stp: 'STP', rst: 'RSTP', mst: 'MSTP' }[st.stp.mode] + ']-------', 'CIST Bridge         :' + bidTxt(st.stp.prio, mac(st)),
+      'Config Times        :Hello 2s MaxAge 20s FwDly 15s MaxHop 20', 'Active Times        :Hello 2s MaxAge 20s FwDly 15s MaxHop 20',
+      'CIST Root/ERPC      :' + bidTxt((rs.stp || {}).prio, rm) + ' / ' + dist + (R === st.dev ? ' (This bridge is the root)' : ''),
+      'CIST RegRoot/IRPC   :' + bidTxt(st.stp.prio, mac(st)) + ' / 0', 'CIST RootPortId     :' + (rpL ? '128.' + portNo(st, rpL) : '0.0'), 'BPDU-Protection     :Disabled'];
+    if ((s.root || {})[0]) o.push('CIST Root Type      :' + (s.root[0] === 'primary' ? 'Primary root' : 'Secondary root'));
+    o.push('TC or TCN received  :0', 'TC count per hello  :0', 'STP Converge Mode   :Normal', 'Time since last TC  :0 days 0h:0m:0s', 'Number of TC        :0');
+    net.lports(st.dev).forEach(function (L) { var r = t[L.name]; if (!r || r.nostp) return; var P = L.cfg || {};
+      o.push('', '----[Port' + portNo(st, L.name) + '(' + full(lname(L.name)) + ')][' + (STATE[net.stpSts(st.dev, L.name, 0)] || 'FORWARDING') + ']----',
+        ' Port Protocol       :Enabled', ' Port Role           :' + { ROOT: 'Root Port', DESI: 'Designated Port', ALTE: 'Alternate Port', BACK: 'Backup Port' }[ROLE[r.role] || 'DESI'],
+        ' Port Priority       :128', ' Port Cost(Dot1T)    :Config=' + (P.stpCost || 'auto') + ' / Active=' + (P.stpCost || (/^po/.test(L.name) ? 10000 : 20000)),
+        ' Port Edged          :Config=' + (P.portfast ? 'enabled' : 'disabled') + ' / Active=' + (P.portfast ? 'enabled' : 'disabled'), ' Point-to-point      :Config=auto / Active=true',
+        ' Port STP Mode       :' + { stp: 'STP', rst: 'RSTP', mst: 'MSTP' }[st.stp.mode]); });
+    return o.join('\n');
+  });
+  function macOf(s) { var m = String(s.bmac || '').replace(/:/g, ''); return m.slice(0, 4) + '-' + m.slice(4, 8) + '-' + m.slice(8, 12); }
+  function portNo(st, n) { if (/^po/.test(n)) return 1000 + +n.slice(2); var L = EL.vrp.dports(st.net, st.net.devs[st.dev]); return L.indexOf(n) + 1; }
+  sc('*', 'display stp region-configuration', function (st) {
+    var m = st.mst, o = ['Oper configuration', '   Format selector :0', '   Region name     :' + m.name, '   Revision level  :' + m.rev, '', '   Instance   VLANs Mapped'];
+    var used = []; Object.keys(m.inst).forEach(function (k) { used = used.concat(m.inst[k].vlans); });
+    var rest = minus(range(1, 4094), used); o.push('      0       ' + Vr.vlTxt(rest));
+    Object.keys(m.inst).forEach(function (k) { o.push('      ' + pad(k, 8) + Vr.vlTxt(m.inst[k].vlans)); });
+    return o.join('\n');
+  });
+  sc('*', 'display eth-trunk', function (st) { return Object.keys(st.pos).map(function (k) { return etText(st, +k.slice(2)); }).join('\n\n'); });
+  sc('*', 'display eth-trunk <n>', function (st, a) { return st.pos['po' + a[0]] ? etText(st, a[0]) : ''; });
+  function etText(st, n) {
+    var net = st.net, x = C(st).ifs['Eth-Trunk' + n] || {}, mem = members(st, n), L = net.lports(st.dev).filter(function (q) { return q.name === 'po' + n; })[0] || { members: [] };
+    var up = mem.filter(function (p) { return L.members.indexOf(p) >= 0; }), least = x['least active-linknumber'] || 1, opUp = up.length >= least && up.length > 0;
+    if (!x.mode) return ['Eth-Trunk' + n + '\'s state information is:', 'WorkingMode: NORMAL          Hash arithmetic: According to SIP-XOR-DIP',
+      'Least Active-linknumber: ' + least + '         Max Bandwidth-affected-linknumber: 8', 'Operate status: ' + (opUp ? 'up' : 'down') + '                Number Of Up Port In Trunk: ' + (opUp ? up.length : 0),
+      new Array(81).join('-'), 'PortName                      Status      Weight'].concat(mem.map(function (p) { return pad(full(p), 33) + pad(up.indexOf(p) >= 0 ? 'Up' : 'Down', 12) + '1'; })).join('\n');
+    var sp = C(st).lacpPrio || 32768, o = ['Eth-Trunk' + n + '\'s state information is:', 'Local:', 'LAG ID: ' + pad(n, 22) + 'WorkingMode: LACP', 'Preempt Delay: ' + pad(x.preempt ? 'Enabled' : 'Disabled', 15) + 'Hash arithmetic: According to SIP-XOR-DIP',
+      'System Priority: ' + pad(sp, 13) + 'System ID: ' + mac(st), 'Least Active-linknumber: ' + pad(least, 5) + 'Max Active-linknumber: ' + (x['max active-linknumber'] || 8),
+      'Operate status: ' + pad(opUp ? 'up' : 'down', 14) + 'Number Of Up Port In Trunk: ' + (opUp ? up.length : 0), new Array(81).join('-'),
+      'ActorPortName          Status   PortType  PortPri PortNo PortKey PortState Weight'];
+    mem.forEach(function (p) { var sel = up.indexOf(p) >= 0; o.push(pad(full(p), 24) + pad(sel ? 'Selected' : 'Unselect', 10) + pad(/^Eth/.test(p) ? '100M' : '1GE', 10) + pad((C(st).ifs[p] || {}).lacpPrio || 32768, 8) +
+      pad(portNo(st, p) + 1, 7) + pad(305, 8) + pad(sel ? '10111100' : '10100000', 10) + '1'); });
+    o.push('', 'Partner:', new Array(81).join('-'), 'ActorPortName          SysPri     SystemID        PortPri  PortNo PortKey   PortState');
+    mem.forEach(function (p) { var pr = net.peer(st.dev, p), sel = up.indexOf(p) >= 0, pd = pr && net.devs[pr.dev];
+      o.push(pad(full(p), 24) + (sel && pd ? pad(EL.vrp.isVrp(pd) ? (pd.st.vrp.c.lacpPrio || 32768) : 32768, 11) + pad(EL.vrp.isVrp(pd) ? mac(pd.st) : macOf(pd.st), 16) + pad(32768, 9) + pad(net.portsOf(pd).indexOf(pr.port) + 2, 7) + pad(305, 10) + '10111100'
+        : pad(0, 11) + pad('0000-0000-0000', 16) + pad(0, 9) + pad(0, 7) + pad(0, 10) + '10100011')); });
+    return o.join('\n');
+  }
+  sc('*', 'display mac-address', function (st) {
+    var net = st.net; if (!net) return ''; var T = net.mac[st.dev] || {}, ks = Object.keys(T), line = new Array(80).join('-');
+    var o = [line, 'MAC Address          VLAN/VSI/BD                 Learned-From        Type', line];
+    ks.forEach(function (k) { var e = T[k], m = String(e.mac).replace(/:/g, ''); o.push(pad(m.slice(0, 4) + '-' + m.slice(4, 8) + '-' + m.slice(8, 12), 21) + pad(e.vlan + '/-/-', 28) + pad(Vr.short(full(lname(e.port))), 20) + (e.st ? 'static' : 'dynamic')); });
+    o.push(line, 'Total items displayed = ' + ks.length);
+    return o.join('\n');
+  });
+  sc('*', 'display lldp neighbor brief', function (st) {
+    var net = st.net; if (!net || !C(st).lldp) return ''; var o = ['Local Intf   Neighbor Dev             Neighbor Intf             Exptime(s)'];
+    EL.vrp.dports(net, net.devs[st.dev]).forEach(function (p) { var pr = net.peer(st.dev, p); if (!pr || !net.linkUp(st.dev, p)) return; var pd = net.devs[pr.dev];
+      if (pd.type !== 'mes' && pd.type !== 'esr' || EL.vrp.isVrp(pd) && !pd.st.vrp.c.lldp) return;
+      var h = pd.type === 'esr' ? pd.st.run.host : pd.st.host; o.push(pad(Vr.short(p), 13) + pad(h, 25) + pad(Vr.short(pr.port), 26) + (90 + ((net.now || 0) % 30 | 0))); });
+    return o.join('\n');
+  });
+})(typeof window !== 'undefined' ? window : global);
+
+/* Маршрутизаторы Huawei AR (AR2220, AR1220) — спецификация sources/huawei/spec/ar-router.md (HCIA-LG гл. 2, 4, 5; AR-CR V200R010).
+   Настройки VRP (st.vrp.c) → st.run модели ESR: ifs (ip, shut, ospf, vrrp, acl, helper), routes, rip, ospf, acls, snat/dnat, dhcp, relay.
+   Межсетевого экрана нет (fw выключен на всех интерфейсах). По документации: статика — preference 60, OSPF — 10, RIP — 100
+   (в модели порядок сохранён через EL.vrp.adOf); OSPF — hello 10 / dead 40, broadcast на Ethernet, DR priority 1, MTU в DD не проверяется;
+   RIP — шлёт v1 (version 2 — v2), network — только классовая сеть; VRRP — v2, приоритет 100, вытеснение включено.
+   LAN-порты AR1220 (Ethernet0/0/0–7) — L2, адрес на них — после undo portswitch.
+   Упрощения (в отчёте): traffic-filter пропускает пакеты, не попавшие ни в одно правило (в снятых страницах документации не указано);
+   nat outbound с address-group транслирует в адрес интерфейса; nat server без смены порта; RIP-суммирование не моделируется. */
+(function (G) {
+  'use strict';
+  var EL = G.EL, IP = EL.ip, Vr = EL.vrp, pad = Vr.pad, full = Vr.full;
+  function AR(st) { return st.vrp.kind === 'ar'; }
+  function ac(views, pat, run, d) { var e = Vr.cmd(views, pat, run, d); e.ok = AR; return e; }
+  function C(st) { return st.vrp.c; }
+  function top(st) { return Vr.top(st); }
+  function x0(st) { return Vr.cur(st)[0]; }
+  function nm(st) { return top(st).name; }
+  function isL3(st, n) { var x = C(st).ifs[n.split('.')[0]] || {}; return !/^Eth\d/.test(n) || !!x.l3; }
+  function wcRange(ip, w) { var a = IP.ip2n(ip), m = IP.ip2n(w); if (a === null || m === null) return null; var lo = (a & ~m) >>> 0; return [IP.n2ip(lo), IP.n2ip((lo | m) >>> 0)]; }
+  function area(w) { return /^\d+$/.test(w) ? IP.n2ip(+w >>> 0) : IP.ip2n(w) !== null ? w : null; }
+
+  // ---------------------------------------------------------------- интерфейсы
+  ac('if', 'ip address <ip> <mask>', function (st, a) { var n = nm(st); if (/^(Eth-Trunk|Vlanif)/.test(n) || !isL3(st, n) || a[1] < 1 || a[1] > 32) return null; x0(st).ip = [a[0], a[1]]; }, 'Configure the IP address of an interface');
+  ac('if', 'undo ip address', function (st) { delete x0(st).ip; });
+  ac('if', 'undo portswitch', function (st) { if (!/^Eth\d+\/\d+\/\d+$/.test(nm(st))) return null; x0(st).l3 = true; });
+  ac('if', 'portswitch', function (st) { if (!/^Eth\d+\/\d+\/\d+$/.test(nm(st))) return null; delete x0(st).l3; delete x0(st).ip; });
+  ac('if', 'dot1q termination vid <n>', function (st, a) { if (nm(st).indexOf('.') < 0 || a[0] < 1 || a[0] > 4094) return null; x0(st).vid = a[0]; });
+  ac('if', 'undo dot1q termination vid <n>', function (st) { delete x0(st).vid; });
+  ac('if', 'arp broadcast enable', function (st) { if (nm(st).indexOf('.') < 0) return null; x0(st).arpb = true; });
+  ac('if', 'mtu <n>', function (st, a) { if (a[0] < 46 || a[0] > 1500) return null; x0(st).mtu = a[0]; });
+  ac('if', 'undo mtu', function (st) { delete x0(st).mtu; });
+
+  // ---------------------------------------------------------------- RIP
+  function rip(st) { return C(st).rip; }
+  function ripEnter(st, n) { var c = C(st); if (!c.rip || c.rip.id !== n) c.rip = { id: n, nets: [], silent: [] }; Vr.push(st, { v: 'rip', key: 'rip', tag: 'rip-' + n }); }
+  ac('sys', 'rip', function (st) { ripEnter(st, 1); }, 'Specify the RIP process');
+  ac('sys', 'rip <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return null; ripEnter(st, a[0]); });
+  ac('sys', 'undo rip <n>', function (st) { delete C(st).rip; });
+  ac('rip', 'version <n>', function (st, a) { if (a[0] !== 1 && a[0] !== 2) return null; rip(st).ver = a[0]; }, 'Specify the RIP version');
+  ac('rip', 'undo version', function (st) { delete rip(st).ver; });
+  ac('rip', 'network <ip>', function (st, a) { var n = IP.ip2n(a[0]), cl = n >>> 31 === 0 ? 8 : n >>> 30 === 2 ? 16 : 24;   // только классовая сеть
+    if (IP.netOf(a[0], cl) !== a[0] + '/' + cl) return null; var R = rip(st); if (R.nets.indexOf(a[0]) < 0) R.nets.push(a[0]); }, 'Enable RIP on the specified network segment');
+  ac('rip', 'undo network <ip>', function (st, a) { var R = rip(st); R.nets = R.nets.filter(function (x) { return x !== a[0]; }); });
+  ac('rip', 'summary', function (st) { delete rip(st).noSum; });
+  ac('rip', 'undo summary', function (st) { rip(st).noSum = true; });
+  ac('rip', 'silent-interface <if>', function (st, a) { var R = rip(st); if (R.silent.indexOf(a[0]) < 0) R.silent.push(a[0]); });
+  ac('rip', 'undo silent-interface <if>', function (st, a) { var R = rip(st); R.silent = R.silent.filter(function (x) { return x !== a[0]; }); });
+  ac('rip', 'import-route <w>', function (st, a) { var w = a[0].toLowerCase(); if (['direct', 'static'].indexOf(w) < 0) return null; var R = rip(st); R.imp = R.imp || []; if (R.imp.indexOf(w) < 0) R.imp.push(w); });
+  ac('rip', 'default-route originate', function (st) { rip(st).defOrig = true; });
+  ac('if', 'rip version <n>', function (st, a) { if (a[0] !== 1 && a[0] !== 2) return null; x0(st).ripVer = a[0]; });
+  ac('if', 'undo rip version', function (st) { delete x0(st).ripVer; });
+
+  // ---------------------------------------------------------------- OSPF
+  function ospfEnter(st, n, rid) { var c = C(st); if (!c.ospf || c.ospf.id !== n) c.ospf = { id: n, areas: {}, silent: [] }; if (rid) c.ospf.rid = rid;
+    Vr.push(st, { v: 'ospf', key: 'ospf', tag: 'ospf-' + n }); }
+  ac('sys', 'ospf', function (st) { ospfEnter(st, 1); }, 'Specify the OSPF process');
+  ac('sys', 'ospf <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return null; ospfEnter(st, a[0]); });
+  ac('sys', 'ospf <n> router-id <ip>', function (st, a) { ospfEnter(st, a[0], a[1]); });
+  ac('sys', 'ospf router-id <ip>', function (st, a) { ospfEnter(st, 1, a[0]); });
+  ac('sys', 'undo ospf <n>', function (st, a) { if (C(st).ospf && C(st).ospf.id === a[0]) delete C(st).ospf; });
+  ac('ospf', 'area <w>', function (st, a) { var id = area(a[0]); if (!id) return null; var O = C(st).ospf; O.areas[id] = O.areas[id] || { nets: [] };
+    Vr.push(st, { v: 'area', key: 'ospf', id: id, tag: 'ospf-' + O.id + '-area-' + id }); }, 'Specify an OSPF area');
+  ac('ospf', 'undo area <w>', function (st, a) { var id = area(a[0]); if (id) delete C(st).ospf.areas[id]; });
+  function ar0(st) { return C(st).ospf.areas[top(st).id]; }
+  ac('area', 'network <ip> <ip>', function (st, a) { var r = wcRange(a[0], a[1]); if (!r) return null; var A = ar0(st);
+    if (!A.nets.some(function (x) { return x[0] === r[0] && x[1] === a[1]; })) A.nets.push([r[0], a[1]]); }, 'Enable OSPF on the interface');   // адрес приводится к сети (HCIA-LG с. 41)
+  ac('area', 'undo network <ip> <ip>', function (st, a) { var r = wcRange(a[0], a[1]); var A = ar0(st); A.nets = A.nets.filter(function (x) { return !(r && x[0] === r[0] && x[1] === a[1]); }); });
+  ac('area', 'authentication-mode md5 <n> cipher <w>', function (st, a) { ar0(st).auth = a[0] + ' ' + a[1]; });
+  ac('ospf', 'silent-interface <if>', function (st, a) { var O = C(st).ospf; if (O.silent.indexOf(a[0]) < 0) O.silent.push(a[0]); });
+  ac('ospf', 'undo silent-interface <if>', function (st, a) { var O = C(st).ospf; O.silent = O.silent.filter(function (x) { return x !== a[0]; }); });
+  ac('ospf', 'default-route-advertise', function (st) { C(st).ospf.dra = 'yes'; });
+  ac('ospf', 'default-route-advertise always', function (st) { C(st).ospf.dra = 'always'; });
+  ac('ospf', 'undo default-route-advertise', function (st) { delete C(st).ospf.dra; });
+  ac('ospf', 'import-route <w>', function (st, a) { var w = a[0].toLowerCase(); if (['direct', 'static', 'rip'].indexOf(w) < 0) return null; var O = C(st).ospf; O.imp = O.imp || []; if (O.imp.indexOf(w) < 0) O.imp.push(w); });
+  ac('if', 'ospf timer hello <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return null; x0(st).hello = a[0]; });
+  ac('if', 'ospf timer dead <n>', function (st, a) { if (a[0] < 1 || a[0] > 235926000) return null; x0(st).dead = a[0]; });
+  ac('if', 'undo ospf timer hello', function (st) { delete x0(st).hello; });
+  ac('if', 'undo ospf timer dead', function (st) { delete x0(st).dead; });
+  ac('if', 'ospf network-type <w>', function (st, a) { var w = a[0].toLowerCase(); if (['p2p', 'broadcast'].indexOf(w) < 0) return null; x0(st).ntype = w; });
+  ac('if', 'undo ospf network-type', function (st) { delete x0(st).ntype; });
+  ac('if', 'ospf cost <n>', function (st, a) { if (a[0] < 1 || a[0] > 65535) return null; x0(st).ocost = a[0]; });
+  ac('if', 'undo ospf cost', function (st) { delete x0(st).ocost; });
+  ac('if', 'ospf dr-priority <n>', function (st, a) { if (a[0] > 255) return null; x0(st).oprio = a[0]; });
+  ac('if', 'undo ospf dr-priority', function (st) { delete x0(st).oprio; });
+  ac('if', 'ospf mtu-enable', function (st) { x0(st).mtuEn = true; });
+  ac('if', 'undo ospf mtu-enable', function (st) { delete x0(st).mtuEn; });
+  ac('if', 'ospf authentication-mode md5 <n> cipher <w>', function (st, a) { x0(st).oauth = a[0] + ' ' + a[1]; });
+
+  // ---------------------------------------------------------------- ACL
+  function acls(st) { var c = C(st); return c.acls || (c.acls = {}); }
+  function aclEnter(st, n) { if (n < 2000 || n > 3999) return null; var A = acls(st); A[n] = A[n] || { rules: {} };
+    Vr.push(st, { v: 'acl', key: 'acl', n: n, tag: 'acl-' + (n < 3000 ? 'basic-' : 'adv-') + n }); }
+  ac('sys', 'acl <n>', function (st, a) { return aclEnter(st, a[0]); }, 'Specify ACL configuration information');
+  ac('sys', 'acl number <n>', function (st, a) { return aclEnter(st, a[0]); });
+  ac('sys', 'undo acl <n>', function (st, a) { delete acls(st)[a[0]]; });
+  ac('sys', 'undo acl number <n>', function (st, a) { delete acls(st)[a[0]]; });
+  var PORTN = { telnet: 23, www: 80, ftp: 21, ssh: 22, smtp: 25, domain: 53, bootps: 67, tftp: 69, snmp: 161 };
+  function portNum(w) { return /^\d+$/.test(w) ? +w : PORTN[String(w).toLowerCase()] || null; }
+  // rule [id] permit|deny [proto] [source A W|any] [destination A W|any] [destination-port eq N]
+  function parseRule(adv, t) {
+    var r = {}, i = 0; if (!/^(permit|deny)$/.test(t[0])) return null; r.act = t[0]; i = 1;
+    if (adv) { var pr = t[1]; if (!pr || !/^(ip|tcp|udp|icmp|\d+)$/.test(pr)) return null; r.proto = pr === 'ip' ? 'any' : pr === '6' ? 'tcp' : pr === '17' ? 'udp' : pr === '1' ? 'icmp' : pr; i = 2; }
+    while (i < t.length) { var k = t[i];
+      if (k === 'source' || k === 'destination' && adv) { var f = k === 'source' ? 'src' : 'dst';
+        if (t[i + 1] === 'any') { i += 2; continue; } var w = t[i + 2] === '0' ? '0.0.0.0' : t[i + 2], rr = wcRange(t[i + 1], w); if (!rr) return null; r[f] = rr; r[f + 'T'] = t[i + 1] + ' ' + (w === '0.0.0.0' ? '0' : w); i += 3; continue; }
+      if (k === 'destination-port' && adv && t[i + 1] === 'eq' && portNum(t[i + 2])) { r.dport = [portNum(t[i + 2]), portNum(t[i + 2])]; r.dportT = t[i + 2]; i += 3; continue; }
+      return null; }
+    return r;
+  }
+  ac('acl', 'rule <rest>', function (st, a) { var t = a[0].toLowerCase().split(/\s+/), A = acls(st)[top(st).n], id = null;
+    if (/^\d+$/.test(t[0])) { id = +t[0]; t = t.slice(1); }
+    var r = parseRule(top(st).n >= 3000, t); if (!r) return null;
+    if (id === null) { var ks = Object.keys(A.rules).map(Number); id = ks.length ? Math.ceil((Math.max.apply(null, ks) + 1) / 5) * 5 : 5; }   // шаг правил — 5
+    A.rules[id] = r; }, 'Specify an ACL rule');
+  ac('acl', 'undo rule <n>', function (st, a) { delete acls(st)[top(st).n].rules[a[0]]; });
+  ac('if', 'traffic-filter <w> acl <n>', function (st, a) { var d = a[0].toLowerCase(); if (['inbound', 'outbound'].indexOf(d) < 0 || !acls(st)[a[1]]) return null; x0(st)['tf' + d] = a[1]; });
+  ac('if', 'undo traffic-filter <w>', function (st, a) { delete x0(st)['tf' + a[0].toLowerCase()]; });
+
+  // ---------------------------------------------------------------- NAT
+  ac('sys', 'nat address-group <n> <ip> <ip>', function (st, a) { if (IP.ip2n(a[2]) < IP.ip2n(a[1]) || IP.ip2n(a[2]) - IP.ip2n(a[1]) > 254) return null; var c = C(st); c.natGroups = c.natGroups || {}; c.natGroups[a[0]] = [a[1], a[2]]; });
+  ac('sys', 'undo nat address-group <n>', function (st, a) { if (C(st).natGroups) delete C(st).natGroups[a[0]]; });
+  ac('if', 'nat outbound <n>', function (st, a) { if (a[0] < 2000 || a[0] > 3999) return null; x0(st).natOut = { acl: a[0] }; }, 'Configure NAT outbound');
+  ac('if', 'nat outbound <n> address-group <n>', function (st, a) { if (!(C(st).natGroups || {})[a[1]]) return null; x0(st).natOut = { acl: a[0], grp: a[1] }; });
+  ac('if', 'nat outbound <n> address-group <n> no-pat', function (st, a) { if (!(C(st).natGroups || {})[a[1]]) return null; x0(st).natOut = { acl: a[0], grp: a[1], nopat: true }; });
+  ac('if', 'undo nat outbound <rest>', function (st) { delete x0(st).natOut; });
+  ac('if', 'nat server protocol <w> global <w> <w> inside <ip> <w>', function (st, a) { return natSrv(st, a[0], a[1], a[2], a[3], a[4]); }, 'Configure NAT server');
+  ac('if', 'nat server protocol <w> global <w> <w> inside <ip>', function (st, a) { return natSrv(st, a[0], a[1], a[2], a[3], a[2]); });
+  ac('if', 'nat server global <ip> inside <ip>', function (st, a) { var x = x0(st); x.natSrv = (x.natSrv || []).concat([{ g: a[0], in: a[1] }]); });
+  ac('if', 'undo nat server <rest>', function (st) { delete x0(st).natSrv; });
+  function natSrv(st, pr, g, gp, ip, ipp) { pr = pr.toLowerCase(); if (['tcp', 'udp'].indexOf(pr) < 0 || !portNum(gp) || !portNum(ipp)) return null;
+    if (g.toLowerCase() !== 'current-interface' && IP.ip2n(g) === null) return null;
+    var x = x0(st); x.natSrv = (x.natSrv || []).concat([{ pr: pr, g: g.toLowerCase() === 'current-interface' ? 'current-interface' : g, gp: gp, in: ip, ip: ipp }]); }
+
+  // ---------------------------------------------------------------- DHCP
+  ac('sys', 'dhcp enable', function (st) { C(st).dhcp = true; return 'Info: The operation may take a few seconds. Please wait for a moment.done.'; }, 'Enable DHCP');
+  ac('sys', 'undo dhcp enable', function (st) { delete C(st).dhcp; });
+  function pools(st) { var c = C(st); return c.pools || (c.pools = {}); }
+  ac('sys', 'ip pool <w>', function (st, a) { var P = pools(st), n = !P[a[0]]; P[a[0]] = P[a[0]] || {}; Vr.push(st, { v: 'pool', key: 'pool', n: a[0], tag: 'ip-pool-' + a[0] });
+    if (n) return 'Info: It\'s successful to create an IP address pool.'; }, 'Configure an IP address pool');
+  ac('sys', 'undo ip pool <w>', function (st, a) { delete pools(st)[a[0]]; });
+  function pl(st) { return pools(st)[top(st).n]; }
+  ac('pool', 'network <ip> mask <mask>', function (st, a) { if (a[1] < 1 || a[1] > 30) return null; pl(st).net = IP.netOf(a[0], a[1]); });
+  ac('pool', 'gateway-list <ip>', function (st, a) { pl(st).gw = a[0]; });
+  ac('pool', 'dns-list <rest>', function (st, a) { var L = a[0].split(/\s+/); if (L.some(function (x) { return IP.ip2n(x) === null; })) return null; pl(st).dns = L; });
+  ac('pool', 'excluded-ip-address <ip>', function (st, a) { var p = pl(st); p.excl = (p.excl || []).concat([[a[0], a[0]]]); });
+  ac('pool', 'excluded-ip-address <ip> <ip>', function (st, a) { var p = pl(st); p.excl = (p.excl || []).concat([[a[0], a[1]]]); });
+  ac('pool', 'lease unlimited', function (st) { pl(st).lease = 'unlimited'; });
+  ac('pool', 'lease day <n>', function (st, a) { pl(st).lease = [a[0], 0, 0]; });
+  ac('pool', 'lease day <n> hour <n>', function (st, a) { pl(st).lease = [a[0], a[1], 0]; });
+  ac('pool', 'lease day <n> hour <n> minute <n>', function (st, a) { pl(st).lease = [a[0], a[1], a[2]]; });
+  ac('pool', 'static-bind ip-address <ip> mac-address <w>', function (st, a) { var p = pl(st); p.bind = (p.bind || []).concat([[a[0], a[1]]]); });
+  ac('if', 'dhcp select <w>', function (st, a) { var w = a[0].toLowerCase(); if (!C(st).dhcp || ['global', 'interface', 'relay'].indexOf(w) < 0) return null; x0(st).dsel = w; });
+  ac('if', 'undo dhcp select <w>', function (st) { delete x0(st).dsel; });
+  ac('if', 'dhcp server dns-list <rest>', function (st, a) { x0(st).ddns = a[0].split(/\s+/); });
+  ac('if', 'dhcp relay server-ip <ip>', function (st, a) { x0(st).relay = a[0]; });
+  ac('if', 'undo dhcp relay server-ip <ip>', function (st) { delete x0(st).relay; });
+
+  // ---------------------------------------------------------------- VRRP
+  function vr(st, id) { var x = x0(st); x.vrrp = x.vrrp || {}; return x.vrrp[id] || (x.vrrp[id] = {}); }
+  ac('if', 'vrrp vrid <n> virtual-ip <ip>', function (st, a) { if (a[0] < 1 || a[0] > 255 || !x0(st).ip) return null; vr(st, a[0]).vip = a[1]; }, 'Configure VRRP');
+  ac('if', 'vrrp vrid <n> priority <n>', function (st, a) { if (a[1] < 1 || a[1] > 254) return null; vr(st, a[0]).prio = a[1]; });
+  ac('if', 'vrrp vrid <n> preempt-mode timer delay <n>', function (st, a) { vr(st, a[0]).delay = a[1]; });
+  ac('if', 'vrrp vrid <n> preempt-mode disable', function (st, a) { vr(st, a[0]).nopre = true; });
+  ac('if', 'vrrp vrid <n> timer advertise <n>', function (st, a) { vr(st, a[0]).adv = a[1]; });
+  ac('if', 'undo vrrp vrid <n>', function (st, a) { if (x0(st).vrrp) delete x0(st).vrrp[a[0]]; });
+
+  // ---------------------------------------------------------------- compile: настройки VRP → модель ESR
+  function ifKey(st, n) { var x = C(st).ifs[n] || {}; if (/^LoopBack/.test(n)) return 'lo' + n.slice(8); if (n.indexOf('.') > 0) return x.vid ? n.split('.')[0] + '.' + x.vid : null; return n; }
+  function inNet(ip, len, nets) { return nets.some(function (w) { var r = wcRange(w[0], w[1]); return r && IP.ip2n(ip) >= IP.ip2n(r[0]) && IP.ip2n(ip) <= IP.ip2n(r[1]); }); }
+  function aclRules(L, permitRest) { var o = {}; Object.keys(L.rules).forEach(function (k) { var r = L.rules[k];
+      o[k] = { on: true, act: r.act, proto: r.proto || 'any', src: r.src, dst: r.dst, dport: r.dport }; });
+    if (permitRest) o[99999] = { on: true, act: 'permit', proto: 'any' }; return { rules: o }; }
+  EL.vrp.compileAr = function (st) {
+    var c = C(st), run = st.run, net = st.net, d = net && net.devs[st.dev], ports = d ? Vr.dports(net, d) : Object.keys(run.ifs).filter(function (k) { return /^(GE|Eth)/.test(k); });
+    var old = run.ifs, ifs = {}, sub = {};
+    Object.keys(old).forEach(function (k) { if (!/^(GE|Eth)\d+\/\d+\/\d+$/.test(k)) ifs[k] = old[k]; });   // служебные порты (console и т. п.) не трогаем
+    run.host = c.sysname || 'Huawei'; run.routes = []; run.rip = null; run.ospf = null; run.acls = {}; run.snat = null; run.dnat = null; run.dhcp = null; run.relay = false;
+    Object.keys(ifs).forEach(function (k) { if (/^(lo\d|GE|Eth)/.test(k)) delete ifs[k]; });
+    ports.forEach(function (p) { ifs[p] = { ip: null, fw: false, shut: false, speed: (old[p] || {}).speed, duplex: (old[p] || {}).duplex }; });
+    Object.keys(c.ifs).forEach(function (n) { var x = c.ifs[n], k = ifKey(st, n); if (!k) return; if (k !== n) sub[k] = n;
+      var y = ifs[k] = ifs[k] || { ip: null, fw: false, shut: false };
+      y.shut = !!x.shut; y.ip = x.ip && isL3(st, n) ? x.ip[0] + '/' + x.ip[1] : null; if (x.mtu) y.mtu = x.mtu;
+      if (x.tfinbound && (c.acls || {})[x.tfinbound]) { run.acls['hw' + x.tfinbound] = aclRules(c.acls[x.tfinbound], true); y.acl = 'hw' + x.tfinbound; }
+      if (x.relay && x.dsel === 'relay' && c.dhcp) { y.helper = x.relay; run.relay = true; }
+      var vk = Object.keys(x.vrrp || {}).filter(function (id) { return x.vrrp[id].vip; })[0];
+      if (vk && x.ip) y.vrrp = { on: true, id: +vk, ip: x.vrrp[vk].vip + '/' + x.ip[1], prio: x.vrrp[vk].prio || 100 }; });
+    st.vrp.sub = sub;
+    run.ifs = ifs;
+    run.routes = (c.routes || []).map(function (r) { return { net: r.net, nh: r.nh, ad: EL.vrp.adOf(r.pref), pref: r.pref }; });
+    // RIP: интерфейс в процессе, если его адрес в классовой сети network; остальные — пассивные (не шлют и не слушают)
+    if (c.rip) { var R = c.rip, nets = R.nets.map(function (n) { var v = IP.ip2n(n); return n + '/' + (v >>> 31 === 0 ? 8 : v >>> 30 === 2 ? 16 : 24); });
+      var pas = []; Object.keys(ifs).forEach(function (k) { var y = ifs[k]; if (!y.ip) return; var ip = y.ip.split('/')[0];
+        var inR = nets.some(function (n) { return IP.sameNet(ip, n.split('/')[0], +n.split('/')[1]); });
+        var hn = sub[k] || (/^lo/.test(k) ? 'LoopBack' + k.slice(2) : k);
+        if (!inR || R.silent.indexOf(hn) >= 0) pas.push(k); });
+      run.rip = { on: nets.length > 0, nets: nets, passive: pas, redist: (R.imp || []).map(function (w) { return w === 'direct' ? 'connected' : w; }), ver: R.ver || 1 }; }
+    if (c.ospf) { var O = c.ospf; run.ospf = { id: O.id, rid: O.rid || null, on: true, areas: {}, dra: O.dra || null };
+      Object.keys(O.areas).forEach(function (a) { run.ospf.areas[a] = { on: true };
+        Object.keys(ifs).forEach(function (k) { var y = ifs[k]; if (!y.ip || y.ospf) return; var p = y.ip.split('/'); if (!inNet(p[0], +p[1], O.areas[a].nets)) return;
+          var hn = sub[k] || (/^lo/.test(k) ? 'LoopBack' + k.slice(2) : k), x = c.ifs[hn] || {};
+          y.ospf = { on: true, inst: O.id, area: a, passive: O.silent.indexOf(hn) >= 0, cost: x.ocost || (/^lo/.test(k) ? 0 : 1), hello: x.hello || 10, dead: x.dead || (x.hello ? x.hello * 4 : 40),
+            net: x.ntype === 'p2p' ? 'point-to-point' : 'broadcast', prio: x.oprio !== undefined ? x.oprio : 1, mtuCheck: !!x.mtuEn }; }); }); }
+    // NAT: Easy IP / пул — Source NAT по разрешающим правилам ACL; nat server — Destination NAT на этом интерфейсе
+    Object.keys(c.ifs).forEach(function (n) { var x = c.ifs[n], k = ifKey(st, n); if (!k) return;
+      if (x.natOut && (c.acls || {})[x.natOut.acl]) { var L = c.acls[x.natOut.acl], rs = {}, q = 1;
+        Object.keys(L.rules).map(Number).sort(function (a, b) { return a - b; }).forEach(function (id) { var r = L.rules[id]; if (r.act !== 'permit') return;
+          rs[q++] = { on: true, act: 'interface', src: r.src, dst: r.dst, proto: r.proto && r.proto !== 'any' ? r.proto : null }; });
+        run.snat = run.snat || { rulesets: {} }; run.snat.rulesets['hw-' + k] = { ifn: k, rules: rs }; }
+      if (x.natSrv && x.ip) { var ds = {}; x.natSrv.forEach(function (s, i) { var g = s.g === 'current-interface' ? x.ip[0] : s.g;
+          ds[i + 1] = { on: true, to: s.in, dst: [g, g], proto: s.pr || null, dport: s.gp ? [portNum(s.gp), portNum(s.gp)] : null }; });
+        run.dnat = run.dnat || { rulesets: {} }; run.dnat.rulesets['hw-' + k] = { ifn: k, rules: ds }; } });
+    // DHCP: глобальный пул — для интерфейса с dhcp select global в его подсети; пул интерфейса — подсеть и шлюз интерфейса
+    if (c.dhcp) { var pp = {};
+      Object.keys(c.ifs).forEach(function (n) { var x = c.ifs[n]; if (!x.ip || !x.dsel) return;
+        if (x.dsel === 'interface') { var nt = IP.netOf(x.ip[0], x.ip[1]); pp[n] = { net: nt, range: hostRange(nt, [[x.ip[0], x.ip[0]]]), gw: x.ip[0], dns: (x.ddns || [])[0] || null, lease: null }; }
+        if (x.dsel === 'global') Object.keys(c.pools || {}).forEach(function (k) { var p = c.pools[k]; if (!p.net || !IP.sameNet(x.ip[0], p.net.split('/')[0], +p.net.split('/')[1])) return;
+          pp[k] = { net: p.net, range: hostRange(p.net, (p.excl || []).concat(p.gw ? [[p.gw, p.gw]] : [])), gw: p.gw || null, dns: (p.dns || [])[0] || null, lease: null }; }); });
+      Object.keys(c.pools || {}).forEach(function (k) { var p = c.pools[k];      // пул не своей подсети — для запросов через relay (выбор по giaddr)
+        if (pp[k] || !p.net || Object.keys(ifs).some(function (q) { var y = ifs[q]; return y.ip && IP.sameNet(y.ip.split('/')[0], p.net.split('/')[0], +p.net.split('/')[1]); })) return;
+        pp[k] = { net: p.net, range: hostRange(p.net, (p.excl || []).concat(p.gw ? [[p.gw, p.gw]] : [])), gw: p.gw || null, dns: (p.dns || [])[0] || null, lease: null }; });
+      run.dhcp = { on: Object.keys(pp).length > 0, pools: pp }; }
+    st.cand = EL.clone(run);
+  };
+  // диапазон выдачи: вся подсеть без исключённых адресов на концах (адреса внутри диапазона модель всё равно не выдаёт — они заняты)
+  function hostRange(nt, ex) { var p = nt.split('/'), lo = IP.ip2n(p[0]) + 1, hi = IP.ip2n(p[0]) + Math.pow(2, 32 - +p[1]) - 2;
+    var ok = function (n) { return !ex.some(function (e) { return n >= IP.ip2n(e[0]) && n <= IP.ip2n(e[1]); }); };
+    while (lo <= hi && !ok(lo)) lo++; while (hi >= lo && !ok(hi)) hi--; return lo <= hi ? [IP.n2ip(lo), IP.n2ip(hi)] : null; }
+
+  // ---------------------------------------------------------------- display current-configuration (части маршрутизатора)
+  function ruleTxt(id, r) { return ' rule ' + id + ' ' + r.act + (r.proto && r.proto !== 'any' ? ' ' + r.proto : r.proto === 'any' && r.dstT === undefined && r.srcT === undefined ? ' ip' : r.proto === 'any' ? ' ip' : '') +
+    (r.srcT ? ' source ' + r.srcT : '') + (r.dstT ? ' destination ' + r.dstT : '') + (r.dport ? ' destination-port eq ' + (Object.keys(PORTN).filter(function (k) { return PORTN[k] === r.dport[0]; })[0] || r.dport[0]) : ''); }
+  function ifLinesAr(x, n) {
+    var o = [];
+    if (x.desc) o.push(' description ' + x.desc); if (x.shut) o.push(' shutdown'); if (x.l3) o.push(' undo portswitch');
+    if (x.mtu) o.push(' mtu ' + x.mtu);
+    if (x.vid) o.push(' dot1q termination vid ' + x.vid);
+    if (x.ip) o.push(' ip address ' + x.ip[0] + ' ' + IP.len2mask(x.ip[1]));
+    if (x.arpb) o.push(' arp broadcast enable');
+    Object.keys(x.vrrp || {}).forEach(function (id) { var v = x.vrrp[id]; if (v.vip) o.push(' vrrp vrid ' + id + ' virtual-ip ' + v.vip);
+      if (v.prio) o.push(' vrrp vrid ' + id + ' priority ' + v.prio); if (v.delay !== undefined) o.push(' vrrp vrid ' + id + ' preempt-mode timer delay ' + v.delay);
+      if (v.nopre) o.push(' vrrp vrid ' + id + ' preempt-mode disable'); if (v.adv) o.push(' vrrp vrid ' + id + ' timer advertise ' + v.adv); });
+    if (x.ntype) o.push(' ospf network-type ' + x.ntype); if (x.hello) o.push(' ospf timer hello ' + x.hello); if (x.dead) o.push(' ospf timer dead ' + x.dead);
+    if (x.ocost) o.push(' ospf cost ' + x.ocost); if (x.oprio !== undefined) o.push(' ospf dr-priority ' + x.oprio); if (x.mtuEn) o.push(' ospf mtu-enable');
+    if (x.oauth) o.push(' ospf authentication-mode md5 ' + x.oauth.split(' ')[0] + ' cipher ' + x.oauth.split(' ')[1]);
+    if (x.ripVer) o.push(' rip version ' + x.ripVer);
+    if (x.tfinbound) o.push(' traffic-filter inbound acl ' + x.tfinbound); if (x.tfoutbound) o.push(' traffic-filter outbound acl ' + x.tfoutbound);
+    (x.natSrv || []).forEach(function (s) { o.push(s.pr ? ' nat server protocol ' + s.pr + ' global ' + s.g + ' ' + s.gp + ' inside ' + s.in + ' ' + s.ip : ' nat server global ' + s.g + ' inside ' + s.in); });
+    if (x.natOut) o.push(' nat outbound ' + x.natOut.acl + (x.natOut.grp ? ' address-group ' + x.natOut.grp + (x.natOut.nopat ? ' no-pat' : '') : ''));
+    if (x.dsel) o.push(' dhcp select ' + x.dsel); if (x.ddns) o.push(' dhcp server dns-list ' + x.ddns.join(' ')); if (x.relay) o.push(' dhcp relay server-ip ' + x.relay);
+    return o;
+  }
+  EL.vrp.renderAr = function (st) {
+    var c = C(st), net = st.net, d = net && net.devs[st.dev], out = [];
+    if (c.dhcp) out.push({ h: 'dhcp', L: ['dhcp enable'] });
+    Object.keys(c.acls || {}).sort().forEach(function (n) { var L = c.acls[n]; out.push({ h: 'acl ' + n, L: ['acl number ' + n].concat(Object.keys(L.rules).map(Number).sort(function (a, b) { return a - b; }).map(function (id) { return ruleTxt(id, L.rules[id]); })) }); });
+    if (c.natGroups) out.push({ h: 'nat', L: Object.keys(c.natGroups).map(function (k) { return ' nat address-group ' + k + ' ' + c.natGroups[k].join(' '); }) });
+    Object.keys(c.pools || {}).forEach(function (k) { var p = c.pools[k], L = ['ip pool ' + k];
+      if (p.gw) L.push(' gateway-list ' + p.gw); if (p.net) L.push(' network ' + p.net.split('/')[0] + ' mask ' + IP.len2mask(+p.net.split('/')[1]));
+      (p.excl || []).forEach(function (e) { L.push(' excluded-ip-address ' + e[0] + (e[1] !== e[0] ? ' ' + e[1] : '')); });
+      (p.bind || []).forEach(function (b) { L.push(' static-bind ip-address ' + b[0] + ' mac-address ' + b[1]); });
+      if (p.lease) L.push(p.lease === 'unlimited' ? ' lease unlimited' : ' lease day ' + p.lease[0] + ' hour ' + p.lease[1] + ' minute ' + p.lease[2]);
+      if (p.dns) L.push(' dns-list ' + p.dns.join(' ')); out.push({ h: 'pool', L: L }); });
+    var ph = d ? Vr.dports(net, d) : [], ks = Object.keys(c.ifs);
+    ph.forEach(function (p) { [p].concat(ks.filter(function (k) { return k.split('.')[0] === p && k !== p; })).forEach(function (k) {
+      out.push({ h: 'interface ' + full(k), L: ['interface ' + full(k)].concat(ifLinesAr(c.ifs[k] || {}, k)) }); }); });
+    ks.filter(function (k) { return /^LoopBack/.test(k); }).forEach(function (k) { out.push({ h: 'interface ' + k, L: ['interface ' + k].concat(ifLinesAr(c.ifs[k], k)) }); });
+    out.push({ h: 'interface NULL0', L: ['interface NULL0'] });
+    if (c.ospf) { var O = c.ospf, L = ['ospf ' + O.id + (O.rid ? ' router-id ' + O.rid : '')];
+      O.silent.forEach(function (s) { L.push(' silent-interface ' + full(s)); }); if (O.dra) L.push(' default-route-advertise' + (O.dra === 'always' ? ' always' : ''));
+      (O.imp || []).forEach(function (w) { L.push(' import-route ' + w); });
+      Object.keys(O.areas).forEach(function (a) { L.push(' area ' + a); if (O.areas[a].auth) L.push('  authentication-mode md5 ' + O.areas[a].auth.replace(' ', ' cipher '));
+        O.areas[a].nets.forEach(function (w) { L.push('  network ' + w[0] + ' ' + w[1]); }); });
+      out.push({ h: 'ospf', L: L }); }
+    if (c.rip) { var R = c.rip, RL = ['rip ' + R.id]; if (R.noSum) RL.push(' undo summary'); if (R.ver) RL.push(' version ' + R.ver);
+      R.nets.forEach(function (n) { RL.push(' network ' + n); }); R.silent.forEach(function (s) { RL.push(' silent-interface ' + full(s)); });
+      (R.imp || []).forEach(function (w) { RL.push(' import-route ' + w); }); if (R.defOrig) RL.push(' default-route originate'); out.push({ h: 'rip', L: RL }); }
+    if ((c.routes || []).length) out.push({ h: 'route', L: c.routes.map(function (r) { var p = r.net.split('/');
+      return 'ip route-static ' + p[0] + ' ' + IP.len2mask(+p[1]) + ' ' + r.nh + (r.pref !== 60 ? ' preference ' + r.pref : ''); }) });
+    return out;
+  };
+
+  // ---------------------------------------------------------------- display (маршрутизатор)
+  function hn(st, k) { return full((st.vrp.sub || {})[k] || k); }
+  function rid(net, id) { var c = net.devs[id].st.run; return (c.ospf && c.ospf.rid) || (net.ifaces(id).map(function (f) { return f.ip; }).sort(function (a, b) { return IP.ip2n(b) - IP.ip2n(a); })[0] || '0.0.0.0'); }
+  function adj(st) { var net = st.net; net.dyn(); var A = (net._adj || {}).O || {}; return Object.keys(A).map(function (k) { return A[k]; }).filter(function (r) { return r.id === st.dev; }); }
+  var OST = { full: 'Full', '2way': '2-Way', init: 'Init', exstart: 'ExStart', exchange: 'Exchange', loading: 'Loading' };
+  ac('*', 'display ospf peer brief', function (st) { var net = st.net, run = st.run; if (!net || !run.ospf) return '';
+    var o = ['', '  OSPF Process ' + run.ospf.id + ' with Router ID ' + rid(net, st.dev), '    Peer Statistic Information', ' ' + new Array(77).join('-'),
+      ' Area Id          Interface                             Neighbor id       State'], L = adj(st);
+    L.forEach(function (r) { var y = run.ifs[r.ifn] || {}; o.push(' ' + pad((y.ospf || {}).area || '0.0.0.0', 17) + pad(hn(st, r.ifn), 40) + pad(rid(net, r.dev), 18) + (OST[r.state] || r.state)); });
+    o.push(' ' + new Array(77).join('-'), 'Total Peer(s):     ' + L.length); return o.join('\n'); }, 'Display OSPF peer brief information');
+  ac('*', 'display ospf peer', function (st) { var net = st.net, run = st.run; if (!net || !run.ospf) return '';
+    var o = ['', '         OSPF Process ' + run.ospf.id + ' with Router ID ' + rid(net, st.dev), '                 Neighbors'];
+    adj(st).forEach(function (r) { var y = run.ifs[r.ifn] || {}, me = net.ifaces(st.dev).filter(function (f) { return f.name === r.ifn; })[0] || {}, t = (y.ospf || {}).dead || 40;
+      o.push('', ' Area ' + ((y.ospf || {}).area || '0.0.0.0') + ' interface ' + me.ip + '(' + hn(st, r.ifn) + ')\'s neighbors', ' Router ID: ' + pad(rid(net, r.dev), 17) + 'Address: ' + r.nh,
+        '   State: ' + (OST[r.state] || r.state) + '  Mode:Nbr is  Master  Priority: 1', '   MTU: 0', '   Dead timer due in ' + Math.max(0, Math.round(r.lost !== undefined ? t - (net.now - r.lost) : t - ((net.now - r.since) % ((y.ospf || {}).hello || 10)))) + '  sec',
+        '   Retrans timer interval: 0', '   Neighbor is up for ' + hms(net.now - r.since), '   Authentication Sequence: [ 0 ]'); });
+    return o.join('\n'); });
+  function hms(s) { s = Math.max(0, Math.floor(s)); return ('0' + Math.floor(s / 3600)).slice(-2) + ':' + ('0' + Math.floor(s / 60) % 60).slice(-2) + ':' + ('0' + s % 60).slice(-2); }
+  ac('*', 'display ospf interface', function (st) { var net = st.net, run = st.run; if (!net || !run.ospf) return '';
+    var o = ['          OSPF Process ' + run.ospf.id + ' with Router ID ' + rid(net, st.dev), '                  Interfaces'];
+    Object.keys(run.ospf.areas).forEach(function (a) { o.push('', ' Area: ' + a + '        (MPLS TE not enabled)', ' IP Address      Type         State    Cost  Pri   DR              BDR');
+      net.ifaces(st.dev).forEach(function (f) { var y = (run.ifs[f.name] || {}).ospf; if (!y || y.area !== a) return;
+        o.push(' ' + pad(f.ip, 16) + pad(y.net === 'point-to-point' ? 'P2P' : 'Broadcast', 13) + pad(y.net === 'point-to-point' ? 'P-2-P' : 'DR', 9) + pad(y.cost, 6) + pad(y.prio, 6) + pad('0.0.0.0', 16) + '0.0.0.0'); }); });
+    return o.join('\n'); });
+  ac('*', 'display rip <n> route', function (st, a) { var net = st.net, run = st.run; if (!net || !run.rip || C(st).rip.id !== a[0]) return '';
+    var o = [' Route Flags: R - RIP', '              A - Aging, G - Garbage-collect', ' ' + new Array(75).join('-')], by = {};
+    net.routes(st.dev).filter(function (r) { return r.p === 'R'; }).forEach(function (r) { (by[r.nh + '|' + r.ifn] = by[r.nh + '|' + r.ifn] || []).push(r); });
+    Object.keys(by).forEach(function (k) { o.push(' Peer ' + k.split('|')[0] + '  on ' + hn(st, k.split('|')[1]), '      Destination/Mask        Nexthop     Cost   Tag     Flags   Sec');
+      by[k].forEach(function (r) { o.push(('                  ' + r.net).slice(-18) + '         ' + pad(r.nh, 15) + pad(r.m, 5) + pad(0, 8) + pad('RA', 8) + (Math.floor(net.now || 0) % 30)); }); });
+    return o.join('\n'); });
+  ac('*', 'display acl <n>', function (st, a) { var L = (C(st).acls || {})[a[0]]; if (!L) return ''; var ks = Object.keys(L.rules).map(Number).sort(function (x, y) { return x - y; });
+    return (a[0] < 3000 ? 'Basic' : 'Advanced') + ' ACL ' + a[0] + ', ' + ks.length + ' rule' + (ks.length === 1 ? '' : 's') + '\nAcl\'s step is 5\n' + ks.map(function (id) { return ruleTxt(id, L.rules[id]); }).join('\n'); });
+  ac('*', 'display acl all', function (st) { var A = C(st).acls || {}; return Object.keys(A).sort().map(function (n) { var L = A[n], ks = Object.keys(L.rules).map(Number).sort(function (x, y) { return x - y; });
+    return (n < 3000 ? 'Basic' : 'Advanced') + ' ACL ' + n + ', ' + ks.length + ' rule' + (ks.length === 1 ? '' : 's') + '\nAcl\'s step is 5\n' + ks.map(function (id) { return ruleTxt(id, L.rules[id]); }).join('\n'); }).join('\n\n'); });
+  ac('*', 'display nat outbound', function (st) { var c = C(st), rows = Object.keys(c.ifs).filter(function (n) { return c.ifs[n].natOut; }), line = ' ' + new Array(75).join('-');
+    return [' NAT Outbound Information:', line, ' Interface                     Acl     Address-group/IP/Interface      Type', line].concat(rows.map(function (n) { var x = c.ifs[n].natOut;
+      return ' ' + pad(full(n), 29) + pad(x.acl, 8) + ('                              ' + (x.grp || (c.ifs[n].ip || ['0.0.0.0'])[0])).slice(-30) + '    ' + (x.grp ? (x.nopat ? 'no-pat' : 'pat') : 'easyip'); }), [line, '  Total : ' + rows.length]).join('\n'); });
+  ac('*', 'display nat server', function (st) { var c = C(st), o = ['', '    Nat Server Information:'], n = 0;
+    Object.keys(c.ifs).forEach(function (k) { (c.ifs[k].natSrv || []).forEach(function (s) { n++; var g = s.g === 'current-interface' ? 'current-interface' : s.g;
+      o.push('    Interface  : ' + full(k), '    Global IP/Port     : ' + g + '/' + (s.gp ? portNum(s.gp) : '----'), '    Inside IP/Port     : ' + s.in + '/' + (s.ip ? portNum(s.ip) : '----'),
+        '    Protocol : ' + (s.pr === 'tcp' ? '6(tcp)' : s.pr === 'udp' ? '17(udp)' : '----'), '    VPN instance-name  : ----', '    Acl number         : ----', '    Vrrp id            : ----', '    Description : ----', ''); }); });
+    o.push('  Total :    ' + n); return o.join('\n'); });
+  ac('*', 'display nat address-group', function (st) { var g = C(st).natGroups || {}, line = ' --------------------------------------';
+    return ['NAT Address-Group Information:', line, ' Index   Start-address      End-address', line].concat(Object.keys(g).map(function (k) { return ' ' + pad(k, 4) + ('                ' + g[k][0]).slice(-16) + ('                 ' + g[k][1]).slice(-17); }), [line, '  Total : ' + Object.keys(g).length]).join('\n'); });
+  function leaseTxt(l) { return l === 'unlimited' ? 'Unlimited' : (l ? l[0] + ' Days ' + l[1] + ' Hours ' + l[2] + ' Minutes' : '1 Days 0 Hours 0 Minutes'); }
+  function poolText(st, name, p, iface) {
+    var net = st.net, L = (net && st.leases) || {}, used = Object.keys(L).filter(function (k) { return p.net && IP.sameNet(L[k], p.net.split('/')[0], +p.net.split('/')[1]); }).length;
+    var nt = p.net ? p.net.split('/') : ['0.0.0.0', '24'], tot = Math.pow(2, 32 - +nt[1]) - 3, s = IP.n2ip(IP.ip2n(nt[0]) + 1), e = IP.n2ip(IP.ip2n(nt[0]) + Math.pow(2, 32 - +nt[1]) - 2);
+    return ['  Pool-name      : ' + name, '  Pool-No        : ' + (iface ? 0 : 1), '  Lease          : ' + leaseTxt(p.lease), '  Domain-name    : -', '  DNS-server0    : ' + ((p.dns || [])[0] || '-'),
+      '  NBNS-server0   : -', '  Netbios-type   : -', '  Position       : ' + (iface ? 'Interface' : 'Local') + '           Status           : Unlocked', '  Gateway-0      : ' + (p.gw || '-'),
+      '  Mask           : ' + IP.len2mask(+nt[1]), '  VPN instance   : --', ' ' + new Array(78).join('-'), '         Start           End     Total  Used  Idle(Expired)  Conflict  Disable', ' ' + new Array(78).join('-'),
+      ('                ' + s).slice(-16) + ('                ' + e).slice(-16) + pad('', 0) + ('      ' + tot).slice(-6) + ('      ' + used).slice(-6) + ('            ' + (tot - used) + '(0)').slice(-14) + '         0        0', ' ' + new Array(78).join('-')].join('\n');
+  }
+  ac('*', 'display ip pool name <w>', function (st, a) { var p = (C(st).pools || {})[a[0]]; return p ? poolText(st, a[0], p) : ''; });
+  ac('*', 'display ip pool interface <if>', function (st, a) { var x = C(st).ifs[a[0]]; if (!x || x.dsel !== 'interface' || !x.ip) return '';
+    return poolText(st, full(a[0]), { net: IP.netOf(x.ip[0], x.ip[1]), gw: x.ip[0], dns: x.ddns }, true); });
+  ac('*', 'display ip pool', function (st) { var P = C(st).pools || {}; return Object.keys(P).map(function (k) { return poolText(st, k, P[k]); }).join('\n\n'); });
+  ac('*', 'display vrrp brief', function (st) { var net = st.net; if (!net) return ''; var t = net.vrrp()[st.dev] || {}, ks = Object.keys(t), m = 0, b = 0, n = 0;
+    var rows = ks.map(function (k) { var v = t[k], s = !v.up ? 'Initialize' : v.master ? 'Master' : 'Backup'; if (s === 'Master') m++; else if (s === 'Backup') b++; else n++;
+      return pad(v.id, 6) + pad(s, 13) + pad(hn(st, k), 25) + pad('Normal', 9) + v.vip.split('/')[0]; });
+    return ['Total:' + ks.length + '     Master:' + m + '     Backup:' + b + '     Non-active:' + n, 'VRID  State        Interface                Type     Virtual IP', new Array(65).join('-')].concat(rows).join('\n'); });
+  ac('*', 'display vrrp', function (st) { var net = st.net; if (!net) return ''; var t = net.vrrp()[st.dev] || {};
+    return Object.keys(t).map(function (k) { var v = t[k], md = v.masterDev && net.devs[v.masterDev], mi = md ? ((md.st.run.ifs[Object.keys(net.vrrp()[v.masterDev] || {}).filter(function (q) { return net.vrrp()[v.masterDev][q].id === v.id; })[0]] || {}).ip || '').split('/')[0] : '-';
+      var mp = md ? (net.vrrp()[v.masterDev][Object.keys(net.vrrp()[v.masterDev]).filter(function (q) { return net.vrrp()[v.masterDev][q].id === v.id; })[0]] || {}).prio : '-';
+      return [hn(st, k) + ' | Virtual Router ' + v.id, '    State : ' + (!v.up ? 'Initialize' : v.master ? 'Master' : 'Backup'), '    Virtual IP : ' + v.vip.split('/')[0], '    Master IP : ' + mi,
+        '    PriorityRun : ' + v.prio, '    PriorityConfig : ' + v.prio, '    MasterPriority : ' + mp, '    Preempt : YES   Delay Time : 0 s', '    TimerRun : 1 s', '    TimerConfig : 1 s',
+        '    Auth type : NONE', '    Virtual MAC : 0000-5e00-01' + ('0' + (+v.id).toString(16)).slice(-2), '    Check TTL : YES', '    Config type : normal-vrrp'].join('\n'); }).join('\n'); });
+  // имена интерфейсов в выводах ядра (маршруты): подынтерфейс — номер из конфигурации
+  var ifn0 = Vr.ifn; Vr.ifn = function (n, st) { return st && st.vrp && st.vrp.sub && st.vrp.sub[n] ? full(st.vrp.sub[n]) : ifn0(n); };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Ветка 10.x (MES14xx/24xx/3400/37xx, ПО 10.4.6): сверка с прошивкой и руководством 10.4.6.
    Общий движок коммутатора (_dk_cli.js) пишет часть команд синтаксисом ветки 6.x — в диалекте 10 их нет, вместо них:
    write memory → write startup-config;  ip default-gateway → ip route 0.0.0.0 0.0.0.0 <next-hop>;  clock timezone → clock utc-offset;
@@ -13801,7 +14841,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ================================================================== терминалы
   function term(id) { return terms[id] || (terms[id] = { html: '', hist: [], hi: 0, auth: false, user: null }); }
   // вход в консоль: MES — User Name/Password (заводской admin/admin или username из конфигурации), ESR — login/Password (admin/password)
-  function needLogin(d) { return (d.type === 'mes' && d.sub !== 'ont' && d.sub !== 'eont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
+  function needLogin(d) { if (d.sub === 'vrp') return false;   // Huawei VRP: консоль без пароля, как в eNSP
+    return (d.type === 'mes' && d.sub !== 'ont' && d.sub !== 'eont') || d.type === 'esr'; }   // у ONT своей CLI нет (Web user/user)
   function loginPrompt(d, t) { return t.user === null ? (d.type === 'mes' ? 'User Name:' : d.st.run.host + ' login: ') : 'Password:'; }
   function checkLogin(d, u, p) {
     var aa = net.aaaLogin ? net.aaaLogin(d.id, 'console', u, p, function (uu, pp) { return localLogin(d, uu, pp); }) : null;   // RADIUS/TACACS+ (aaa.js)
@@ -13829,6 +14870,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return keep.join('\n');
   }
   function banner(d) {
+    if (d.sub === 'vrp') return d.model + '\n';
     if (d.type === 'deb') return d.model === 'Docker' ? 'Docker container · pnet-chrome · введите help' : 'Debian GNU/Linux 11 ' + d.st.host + ' tty1';
     if (d.sub === 'phone') return 'Аналоговый телефон · dial НОМЕР — набрать, hangup — положить трубку, status — состояние';
     if (d.sub === 'tau' || d.sub === 'smg') return 'Eltex ' + d.model + '\n';
@@ -13864,7 +14906,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
       }
       if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(id, v); e.preventDefault(); }
       else if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); var dz = net.devs[id];   // Ctrl+Z — выход в привилегированный режим
-        if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
+        if (dz && dz.sub === 'vrp' && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = ''; net.exec(id, 'return'); setPr(id); }   // VRP: Ctrl+Z — в user view
+        else if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
           if (dz.type === 'mes' ? dz.st.mode !== 'user' && dz.st.mode !== 'priv' : dz.st.mode !== 'priv') net.exec(id, 'end'); setPr(id); } }
       else if (e.key === 'ArrowUp') { if (t.hi > 0) { t.hi--; inp.value = t.hist[t.hi]; } e.preventDefault(); }
       else if (e.key === 'ArrowDown') { if (t.hi < t.hist.length) { t.hi++; inp.value = t.hist[t.hi] || ''; } e.preventDefault(); }
@@ -14060,7 +15103,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       if (!net.devs[id]) return;
       if (reload) net.reboot(id); else net.power(id, true);
       var tt = term(id); tt.auth = false; tt.user = null;   // после загрузки снова вход
-      tlog(id, d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
+      tlog(id, d.sub === 'vrp' ? 'Booting ' + d.model + ' … OK' : d.type === 'esr' ? 'Loading ' + d.model + ' firmware 1.24.2 … OK' : d.type === 'mes' ? 'Booting ' + d.model + ' … loading startup-config … OK' :
         d.type === 'deb' ? 'Debian GNU/Linux 11 ' + d.st.host + ' tty1' : 'VPCS ready', 's');
       draw(); setPr(id); refresh();
     }, 1100);

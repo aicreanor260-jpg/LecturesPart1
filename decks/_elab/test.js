@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3010,6 +3010,76 @@ EL.labs.LABS.forEach(runLab);
   chk('VLAN убрана с pon-port в коммутаторе — трафика нет', !n.ping(pc.id, '10.0.0.2').ok);
   chk('ONT ID 128 — вне 0..127', /%/.test((n.exec(o.id, 'configure terminal'), n.exec(o.id, 'interface ont 0/128'))));
   console.log('✓ OLT LTP-X (ПО 3.52)');
+})();
+// Huawei VRP (спецификации sources/huawei/spec): S5700/S3700 в модели MES, AR2220/AR1220 в модели ESR, смешанные схемы с Eltex
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  function run(n, id, L) { return L.filter(function (l) { return /Error/.test(n.exec(id, l)); }); }
+  var n = new EL.Net(), s = n.add('S5700', 'S1'), m = n.add('MES2428', 'SW2'), a = n.add('VPC', 'PC1'), b = n.add('VPC', 'PC2');
+  n.connect(s.id, 'GE0/0/24', m.id, 'gi1/0/24'); n.connect(a.id, 'eth0', s.id, 'GE0/0/1'); n.connect(b.id, 'eth0', m.id, 'gi1/0/1');
+  chk('VRP: <Huawei>, system-view → [Huawei], interface g0/0/1 → [Huawei-GigabitEthernet0/0/1]', n.prompt(s.id) === '<Huawei>' &&
+    /Enter system view/.test(n.exec(s.id, 'sys')) && n.prompt(s.id) === '[Huawei]' && (n.exec(s.id, 'int g0/0/1'), n.prompt(s.id) === '[Huawei-GigabitEthernet0/0/1]'));
+  chk('VRP: ошибка с кареткой под неверным словом', /\s+\^\nError: Unrecognized command found at '\^' position\./.test(n.exec(s.id, 'port lnk-type access')));
+  chk('VRP: intelligent rollback — interface из вида интерфейса', (n.exec(s.id, 'interface GigabitEthernet 0/0/24'), n.prompt(s.id) === '[Huawei-GigabitEthernet0/0/24]'));
+  var bad = run(n, s.id, ['return', 'sys', 'vlan batch 10 20', 'int g0/0/1', 'port link-type access', 'port default vlan 10', 'int g0/0/24', 'port link-type trunk',
+    'port trunk allow-pass vlan 10 20', 'undo port trunk allow-pass vlan 1', 'return']);
+  chk('S5700: VLAN access/trunk без ошибок', !bad.length, bad.join('; '));
+  EL.labs.apply(n, { SW2: ['enable', 'configure', 'vlan database', 'vlan 10', 'exit', 'interface gi1/0/1', 'switchport access vlan 10', 'exit', 'interface gi1/0/24', 'switchport mode trunk',
+    'switchport trunk allowed vlan add 10', 'end'], PC1: ['ip 10.0.0.1/24'], PC2: ['ip 10.0.0.2/24'] });
+  n.tick(31);
+  chk('S5700 ↔ MES: trunk VLAN 10, ПК пингуют друг друга', n.ping(a.id, '10.0.0.2').ok);
+  chk('display vlan: UT:GE0/0/1(U) в VLAN 10, TG:GE0/0/24(U)', /10   common  UT:GE0\/0\/1\(U\)\s*\n\s+TG:GE0\/0\/24\(U\)/.test(n.exec(s.id, 'display vlan')));
+  chk('display this: port link-type trunk, undo port trunk allow-pass vlan 1, allow-pass vlan 10 20', (n.exec(s.id, 'sys'), n.exec(s.id, 'int g0/0/24'),
+    /port link-type trunk\n undo port trunk allow-pass vlan 1\n port trunk allow-pass vlan 10 20/.test(n.exec(s.id, 'display this'))));
+  n.exec(s.id, 'undo port trunk allow-pass vlan 10'); n.tick(2);
+  chk('VLAN 10 убрана с trunk Huawei — связи нет', !n.ping(a.id, '10.0.0.2').ok);
+  n.exec(s.id, 'return');
+  chk('save — вопрос [Y/N], y — сохранено; reboot поднимает сохранённое', /Are you sure to continue\?\[Y\/N\]/.test(n.exec(s.id, 'save')) && /successfully/.test(n.exec(s.id, 'y')) &&
+    (n.exec(s.id, 'sys'), n.exec(s.id, 'undo vlan 20'), n.exec(s.id, 'return'), n.reboot(s.id), /vlan batch 10 20/.test(n.exec(s.id, 'display current-configuration'))));
+  chk('STP по умолчанию MSTP, имя региона — MAC моста', /\[Mode MSTP\]/.test(n.exec(s.id, 'display stp')) && /Region name     :4c1f-/.test(n.exec(s.id, 'display stp region-configuration')));
+  // Eth-Trunk LACP Huawei ↔ MES
+  var t = new EL.Net(), S1 = t.add('S5700', 'S1'), M = t.add('MES2428', 'SW2');
+  ['1', '2'].forEach(function (i) { t.connect(S1.id, 'GE0/0/' + i, M.id, 'gi1/0/' + i); });
+  bad = run(t, S1.id, ['sys', 'int eth-trunk 1', 'mode lacp', 'quit', 'int g0/0/1', 'eth-trunk 1', 'int g0/0/2', 'eth-trunk 1', 'return']);
+  EL.labs.apply(t, { SW2: ['enable', 'configure', 'interface range gi1/0/1-2', 'channel-group 1 mode active', 'exit', 'interface port-channel 1', 'exit', 'end'] });
+  chk('Eth-Trunk mode lacp ↔ MES channel-group active: агрегат собран', !bad.length && /Operate status: up\s+Number Of Up Port In Trunk: 2/.test(t.exec(S1.id, 'display eth-trunk 1')), bad.join('; '));
+  run(t, S1.id, ['sys', 'int g0/0/1', 'undo eth-trunk', 'int g0/0/2', 'undo eth-trunk', 'int eth-trunk 1', 'mode manual load-balance', 'int g0/0/1', 'eth-trunk 1', 'int g0/0/2', 'eth-trunk 1', 'return']);
+  chk('Eth-Trunk manual ↔ MES LACP — агрегат не собирается (несовместимость вендоров)', /Operate status: down/.test(t.exec(S1.id, 'display eth-trunk 1')));
+  // AR2220 ↔ ESR: OSPF
+  var o = new EL.Net(), h = o.add('AR2220', 'R1'), e = o.add('vESR', 'R2'), p1 = o.add('VPC', 'PC1'), p2 = o.add('VPC', 'PC2');
+  o.connect(h.id, 'GE0/0/0', e.id, 'gi1/0/1'); o.connect(p1.id, 'eth0', h.id, 'GE0/0/1'); o.connect(p2.id, 'eth0', e.id, 'gi1/0/2');
+  bad = run(o, h.id, ['sys', 'sysname R1', 'int g0/0/0', 'ip address 10.0.12.1 24', 'int g0/0/1', 'ip add 192.168.1.1 255.255.255.0', 'quit', 'ospf 1 router-id 1.1.1.1', 'area 0',
+    'network 10.0.12.1 0.0.0.255', 'network 192.168.1.0 0.0.0.255', 'return']);
+  EL.labs.apply(o, { R2: ['configure', 'router ospf 1', 'router-id 2.2.2.2', 'area 0.0.0.0', 'enable', 'exit', 'enable', 'exit', 'interface gi1/0/1', 'ip address 10.0.12.2/24', 'ip firewall disable',
+    'ip ospf instance 1', 'ip ospf area 0.0.0.0', 'ip ospf', 'exit', 'interface gi1/0/2', 'ip address 192.168.2.1/24', 'ip firewall disable', 'ip ospf instance 1', 'ip ospf area 0.0.0.0', 'ip ospf', 'exit',
+    'end', 'commit', 'confirm'], PC1: ['ip 192.168.1.10/24 192.168.1.1'], PC2: ['ip 192.168.2.10/24 192.168.2.1'] });
+  o.tick(60);
+  chk('AR2220 ↔ ESR: OSPF Full, ping ПК–ПК', !bad.length && /0\.0\.0\.0\s+GigabitEthernet0\/0\/0\s+2\.2\.2\.2\s+Full/.test(o.exec(h.id, 'display ospf peer brief')) && o.ping(p1.id, '192.168.2.10').ok, bad.join('; '));
+  chk('display ip routing-table: 192.168.2.0/24 OSPF 10', /192\.168\.2\.0\/24\s+OSPF\s+10 /.test(o.exec(h.id, 'display ip routing-table')));
+  chk('OSPF: network приводится к сети в конфигурации', /network 10\.0\.12\.0 0\.0\.0\.255/.test(o.exec(h.id, 'display current-configuration')));
+  run(o, h.id, ['sys', 'int g0/0/0', 'ospf timer hello 5', 'return']); o.tick(60);
+  chk('OSPF: разные hello (Huawei 5 / ESR 10) — соседства нет', /Total Peer\(s\):     0/.test(o.exec(h.id, 'display ospf peer brief')) && !o.ping(p1.id, '192.168.2.10').ok);
+  // AR1220: L2-порты LAN, DHCP, NAT easy-ip
+  var r = new EL.Net(), A = r.add('AR1220', 'R1'), B = r.add('vESR', 'ISP'), IN = r.add('VPC', 'IN'), W = r.add('VPC', 'WEB');
+  r.connect(A.id, 'GE0/0/0', B.id, 'gi1/0/1'); r.connect(IN.id, 'eth0', A.id, 'Eth0/0/1'); r.connect(W.id, 'eth0', B.id, 'gi1/0/2');
+  chk('AR1220: Ethernet0/0/1 в L2 — ip address без undo portswitch не принимается', (r.exec(A.id, 'sys'), r.exec(A.id, 'int e0/0/1'), /Error/.test(r.exec(A.id, 'ip address 192.168.10.1 24'))));
+  bad = run(r, A.id, ['undo portswitch', 'ip address 192.168.10.1 24', 'quit', 'dhcp enable', 'ip pool p1', 'network 192.168.10.0 mask 24', 'gateway-list 192.168.10.1', 'dns-list 8.8.8.8', 'quit',
+    'int e0/0/1', 'dhcp select global', 'quit', 'acl 2000', 'rule 5 permit source 192.168.10.0 0.0.0.255', 'quit', 'int g0/0/0', 'ip address 1.1.1.1 24', 'nat outbound 2000', 'quit',
+    'ip route-static 0.0.0.0 0 1.1.1.2', 'return']);
+  EL.labs.apply(r, { ISP: ['configure', 'interface gi1/0/1', 'ip address 1.1.1.2/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 2.2.2.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    WEB: ['ip 2.2.2.10/24 2.2.2.1'], IN: ['ip dhcp'] });
+  r.tick(5);
+  chk('AR1220: DHCP из глобального пула (dhcp select global)', !bad.length && /^192\.168\.10\./.test(r.devs[IN.id].st.ip || ''), bad.join('; '));
+  chk('AR1220: NAT easy-ip (nat outbound 2000) — внутренний узел выходит в сеть провайдера', r.ping(IN.id, '2.2.2.10').ok && (r.ctLast || []).some(function (c) { return c.kind === 's' && c.pub === '1.1.1.1'; }));
+  chk('ACL: rule 5 permit source … 0.0.0.255 в display acl', /Basic ACL 2000, 1 rule\nAcl's step is 5\n rule 5 permit source 192\.168\.10\.0 0\.0\.0\.255/.test(r.exec(A.id, 'display acl 2000')));
+  // VRRP AR + ESR
+  var v = new EL.Net(), RA = v.add('AR2220', 'RA'), RB = v.add('vESR', 'RB'), sw = v.add('MES2428', 'SW'), pc = v.add('VPC', 'PC');
+  v.connect(RA.id, 'GE0/0/1', sw.id, 'gi1/0/1'); v.connect(RB.id, 'gi1/0/1', sw.id, 'gi1/0/2'); v.connect(pc.id, 'eth0', sw.id, 'gi1/0/3');
+  run(v, RA.id, ['sys', 'int g0/0/1', 'ip address 10.0.0.2 24', 'vrrp vrid 1 virtual-ip 10.0.0.1', 'vrrp vrid 1 priority 120', 'return']);
+  EL.labs.apply(v, { RB: ['configure', 'interface gi1/0/1', 'ip address 10.0.0.3/24', 'ip firewall disable', 'vrrp id 1', 'vrrp ip 10.0.0.1/24', 'vrrp', 'exit', 'end', 'commit', 'confirm'], PC: ['ip 10.0.0.10/24 10.0.0.1'] });
+  v.tick(40);
+  chk('VRRP Huawei (120) + ESR (100): Master — AR, шлюз 10.0.0.1 отвечает', /1     Master/.test(v.exec(RA.id, 'display vrrp brief')) && v.ping(pc.id, '10.0.0.1').ok);
+  console.log('✓ Huawei VRP: S5700, AR2220, AR1220 в смешанных схемах');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
