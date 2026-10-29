@@ -160,6 +160,22 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .pad .qq.bad{border-color:#ff5c6c;background:rgba(255,92,108,.07)}.pad .qq.bad .qr{color:#ff5c6c}
 .pad .qo{display:block;margin:3px 0;cursor:pointer}.pad .qin{width:100%;box-sizing:border-box}
 .pad .quiz .qs{margin-left:10px;align-self:center}
+.cons{display:flex;flex-direction:column;flex:1;min-height:0}
+.ctabs{display:flex;align-items:stretch;gap:2px;padding:4px 6px 0;overflow-x:auto;border-bottom:1px solid var(--cy2);background:rgba(0,0,0,.25);flex:0 0 auto;position:relative;scrollbar-width:thin}
+.ctabs.drop{background:rgba(111,227,234,.12);box-shadow:inset 0 0 0 1px var(--cy)}
+.ctab{display:flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid rgba(111,227,234,.25);border-bottom:0;background:rgba(255,255,255,.03);cursor:pointer;user-select:none;white-space:nowrap;font-size:12px;color:var(--tx,#cfe);position:relative}
+.ctab:hover{background:rgba(111,227,234,.08)}
+.ctab.on{background:var(--cyd);border-color:var(--cy);color:var(--cy)}
+.ctab i{font:700 9px var(--m);font-style:normal;border:1px solid currentColor;padding:0 3px;opacity:.8}
+.ctab b{font-weight:700}.ctab .cx{opacity:.5;padding:0 2px}.ctab .cx:hover{opacity:1;color:var(--bad,#ff5c6c)}
+.ctab.new::after{content:'';position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:#f5c542;box-shadow:0 0 6px #f5c542}
+.ctab.off{opacity:.45;text-decoration:line-through}
+.ctab.dragging{opacity:.3}
+.ctab.ghost{position:fixed;z-index:99999;pointer-events:none;opacity:.9;box-shadow:0 6px 18px rgba(0,0,0,.5)}
+.ctab.ghost.out{border-style:dashed;border-bottom:1px dashed}
+.cmark{width:3px;align-self:stretch;background:var(--cy);box-shadow:0 0 8px var(--cy);flex:0 0 3px}
+.ctabs .cman{margin-left:auto;align-self:center}
+.cbody{flex:1;display:flex;flex-direction:column;min-height:0}
 .pad .sub{margin-top:14px;padding-top:10px;border-top:1px solid rgba(111,227,234,.25)}
 .pad .subp{padding:6px 9px;margin:5px 0;border:1px solid rgba(111,227,234,.3);font-weight:700}
 .pad .subp.ok{border-color:#3ddc84;color:#3ddc84;background:rgba(61,220,132,.08)}.pad .subp.ret{border-color:#ff5c6c;color:#ff8c98;background:rgba(255,92,108,.08)}

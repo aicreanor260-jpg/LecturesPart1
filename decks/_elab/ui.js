@@ -331,8 +331,8 @@
       if (e.target.closest('button')) return; focusWin(key);
       var sx = e.clientX, sy = e.clientY, x0 = w.offsetLeft, y0 = w.offsetTop;
       function mv(ev) { w.style.left = Math.max(-w.offsetWidth + 80, Math.min(innerWidth - 80, x0 + ev.clientX - sx)) + 'px';
-        w.style.top = Math.max(54, Math.min(innerHeight - 60, y0 + ev.clientY - sy)) + 'px'; }
-      function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); }
+        w.style.top = Math.max(54, Math.min(innerHeight - 60, y0 + ev.clientY - sy)) + 'px'; if (o.onMove) o.onMove(ev); }
+      function up(ev) { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); if (o.onDrop) o.onDrop(ev); }
       window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
     });
     w.addEventListener('mousedown', function (e) { e.stopPropagation(); focusWin(key); closeMenu(); });
@@ -342,7 +342,13 @@
   }
   function focusWin(key) { Object.keys(wins).forEach(function (k) { wins[k].el.classList.toggle('focus', k === key); }); var w = wins[key]; if (w) w.el.style.zIndex = ++z; }
   function minWin(key, m) { var w = wins[key]; if (!w) return; w.min = m; w.el.style.display = m ? 'none' : 'flex'; if (!m) focusWin(key); chips(); }
-  function closeWin(key, silent) { var w = wins[key]; if (!w) return; w.el.remove(); delete wins[key]; if (!silent) chips(); }
+  function closeWin(key, silent) {
+    var tid = key.charAt(0) === 't' && net && net.devs[key.slice(1)] ? key.slice(1) : null;
+    if (tid !== null && !wins[key] && consOrder && consOrder.indexOf(String(tid)) >= 0) { closeTab(tid); return; }   // терминал во вкладке «Консолей»
+    var w = wins[key]; if (!w) return;
+    if (key === 'cons' && consOrder) { consOrder.forEach(function (id) { if (terms[id]) delete terms[id].body; }); consOrder = []; consActive = null; }
+    if (tid !== null && terms[tid]) delete terms[tid].body;
+    w.el.remove(); delete wins[key]; if (!silent) chips(); }
   function chips() {
     $('chips').innerHTML = Object.keys(wins).map(function (k) { var w = wins[k];
       return '<button class="chip' + (w.min ? ' min' : '') + '" data-k="' + k + '">' + esc(w.title) + '</button>'; }).join('');
@@ -387,16 +393,15 @@
     return d.model + '\n';
   }
   function openTerm(id) {
-    var d = net.devs[id]; if (!d) return; sel = id; draw();
-    var key = 't' + id; if (wins[key]) { minWin(key, false); wins[key].el.querySelector('input').focus(); return; }
-    var t = term(id); if (!t.html) t.html = '<div class="s">' + esc(banner(d)) + '</div>';
-    var body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
+    var d = net.devs[id]; if (!d) return; sel = id; draw(); id = String(id);
+    var key = 't' + id, t = term(id);
+    if (t.body) { if (wins[key]) { minWin(key, false); focusTerm(id); } else consShow(id); return; }
+    if (!t.html) t.html = '<div class="s">' + esc(banner(d)) + '</div>';
+    var body = document.createElement('div'); body.className = 'tbody'; body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
     body.innerHTML = '<div class="out"></div><label class="inp"><span></span><input ' + NOFILL + '></label>';
-    var tw = makeWin(key, d.name, d.model, body, { w: Math.min(720, innerWidth - 60), h: Math.min(460, innerHeight - 160) });
-    if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство Eltex'; mb.textContent = 'Руководство';
-      tw.querySelector('.wt').insertBefore(mb, tw.querySelector('.wt [data-w="min"]')); mb.addEventListener('click', function () { openManual(id); }); }
+    t.body = body;
     var out = body.querySelector('.out'), inp = body.querySelector('input');
-    out.innerHTML = t.html; out.scrollTop = out.scrollHeight; setPr(id);
+    out.innerHTML = t.html;
     out.addEventListener('mouseup', function () { if (!getSelection().toString()) inp.focus(); });
     // ввод без keydown (IME, мобильные клавиатуры, вставка текста) — тоже в скрытый буфер
     inp.addEventListener('beforeinput', function (e) { if (!t.secret) return; e.preventDefault();
@@ -404,6 +409,8 @@
     inp.addEventListener('input', function () { if (t.secret && inp.value) { t.pwbuf = (t.pwbuf || '') + inp.value; inp.value = ''; } });
     inp.addEventListener('paste', function (e) { if (!t.secret) return; e.preventDefault(); t.pwbuf = (t.pwbuf || '') + ((e.clipboardData || window.clipboardData).getData('text') || '').split(/\r?\n/)[0]; });
     inp.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey && e.key === 'Tab') || (e.altKey && /^Arrow(Left|Right)$/.test(e.key))) {   // переключение вкладок «Консолей»
+        e.preventDefault(); e.stopPropagation(); consNext(id, e.shiftKey || e.key === 'ArrowLeft' ? -1 : 1); return; }
       if (t.more) { e.preventDefault(); e.stopPropagation(); moreKey(id, e); return; }
       if (t.secret && !e.ctrlKey && !e.metaKey && !e.altKey) {           // пароль: строка остаётся пустой, нажатия — в буфер
         if (e.key === 'Enter') { var pv = t.pwbuf || ''; t.pwbuf = ''; inp.value = ''; e.preventDefault(); e.stopPropagation(); run(id, pv); return; }
@@ -422,7 +429,99 @@
       else if (e.key === '?' && net.table(id, inp.value)) { e.preventDefault(); tlog(id, net.prompt(id) + inp.value + '?', 'c'); tlog(id, realOut(net.devs[id], '?', net.help(id, inp.value)), 'h'); }
       e.stopPropagation();
     });
-    setTimeout(function () { inp.focus(); }, 0);
+    dockTerm(id);                                   // новая консоль — вкладкой в окне «Консоли»
+  }
+  // ================================================================== «Консоли»: вкладки, вынос в отдельное окно и возврат
+  var consOrder = [], consActive = null, TYPE = { mes: 'SW', esr: 'R', vpc: 'PC', deb: 'PC' };
+  function tEl(id) { var t = terms[id]; return t && t.body || null; }
+  function focusTerm(id) { var b = tEl(id); if (b) { var o = b.querySelector('.out'); o.scrollTop = o.scrollHeight; setTimeout(function () { b.querySelector('input').focus(); }, 0); } }
+  function consWin() {
+    if (wins.cons) return wins.cons.el;
+    var b = document.createElement('div'); b.className = 'cons'; b.innerHTML = '<div class="ctabs"></div><div class="cbody"></div>';
+    makeWin('cons', 'Консоли', '', b, { w: Math.min(760, innerWidth - 60), h: Math.min(480, innerHeight - 160) });
+    var strip = b.querySelector('.ctabs');
+    strip.addEventListener('mousedown', tabDown);
+    return wins.cons.el;
+  }
+  function dockTerm(id, at) {
+    id = String(id); var t = term(id), fw = wins['t' + id];
+    if (fw) { fw.el.remove(); delete wins['t' + id]; }
+    consWin(); var i = consOrder.indexOf(id); if (i >= 0) consOrder.splice(i, 1);
+    consOrder.splice(at === undefined || at > consOrder.length ? consOrder.length : at, 0, id);
+    if (t.body && t.body.parentNode) t.body.parentNode.removeChild(t.body);
+    consShow(id);
+  }
+  function consShow(id) {
+    id = String(id); if (consOrder.indexOf(id) < 0) return; consActive = id;
+    var cb = consWin().querySelector('.cbody'); while (cb.firstChild) cb.removeChild(cb.firstChild);
+    cb.appendChild(term(id).body); term(id).unread = false;
+    minWin('cons', false); renderTabs(); setPr(id); focusTerm(id);
+  }
+  function consNext(id, dir) { if (consOrder.indexOf(String(id)) < 0 || consOrder.length < 2) return;
+    var i = (consOrder.indexOf(String(id)) + dir + consOrder.length) % consOrder.length; consShow(consOrder[i]); }
+  function renderTabs() {
+    if (!wins.cons) return; var strip = wins.cons.el.querySelector('.ctabs');
+    strip.innerHTML = consOrder.map(function (id) { var d = net.devs[id], t = terms[id] || {}; if (!d) return '';
+      return '<div class="ctab' + (id === consActive ? ' on' : '') + (t.unread ? ' new' : '') + (d.off ? ' off' : '') + '" data-id="' + esc(id) + '" title="' + esc(d.model) +
+        ' — перетащите за пределы полосы, чтобы открыть отдельным окном"><i>' + (TYPE[d.type] || '•') + '</i><b>' + esc(d.name) + '</b><span class="cx" data-x="1" title="Закрыть">✕</span></div>'; }).join('') +
+      (consActive && net.manualFor(consActive) ? '<button class="man cman" data-man="1">Руководство</button>' : '');
+    wins.cons.title = 'Консоли (' + consOrder.length + ')'; wins.cons.el.querySelector('.wt b').textContent = 'Консоли'; chips();
+  }
+  function closeTab(id) {
+    id = String(id); var i = consOrder.indexOf(id); if (i < 0) return; consOrder.splice(i, 1);
+    var t = terms[id]; if (t && t.body) { if (t.body.parentNode) t.body.parentNode.removeChild(t.body); delete t.body; }
+    if (!consOrder.length) { consActive = null; closeWin('cons'); return; }
+    if (consActive === id) consShow(consOrder[Math.min(i, consOrder.length - 1)]); else renderTabs();
+  }
+  function undockTerm(id, x, y) {
+    id = String(id); var i = consOrder.indexOf(id), d = net.devs[id], t = term(id); if (i < 0 || !d) return;
+    consOrder.splice(i, 1); if (t.body.parentNode) t.body.parentNode.removeChild(t.body);
+    var ww = Math.min(640, innerWidth - 60), wh = Math.min(420, innerHeight - 160);
+    var tw = makeWin('t' + id, d.name, d.model, t.body, { x: Math.max(10, Math.min(x, innerWidth - ww - 10)), y: Math.max(60, Math.min(y, innerHeight - wh - 50)), w: ww, h: wh,
+      onMove: function (ev) { stripHint(ev); }, onDrop: function (ev) { var at = stripAt(ev); stripHint(null); if (at !== null) dockTerm(id, at); } });
+    if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство Eltex'; mb.textContent = 'Руководство';
+      tw.querySelector('.wt').insertBefore(mb, tw.querySelector('.wt [data-w="min"]')); mb.addEventListener('click', function () { openManual(id); }); }
+    if (!consOrder.length) { consActive = null; closeWin('cons'); } else if (consActive === id) consShow(consOrder[Math.min(i, consOrder.length - 1)]); else renderTabs();
+    setPr(id); focusTerm(id);
+  }
+  // место вставки на полосе вкладок под указателем: индекс или null (указатель не над полосой)
+  function stripAt(ev) {
+    if (!ev || !wins.cons || wins.cons.min) return null; var strip = wins.cons.el.querySelector('.ctabs'), r = strip.getBoundingClientRect();
+    if (ev.clientX < r.left - 10 || ev.clientX > r.right + 10 || ev.clientY < r.top - 18 || ev.clientY > r.bottom + 18) return null;
+    var tabs = [].slice.call(strip.querySelectorAll('.ctab')), k = tabs.length;
+    for (var i = 0; i < tabs.length; i++) { var b = tabs[i].getBoundingClientRect(); if (ev.clientX < b.left + b.width / 2) { k = i; break; } }
+    return k;
+  }
+  function stripHint(ev, skip) {
+    if (!wins.cons) return; var strip = wins.cons.el.querySelector('.ctabs'), at = stripAt(ev), m = strip.querySelector('.cmark');
+    strip.classList.toggle('drop', at !== null);
+    if (at === null) { if (m) m.remove(); return; }
+    if (!m) { m = document.createElement('span'); m.className = 'cmark'; }
+    var tabs = [].slice.call(strip.querySelectorAll('.ctab')).filter(function (x) { return x !== skip; });
+    strip.insertBefore(m, tabs[at] || strip.querySelector('.cman') || null);
+  }
+  // вкладка: щелчок — показать, ✕ — закрыть, перетаскивание по полосе — порядок, за пределы полосы — отдельное окно
+  function tabDown(e) {
+    if (e.target.closest('[data-man]')) { openManual(consActive); return; }
+    var tab = e.target.closest('.ctab'); if (!tab) return; var id = tab.dataset.id;
+    if (e.target.closest('[data-x]')) { closeTab(id); e.preventDefault(); return; }
+    e.preventDefault(); e.stopPropagation(); focusWin('cons');
+    var sx = e.clientX, sy = e.clientY, drag = false, ghost = null;
+    function mv(ev) {
+      if (!drag && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 6) return;
+      if (!drag) { drag = true; ghost = tab.cloneNode(true); ghost.classList.add('ghost'); document.body.appendChild(ghost); tab.classList.add('dragging'); }
+      ghost.style.left = (ev.clientX - 30) + 'px'; ghost.style.top = (ev.clientY - 12) + 'px';
+      var at = stripAt(ev); ghost.classList.toggle('out', at === null); stripHint(ev, tab);
+    }
+    function up(ev) {
+      window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up);
+      if (ghost) ghost.remove(); tab.classList.remove('dragging'); stripHint(null);
+      if (!drag) { consShow(id); return; }
+      var at = stripAt(ev);
+      if (at === null) { undockTerm(id, ev.clientX - 120, ev.clientY - 14); return; }
+      var i = consOrder.indexOf(id); consOrder.splice(i, 1); if (at > i) at--; consOrder.splice(at, 0, id); renderTabs(); focusTerm(consActive);
+    }
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
   // ввод консоли — без type=password и без признаков формы входа: менеджер паролей браузера к нему не цепляется
   var NOFILL = 'type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-autocomplete="none"';
@@ -432,15 +531,17 @@
     [['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'], ['data-lpignore', 'true'], ['data-1p-ignore', 'true'], ['data-form-type', 'other']].forEach(function (a) { if (!x.hasAttribute(a[0])) x.setAttribute(a[0], a[1]); }); }, true);
   function tlog(id, text, cls) {
     var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h;
-    var w = wins['t' + id]; if (w) { var out = w.el.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight; }
+    var b = tEl(id); if (b) { var out = b.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight;
+      if (consOrder.indexOf(String(id)) >= 0 && consActive !== String(id) && !t.unread) { t.unread = true; renderTabs(); } }
   }
-  function setPr(id) { var w = wins['t' + id], d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
+  function setPr(id) { var w = tEl(id) ? { el: tEl(id) } : null, d = net.devs[id]; if (!w || !d) return; var t = term(id), p = needLogin(d) && !t.auth ? loginPrompt(d, t) : net.prompt(id), inp = w.el.querySelector('input');
     if (t.more && !d.off) p = net.moreText(id);
     if (t.ask && !d.off) p = t.ask.q;
     if (t.cep && !d.off) p = net.prompt(id).replace(/#$/, '') + '(change-expired-password)# ';
     var sec = !d.off && /(password|passphrase[^:]*): ?$/i.test(p); if (sec !== !!t.secret) { t.secret = sec; t.pwbuf = ''; inp.value = ''; }
-    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
-  var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
+    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.disabled = !!d.off; inp.readOnly = !!t.more;
+    if (wins.cons && consOrder.indexOf(String(id)) >= 0) { var tb = wins.cons.el.querySelector('.ctab[data-id="' + String(id) + '"]'); if (tb) tb.classList.toggle('off', !!d.off); } }
+  var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var b = tEl(id); if (b) b.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
     var d = net.devs[id], t = term(id); if (!d || d.off) return;
@@ -478,7 +579,7 @@
   // hostname в консоли — сразу подпись на схеме (если имя свободно и допустимо)
   function syncHost(id, h0) { var d = net.devs[id], h = d && net.hostOf(id); if (!d || !h || h === h0 || h === d.name) return;
     var err = net.rename(id, h); if (err) { toast('Подпись на схеме не изменена: ' + err); return; }
-    if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } chips(); }
+    if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } renderTabs(); chips(); }
   // постраничный вывод длинных show: пробел — страница, Enter — строка, q — выход (ESR: R — всё остальное)
   function outPaged(id, r, cls) {
     var n = net.pageLen(id), L = String(r).split('\n');
@@ -562,7 +663,7 @@
     var inp = body.querySelector('#pname'); inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-p]'); if (!b) return; var a = b.dataset.p;
       if (a === 'name') { var err = net.rename(id, inp.value); if (err) { toast(err); return; } net.setHost(id, d.name); setPr(id); draw(); toast('Имя и hostname изменены');
-        if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } chips(); }
+        if (wins['t' + id]) { wins['t' + id].title = d.name; wins['t' + id].el.querySelector('.wt b').textContent = d.name; } renderTabs(); chips(); }
       if (a === 'term') openTerm(id);
       if (a === 'off') { net.power(id, false); setPr(id); draw(); openProps(id); }
       if (a === 'on') { boot(id, false); setTimeout(function () { openProps(id); }, 1200); }
