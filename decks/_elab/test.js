@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'cpe.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -269,6 +269,52 @@ EL.labs.LABS.forEach(runLab);
   chk('после перезагрузки настройки веб-интерфейса сохранены', (n.reboot(rg.id), rg.st.cpe.web.lan.ip === '10.10.0.1' && n.ping(pc.id, '100.64.0.1').ok));
   console.log('✓ RG-35-WZ (CPE)');
 })();
+  // ESBC-3200 между абонентами (TAU) и SMG — пример руководства ESBC 1.9.0 «Настройка для SIP-абонентов»
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ESBC: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), sw = n.add('MES2300-24', 'SW1'), e = n.add('ESBC-3200', 'ESBC'), sm = n.add('SMG-1016M', 'SMG'), t1 = n.add('TAU-72.IP', 'TAU1'), t2 = n.add('TAU-72.IP', 'TAU2'),
+        a = n.add('Телефон', 'Tel101'), b = n.add('Телефон', 'Tel202');
+    n.connect(sm.id, 'eth0', e.id, 'gi1/0/1'); n.connect(e.id, 'gi1/0/2', sw.id, 'gi1/0/1'); n.connect(t1.id, 'eth0', sw.id, 'gi1/0/2'); n.connect(t2.id, 'eth0', sw.id, 'gi1/0/3');
+    n.connect(a.id, 'Line', t1.id, 'fxs 1'); n.connect(b.id, 'Line', t2.id, 'fxs 1');
+    function tau(ip, num, reg) { return ['admin', 'rootpasswd', 'config', 'network', 'ipaddr ' + ip, 'netmask 255.255.255.0', 'exit', 'sip profile 1', 'proxy address 1 ' + reg,
+      'regristrar address 1 ' + reg, 'regristrar enable 1', 'exit', 'voice port 1', 'username ' + num, 'authname ' + num, 'password p' + num, 'exit', 'exit', 'commit', 'confirm']; }
+    var ESBC = ['configure', 'interface gigabitethernet 1/0/1', 'description "SSW"', 'ip address 192.168.16.113/24', 'ip firewall disable', 'exit',
+      'interface gigabitethernet 1/0/2', 'description "ABONENTS"', 'ip address 192.168.20.120/24', 'ip firewall disable', 'exit',
+      'esbc', 'sip transport TRANSPORT_SSW', 'ip address 192.168.16.113', 'port 5061', 'exit', 'sip transport TRANSPORT_ABONENTS', 'ip address 192.168.20.120', 'port 5062', 'exit',
+      'media resource MEDIA_SSW', 'ip address 192.168.16.113', 'port-range 1024-65535', 'exit', 'media resource MEDIA_ABONENTS', 'ip address 192.168.20.120', 'exit',
+      'trunk sip TRUNK_SSW', 'sip transport TRANSPORT_SSW', 'remote address 192.168.16.65', 'remote port 5060', 'media resource 0 MEDIA_SSW', 'exit',
+      'user-interface sip ABONENTS', 'sip transport TRANSPORT_ABONENTS', 'media resource 0 MEDIA_ABONENTS', 'nat comedia-mode on', 'exit',
+      'route-table TO_SSW', 'rule 0', 'action direct-to-trunk TRUNK_SSW', 'exit', 'exit', 'user-interface sip ABONENTS', 'route-table TO_SSW', 'exit', 'exit', 'end', 'commit', 'confirm'];
+    var er = EL.labs.apply(n, { ESBC: ESBC, SMG: ['admin', 'rootpasswd', 'config', 'network', 'set interface ipaddr 0 192.168.16.65', 'set interface netmask 0 255.255.255.0', 'exit', 'sip users',
+        'add user 0', 'set user number 0 101', 'set login 0 101 p101', 'set authorization 0 register', 'add user 1', 'set user number 1 202', 'set login 1 202 p202', 'set authorization 1 register', 'exit', 'save'],
+      TAU1: tau('192.168.20.11', '101', '192.168.20.120:5062'), TAU2: tau('192.168.20.12', '202', '192.168.20.120:5062') });
+    chk('настройка ESBC по примеру руководства, SMG и TAU — без ошибок', !er.length, er.join('; '));
+    chk('приглашения раздела esbc', (function () { var o = []; ['configure', 'esbc', 'sip transport X'].forEach(function (l) { n.exec(e.id, l); o.push(n.prompt(e.id)); });
+      n.exec(e.id, 'end'); n.exec(e.id, 'rollback'); return o.join('|') === 'esbc(config)#|esbc(config-esbc)#|esbc(config-esbc-sip-transport)#'; })());
+    var run = n.exec(e.id, 'show running-config');
+    chk('running-config: раздел esbc', /esbc\n  sip transport TRANSPORT_ABONENTS\n    ip address 192\.168\.20\.120\n    port 5062/.test(run) && /    action direct-to-trunk TRUNK_SSW/.test(run) && /    nat comedia-mode on\n    route-table TO_SSW/.test(run), run.slice(-900));
+    chk('TAU зарегистрированы через ESBC', /^1\s+101\s+registered/m.test(n.exec(t1.id, 'show voiceport status')) && /^1\s+202\s+registered/m.test(n.exec(t2.id, 'show voiceport status')), n.exec(t1.id, 'show voiceport status'));
+    n.exec(sm.id, 'sip users');
+    chk('SMG видит абонентов с контактом ESBC (транк)', /101\s+register\s+registered 192\.168\.16\.113 \(ESBC, TRUNK_SSW\)/.test(n.exec(sm.id, 'show list')), n.exec(sm.id, 'show list'));
+    chk('show esbc users sip', /101\s+ABONENTS\s+192\.168\.20\.11:5060\s+TRUNK_SSW/.test(n.exec(e.id, 'show esbc users sip')) && /202\s+ABONENTS/.test(n.exec(e.id, 'show esbc users sip')), n.exec(e.id, 'show esbc users sip'));
+    chk('show esbc trunks sip: транк доступен', /TRUNK_SSW\s+192\.168\.16\.113:5061\s+192\.168\.16\.65:5060\s+available/.test(n.exec(e.id, 'show esbc trunks sip')), n.exec(e.id, 'show esbc trunks sip'));
+    var c = EL.voip.call(n, a, '202'), tr = c.steps.map(function (x) { return x.t; }).join(' | ');
+    chk('вызов 101 → 202 через ESBC и SMG', c.ok && /INVITE принят user-interface ABONENTS/.test(tr) && /ESBC → 192\.168\.16\.65:5060: SIP INVITE с транспорта TRANSPORT_SSW/.test(tr) &&
+      /SMG → ESBC 192\.168\.16\.113:5061/.test(tr) && /INVITE из trunk TRUNK_SSW/.test(tr) && /RTP через ESBC: 192\.168\.20\.11 ↔ 192\.168\.20\.120/.test(tr), c.msg + ' :: ' + tr);
+    chk('dial с телефона и show esbc active calls', /разговор с 202/.test(n.exec(a.id, 'dial 202')) && /101\s+202/.test(n.exec(e.id, 'show esbc active calls')), n.exec(e.id, 'show esbc active calls'));
+    chk('отбой — активных вызовов нет', (n.exec(a.id, 'hangup'), /No active calls/.test(n.exec(e.id, 'show esbc active calls'))));
+    // ошибки
+    ['configure', 'esbc', 'user-interface sip ABONENTS', 'no route-table', 'exit', 'exit', 'end', 'commit'].forEach(function (l) { n.exec(e.id, l); });
+    chk('без route-table абонент не регистрируется', /not registered/.test(n.exec(t1.id, 'show voiceport status')) && /route-table/.test(n.voipRegs()[t1.id + '|1'].why), n.voipRegs()[t1.id + '|1'].why);
+    n.exec(e.id, 'rollback'); ['configure', 'esbc', 'user-interface sip ABONENTS', 'route-table TO_SSW', 'exit', 'exit', 'end', 'commit'].forEach(function (l) { n.exec(e.id, l); });
+    chk('route-table возвращён — снова registered', /^1\s+101\s+registered/m.test(n.exec(t1.id, 'show voiceport status')));
+    ['config', 'sip profile 1', 'regristrar address 1 192.168.20.120', 'exit', 'exit', 'commit'].forEach(function (l) { n.exec(t1.id, l); });
+    chk('TAU на порт 5060 вместо 5062 — not registered (на 5060 нет SIP)', /нет SIP/.test(n.voipRegs()[t1.id + '|1'].why), n.voipRegs()[t1.id + '|1'].why);
+    ['config', 'esbc', 'trunk sip TRUNK_SSW', 'remote port 5070', 'exit', 'exit', 'end', 'commit'].forEach(function (l) { n.exec(e.id, l); });
+    chk('неверный remote port транка — регистрация не проходит, транк unavailable', /недоступен/.test(n.voipRegs()[t2.id + '|1'].why) && /unavailable/.test(n.exec(e.id, 'show esbc trunks sip')), n.voipRegs()[t2.id + '|1'].why);
+    chk('esbc на обычном ESR — неизвестная команда', (function () { var r = n.add('vESR', 'R'); n.exec(r.id, 'configure'); return /Unknown command|Syntax error/.test(n.exec(r.id, 'esbc')); })());
+    console.log('✓ ESBC-3200: абоненты TAU ↔ ESBC ↔ SMG');
+  })();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {

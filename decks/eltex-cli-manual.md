@@ -595,6 +595,18 @@ tunnel l2tpv3 1
 - **Телефон:** консоль трубки — `dial 202` (или просто номер), `hangup`, `status`; у вызываемого звонок и снятая трубка. Трасса вызова: REGISTER (UDP 5060) → INVITE на SMG → поиск номера → INVITE на TAU вызываемого → 180 Ringing → 200 OK → RTP напрямую между шлюзами; ошибки — 404 (номер не зарегистрирован), 403 (неверный логин/пароль), 486 (занято), нет связи RTP — «не слышно друг друга».
 Упрощения: кодеки, DTMF, ДВО, план нумерации, транки SMG, E1/SIGTRAN не моделируются.
 
+**Пограничный контроллер сессий ESBC-3200 / vESBC** (руководство пользователя ESBC 1.9.0, пример «Настройка для SIP-абонентов»). Палитра → «VoIP-шлюзы»; CLI, интерфейсы, маршруты, межсетевой экран и `commit` / `confirm` — как у ESR, приглашение `esbc#`. ESBC ставится между абонентами (TAU) и SMG / Softswitch: абоненты регистрируются на ESBC, ESBC передаёт REGISTER и INVITE в SIP-транк.
+- интерфейсы: `interface gigabitethernet 1/0/1` → `ip address 192.168.16.113/24` (сторона SSW), `1/0/2` → `192.168.20.120/24` (абоненты), `ip firewall disable` или зоны;
+- `esbc` → `esbc(config-esbc)#`: `sip transport ИМЯ` → `(config-esbc-sip-transport)#` → `ip address A`, `port N` (по умолчанию 5060); `media resource ИМЯ` → `(config-esbc-media-resource)#` → `ip address A`, `port-range 1024-65535`;
+- `trunk sip ИМЯ` → `(config-esbc-trunk-sip)#` → `sip transport ИМЯ`, `remote address A`, `remote port 5060`, `media resource 0 ИМЯ`;
+- `user-interface sip ИМЯ` → `(config-esbc-user-interface-sip)#` → `sip transport ИМЯ`, `media resource 0 ИМЯ`, `nat comedia-mode on`, `route-table ИМЯ`;
+- `route-table ИМЯ` → `(config-esbc-route-table)#` → `rule 0` → `(config-esbc-route-table-rule)#` → `action direct-to-trunk ТРАНК`;
+- на TAU регистратор — адрес и порт транспорта абонентов: `regristrar address 1 192.168.20.120:5062`, `proxy address 1 192.168.20.120:5062`;
+- `show esbc users sip` — зарегистрированные абоненты (номер, user-interface, контакт, транк); `show esbc trunks sip` — транки и доступность встречной стороны; `show esbc active calls` — текущие разговоры. На SMG в `show list` контакт абонента — адрес транспорта транка ESBC.
+- Трасса вызова: TAU → user-interface (транспорт абонентов) → route-table, rule → trunk → SMG; встречный INVITE: SMG → транспорт транка ESBC → абонент по регистрации; RTP: абонент ↔ media resource user-interface, media resource транка ↔ другая сторона.
+- Типовые ошибки: TAU шлёт на 5060, а транспорт на 5062 — «на UDP 5060 нет SIP»; у user-interface нет `route-table` или в нём нет `action direct-to-trunk` — регистрация не проходит; неверный `remote port` транка — транк `unavailable`; абонент за Source NAT без `nat comedia-mode on` — разговор без звука.
+Упрощения: правила route-table без условий (берётся первое правило с действием), SIP-профили, модификаторы, балансировка, H.323, CDR, белые и чёрные списки, защита от флуда не моделируются; порты ESBC-3200 названы `gigabitethernet 1/0/N`, как в примере руководства.
+
 **OLT Turbo GEPON LTE-8X / LTE-2X и EPON-терминал NTE-2 (B+)** (руководство и Quick guide 3.16.7) — один сценарий подключения абонента. Порты: `front-port 0`–`7` (LTE-2X — 0–3), `pon-port 0`–`7` (0–1); вход admin / password, приглашение `LTE-8X#`.
 - VLAN во встроенном коммутаторе: `switch` → `configure` → `vlan 2000` → `tagged front-port 0 – 7`, `tagged pon-port 0 – 7`, `name Data` → `exit` → `reconfig` (без `reconfig` правки не действуют);
 - `show ont list all` — подключённая ONT без конфигурации в состоянии AUTHFAILED (видно её MAC 02:00:4B:…);

@@ -45,18 +45,32 @@
         if (p.off) return res(false, 'порт выключен (disable)');
         if (!p.user) return res(false, 'не задан username (номер)');
         if (!sp.regOn || !sp.reg) return res(false, 'в sip profile ' + (p.sip || 1) + ' не включена регистрация (regristrar address 1 / regristrar enable 1)');
-        steps.push({ k: 'route', t: d.name + ' → ' + sp.reg + ': SIP REGISTER sip:' + p.user + '@' + (sp.domain || sp.reg) + ' (UDP 5060)' });
-        var r = s.request(d.id, sp.reg, 'udp', 5060); r.steps.forEach(function (x) { steps.push(x); });
-        if (!r.ok) return res(false, 'регистратор ' + sp.reg + ' недоступен (' + (r.why === 'Connection refused' ? 'на UDP 5060 нет SIP' : 'нет связи') + ')');
-        var sm = s.devs[r.dev]; if (!isS(sm)) return res(false, sp.reg + ' — не SIP-регистратор');
+        var rp = sp.regPort || 5060, vi = null;
+        steps.push({ k: 'route', t: d.name + ' → ' + sp.reg + ': SIP REGISTER sip:' + p.user + '@' + (sp.domain || sp.reg) + ' (UDP ' + rp + ')' });
+        var r = s.request(d.id, sp.reg, 'udp', rp); r.steps.forEach(function (x) { steps.push(x); });
+        if (!r.ok) return res(false, 'регистратор ' + sp.reg + ' недоступен (' + (r.why === 'Connection refused' ? 'на UDP ' + rp + ' нет SIP' : 'нет связи') + ')');
+        var sm = s.devs[r.dev];
+        if (EL.isEsbc && EL.isEsbc(sm)) { vi = viaEsbc(s, sm, sp.reg, rp, 'REGISTER', steps, r); if (vi.why) return res(false, vi.why); sm = s.devs[vi.next]; }
+        if (!isS(sm)) return res(false, sp.reg + ' — не SIP-регистратор');
         var U = sm.st.voip.cfg.users, u = Object.keys(U).map(function (k) { return U[k]; }).filter(function (x) { return x.num === p.user; })[0];
         if (!u) { steps.push({ k: 'drop', t: sm.name + ': 404 Not Found — номера ' + p.user + ' нет в базе SIP-абонентов' }); return res(false, 'на SMG нет абонента с номером ' + p.user); }
         if (u.auth && u.auth !== 'none') { steps.push({ k: 'route', t: sm.name + ': 401 Unauthorized — запрос логина и пароля (digest)' });
           if (u.login !== (p.authname || p.user) || u.pw !== p.pw) { steps.push({ k: 'drop', t: sm.name + ': 403 Forbidden — неверный логин или пароль' }); return res(false, 'SMG отклонил: неверный authname / password'); } }
         steps.push({ k: 'ok', t: sm.name + ': 200 OK — номер ' + p.user + ' зарегистрирован' });
-        t[key] = { ok: true, tau: d.id, port: +n, num: p.user, smg: sm.id, steps: steps, auth: u.auth }; }); });
+        t[key] = { ok: true, tau: d.id, port: +n, num: p.user, smg: sm.id, steps: steps, auth: u.auth, vi: vi, via: vi && vi.esbc, ui: vi && vi.ui, trunk: vi && vi.trunk }; }); });
     return t;
   };
+  // абонент → ESBC (user-interface на ip:port) → route-table → SIP-транк → встречная сторона (SMG)
+  function viaEsbc(net, e, ip, p, what, steps, r0) { var H = EL.esbcHop, u = H.uiAt(net, e, ip, p);
+    if (!u) { steps.push({ k: 'drop', t: e.name + ': на ' + ip + ':' + p + ' нет user-interface sip — запрос отброшен' }); return { why: 'ESBC: на ' + ip + ':' + p + ' нет user-interface sip' }; }
+    var tk = H.trunkOf(e, u.ui); if (tk.why) { steps.push({ k: 'drop', t: e.name + ': ' + tk.why + ' — 404 Not Found' }); return { why: 'ESBC: ' + tk.why }; }
+    steps.push({ k: 'route', t: e.name + ': ' + what + ' принят user-interface ' + u.name + ' (транспорт ' + u.trName + ' ' + u.tr.ip + ':' + p + ') → route-table ' + tk.rt + ', rule ' + tk.rule + ' → trunk ' + tk.name });
+    var rp = tk.tk.rp || 5060;
+    steps.push({ k: 'route', t: e.name + ' → ' + tk.tk.ra + ':' + rp + ': SIP ' + what + ' с транспорта ' + tk.trName + ' (' + tk.tr.ip + ':' + H.port(tk.tr) + ')' });
+    var r = net.request(e.id, tk.tk.ra, 'udp', rp); r.steps.forEach(function (x) { steps.push(x); });
+    if (!r.ok) return { why: 'ESBC: транк ' + tk.name + ' — ' + tk.tk.ra + ':' + rp + ' недоступен' };
+    return { esbc: e.id, ui: u.name, trunk: tk.name, next: r.dev, contact: tk.tr.ip, cport: H.port(tk.tr),
+             nat: (r0 && r0.steps || []).some(function (x) { return /Source NAT/.test(x.t); }), comedia: !!u.ui.comedia }; }
   function regByNum(net, smg, num) { var t = net.voipRegs(); return Object.keys(t).map(function (k) { return t[k]; }).filter(function (r) { return r.ok && r.smg === smg && r.num === num; })[0] || null; }
   function call(net, ph, num) {
     var steps = [], pr = null, tau = null, n = null;
@@ -68,25 +82,52 @@
     steps.push({ k: 'route', t: ph.name + ': трубка снята, гудок; набран ' + num });
     var sp = tau.st.voip.run.sip[tau.st.voip.run.ports[n].sip || 1], sm = net.devs[me.smg];
     steps.push({ k: 'route', t: tau.name + ' → ' + sp.reg + ': SIP INVITE sip:' + num + '@' + (sp.domain || sp.reg) + ' от ' + me.num });
-    var r1 = net.request(tau.id, sp.reg, 'udp', 5060); r1.steps.forEach(function (x) { steps.push(x); });
+    var r1 = net.request(tau.id, sp.reg, 'udp', sp.regPort || 5060); r1.steps.forEach(function (x) { steps.push(x); });
     if (!r1.ok) return { ok: false, msg: 'короткие гудки — нет связи с ' + sp.reg, steps: steps };
+    if (me.vi) { var v1 = viaEsbc(net, net.devs[me.vi.esbc], sp.reg, sp.regPort || 5060, 'INVITE', steps, r1); if (v1.why) return { ok: false, msg: 'короткие гудки — ' + v1.why, steps: steps }; }
     if (me.auth === 'register_and_invite') steps.push({ k: 'route', t: sm.name + ': 401 — повторный INVITE с логином и паролем' });
     var dst = regByNum(net, sm.id, num);
     if (!dst) { steps.push({ k: 'drop', t: sm.name + ': 404 Not Found — номер ' + num + ' не зарегистрирован' }); return { ok: false, msg: 'короткие гудки (404) — номер ' + num + ' недоступен', steps: steps }; }
     var dt = net.devs[dst.tau];
-    steps.push({ k: 'route', t: sm.name + ' → ' + dt.name + ': SIP INVITE на порт ' + dst.port + ' (номер ' + num + ')' });
-    var r2 = net.request(sm.id, dt.st.ip, 'udp', 5060); r2.steps.forEach(function (x) { steps.push(x); });
-    if (!r2.ok) return { ok: false, msg: 'короткие гудки — SMG не достучался до ' + dt.name, steps: steps };
+    if (dst.vi) { var de = net.devs[dst.vi.esbc];
+      steps.push({ k: 'route', t: sm.name + ' → ' + de.name + ' ' + dst.vi.contact + ':' + dst.vi.cport + ': SIP INVITE sip:' + num + ' (контакт регистрации — транк ' + dst.vi.trunk + ')' });
+      var r2a = net.request(sm.id, dst.vi.contact, 'udp', dst.vi.cport); r2a.steps.forEach(function (x) { steps.push(x); });
+      if (!r2a.ok) return { ok: false, msg: 'короткие гудки — SMG не достучался до ESBC', steps: steps };
+      steps.push({ k: 'route', t: de.name + ': INVITE из trunk ' + dst.vi.trunk + ' → абонент ' + num + ' (user-interface ' + dst.vi.ui + ') → ' + dt.name + ' порт ' + dst.port });
+      var r2 = net.request(de.id, dt.st.ip, 'udp', 5060); r2.steps.forEach(function (x) { steps.push(x); });
+      if (!r2.ok) return { ok: false, msg: 'короткие гудки — ESBC не достучался до ' + dt.name, steps: steps };
+    } else {
+      steps.push({ k: 'route', t: sm.name + ' → ' + dt.name + ': SIP INVITE на порт ' + dst.port + ' (номер ' + num + ')' });
+      var r2b = net.request(sm.id, dt.st.ip, 'udp', 5060); r2b.steps.forEach(function (x) { steps.push(x); });
+      if (!r2b.ok) return { ok: false, msg: 'короткие гудки — SMG не достучался до ' + dt.name, steps: steps }; }
     var to = phoneOf(net, dt, dst.port);
     if (!to) { steps.push({ k: 'drop', t: dt.name + ': на порту FXS ' + dst.port + ' нет телефона — 480 Temporarily Unavailable' }); return { ok: false, msg: 'короткие гудки — абонент недоступен', steps: steps }; }
     if (to.st.phone.call) { steps.push({ k: 'drop', t: dt.name + ': 486 Busy Here' }); return { ok: false, msg: 'занято (486 Busy Here)', steps: steps }; }
     if (to === ph) return { ok: false, msg: 'занято — вы звоните себе', steps: steps };
     steps.push({ k: 'route', t: dt.name + ': 180 Ringing — звонит ' + to.name + '; трубка снята → 200 OK → ACK' });
+    if (me.vi || dst.vi) { var rtp = rtpEsbc(net, tau, me.vi, dt, dst.vi, steps);
+      if (rtp.why) return { ok: false, msg: 'соединились, но не слышно друг друга — ' + rtp.why, steps: steps, to: to };
+      steps.push({ k: 'ok', t: 'RTP через ESBC: ' + rtp.legs + ' — разговор установлен' });
+      var calls = net._esbCalls || (net._esbCalls = []);
+      [me.vi, dst.vi].forEach(function (v) { if (v && !calls.some(function (c) { return c.esbc === v.esbc && c.from === me.num; })) calls.push({ esbc: v.esbc, from: me.num, to: num, legs: rtp.legs }); });
+      return { ok: true, msg: 'разговор с ' + num + ' (' + to.name + ')', steps: steps, to: to, from: me.num }; }
     var r3 = net.request(tau.id, dt.st.ip, 'udp', 5004); r3.steps.forEach(function (x) { steps.push(x); });
     if (!r3.ok) { steps.push({ k: 'drop', t: 'RTP ' + tau.name + ' ↔ ' + dt.name + ' не проходит — разговор без звука' }); return { ok: false, msg: 'соединились, но не слышно друг друга — нет прямой связи RTP между шлюзами', steps: steps, to: to }; }
     steps.push({ k: 'ok', t: 'RTP ' + tau.st.ip + ' ↔ ' + dt.st.ip + ' — разговор установлен' });
     return { ok: true, msg: 'разговор с ' + num + ' (' + to.name + ')', steps: steps, to: to, from: me.num };
   }
+  // речь через ESBC: абонент ↔ media resource user-interface, media resource транка ↔ встречная сторона
+  function rtpEsbc(net, ta, va, tb, vb, steps) { var H = EL.esbcHop, legs = [];
+    function side(t, v) { var e = net.devs[v.esbc], c = H.cfg(e), mu = H.mediaIp(e, c.ui[v.ui]), mt = H.mediaIp(e, c.trunk[v.trunk]);
+      if (!mu) return { why: 'у user-interface ' + v.ui + ' нет media resource с ip address' }; if (!mt) return { why: 'у trunk sip ' + v.trunk + ' нет media resource с ip address' };
+      if (v.nat && !v.comedia) { steps.push({ k: 'drop', t: e.name + ': абонент ' + t.name + ' за NAT, nat comedia-mode выключен — RTP уходит на внутренний адрес из SDP' }); return { why: 'абонент за NAT, на user-interface ' + v.ui + ' не включён nat comedia-mode on' }; }
+      var r = net.request(t.id, mu.ip, 'udp', 5004); r.steps.forEach(function (x) { steps.push(x); }); if (!r.ok) return { why: 'RTP ' + t.name + ' → ' + mu.ip + ' не проходит' };
+      legs.push(t.st.ip + ' ↔ ' + mu.ip + (v.comedia && v.nat ? ' (comedia)' : '')); return { e: e, mt: mt }; }
+    var a = va ? side(ta, va) : null; if (a && a.why) return a; var b = vb ? side(tb, vb) : null; if (b && b.why) return b;
+    if (a && b && a.e === b.e) { legs.splice(1, 0, a.mt.ip + ' ↔ ' + b.mt.ip); return { legs: legs.join(', ') }; }
+    var fromIp = a ? a.mt.ip : ta.st.ip, toIp = b ? b.mt.ip : tb.st.ip, r = net.request(a ? a.e.id : ta.id, toIp, 'udp', 5004); r.steps.forEach(function (x) { steps.push(x); });
+    if (!r.ok) return { why: 'RTP ' + fromIp + ' → ' + toIp + ' не проходит' };
+    legs.splice(a ? 1 : 0, 0, fromIp + ' ↔ ' + toIp); return { legs: legs.join(', ') }; }
   EL.listensX = (function (lx0) { return function (d, proto, port) {
     if (proto === 'udp' && (port === 5060 || port === 5004) && (d.sub === 'smg' || d.sub === 'tau')) return port === 5060 || d.sub === 'tau';
     return lx0 ? lx0(d, proto, port) : undefined; }; })(EL.listensX);
@@ -125,7 +166,7 @@
       return ERR; }
     if (v.mode === 'sipp') { var s = c.sip[v.ctx];
       if ((m = l.match(/^proxy address 1 (\S+)$/))) { s.proxy = m[1].replace(/:\d+$/, ''); return ''; }
-      if ((m = l.match(/^regristrar address 1 (\S+)$/))) { s.reg = m[1].replace(/:\d+$/, ''); return ''; }
+      if ((m = l.match(/^regristrar address 1 (\d+\.\d+\.\d+\.\d+)(?::(\d+))?$/))) { s.reg = m[1]; s.regPort = m[2] ? +m[2] : null; return ''; }
       if (lo === 'regristrar enable 1') { s.regOn = true; return ''; }
       if (lo === 'no regristrar enable 1') { s.regOn = false; return ''; }
       if ((m = l.match(/^domain (\S+)$/))) { s.domain = m[1]; return ''; }
@@ -144,7 +185,7 @@
   }
   function cfgText(c) { var o = ['network', '  ipaddr ' + c.net.ip, '  netmask ' + c.net.mask]; if (c.net.gw) o.push('  gateway ' + c.net.gw); o.push('exit');
     Object.keys(c.sip).forEach(function (k) { var s = c.sip[k]; if (!s.reg && !s.proxy && !s.domain) return; o.push('sip profile ' + k); if (s.proxy) o.push('  proxy address 1 ' + s.proxy);
-      if (s.reg) o.push('  regristrar address 1 ' + s.reg); if (s.regOn) o.push('  regristrar enable 1'); if (s.domain) o.push('  domain ' + s.domain); o.push('exit'); });
+      if (s.reg) o.push('  regristrar address 1 ' + s.reg + (s.regPort ? ':' + s.regPort : '')); if (s.regOn) o.push('  regristrar enable 1'); if (s.domain) o.push('  domain ' + s.domain); o.push('exit'); });
     Object.keys(c.ports).sort(function (a, b) { return a - b; }).forEach(function (k) { var p = c.ports[k]; o.push('voice port ' + k); if (p.user) o.push('  username ' + p.user);
       if (p.authname) o.push('  authname ' + p.authname); if (p.pw) o.push('  password ' + p.pw); if (p.sip && p.sip !== 1) o.push('  profile sip ' + p.sip); if (p.off) o.push('  disable'); o.push('exit'); });
     return o.join('\n'); }
@@ -183,7 +224,7 @@
       return ERR; }
     return ERR;
   }
-  function regNum(st, num) { var net = st.net; if (!net || !num) return null; var r = regByNum(net, devOf(net, st), num); return r ? net.devs[r.tau].st.ip + ' port ' + r.port : null; }
+  function regNum(st, num) { var net = st.net; if (!net || !num) return null; var r = regByNum(net, devOf(net, st), num); return r ? (r.vi ? r.vi.contact + ' (ESBC, ' + r.trunk + ')' : net.devs[r.tau].st.ip + ' port ' + r.port) : null; }
   function phoneExec(net, d, raw) { var ph = d.st.phone, l = String(raw).trim(), m;
     if (!l) return '';
     if ((m = l.match(/^(?:dial\s+)?(\d{2,15})$/i))) { if (ph.call) return 'Сначала положите трубку (hangup)';
@@ -191,7 +232,7 @@
       if (r.ok) { ph.call = m[1]; r.to.st.phone.call = r.from; r.to.st.phone.log.push('Звонок от ' + r.from + ' — трубка снята, идёт разговор'); net.gen++; }
       return r.msg; }
     if (/^hangup$/i.test(l)) { if (!ph.call) return 'Трубка уже положена'; var other = net.list().filter(function (x) { return isPh(x) && x !== d && x.st.phone.call; });
-      other.forEach(function (x) { x.st.phone.call = null; x.st.phone.log.push('Собеседник положил трубку — отбой'); }); ph.call = null; net.gen++; return 'Трубка положена'; }
+      other.forEach(function (x) { x.st.phone.call = null; x.st.phone.log.push('Собеседник положил трубку — отбой'); }); ph.call = null; net._esbCalls = []; net.gen++; return 'Трубка положена'; }
     if (/^status$/i.test(l)) return ph.call ? 'Разговор: ' + ph.call : 'Трубка положена' + (ph.log.length ? '\n' + ph.log.slice(-3).join('\n') : '');
     if (/^(help|\?)$/.test(l)) return 'dial НОМЕР (или просто номер) — набрать; hangup — положить трубку; status — состояние';
     return 'dial НОМЕР — набрать номер; hangup — положить трубку';

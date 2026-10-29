@@ -166,6 +166,11 @@ def main():
                 names = ["eth0"] + ["fxs %d" % i for i in range(1, 9)]
                 models[k] = {"type": "vpc", "kind": "tau", "ports": len(names), "portList": names, "group": "VoIP-шлюзы", "host": "tau-72", "sw": "ПО " + sv,
                              "note": "абонентский шлюз: eth0 + FXS 1–8 (у TAU-72 их 72) · admin / rootpasswd · commit + confirm", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
+            elif k in ("ESBC-3200", "vESBC"):
+                n = 12 if k == "ESBC-3200" else 4
+                models[k] = {"type": "esr", "kind": "esbc", "ports": n, "portList": ["gi1/0/%d" % i for i in range(1, n + 1)], "group": "VoIP-шлюзы", "host": "esbc", "sw": "ПО " + (sv if sv != "?" else "1.9.0"),
+                             "note": "пограничный контроллер сессий: CLI ESR + раздел esbc (sip transport, media resource, trunk sip, user-interface sip, route-table) · commit + confirm",
+                             "full": (m.get("summary") or "Пограничный контроллер сессий") + " · ПО " + (sv if sv != "?" else "1.9.0"), "url": m.get("url")}
             elif k == "SMG-1016M":
                 models[k] = {"type": "vpc", "kind": "smg", "ports": 1, "portList": ["eth0"], "group": "VoIP-шлюзы", "sw": "ПО " + sv,
                              "note": "цифровой шлюз с SIP-регистратором (sip users) · admin / rootpasswd", "full": (m.get("summary") or "") + " · ПО " + sv, "url": m.get("url")}
