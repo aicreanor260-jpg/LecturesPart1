@@ -434,7 +434,7 @@
     dockTerm(id);                                   // новая консоль — вкладкой в окне «Консоли»
   }
   // ================================================================== «Консоли»: вкладки, вынос в отдельное окно и возврат
-  var consOrder = [], consActive = null, TYPE = { mes: 'SW', esr: 'R', vpc: 'PC', deb: 'PC' };
+  var consOrder = [], consActive = null, TYPE = { mes: 'SW', esr: 'R', vpc: 'PC', deb: 'PC', tau: 'TAU', smg: 'SMG', phone: 'TEL', olt: 'OLT', lte: 'OLT' };
   function tEl(id) { var t = terms[id]; return t && t.body || null; }
   function focusTerm(id) { var b = tEl(id); if (b) { var o = b.querySelector('.out'); o.scrollTop = o.scrollHeight; setTimeout(function () { b.querySelector('input').focus(); }, 0); } }
   function consWin() {
@@ -465,7 +465,7 @@
     if (!wins.cons) return; var strip = wins.cons.el.querySelector('.ctabs');
     strip.innerHTML = consOrder.map(function (id) { var d = net.devs[id], t = terms[id] || {}; if (!d) return '';
       return '<div class="ctab' + (id === consActive ? ' on' : '') + (t.unread ? ' new' : '') + (d.off ? ' off' : '') + '" data-id="' + esc(id) + '" title="' + esc(d.model) +
-        ' — перетащите за пределы полосы, чтобы открыть отдельным окном"><i>' + (TYPE[d.type] || '•') + '</i><b>' + esc(d.name) + '</b><span class="cx" data-x="1" title="Закрыть">✕</span></div>'; }).join('') +
+        ' — перетащите за пределы полосы, чтобы открыть отдельным окном"><i>' + (TYPE[d.sub] || TYPE[d.type] || '•') + '</i><b>' + esc(d.name) + '</b><span class="cx" data-x="1" title="Закрыть">✕</span></div>'; }).join('') +
       (consActive && net.manualFor(consActive) ? '<button class="man cman" data-man="1">Руководство</button>' : '');
     wins.cons.title = 'Консоли (' + consOrder.length + ')'; wins.cons.el.querySelector('.wt b').textContent = 'Консоли'; chips();
   }
