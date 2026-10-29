@@ -105,7 +105,6 @@
       el('text', { y: 50, 'class': 'lbl' }, g).textContent = d.name;
       el('text', { y: 65, 'class': 'mdl' }, g).textContent = d.model + ipLabel(d);
       g.addEventListener('mousedown', function (e) { devDown(e, d); });
-      g.addEventListener('dblclick', function (e) { e.stopPropagation(); openTerm(d.id); });
       g.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); devMenu(d, e); });
     });
     if (undoPre) undoPre();
@@ -147,9 +146,11 @@
     if (b.dataset.ff) { var sec = +b.dataset.ff; if (!advance(sec, true)) toast('Промотано ' + (sec >= 3600 ? sec / 3600 + ' ч' : sec / 60 + ' мин') + ' модельного времени'); return; }
     speed = +b.dataset.sp; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x === b); }); });
   function stat() {
+    $('bPower').hidden = !net.list().some(function (d) { return d.off; });
     $('stat').innerHTML = 'УСТРОЙСТВ <b>' + net.list().length + '</b> · КАБЕЛЕЙ <b>' + net.links.length + '</b><br>' +
       (lab ? 'ЛАБА <b>' + lab.id + '</b>' : task ? 'ЗАДАНИЕ <b>' + (task.kind === 'base' ? 'БАЗА' : 'VLAN') + '</b>' : 'СВОБОДНАЯ СХЕМА');
   }
+  var lastClick = { id: null, t: 0 };     // двойной щелчок по устройству — консоль (dblclick не доходит: значок перерисовывается после первого щелчка)
   function devDown(e, d) {
     e.stopPropagation(); closeMenu();
     if (e.button !== 0) return;
@@ -161,6 +162,7 @@
     function mv(ev) { var p = toWorld(ev.clientX, ev.clientY); start.forEach(function (q) { q.d.x = q.x + p.x - p0.x; q.d.y = q.y + p.y - p0.y; });
       if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) { moved = true; draw(); } }
     function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null;
+      if (!moved) { var tnow = Date.now(); if (lastClick.id === d.id && tnow - lastClick.t < 450) { lastClick = { id: null, t: 0 }; draw(); openTerm(d.id); return; } lastClick = { id: d.id, t: tnow }; } else lastClick = { id: null, t: 0 };
       if (moved) start.forEach(function (q) { if (q.d.x !== q.x || q.d.y !== q.y) X.rec({ k: 'move', name: q.d.name, x: q.x, y: q.y }); }); draw(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
@@ -627,6 +629,9 @@
       draw(); setPr(id); refresh();
     }, 1100);
   }
+  function powerAll() { var L = net.list().filter(function (d) { return d.off; }); if (!L.length) { toast('Всё оборудование уже включено'); return; }
+    L.forEach(function (d, i) { setTimeout(function () { if (net.devs[d.id] && net.devs[d.id].off) boot(d.id, false); }, i * 150); }); toast('Включаю: ' + L.length + ' устр.'); }
+  $('bPower').addEventListener('click', powerAll);
   $('bTerm').addEventListener('click', function () { if (sel) openTerm(sel); else toast('Выберите устройство на схеме (щелчок) или дважды щёлкните по нему'); });
 
   // ================================================================== nano, свойства, ping
@@ -892,7 +897,7 @@
     net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
-    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); EL.labs.powerOff(net); draw(); fit(); renderLab(true); renderSide();
     report({ type: 'lab', lab: id, title: lab.title, mode: mode });
   }
   // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
@@ -900,17 +905,20 @@
     if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;      // только на сайте курса
     try { fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(ev) }).catch(function () {}); } catch (err) { /* без сайта курса */ }
   }
-  if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
-    $('bOut').hidden = false;
-    $('bOut').addEventListener('click', function () {
-      autoSave(); autoOff = true;                                          // выход не стирает работу: при следующем входе — «Продолжить?»
-      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
-    });
-  }
+  // «Сохранить» и значок NetCat — сохранить работу (на сервер — EL.serverSave из клиента /ws) и вернуться на курс; «Выйти» — сохранить и выйти из учётки
+  var COURSE = '/';
+  function saveNow() { autoSave(); var j = review ? null : snapshot(); return Promise.resolve(j && EL.serverSave ? EL.serverSave(j) : null).catch(function () { return null; }); }
+  function saveAndGo() { toast('Сохраняю…'); saveNow().then(function () { autoOff = true; location.href = COURSE; }); }
+  $('bSave').addEventListener('click', saveAndGo);
+  $('logo').addEventListener('click', saveAndGo); $('logo').addEventListener('keydown', function (e) { if (e.key === 'Enter') saveAndGo(); });
+  $('bOut').addEventListener('click', function () {
+    saveNow().then(function () { autoOff = true;                          // выход не стирает работу: при следующем входе — «Продолжить?»
+      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; }); });
+  });
   // ссылка с портала курса: eltex-cli.html#lab=4.1 — сразу открыть лабу (режим текущий); неизвестный id — без реакции
   function labFromHash() {
     var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); if (!m || !EL.labs.byId(m[1])) return;
-    startLab(m[1]); if (location.hostname === 'net-cat.duckdns.org') $('bCourse').hidden = false;
+    startLab(m[1]);
   }
   window.addEventListener('hashchange', labFromHash);
   setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);

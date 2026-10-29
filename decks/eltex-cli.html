@@ -24,7 +24,7 @@ button,input,select{font:inherit;color:inherit}
 /* ---------- шапка */
 .top{position:fixed;left:0;right:0;top:0;height:54px;display:flex;align-items:center;gap:18px;padding:0 18px 0 26px;z-index:30;
   background:linear-gradient(180deg,rgba(18,8,11,.95),rgba(18,8,11,.6));border-bottom:1px solid var(--rd2)}
-.logo{display:flex;align-items:center;gap:10px;font:700 22px/1 var(--f);letter-spacing:.12em;color:var(--cy)}
+.logo{cursor:pointer;display:flex;align-items:center;gap:10px;font:700 22px/1 var(--f);letter-spacing:.12em;color:var(--cy)}
 .logo i{width:28px;height:28px;border:2px solid var(--cy);transform:skewX(-14deg);display:grid;place-items:center;font:700 14px var(--m);font-style:normal}
 .logo small{display:block;font:600 11px/1.1 var(--m);color:var(--rd);letter-spacing:.08em}
 .rule{flex:1;height:22px;position:relative;opacity:.8}
@@ -33,7 +33,7 @@ button,input,select{font:inherit;color:inherit}
 .stat{font:500 12px/1.3 var(--m);color:var(--dim);text-align:right;white-space:nowrap}
 .stat b{color:var(--cy);font-weight:700}
 .bar{width:160px;height:26px;background:repeating-linear-gradient(90deg,var(--cy) 0 2px,transparent 2px 4px,var(--cy) 4px 5px,transparent 5px 9px,var(--cy) 9px 12px,transparent 12px 14px);opacity:.75}
-.tbtn{border:1px solid var(--cy2);background:var(--cyd);color:var(--cy);padding:6px 12px;clip-path:var(--cut-s);cursor:pointer;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px}
+.tbtn{white-space:nowrap;border:1px solid var(--cy2);background:var(--cyd);color:var(--cy);padding:6px 12px;clip-path:var(--cut-s);cursor:pointer;font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px}
 .tbtn:hover{background:var(--cy);color:#0e1b1e}
 .mode{display:flex;border:1px solid var(--rd);clip-path:var(--cut-s)}
 .mode button{background:transparent;border:0;color:var(--rd);padding:6px 14px;cursor:pointer;font:700 13px var(--f);letter-spacing:.1em;text-transform:uppercase}
@@ -114,7 +114,7 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 /* ---------- нижняя панель */
 .dock{position:fixed;left:0;right:0;bottom:0;height:46px;z-index:30;display:flex;align-items:center;gap:8px;padding:0 14px;
   background:linear-gradient(0deg,rgba(12,19,32,.97),rgba(12,19,32,.75));border-top:1px solid var(--cy2)}
-.term-btn{border:0;background:var(--rd);color:#1a0b0d;padding:8px 18px;font-weight:700;letter-spacing:.1em;cursor:pointer;clip-path:var(--cut-s);text-transform:uppercase}
+.term-btn{white-space:nowrap;border:0;background:var(--rd);color:#1a0b0d;padding:8px 18px;font-weight:700;letter-spacing:.1em;cursor:pointer;clip-path:var(--cut-s);text-transform:uppercase}
 .term-btn:hover{background:#ef6c63}
 .chips{display:flex;gap:6px;overflow-x:auto;flex:1}
 .chip{border:1px solid var(--cy2);background:transparent;color:var(--cy);padding:5px 10px;cursor:pointer;font:600 13px var(--m);white-space:nowrap}
@@ -255,7 +255,7 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .zonew .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.zonew .cs2{color:var(--dim);font:500 12px var(--m)}
 .zonew button[data-c="del"],.zonew button[data-zx]{background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:6px 10px;font:700 12px var(--m);cursor:pointer}
 body.pdu-pick #cv,body.pdu-pick #cv .dev{cursor:crosshair}
-.pdu-btn{margin-left:8px}.pdu-btn.on{background:var(--cy);color:#150b0e;box-shadow:0 0 14px rgba(111,227,234,.6)}
+.pdu-btn,.pwr-btn{margin-left:8px}.pwr-btn{order:-1;margin:0 8px 0 0;background:#1f3a24;color:#7dffb0;border-color:#38e07b}.pdu-btn.on{background:var(--cy);color:#150b0e;box-shadow:0 0 14px rgba(111,227,234,.6)}
 .pduw .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.pduw .cs2{color:var(--dim);font:500 12px var(--m)}.pduw .cs{font:600 12px var(--m);color:var(--bad)}
 .pduw button:not(.pri){background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:4px 9px;font:700 12px var(--m);cursor:pointer}.pduw button:not(.pri):hover{border-color:var(--cy)}
 .pduw .cxg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px 10px}.pduw .cxg label{margin:0}
@@ -329,7 +329,7 @@ body.pdu-pick #cv,body.pdu-pick #cv .dev{cursor:crosshair}
 </head>
 <body>
 <header class="top">
-  <div class="logo"><i>N</i><div>NETCAT // NETWORK<small>СЕТИ И ПРОТОКОЛЫ</small></div></div>
+  <div class="logo" id="logo" title="Сохранить работу и вернуться на курс NetCat" role="button" tabindex="0"><i>N</i><div>NETCAT // NETWORK<small>СЕТИ И ПРОТОКОЛЫ</small></div></div>
   <div class="rule"></div>
   <div class="stat" id="stat"></div>
   <div class="clk t-only" id="clk" title="Модельное время сети: от него стареют записи MAC (300 с) и ARP">
@@ -339,8 +339,8 @@ body.pdu-pick #cv,body.pdu-pick #cv .dev{cursor:crosshair}
   </div>
   <div class="mode" id="mode" title="Работа — как на оборудовании; Тест — учебные инструменты: таблицы, путь пакета, часы, автопроверка"><button data-m="work" class="on">Работа</button><button data-m="test">Тест</button></div>
   <button class="tbtn" id="bFit" title="Показать всю схему">Вся схема</button>
-  <a class="tbtn" id="bCourse" href="/" title="Вернуться на сайт курса" hidden>← к курсу</a>
-  <button class="tbtn" id="bOut" title="Выйти из учётной записи курса" hidden>Выйти</button>
+  <button class="tbtn" id="bSave" title="Сохранить работу на сервер и вернуться на курс NetCat">Сохранить</button>
+  <button class="tbtn" id="bOut" title="Сохранить работу и выйти из учётной записи курса">Выйти</button>
 </header>
 <svg id="cv"><g id="world"><g id="gl"></g><g id="gp"></g><g id="gn"></g><g id="gd"></g><g id="pk"></g><line id="ghost" class="ghost" x1="0" y1="0" x2="0" y2="0" style="display:none"/></g></svg>
 <div class="frame"></div><div class="ticks"></div>
@@ -350,6 +350,7 @@ body.pdu-pick #cv,body.pdu-pick #cv .dev{cursor:crosshair}
   <div class="sbody" id="sbody"></div>
 </aside>
 <div class="dock">
+  <button class="term-btn pwr-btn" id="bPower" title="Включить всё выключенное оборудование (загрузка с выводом в консоль)" hidden>▶ Включить всё</button>
   <button class="term-btn" id="bTerm" title="Открыть терминал выбранного устройства">▣ Терминал</button>
   <div class="chips" id="chips"></div>
   <div class="dhint"><b>ПКМ</b> по полю — добавить · <b>ПКМ</b> по устройству — меню · <b>2×клик</b> — консоль · <b>колесо</b> — масштаб</div>
@@ -12394,6 +12395,8 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function port(net, n, p) { var s = dev(net, n); return s && s.ports['gi1/0/' + p]; }
   function acc(net, n, ps, v) { return ps.every(function (p) { var q = port(net, n, p); return q && q.mode === 'access' && q.access === v; }); }
   function distinct(k, from) { var o = []; while (o.length < k) { var x = PK(from); if (o.indexOf(x) < 0) o.push(x); } return o; }
+  // лаба начинается с выключенным оборудованием (как в pnetlab): студент включает сам — ПКМ → «Включить» или «Включить всё»
+  function powerOff(net) { net.list().forEach(function (d) { net.power(d.id, false); }); }
   function apply(net, script) {                 // выполнить команды на устройствах; вернуть ошибки (для автотеста)
     var errs = [];
     Object.keys(script).forEach(function (n) {
@@ -12570,7 +12573,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var pool = EL.E.TASKS[kind], k = R(0, pool.length - 1), T = pool[k], P = T.gen();
     return { T: T, P: P, k: k };
   }
-  EL.labs = { LABS: LABS, apply: apply, randomTask: randomTask, byId: function (id) { return LABS.filter(function (l) { return l.id === id; })[0]; } };
+  EL.labs = { LABS: LABS, apply: apply, powerOff: powerOff, randomTask: randomTask, byId: function (id) { return LABS.filter(function (l) { return l.id === id; })[0]; } };
 })(typeof window !== 'undefined' ? window : global);
 
 /* Лабораторные 4.3, 5.1, 5.2, 5.3 — маршрутизация на ESR: статика, суммарный и плавающий маршрут, RIP, OSPF.
@@ -13519,7 +13522,6 @@ vesr(config)#         do confirm  — подтвердить</pre>
       el('text', { y: 50, 'class': 'lbl' }, g).textContent = d.name;
       el('text', { y: 65, 'class': 'mdl' }, g).textContent = d.model + ipLabel(d);
       g.addEventListener('mousedown', function (e) { devDown(e, d); });
-      g.addEventListener('dblclick', function (e) { e.stopPropagation(); openTerm(d.id); });
       g.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); devMenu(d, e); });
     });
     if (undoPre) undoPre();
@@ -13561,9 +13563,11 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (b.dataset.ff) { var sec = +b.dataset.ff; if (!advance(sec, true)) toast('Промотано ' + (sec >= 3600 ? sec / 3600 + ' ч' : sec / 60 + ' мин') + ' модельного времени'); return; }
     speed = +b.dataset.sp; [].forEach.call($('clk').querySelectorAll('[data-sp]'), function (x) { x.classList.toggle('on', x === b); }); });
   function stat() {
+    $('bPower').hidden = !net.list().some(function (d) { return d.off; });
     $('stat').innerHTML = 'УСТРОЙСТВ <b>' + net.list().length + '</b> · КАБЕЛЕЙ <b>' + net.links.length + '</b><br>' +
       (lab ? 'ЛАБА <b>' + lab.id + '</b>' : task ? 'ЗАДАНИЕ <b>' + (task.kind === 'base' ? 'БАЗА' : 'VLAN') + '</b>' : 'СВОБОДНАЯ СХЕМА');
   }
+  var lastClick = { id: null, t: 0 };     // двойной щелчок по устройству — консоль (dblclick не доходит: значок перерисовывается после первого щелчка)
   function devDown(e, d) {
     e.stopPropagation(); closeMenu();
     if (e.button !== 0) return;
@@ -13575,6 +13579,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     function mv(ev) { var p = toWorld(ev.clientX, ev.clientY); start.forEach(function (q) { q.d.x = q.x + p.x - p0.x; q.d.y = q.y + p.y - p0.y; });
       if (Math.abs(p.x - p0.x) + Math.abs(p.y - p0.y) > 3) { moved = true; draw(); } }
     function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); sel = d.id; selLink = null;
+      if (!moved) { var tnow = Date.now(); if (lastClick.id === d.id && tnow - lastClick.t < 450) { lastClick = { id: null, t: 0 }; draw(); openTerm(d.id); return; } lastClick = { id: d.id, t: tnow }; } else lastClick = { id: null, t: 0 };
       if (moved) start.forEach(function (q) { if (q.d.x !== q.x || q.d.y !== q.y) X.rec({ k: 'move', name: q.d.name, x: q.x, y: q.y }); }); draw(); }
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up);
   }
@@ -14041,6 +14046,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
       draw(); setPr(id); refresh();
     }, 1100);
   }
+  function powerAll() { var L = net.list().filter(function (d) { return d.off; }); if (!L.length) { toast('Всё оборудование уже включено'); return; }
+    L.forEach(function (d, i) { setTimeout(function () { if (net.devs[d.id] && net.devs[d.id].off) boot(d.id, false); }, i * 150); }); toast('Включаю: ' + L.length + ' устр.'); }
+  $('bPower').addEventListener('click', powerAll);
   $('bTerm').addEventListener('click', function () { if (sel) openTerm(sel); else toast('Выберите устройство на схеме (щелчок) или дважды щёлкните по нему'); });
 
   // ================================================================== nano, свойства, ping
@@ -14306,7 +14314,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     net = new EL.Net(); net.onTrace = function (r, id, dst) { showTrace(r, id, dst); }; terms = {}; sel = null; selLink = null; msel = {}; mselL = {}; cable = null; draw();
   }
   function startLab(id) {
-    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); draw(); fit(); renderLab(true); renderSide();
+    lab = EL.labs.byId(id); lab._done = null; labSent = null; labP = lab.gen(); labShow = false; task = null; resetNet(); lab.build(net, labP); EL.labs.powerOff(net); draw(); fit(); renderLab(true); renderSide();
     report({ type: 'lab', lab: id, title: lab.title, mode: mode });
   }
   // учёт на сайте курса: какую лабу открыл студент. Офлайн (file://, GitHub Pages) запрос просто не проходит — молча
@@ -14314,17 +14322,20 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (location.hostname !== 'net-cat.duckdns.org' || !window.fetch) return;      // только на сайте курса
     try { fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(ev) }).catch(function () {}); } catch (err) { /* без сайта курса */ }
   }
-  if (location.hostname === 'net-cat.duckdns.org') {      // «Выйти» — только на сайте курса с учётными записями
-    $('bOut').hidden = false;
-    $('bOut').addEventListener('click', function () {
-      autoSave(); autoOff = true;                                          // выход не стирает работу: при следующем входе — «Продолжить?»
-      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; });
-    });
-  }
+  // «Сохранить» и значок NetCat — сохранить работу (на сервер — EL.serverSave из клиента /ws) и вернуться на курс; «Выйти» — сохранить и выйти из учётки
+  var COURSE = '/';
+  function saveNow() { autoSave(); var j = review ? null : snapshot(); return Promise.resolve(j && EL.serverSave ? EL.serverSave(j) : null).catch(function () { return null; }); }
+  function saveAndGo() { toast('Сохраняю…'); saveNow().then(function () { autoOff = true; location.href = COURSE; }); }
+  $('bSave').addEventListener('click', saveAndGo);
+  $('logo').addEventListener('click', saveAndGo); $('logo').addEventListener('keydown', function (e) { if (e.key === 'Enter') saveAndGo(); });
+  $('bOut').addEventListener('click', function () {
+    saveNow().then(function () { autoOff = true;                          // выход не стирает работу: при следующем входе — «Продолжить?»
+      fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).catch(function () {}).then(function () { location.href = '/login'; }); });
+  });
   // ссылка с портала курса: eltex-cli.html#lab=4.1 — сразу открыть лабу (режим текущий); неизвестный id — без реакции
   function labFromHash() {
     var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); if (!m || !EL.labs.byId(m[1])) return;
-    startLab(m[1]); if (location.hostname === 'net-cat.duckdns.org') $('bCourse').hidden = false;
+    startLab(m[1]);
   }
   window.addEventListener('hashchange', labFromHash);
   setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);

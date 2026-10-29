@@ -9,6 +9,8 @@
   function port(net, n, p) { var s = dev(net, n); return s && s.ports['gi1/0/' + p]; }
   function acc(net, n, ps, v) { return ps.every(function (p) { var q = port(net, n, p); return q && q.mode === 'access' && q.access === v; }); }
   function distinct(k, from) { var o = []; while (o.length < k) { var x = PK(from); if (o.indexOf(x) < 0) o.push(x); } return o; }
+  // лаба начинается с выключенным оборудованием (как в pnetlab): студент включает сам — ПКМ → «Включить» или «Включить всё»
+  function powerOff(net) { net.list().forEach(function (d) { net.power(d.id, false); }); }
   function apply(net, script) {                 // выполнить команды на устройствах; вернуть ошибки (для автотеста)
     var errs = [];
     Object.keys(script).forEach(function (n) {
@@ -185,5 +187,5 @@
     var pool = EL.E.TASKS[kind], k = R(0, pool.length - 1), T = pool[k], P = T.gen();
     return { T: T, P: P, k: k };
   }
-  EL.labs = { LABS: LABS, apply: apply, randomTask: randomTask, byId: function (id) { return LABS.filter(function (l) { return l.id === id; })[0]; } };
+  EL.labs = { LABS: LABS, apply: apply, powerOff: powerOff, randomTask: randomTask, byId: function (id) { return LABS.filter(function (l) { return l.id === id; })[0]; } };
 })(typeof window !== 'undefined' ? window : global);

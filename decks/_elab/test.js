@@ -16,7 +16,10 @@ var EL = global.EL, fail = 0, total = 0;
 function runLab(L) {
   for (var i = 0; i < N; i++) {
     total++;
-    var net = new EL.Net(), p = L.gen(); L.build(net, p); net.tick(31);   // STP: порты к узлам и между мостами переходят в forwarding
+    var net = new EL.Net(), p = L.gen(); L.build(net, p); EL.labs.powerOff(net);
+    if (i === 0 && net.list().some(function (d) { return !d.off; })) { fail++; console.error('✗ ' + L.id + ': при открытии лабы не всё выключено'); }
+    net.list().forEach(function (d) { net.power(d.id, true); });   // студент включает оборудование
+    net.tick(31);   // STP: порты к узлам и между мостами переходят в forwarding
     var tasks = L.tasks(p);
     if (i === 0) {                                // до работы студента пункты не горят (кроме проверки уже работающей службы)
       var pre = tasks.filter(function (t) { var y = false; try { y = !!t.ok(net); } catch (e) { y = false; } return y && !/tftpd-hpa запущена/.test(t.t); });
