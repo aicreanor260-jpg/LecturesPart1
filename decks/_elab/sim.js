@@ -23,7 +23,7 @@
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
   // скорость и дуплекс кабеля сегмента
   function linkInfo(net, sg) { var l = net.links[sg.li]; if (!l) return null; var ph = net.phys ? net.phys(l.a.dev, l.a.port) : { up: true, speed: 1000, dup: {} };
-    return { l: l, mbps: ph.speed || 1000, mismatch: !!ph.mismatch, len: l.len || DEF.len, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
+    return { l: l, mbps: ph.speed || 1000, mismatch: !!ph.mismatch, len: l.len || DEF.len, prop: EL.propSpeed ? EL.propSpeed(net.cabOf ? net.cabOf(l) : l.cab) : DEF.prop, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
   /* flows: [{kind:'ping'|'udp', src, dst, size, count, interval, df, rate, dur, start}]; opt: {len, qcap, until}
      → {events:[{t, kind:'tx'|'drop'|'rx'|'deliver', flow, pkt, seg, t0, t1}], stats} */
   P.simulate = function (flows, opt) {
@@ -77,7 +77,7 @@
       P2.wait = P2.wait.filter(function (x) { return x > t; });
       if (P2.wait.length >= (opt.qcap || DEF.qcap)) { var w = 'очередь ' + P2.name + ' переполнена'; st.drops[w] = (st.drops[w] || 0) + 1;
         ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: w }); continue; }
-      var t1 = Math.max(t, P2.busy), tx = e.bytes * 8 / (li.mbps * 1e6), t2 = t1 + tx, t3 = t2 + (opt.len || li.len) / DEF.prop;
+      var t1 = Math.max(t, P2.busy), tx = e.bytes * 8 / (li.mbps * 1e6), t2 = t1 + tx, t3 = t2 + (opt.len || li.len) / li.prop;
       P2.busy = t2; P2.wait.push(t1); P2.maxq = Math.max(P2.maxq, P2.wait.length);
       var L = links[sg.li] || (links[sg.li] = { bits: 0, frames: 0, mbps: li.mbps, name: s.devs[li.l.a.dev].name + ' ' + li.l.a.port + ' ↔ ' + s.devs[li.l.b.dev].name + ' ' + li.l.b.port });
       L.bits += e.bytes * 8; L.frames++;

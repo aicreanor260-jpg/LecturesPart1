@@ -238,6 +238,13 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .clu rect{fill:#150b0e;stroke:var(--zc);stroke-width:2;cursor:move;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--zc) 45%,transparent))}
 .clu circle{fill:color-mix(in srgb,var(--zc) 30%,#150b0e);stroke:var(--zc);stroke-width:1.5;pointer-events:none}.clu .cl{stroke:var(--zc);fill:none;pointer-events:none}
 .clu .ct{fill:var(--zc);font:700 12px var(--m);text-anchor:middle;pointer-events:none}.clu .lbl{fill:var(--ink);font:700 14px var(--f);text-anchor:middle;pointer-events:none}
+.lkm{fill:#ffc65c;font:700 12px var(--m);text-anchor:middle;paint-order:stroke;stroke:#0b0507;stroke-width:4px;pointer-events:none}
+.lprop .row,.mapw .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}.lprop .row .q{flex:1;width:auto}.lprop .cs2,.mapw .cs2{color:var(--dim);font:500 12px var(--m)}.lprop .cs{font:600 12px var(--m);color:var(--cy)}
+.lprop button:not(.pri){background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:6px 10px;font:700 12px var(--m);cursor:pointer}
+.mapw .msvg{width:100%;background:radial-gradient(circle at 50% 40%,rgba(111,227,234,.06),transparent 70%);border:1px solid rgba(111,227,234,.2)}
+.mapw .msvg line{stroke:#ffc65c;stroke-width:2;stroke-dasharray:6 4}.mapw .msvg .mk{fill:#ffc65c;font:700 11px var(--m);text-anchor:middle}.mapw .msvg .mt{fill:var(--ink);font:700 12px var(--f);text-anchor:middle}
+.mapw .mtab{width:100%;border-collapse:collapse;margin-top:8px;font:500 13px var(--m)}.mapw .mtab th{font:700 10px var(--m);color:var(--rd);text-align:left;letter-spacing:.08em;text-transform:uppercase;padding:3px 6px}
+.mapw .mtab td{padding:4px 6px;border-top:1px solid rgba(111,227,234,.1)}.mapw .mtab tr[data-i]{cursor:pointer}.mapw .mtab tr[data-i]:hover td{background:rgba(111,227,234,.06)}
 .zonew .zcol{display:flex;gap:8px}.zonew .zcol button{width:30px;height:30px;border:2px solid transparent;cursor:pointer}.zonew .zcol button.on{border-color:#fff;box-shadow:0 0 10px currentColor}
 .zonew .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.zonew .cs2{color:var(--dim);font:500 12px var(--m)}
 .zonew button[data-c="del"],.zonew button[data-zx]{background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:6px 10px;font:700 12px var(--m);cursor:pointer}
@@ -3263,16 +3270,17 @@ vesr(config)#         do confirm  — подтвердить</pre>
   // ------------------------------------------------------------------ текстовые выводы
   P.pingText = function (id, dst, style) {
     var r = this.ping(id, dst), n = 5, o = [], s = this, E = [];
-    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)));   // несовпадение дуплекса: часть эхо теряется (physics.js)
+    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)) && !(s.lossHit && s.lossHit(r, e)));   // дуплекс (physics.js), потери канала (linkprops.js)
+    var X = r.ok && s.rttExtra ? s.rttExtra(r) : 0;          // каналы и длинные кабели: распространение туда и обратно, мс
     var got = function (k) { return E.slice(0, k).filter(Boolean).length; };
     if (this.onTrace) this.onTrace(r, id, dst);
     if (IP.ip2n(dst) === null) return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : '% Неверный адрес';
-    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
+    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13 + X).toFixed(3) + ' ms'
                                                                : (r.why === 'Host unreachable' || r.why === 'No IP address' ? 'host (' + dst + ') not reachable' : dst + ' icmp_seq=' + i + ' timeout'));
       return o.join('\n'); }
     if (style === 'linux') {
       o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.');
-      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
+      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.6 + j * 0.037 + X).toFixed(X ? 2 : 3) + ' ms');
       if (!r.ok && /unreach/i.test(r.why || '')) o.push('From ' + (this.ifaces(id)[0] || { ip: dst }).ip + ' icmp_seq=1 Destination Host Unreachable');
       if (!r.ok && /No IP/.test(r.why || '')) return 'ping: connect: Network is unreachable';
       o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + got(4) + ' received, ' + Math.round((4 - got(4)) * 25) + '% packet loss, time 3004ms');
@@ -10881,6 +10889,65 @@ vesr(config)#         do confirm  — подтвердить</pre>
   };
 })(typeof window !== 'undefined' ? window : global);
 
+/* Свойства кабеля и канала: длина, расстояние между площадками, скорость, потери, джиттер, битовые ошибки, нормы длины.
+   Длина l.len, м (по умолчанию 100 м). «Канал связи» (wan) — канал между площадками (оптика оператора): расстояние, км, без нормы длины;
+   задержка распространения = длина / скорость сигнала: оптика (n ≈ 1,47) ≈ 4,9 мкс/км, медь (NVP ≈ 0,66) ≈ 5,05 мкс/км.
+   ping показывает RTT: обычное время LAN + распространение и передача по каналам туда и обратно (Москва — Новосибирск ≈ 3300 км ≈ +16 мс в одну сторону).
+   Расстояние по координатам площадок: по дуге большого круга × 1,2 (коэффициент трассы кабеля — допущение эмулятора). */
+(function (G) {
+  'use strict';
+  var EL = G.EL, P = EL.Net.prototype;
+  EL.CABLES.wan = 'Канал связи между площадками (оптика оператора)';
+  var FIBER = /^(sfp|pon|wan)/, PROP_F = 2.04e8, PROP_C = 1.98e8;
+  function propOf(cab) { return FIBER.test(cab || '') ? PROP_F : PROP_C; }
+  P.cabOf = function (l) { return l.cab || this.defaultCable(l.a.dev, l.a.port, l.b.dev, l.b.port); };
+  P.lenOf = function (l) { return l.len || 100; };
+  P.propDelay = function (l) { return this.lenOf(l) / propOf(this.cabOf(l)); };          // с, в одну сторону
+  EL.propSpeed = propOf;
+  // «Канал связи» — линк на скорости портов, как медь без MDI (пары и модули — забота оператора)
+  var phys0 = P.phys;
+  P.phys = function (id, port) {
+    var pr = this.peer(id, port); if (!pr) return phys0.apply(this, arguments);
+    var l = this.links[pr.li]; if (l.cab !== 'wan') return phys0.apply(this, arguments);
+    l.cab = 'cu'; var r; try { r = phys0.apply(this, arguments); } finally { l.cab = 'wan'; }
+    if (!r.up && /оптическ|модул|медн/.test(r.why || '')) r = { up: true, speed: 1000, dup: {}, cab: 'wan' }; else r = EL.clone(r);
+    r.cab = 'wan'; if (r.up) { r.dup = r.dup || {}; r.dup[id] = r.dup[pr.dev] = 'full'; r.mismatch = false; } return r;
+  };
+  // задержка пути пакета (шаги трассы ip): передача + распространение по каждому сегменту + обработка в узлах
+  P.pathDelay = function (r, bytes) { var s = this, t = 0, b = (bytes || 84) + 18;
+    (r && r.steps || []).forEach(function (x) { if (x.k !== 'ip') return; (x.segs || []).forEach(function (g) { var l = s.links[g.li]; if (!l) return;
+      var ph = s.phys(l.a.dev, l.a.port), mb = l.mbps || ph.speed || 1000; t += b * 8 / (mb * 1e6) + s.propDelay(l) + 10e-6; }); });
+    return t; };
+  // добавка к выводу ping, мс: только заметная, от 0,2 мс (каналы, длинные кабели, медленные линии) — короткий LAN остаётся как был
+  P.rttExtra = function (r, bytes) { var ms = this.pathDelay(r, bytes) * 1000; return ms >= 0.2 ? ms : 0; };
+  // потери эхо на каналах (потери %, битовые ошибки, длина сверх нормы) — повторяемо по номеру эхо
+  P.lossHit = function (r, k) { var s = this, p = 1;
+    (r && r.steps || []).forEach(function (x) { if (x.k !== 'ip') return; (x.segs || []).forEach(function (g) { var l = s.links[g.li]; if (!l) return; p *= 1 - s.linkLoss(l, 84 + 18); }); });
+    var q = 1 - p; if (q <= 0) return false; var h = Math.sin((k + 1) * 12.9898 + (r.steps.length || 1) * 78.233) * 43758.5453; return h - Math.floor(h) < q; };
+  // вероятность потери кадра на линке: потери %, BER, длина сверх нормы (linklen.js)
+  P.linkLoss = function (l, bytes) { var p = (l.loss || 0) / 100; if (l.ber) p = 1 - (1 - p) * Math.pow(1 - l.ber, (bytes || 100) * 8);
+    if (this.lenErr) { var e = this.lenErr(l); if (e) p = 1 - (1 - p) * (1 - e); } return Math.min(1, p); };
+
+  // ---------------------------------------------------------------- сохранение: свойства — пятым элементом кабеля в файле схемы
+  var KEYS = ['len', 'mbps', 'loss', 'jit', 'ber'];
+  var json0 = P.toJSON;
+  P.toJSON = function () { var j = json0.call(this), s = this; j.links.forEach(function (x, i) { var l = s.links[i], o = {};
+    KEYS.forEach(function (k) { if (l[k]) o[k] = l[k]; }); if (Object.keys(o).length) { while (x.length < 5) x.push(null); x[5] = o; } }); return j; };
+  var from0 = EL.Net.fromJSON;
+  EL.Net.fromJSON = function (j) { var n = from0(j); (j.links || []).forEach(function (l) { if (!l[5] || typeof l[5] !== 'object') return;
+    var a = n.byName(l[0]), b = n.byName(l[2]); n.links.forEach(function (x) { if (x.a.dev === (a && a.id) && x.a.port === l[1] && x.b.dev === (b && b.id) && x.b.port === l[3])
+      KEYS.forEach(function (k) { if (isFinite(l[5][k]) && l[5][k] > 0) x[k] = +l[5][k]; }); }); }); return n; };
+  P.setLink = function (li, o) { var l = this.links[li]; if (!l) return; KEYS.forEach(function (k) { if (o[k] === undefined) return; if (o[k] > 0) l[k] = +o[k]; else delete l[k]; }); this.gen++; };
+
+  // ---------------------------------------------------------------- координаты площадок (зоны): расстояние по дуге × коэффициент трассы
+  EL.CITIES = { 'Москва': [55.7558, 37.6173], 'Санкт-Петербург': [59.9343, 30.3351], 'Новосибирск': [55.0084, 82.9357], 'Екатеринбург': [56.8389, 60.6057],
+    'Казань': [55.7963, 49.1088], 'Нижний Новгород': [56.2965, 43.9361], 'Самара': [53.1959, 50.1002], 'Омск': [54.9885, 73.3242], 'Красноярск': [56.0153, 92.8932],
+    'Иркутск': [52.2870, 104.3050], 'Хабаровск': [48.4802, 135.0719], 'Владивосток': [43.1155, 131.8855], 'Ростов-на-Дону': [47.2357, 39.7015], 'Краснодар': [45.0355, 38.9753] };
+  EL.ROUTE_K = 1.2;
+  EL.geoKm = function (a, b) { var R = 6371, r = Math.PI / 180, dLa = (b[0] - a[0]) * r, dLo = (b[1] - a[1]) * r;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2); return 2 * R * Math.asin(Math.sqrt(h)); };
+})(typeof window !== 'undefined' ? window : global);
+
 /* Программы «Рабочего стола» конечных узлов (VPC, Debian, Docker) — сетевая часть (окна — desk_ui.js).
    Настройка IP: статический адрес / DHCP, маска, шлюз, DNS — то же состояние, что у команд: VPC — ip, ip dhcp, ip dns;
      Debian — /etc/network/interfaces (iface ens3 inet static|dhcp), /etc/resolv.conf и поднятый ens3.
@@ -11915,7 +11982,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   function rng(seed) { var x = seed >>> 0 || 1; return function () { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
   // скорость и дуплекс кабеля сегмента
   function linkInfo(net, sg) { var l = net.links[sg.li]; if (!l) return null; var ph = net.phys ? net.phys(l.a.dev, l.a.port) : { up: true, speed: 1000, dup: {} };
-    return { l: l, mbps: ph.speed || 1000, mismatch: !!ph.mismatch, len: l.len || DEF.len, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
+    return { l: l, mbps: ph.speed || 1000, mismatch: !!ph.mismatch, len: l.len || DEF.len, prop: EL.propSpeed ? EL.propSpeed(net.cabOf ? net.cabOf(l) : l.cab) : DEF.prop, port: l.a.dev === sg.from ? l.a.port : l.b.port }; }
   /* flows: [{kind:'ping'|'udp', src, dst, size, count, interval, df, rate, dur, start}]; opt: {len, qcap, until}
      → {events:[{t, kind:'tx'|'drop'|'rx'|'deliver', flow, pkt, seg, t0, t1}], stats} */
   P.simulate = function (flows, opt) {
@@ -11969,7 +12036,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       P2.wait = P2.wait.filter(function (x) { return x > t; });
       if (P2.wait.length >= (opt.qcap || DEF.qcap)) { var w = 'очередь ' + P2.name + ' переполнена'; st.drops[w] = (st.drops[w] || 0) + 1;
         ev.push({ t: t, kind: 'drop', flow: e.flow, pkt: e.pkt, seg: sg, why: w }); continue; }
-      var t1 = Math.max(t, P2.busy), tx = e.bytes * 8 / (li.mbps * 1e6), t2 = t1 + tx, t3 = t2 + (opt.len || li.len) / DEF.prop;
+      var t1 = Math.max(t, P2.busy), tx = e.bytes * 8 / (li.mbps * 1e6), t2 = t1 + tx, t3 = t2 + (opt.len || li.len) / li.prop;
       P2.busy = t2; P2.wait.push(t1); P2.maxq = Math.max(P2.maxq, P2.wait.length);
       var L = links[sg.li] || (links[sg.li] = { bits: 0, frames: 0, mbps: li.mbps, name: s.devs[li.l.a.dev].name + ' ' + li.l.a.port + ' ↔ ' + s.devs[li.l.b.dev].name + ' ' + li.l.b.port });
       L.bits += e.bytes * 8; L.frames++;
@@ -15360,14 +15427,14 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var body = document.createElement('div'); body.className = 'pad zonew';
     body.innerHTML = '<label>Подпись</label><input class="q" data-f="t" value="' + esc(z.t) + '" maxlength="40"><label>Цвет</label><div class="zcol">' +
       COLORS.map(function (c) { return '<button data-col="' + c + '" style="background:' + c + '"' + (c === z.c ? ' class="on"' : '') + '></button>'; }).join('') + '</div>' +
-      '<div class="row">' + (EL.zoneExtra ? EL.zoneExtra(z) : '') + '<button class="pri" data-c="ok">Сохранить</button><button data-c="del">Удалить зону</button></div>' +
+      (EL.zoneFields ? EL.zoneFields(z) : '') + '<div class="row">' + (EL.zoneExtra ? EL.zoneExtra(z) : '') + '<button class="pri" data-c="ok">Сохранить</button><button data-c="del">Удалить зону</button></div>' +
       '<p class="cs2">Удаляется только рамка — устройства остаются на схеме.</p>';
-    U.closeWin('zone', true); U.makeWin('zone', 'Зона', z.t, body, { w: 360, h: 280 });
+    U.closeWin('zone', true); U.makeWin('zone', 'Зона', z.t, body, { w: 380, h: 360 });
     var col = z.c, inp = body.querySelector('[data-f="t"]'); inp.focus(); inp.select();
     body.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('[data-c="ok"]').click(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return;
       if (b.dataset.col) { col = b.dataset.col; [].forEach.call(body.querySelectorAll('[data-col]'), function (x) { x.classList.toggle('on', x === b); }); return; }
-      if (b.dataset.c === 'ok') { z.t = inp.value.trim() || z.t; z.c = col; }
+      if (b.dataset.c === 'ok') { z.t = inp.value.trim() || z.t; z.c = col; if (EL.zoneSave) EL.zoneSave(z, body); }
       if (b.dataset.c === 'del') { net().zones = Z().filter(function (x) { return x !== z; }); }
       if (b.dataset.zx && EL.zoneAct) EL.zoneAct(z, b.dataset.zx);
       U.closeWin('zone', true); U.draw(); });
@@ -15409,6 +15476,90 @@ vesr(config)#         do confirm  — подтвердить</pre>
     window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up); }
   var draw1 = X.onDraw; X.onDraw = function () { draw1(); paintClusters(); };
   EL.zones = { list: Z, paint: paint, edit: edit, inside: inside, collapse: collapse };
+})();
+
+/* Окно «Свойства канала» (ПКМ по кабелю) и «Карта площадок» (ПКМ по полю): площадки — зоны с городом или координатами,
+   каналы между ними — с расстоянием, км, и задержкой распространения. */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  function net() { return U.net(); }
+  function fmtT(s) { return (s < 1e-3 ? (s * 1e6).toFixed(1) + ' мкс' : (s * 1e3).toFixed(s < 0.1 ? 3 : 1) + ' мс').replace('.', ','); }
+  function km(m) { return m >= 1000 ? (m / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' км' : m + ' м'; }
+  var items0 = X.items, run0 = X.run;
+  X.items = function (k, d) { return items0(k, d) + (k === 'link' ? '<button data-a="lprops"><span>⇿</span>Свойства канала…</button>' : '') +
+    (k === 'field' ? '<button data-a="map"><span>🗺</span>Карта площадок</button>' : ''); };
+  X.run = function (k, a, arg) { run0(k, a, arg); if (k === 'link' && a === 'lprops') openLink(arg); if (k === 'field' && a === 'map') openMap(); };
+  // площадка (зона) кабеля: зона, в которой лежит устройство конца
+  function zoneOf(d) { return ((net().zones || []).filter(function (z) { return EL.zoneInside(z, d.x, d.y) || (z.members || []).indexOf(d.name) >= 0; })[0]) || null; }
+  function coords(z) { return z && z.geo ? z.geo : null; }
+  function geoLen(l) { var n = net(), a = coords(zoneOf(n.devs[l.a.dev])), b = coords(zoneOf(n.devs[l.b.dev])); return a && b ? Math.round(EL.geoKm(a, b) * EL.ROUTE_K) : null; }
+  EL.linkGeoKm = geoLen;
+
+  // ---------------------------------------------------------------- свойства канала
+  function openLink(i) {
+    var n = net(), l = n.links[i]; if (!l) return; var body = document.createElement('div'); body.className = 'pad lprop';
+    function render() {
+      var cab = n.cabOf(l), wan = cab === 'wan', ph = n.phys(l.a.dev, l.a.port), g = geoLen(l), len = n.lenOf(l);
+      body.innerHTML = '<div class="k">' + esc(n.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + n.devs[l.b.dev].name + ' ' + l.b.port) + '</div><p>' + esc(n.cableText ? n.cableText(l) : EL.CABLES[cab]) + '</p>' +
+        (wan ? '<label>Расстояние, км</label><div class="row"><input class="q" data-f="km" type="number" min="0.001" step="any" value="' + (len / 1000) + '">' +
+          (g ? '<button data-c="geo">По площадкам: ' + g + ' км</button>' : '') + '</div>' : '<label>Длина кабеля, м</label><input class="q" data-f="len" type="number" min="0.5" step="any" value="' + len + '">') +
+        (EL.linkParams ? EL.linkParams(l, ph) : '') +
+        '<div class="row"><button class="pri" data-c="ok">Сохранить</button><span class="cs"></span></div>' +
+        '<p class="cs2">Распространение в одну сторону: <b>' + fmtT(n.propDelay(l)) + '</b> (' + (EL.propSpeed(cab) > 2e8 ? 'оптика ≈ 4,9 мкс/км' : 'медь ≈ 5,05 мкс/км') + ')' +
+        (ph.up ? ' · линк ' + (ph.speed >= 1000 ? ph.speed / 1000 + ' Гбит/с' : ph.speed + ' Мбит/с') : ' · нет линка: ' + esc(ph.why || '')) + '</p>' +
+        (EL.lenNorm ? '<p class="cs2">' + esc(EL.lenNorm(n, l)) + '</p>' : '');
+    }
+    body.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return;
+      if (b.dataset.c === 'geo') { body.querySelector('[data-f="km"]').value = geoLen(l); return; }
+      if (b.dataset.c !== 'ok') return;
+      var o = {}, f = function (k) { var x = body.querySelector('[data-f="' + k + '"]'); return x ? x.value.trim() : null; };
+      if (f('km') !== null) o.len = Math.round(parseFloat(String(f('km')).replace(',', '.')) * 1000);
+      if (f('len') !== null) o.len = parseFloat(String(f('len')).replace(',', '.'));
+      if (!(o.len > 0) || o.len > 4e7) { body.querySelector('.cs').textContent = 'Длина — положительное число'; return; }
+      if (EL.linkParamsRead) { var bad = EL.linkParamsRead(body, o); if (bad) { body.querySelector('.cs').textContent = bad; return; } }
+      n.setLink(n.links.indexOf(l), o); render(); body.querySelector('.cs').textContent = 'Сохранено'; U.draw(); });
+    render();
+    U.makeWin('lprop', 'Свойства канала', n.devs[l.a.dev].name + ' ↔ ' + n.devs[l.b.dev].name, body, { w: 420, h: Math.min(560, innerHeight - 140) });
+  }
+
+  // ---------------------------------------------------------------- город / координаты площадки (окно зоны)
+  EL.zoneFields = function (z) { var g = z.geo || ['', ''], city = z.city || '';
+    return '<label>Площадка: город</label><select class="q" data-f="city"><option value="">— не задан —</option>' + Object.keys(EL.CITIES).map(function (c) {
+      return '<option' + (c === city ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '<option value="*"' + (city === '*' ? ' selected' : '') + '>Свои координаты</option></select>' +
+      '<div class="row"><input class="q" data-f="lat" placeholder="широта" value="' + (city === '*' ? g[0] : '') + '"><input class="q" data-f="lon" placeholder="долгота" value="' + (city === '*' ? g[1] : '') + '"></div>'; };
+  EL.zoneSave = function (z, body) { var c = body.querySelector('[data-f="city"]').value, la = parseFloat(body.querySelector('[data-f="lat"]').value), lo = parseFloat(body.querySelector('[data-f="lon"]').value);
+    if (!c) { delete z.city; delete z.geo; return; }
+    if (c === '*') { if (isFinite(la) && isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) { z.city = '*'; z.geo = [la, lo]; } return; }
+    z.city = c; z.geo = EL.CITIES[c].slice(); };
+
+  // ---------------------------------------------------------------- карта площадок: города по координатам, каналы с расстоянием и задержкой
+  function openMap() {
+    var n = net(), Z = (n.zones || []).filter(function (z) { return z.geo; }), body = document.createElement('div'); body.className = 'pad mapw';
+    var ch = []; n.links.forEach(function (l, i) { var za = zoneOf(n.devs[l.a.dev]), zb = zoneOf(n.devs[l.b.dev]); if (za && zb && za !== zb) ch.push({ i: i, l: l, a: za, b: zb }); });
+    if (!Z.length) { body.innerHTML = '<p>Площадок нет. Создайте зоны (ПКМ по полю → «Зона») и задайте им город или координаты в окне зоны; устройства разных площадок соедините кабелем «Канал связи» и задайте расстояние (или «По площадкам»).</p>'; }
+    else {
+      var la = Z.map(function (z) { return z.geo[0]; }), lo = Z.map(function (z) { return z.geo[1]; }), W = 560, H = 260, pad = 90;
+      var x0 = Math.min.apply(null, lo) - 2, x1 = Math.max.apply(null, lo) + 2, y0 = Math.min.apply(null, la) - 2, y1 = Math.max.apply(null, la) + 2;
+      var px = function (g) { return pad + (g[1] - x0) / (x1 - x0 || 1) * (W - 2 * pad); }, py = function (g) { return H - pad - (g[0] - y0) / (y1 - y0 || 1) * (H - 2 * pad); };
+      var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" class="msvg">' + ch.filter(function (c) { return c.a.geo && c.b.geo; }).map(function (c) {
+        var A = c.a.geo, B = c.b.geo, mx = (px(A) + px(B)) / 2, my = (py(A) + py(B)) / 2;
+        return '<line x1="' + px(A) + '" y1="' + py(A) + '" x2="' + px(B) + '" y2="' + py(B) + '"/><text x="' + mx + '" y="' + (my - 6) + '" class="mk">' + km(n.lenOf(c.l)) + ' · ' + fmtT(n.propDelay(c.l)) + '</text>'; }).join('') +
+        Z.map(function (z) { return '<circle cx="' + px(z.geo) + '" cy="' + py(z.geo) + '" r="7" style="fill:' + z.c + '"/><text x="' + px(z.geo) + '" y="' + (py(z.geo) + 22) + '" class="mt">' + esc(z.t) + (z.city && z.city !== '*' && z.city !== z.t ? ' · ' + esc(z.city) : '') + '</text>'; }).join('') + '</svg>';
+      body.innerHTML = svg + '<table class="mtab"><thead><tr><th>Канал</th><th>Кабель</th><th>Длина</th><th>Задержка ↦</th><th>По площадкам</th></tr></thead><tbody>' +
+        (ch.map(function (c) { var g = geoLen(c.l); return '<tr data-i="' + c.i + '"><td>' + esc(c.a.t + ' ↔ ' + c.b.t) + '</td><td>' + esc(n.cabOf(c.l) === 'wan' ? 'канал связи' : n.cabOf(c.l)) + '</td><td>' + km(n.lenOf(c.l)) +
+          '</td><td>' + fmtT(n.propDelay(c.l)) + '</td><td>' + (g ? g + ' км' : '—') + '</td></tr>'; }).join('') || '<tr><td colspan="5">Кабелей между площадками нет</td></tr>') + '</tbody></table>' +
+        '<p class="cs2">Задержка — распространение в одну сторону; RTT ping — вдвое больше плюс передача. «По площадкам» — по дуге × ' + String(EL.ROUTE_K).replace('.', ',') + ' (трасса кабеля длиннее прямой). Щелчок по строке — свойства канала.</p>';
+    }
+    body.addEventListener('click', function (e) { var tr = e.target.closest('tr[data-i]'); if (tr) openLink(+tr.dataset.i); });
+    U.makeWin('map', 'Карта площадок', 'расстояния и задержки', body, { w: 640, h: Math.min(600, innerHeight - 120) });
+  }
+  // подпись длины на длинных кабелях
+  var od = X.onDraw; X.onDraw = function () { od(); var n = net(), g = document.getElementById('gp'); if (!g) return;
+    n.links.forEach(function (l, i) { if (n.lenOf(l) < 1000 && n.cabOf(l) !== 'wan') return; var a = n.devs[l.a.dev], b = n.devs[l.b.dev], o = U.linkOff(i);
+      var t = U.el('text', { 'class': 'lkm', x: (a.x + b.x) / 2 + o.x, y: (a.y + b.y) / 2 + o.y - 8 }, g); t.textContent = km(n.lenOf(l)); }); };
+  EL.openMap = openMap; EL.openLinkProps = openLink;
 })();
 
 /* Окно «Симуляция пакетов» (режим «Тест»), как Simulation в Packet Tracer: пока окно открыто, каждый обмен (ping, curl, DHCP,

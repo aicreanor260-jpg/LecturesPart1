@@ -768,16 +768,17 @@
   // ------------------------------------------------------------------ текстовые выводы
   P.pingText = function (id, dst, style) {
     var r = this.ping(id, dst), n = 5, o = [], s = this, E = [];
-    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)));   // несовпадение дуплекса: часть эхо теряется (physics.js)
+    for (var e = 0; e < 5; e++) E.push(r.ok && !(s.echoLoss && s.echoLoss(r)) && !(s.lossHit && s.lossHit(r, e)));   // дуплекс (physics.js), потери канала (linkprops.js)
+    var X = r.ok && s.rttExtra ? s.rttExtra(r) : 0;          // каналы и длинные кабели: распространение туда и обратно, мс
     var got = function (k) { return E.slice(0, k).filter(Boolean).length; };
     if (this.onTrace) this.onTrace(r, id, dst);
     if (IP.ip2n(dst) === null) return style === 'linux' ? 'ping: ' + dst + ': Name or service not known' : '% Неверный адрес';
-    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13).toFixed(3) + ' ms'
+    if (style === 'vpc') { for (var i = 1; i <= n; i++) o.push(E[i - 1] ? '84 bytes from ' + dst + ' icmp_seq=' + i + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.5 + i * 0.13 + X).toFixed(3) + ' ms'
                                                                : (r.why === 'Host unreachable' || r.why === 'No IP address' ? 'host (' + dst + ') not reachable' : dst + ' icmp_seq=' + i + ' timeout'));
       return o.join('\n'); }
     if (style === 'linux') {
       o.push('PING ' + dst + ' (' + dst + ') 56(84) bytes of data.');
-      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=0.' + (600 + j * 37) + ' ms');
+      for (var j = 1; j <= 4; j++) if (E[j - 1]) o.push('64 bytes from ' + dst + ': icmp_seq=' + j + ' ttl=' + (64 - r.hops.length + 1) + ' time=' + (0.6 + j * 0.037 + X).toFixed(X ? 2 : 3) + ' ms');
       if (!r.ok && /unreach/i.test(r.why || '')) o.push('From ' + (this.ifaces(id)[0] || { ip: dst }).ip + ' icmp_seq=1 Destination Host Unreachable');
       if (!r.ok && /No IP/.test(r.why || '')) return 'ping: connect: Network is unreachable';
       o.push('', '--- ' + dst + ' ping statistics ---', '4 packets transmitted, ' + got(4) + ' received, ' + Math.round((4 - got(4)) * 25) + '% packet loss, time 3004ms');

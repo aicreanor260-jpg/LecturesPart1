@@ -56,14 +56,14 @@
     var body = document.createElement('div'); body.className = 'pad zonew';
     body.innerHTML = '<label>Подпись</label><input class="q" data-f="t" value="' + esc(z.t) + '" maxlength="40"><label>Цвет</label><div class="zcol">' +
       COLORS.map(function (c) { return '<button data-col="' + c + '" style="background:' + c + '"' + (c === z.c ? ' class="on"' : '') + '></button>'; }).join('') + '</div>' +
-      '<div class="row">' + (EL.zoneExtra ? EL.zoneExtra(z) : '') + '<button class="pri" data-c="ok">Сохранить</button><button data-c="del">Удалить зону</button></div>' +
+      (EL.zoneFields ? EL.zoneFields(z) : '') + '<div class="row">' + (EL.zoneExtra ? EL.zoneExtra(z) : '') + '<button class="pri" data-c="ok">Сохранить</button><button data-c="del">Удалить зону</button></div>' +
       '<p class="cs2">Удаляется только рамка — устройства остаются на схеме.</p>';
-    U.closeWin('zone', true); U.makeWin('zone', 'Зона', z.t, body, { w: 360, h: 280 });
+    U.closeWin('zone', true); U.makeWin('zone', 'Зона', z.t, body, { w: 380, h: 360 });
     var col = z.c, inp = body.querySelector('[data-f="t"]'); inp.focus(); inp.select();
     body.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') body.querySelector('[data-c="ok"]').click(); });
     body.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return;
       if (b.dataset.col) { col = b.dataset.col; [].forEach.call(body.querySelectorAll('[data-col]'), function (x) { x.classList.toggle('on', x === b); }); return; }
-      if (b.dataset.c === 'ok') { z.t = inp.value.trim() || z.t; z.c = col; }
+      if (b.dataset.c === 'ok') { z.t = inp.value.trim() || z.t; z.c = col; if (EL.zoneSave) EL.zoneSave(z, body); }
       if (b.dataset.c === 'del') { net().zones = Z().filter(function (x) { return x !== z; }); }
       if (b.dataset.zx && EL.zoneAct) EL.zoneAct(z, b.dataset.zx);
       U.closeWin('zone', true); U.draw(); });

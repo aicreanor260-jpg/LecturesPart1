@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -471,6 +471,32 @@ EL.labs.LABS.forEach(runLab);
     chk('сложный PDU ICMP ×5 — 5/5', m.ok && m.sent === 5 && m.recv === 5, JSON.stringify({ s: m.sent, r: m.recv }));
     chk('нет пути — неудачно', !n.pdu(a.id, { dst: '10.9.9.9', proto: 'icmp' }).ok);
     console.log('✓ PDU: простой и сложный');
+  })();
+  // Площадки и каналы: расстояние → задержка распространения, RTT в ping
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Каналы: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), r1 = n.add('vESR', 'MSK'), r2 = n.add('vESR', 'NSK'), a = n.add('VPC', 'PCM'), b = n.add('VPC', 'PCN');
+    n.connect(r1.id, 'gi1/0/1', r2.id, 'gi1/0/1', 'wan'); n.connect(a.id, 'eth0', r1.id, 'gi1/0/2'); n.connect(b.id, 'eth0', r2.id, 'gi1/0/2');
+    EL.labs.apply(n, { MSK: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 10.0.0.1/30', 'ip firewall disable', 'exit', 'interface gigabitethernet 1/0/2', 'ip address 192.168.1.1/24', 'ip firewall disable', 'exit',
+      'ip route 192.168.2.0/24 10.0.0.2', 'end', 'commit', 'confirm'], NSK: ['configure', 'interface gigabitethernet 1/0/1', 'ip address 10.0.0.2/30', 'ip firewall disable', 'exit', 'interface gigabitethernet 1/0/2',
+      'ip address 192.168.2.1/24', 'ip firewall disable', 'exit', 'ip route 192.168.1.0/24 10.0.0.1', 'end', 'commit', 'confirm'] });
+    n.exec(a.id, 'ip 192.168.1.10/24 192.168.1.1'); n.exec(b.id, 'ip 192.168.2.10/24 192.168.2.1');
+    chk('канал связи: линк есть', n.linkUp(r1.id, 'gi1/0/1') && n.phys(r1.id, 'gi1/0/1').cab === 'wan');
+    var t0 = n.exec(a.id, 'ping 192.168.2.10');
+    chk('LAN-время без расстояния — как раньше (< 1 мс)', /time=0\.630 ms/.test(t0), t0.split('\n')[0]);
+    n.setLink(0, { len: 3300e3 });
+    var l = n.links[0], d = n.propDelay(l);
+    chk('3300 км оптики ≈ 16,2 мс в одну сторону', d > 0.0160 && d < 0.0164, d);
+    var t1 = n.exec(a.id, 'ping 192.168.2.10'), ms = +(t1.match(/time=([\d.]+) ms/) || [])[1];
+    chk('ping показывает RTT ≈ 32–34 мс', ms > 32 && ms < 34, t1.split('\n')[0]);
+    var sm = n.simulate([{ kind: 'ping', src: a.id, dst: '192.168.2.10', count: 2, interval: 1, size: 56 }]).flows[0];
+    chk('симуляция: RTT ≈ 32–34 мс', sm.avg > 0.032 && sm.avg < 0.034, sm.avg);
+    var J = n.toJSON(), m = EL.Net.fromJSON(J);
+    chk('расстояние канала и тип сохраняются в схеме', m.links[0].len === 3300e3 && m.links[0].cab === 'wan');
+    chk('расстояние по координатам: Москва — Новосибирск × 1,2 ≈ 3370 км', Math.abs(EL.geoKm(EL.CITIES['Москва'], EL.CITIES['Новосибирск']) * EL.ROUTE_K - 3370) < 60);
+    var deb = n.add('Debian', 'D1'); n.connect(deb.id, 'ens3', r2.id, 'gi1/0/3');
+    chk('медь: 5,05 мкс/км', Math.abs(n.propDelay({ len: 1000, cab: 'cu' }) * 1e6 - 5.05) < 0.05);
+    console.log('✓ Каналы: расстояние, задержка распространения, RTT');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES
