@@ -142,5 +142,31 @@
     hint: function (p) { return ['show etherchannel summary на S1 — какой протокол у Po1? display eth-trunk 1 на S2', 'show etherchannel summary: Protocol «-» — это on (без LACP), а у S2 mode lacp',
       'display port vlan на S2 — разрешена ли VLAN ' + p.v + ' на Eth-Trunk1?'][p.fault]; }
   };
-  L.LABS.push(C1, C2, C3, C4, C5);
+  function asa(lines) { return ['enable', '', 'configure terminal'].concat(lines, ['end']); }   // enable: пароль пустой — Enter
+  var C6 = {
+    id: 'T.C6', title: 'Поиск неисправности: межсетевой экран Cisco ASA 5506 между офисом и провайдером (Eltex ESR)',
+    goal: 'Узел IN (inside) должен пинговать веб-сервер WEB у провайдера. Связи нет. Найдите и исправьте одну ошибку. Помните: у ASA трафик с высокого уровня ' +
+      'безопасности на низкий разрешён, но ответы ICMP возвращаются только при inspect icmp; без nat (inside,outside) провайдер не знает обратного пути.',
+    gen: function () { return { a: R(1, 200), fault: R(0, 3) }; },
+    build: function (net, p) {
+      var f0 = net.add('ASA 5506', 'FW', 460, 220), i = net.add('VPC', 'IN', 260, 400), isp = net.add('vESR', 'ISP', 680, 220), w = net.add('VPC', 'WEB', 680, 400);
+      net.connect(f0.id, 'gi1/2', i.id, 'eth0'); net.connect(f0.id, 'gi1/1', isp.id, 'gi1/0/1'); net.connect(w.id, 'eth0', isp.id, 'gi1/0/2');
+      var f = p.fault, A = '192.168.' + p.a;
+      L.apply(net, {
+        FW: asa(['hostname FW', 'interface gi1/1', 'nameif outside', 'ip address 203.0.113.2 255.255.255.0', 'no shutdown', 'interface gi1/2'].concat(f === 2 ? [] : ['nameif inside'],
+          ['ip address ' + A + '.1 255.255.255.0', 'no shutdown', 'exit'], f === 3 ? [] : ['route outside 0 0 203.0.113.1'], ['object network INSIDE', 'subnet ' + A + '.0 255.255.255.0'],
+          f === 1 ? [] : ['nat (inside,outside) dynamic interface'], ['exit'], f === 0 ? [] : ['policy-map global_policy', 'class inspection_default', 'inspect icmp', 'exit', 'exit'])),
+        ISP: esr(['hostname ISP', 'interface gi1/0/1', 'ip address 203.0.113.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 198.51.100.1/24', 'ip firewall disable', 'exit']),
+        IN: vpc(A + '.10', A + '.1'), WEB: vpc('198.51.100.10', '198.51.100.1') });
+    },
+    tasks: function () { return [{ t: 'IN пингует WEB (198.51.100.10)', ok: function (n) { return n.reach('IN', '198.51.100.10'); } }]; },
+    sol: function (p) { var A = '192.168.' + p.a; return [
+      { FW: ['configure terminal', 'policy-map global_policy', 'class inspection_default', 'inspect icmp', 'end'] },
+      { FW: ['configure terminal', 'object network INSIDE', 'nat (inside,outside) dynamic interface', 'end'] },
+      { FW: ['configure terminal', 'interface gi1/2', 'nameif inside', 'end'] },
+      { FW: ['configure terminal', 'route outside 0 0 203.0.113.1', 'end'] }][p.fault]; void A; },
+    hint: function (p) { return ['Путь пакета: запрос ушёл, ответ ICMP отброшен на outside — show running-config | begin policy-map', 'show nat / show xlate на FW — транслируется ли inside?',
+      'show nameif на FW — у Gi1/2 нет имени?', 'show route на FW — есть ли маршрут по умолчанию?'][p.fault]; }
+  };
+  L.LABS.push(C1, C2, C3, C4, C5, C6);
 })(typeof window !== 'undefined' ? window : global);

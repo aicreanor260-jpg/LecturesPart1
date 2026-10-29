@@ -101,9 +101,9 @@
   // ---------------------------------------------------------------- режимы и приглашения
   function X(st) { return st.ios; }
   function top(st) { var s = X(st).stack; return s[s.length - 1] || { v: 'user' }; }
-  function host(st) { return X(st).c.hostname || (X(st).kind === 'sw' ? 'Switch' : 'Router'); }
+  function host(st) { return X(st).c.hostname || { sw: 'Switch', rt: 'Router', asa: 'ciscoasa' }[X(st).kind]; }
   var PR = { user: '>', priv: '#', config: '(config)#', 'if': '(config-if)#', range: '(config-if-range)#', subif: '(config-subif)#', vlan: '(config-vlan)#', line: '(config-line)#',
-    router: '(config-router)#', std: '(config-std-nacl)#', ext: '(config-ext-nacl)#', dhcp: '(dhcp-config)#' };
+    router: '(config-router)#', std: '(config-std-nacl)#', ext: '(config-ext-nacl)#', dhcp: '(dhcp-config)#', obj: '(config-network-object)#', pmap: '(config-pmap)#', pmapc: '(config-pmap-c)#' };
   function prompt(st) { var x = X(st); if (x.ask) return x.ask.pr || ''; return host(st) + PR[top(st).v]; }
   function push(st, f) { X(st).stack.push(f); }
   function toConfig(st) { var s = X(st).stack; while (s.length && s[s.length - 1].v !== 'config') s.pop(); }
@@ -131,7 +131,7 @@
   }
   function run(st, line, toks, v) {
     var x = X(st), H = hits(st, v, toks);
-    if (!H.length && ['if', 'range', 'subif', 'vlan', 'line', 'router', 'std', 'ext', 'dhcp'].indexOf(v) >= 0) {   // команда глобальной конфигурации из подрежима
+    if (!H.length && ['if', 'range', 'subif', 'vlan', 'line', 'router', 'std', 'ext', 'dhcp', 'obj', 'pmap', 'pmapc'].indexOf(v) >= 0) {   // команда глобальной конфигурации из подрежима
       var H2 = hits(st, 'config', toks); if (H2.length) { toConfig(st); v = 'config'; H = H2; } }
     if (H.length > 1 && ambiguous(H, toks)) return '% Ambiguous command:  "' + line.trim() + '"';
     if (!H.length && ambPart(st, v, toks)) return '% Ambiguous command:  "' + line.trim() + '"';
@@ -150,7 +150,7 @@
     var t = 'Translating "' + w + '"...domain server (255.255.255.255)\n';
     return (X(st).c.noLookup ? '' : t + '(255.255.255.255)\n' + t) + '% Unknown command or computer name, or unable to find computer address';
   }
-  function compile(st) { (X(st).kind === 'rt' ? EL.ios.compileRt : EL.ios.compileSw)(st); if (st.net) st.net.gen++; }
+  function compile(st) { ({ rt: EL.ios.compileRt, sw: EL.ios.compileSw, asa: EL.ios.compileAsa })[X(st).kind](st); if (st.net) st.net.gen++; }
   var PH = { '<n>': '<0-4294967295>', '<w>': 'WORD', '<ip>': 'A.B.C.D', '<if>': 'Interface', '<rng>': 'Interface range', '<list>': 'WORD', '<rest>': 'LINE' };
   function cands(st, txt) {
     var ends = /\s$/.test(txt) || !txt.trim(), toks = txt.trim() ? norm(txt) : [], part = ends ? null : toks.pop(), v = top(st).v, out = [], seen = {}, cr = false;
@@ -178,7 +178,9 @@
   function ifc(st, n) { var c = C(st); return c.ifs[n] || (c.ifs[n] = {}); }
   function cur(st) { var t = top(st); return (t.names || (t.name ? [t.name] : [])).map(function (n) { return ifc(st, n); }); }
   function curNames(st) { var t = top(st); return t.names || (t.name ? [t.name] : []); }
-  cmd('user', 'enable', function (st) { var c = C(st), p = c.secret || c.enpw; if (!p) { push(st, { v: 'priv' }); return; }
+  cmd('user', 'enable', function (st) { var c = C(st), p = c.secret || c.enpw;
+    if (!p && X(st).kind === 'asa') { X(st).ask = { pr: 'Password: ', fn: function (s) { if (!s) { push(st, { v: 'priv' }); return ''; } return 'Invalid password'; } }; return ''; }   // ASA 9.x: пароль enable пустой — Enter (GS92)
+    if (!p) { push(st, { v: 'priv' }); return; }
     X(st).ask = { pr: 'Password: ', fn: function (s) { if (s === p) { push(st, { v: 'priv' }); return ''; } return '% Bad secrets'; } }; return ''; }, 'Turn on privileged commands').cfg = false;
   cmd('priv', 'disable', function (st) { X(st).stack = []; }, 'Turn off privileged commands').cfg = false;
   cmd('exec', 'exit', function (st) { X(st).stack = []; return ''; }, 'Exit from the EXEC').cfg = false;
@@ -232,6 +234,7 @@
 
   // ---------------------------------------------------------------- конфигурация: show running-config, сохранение, reload
   function cfgText(st, c) {
+    if (X(st).kind === 'asa') return EL.ios.cfgAsa(st, c || X(st).c);
     var x = X(st), o = [], d = st.net && st.net.devs[st.dev], m = EL.MODELS[d ? d.model : ''] || {};
     c = c || x.c;
     o.push('!', 'version ' + (m.ios || '15.0'), 'no service timestamps log datetime msec', 'no service timestamps debug datetime msec', (c.pwEnc ? '' : 'no ') + 'service password-encryption', '!',
@@ -276,8 +279,8 @@
   function ping(st, dst) {
     var net = st.net; if (!net || IP.ip2n(dst) === null) return null;
     var r = net.ping(st.dev, dst); if (net.onTrace) net.onTrace(r, st.dev, dst);
-    var s = '', got = 0; for (var i = 0; i < 5; i++) { var ok = r.ok && !(net.lossHit && net.lossHit(r, i)); if (ok) got++; s += ok ? '!' : /unreachable/i.test(r.why || '') ? (i % 2 ? '.' : 'U') : '.'; }
-    return 'Type escape sequence to abort.\nSending 5, 100-byte ICMP Echos to ' + dst + ', timeout is 2 seconds:\n' + s + '\nSuccess rate is ' + got * 20 + ' percent (' + got + '/5)' +
+    var s = '', got = 0; for (var i = 0; i < 5; i++) { var ok = r.ok && !(net.lossHit && net.lossHit(r, i)); if (ok) got++; s += ok ? '!' : X(st).kind === 'asa' ? '?' : /unreachable/i.test(r.why || '') ? (i % 2 ? '.' : 'U') : '.'; }   // ASA без ответа — ????? (CMD)
+    return (X(st).kind === 'asa' ? '' : 'Type escape sequence to abort.\n') + 'Sending 5, 100-byte ICMP Echos to ' + dst + ', timeout is 2 seconds:\n' + s + '\nSuccess rate is ' + got * 20 + ' percent (' + got + '/5)' +
       (got ? ', round-trip min/avg/max = ' + (function () { var t = [ms(dst.length, 1), ms(dst.length, 2), ms(dst.length, 3)].sort(function (a, b) { return a - b; });
         return t[0] + '/' + t[1] + '/' + t[2]; })() + ' ms' : '');
   }
@@ -326,7 +329,7 @@
       else { o.push('      ' + maj + '/' + cl + ' is variably subnetted, ' + L.length + ' subnets, ' + masks.length + ' masks'); L.forEach(function (r) { o.push(pad(r.c, 9) + r.net + '/' + r.len + ' ' + r.t); }); } });
     return o.join('\n');
   }
-  cmd('exec', 'show ip route', function (st) { return showRoute(st); }, 'IP routing table').cfg = false;
+  var sr = cmd('exec', 'show ip route', function (st) { return showRoute(st); }, 'IP routing table'); sr.cfg = false; sr.ok = function (st) { return X(st).kind !== 'asa'; };
 
   // ---------------------------------------------------------------- устройство в модели сети
   function fresh() { return { ifs: {} }; }
@@ -337,7 +340,7 @@
     var st = d.st, n = +String(d.id).slice(1) || 1;
     d.sub = 'ios'; st.mode = 'ios';
     if (m.type === 'mes') st.bmac = '00:0a:f3:' + ('0' + ((n * 37) & 255).toString(16)).slice(-2) + ':' + ('0' + ((n * 101) & 255).toString(16)).slice(-2) + ':' + ('0' + (n & 255).toString(16)).slice(-2);
-    st.ios = { kind: m.type === 'mes' ? 'sw' : 'rt', l3: !!m.l3, costs: m.costs || 'short', stack: [], c: fresh(), saved: null, ask: null };
+    st.ios = { kind: m.kind === 'cs-asa' ? 'asa' : m.type === 'mes' ? 'sw' : 'rt', l3: !!m.l3, costs: m.costs || 'short', stack: [], c: fresh(), saved: null, ask: null };
     compile(st);
     return d;
   };
@@ -364,8 +367,8 @@
       if (/^\S/.test(l)) toConfig(d.st); var r = n.exec(id, l.trim()); if (/^%|\n%/.test(r)) errs.push(d.name + ' «' + l.trim() + '» → ' + r.split('\n').pop()); });
     x.stack = []; return errs; }; }
 
-  EL.ios = { cmd: cmd, T: T, exec: exec, prompt: prompt, norm: norm, full: full, short: short, isIos: isIos, dports: dports, ifc: ifc, cur: cur, curNames: curNames, top: top, push: push,
+  EL.ios = { showRoute: showRoute, cmd: cmd, T: T, exec: exec, prompt: prompt, norm: norm, full: full, short: short, isIos: isIos, dports: dports, ifc: ifc, cur: cur, curNames: curNames, top: top, push: push,
     pad: pad, phyUp: phyUp, cfgText: cfgText, ifn: ifn, compile: compile, list: list, age: age, classful: classful,
     isShut: function (st, k, x) { return !!x.shut; }, ifUp: function (st, k) { return phyUp(st, k); },
-    compileSw: function () {}, compileRt: function () {}, renderSw: function () {}, renderRt: function () {} };
+    compileSw: function () {}, compileRt: function () {}, compileAsa: function () {}, cfgAsa: function () { return ''; }, renderSw: function () {}, renderRt: function () {} };
 })(typeof window !== 'undefined' ? window : global);

@@ -75,6 +75,7 @@
   "cisco.js",
   "cisco_sw.js",
   "cisco_rt.js",
+  "cisco_asa.js",
   "mes10.js",
   "sim.js",
   "qos.js",

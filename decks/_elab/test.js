@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3161,6 +3161,29 @@ EL.labs.LABS.forEach(runLab);
   run(e, c1.id, ['conf t', 'int range fa0/1 - 2', 'channel-group 1 mode auto', 'end']);
   chk('EtherChannel PAgP auto ↔ auto не поднимается', /Po1\(SD\)/.test(e.exec(c1.id, 'show etherchannel summary')));
   console.log('✓ Cisco IOS: 2960, 1941, 2911 в смешанных схемах');
+})();
+// Cisco ASA 5506 (spec/asa.md): nameif + security-level, ACL + access-group, object NAT, inspect icmp
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), f = n.add('ASA 5506', 'FW'), i = n.add('VPC', 'IN'), o = n.add('vESR', 'ISP'), w = n.add('VPC', 'WEB'), s = n.add('VPC', 'SRV');
+  n.connect(f.id, 'gi1/2', i.id, 'eth0'); n.connect(f.id, 'gi1/1', o.id, 'gi1/0/1'); n.connect(w.id, 'eth0', o.id, 'gi1/0/2'); n.connect(f.id, 'gi1/3', s.id, 'eth0');
+  chk('ASA: ciscoasa> → enable → Password: (пустой, Enter) → ciscoasa#', n.prompt(f.id) === 'ciscoasa>' && (n.exec(f.id, 'enable'), n.prompt(f.id) === 'Password: ') && (n.exec(f.id, ''), n.prompt(f.id) === 'ciscoasa#'));
+  chk('ASA: nameif inside — security-level 100 по умолчанию', (n.exec(f.id, 'conf t'), n.exec(f.id, 'int gi1/2'), /Security level for "inside" set to 100 by default/.test(n.exec(f.id, 'nameif inside'))));
+  var bad = ['ip address 192.168.1.1 255.255.255.0', 'no shut', 'int gi1/1', 'nameif outside', 'ip address 203.0.113.2 255.255.255.0', 'no shut', 'int gi1/3', 'nameif dmz', 'security-level 50',
+    'ip address 10.10.10.1 255.255.255.0', 'no shut', 'exit', 'route outside 0 0 203.0.113.1', 'object network obj_any', 'subnet 0 0', 'nat (inside,outside) dynamic interface',
+    'object network SRV', 'host 10.10.10.10', 'nat (dmz,outside) static 203.0.113.10', 'exit', 'access-list OUT extended permit icmp any object SRV', 'access-group OUT in interface outside', 'end']
+    .filter(function (l) { return /%|ERROR/.test(n.exec(f.id, l)); });
+  EL.labs.apply(n, { ISP: ['configure', 'interface gi1/0/1', 'ip address 203.0.113.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 198.51.100.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    WEB: ['ip 198.51.100.10/24 198.51.100.1'], IN: ['ip 192.168.1.10/24 192.168.1.1'], SRV: ['ip 10.10.10.10/24 10.10.10.1'] });
+  n.tick(3);
+  chk('ASA: настройка без ошибок; без inspect icmp ответ на пинг изнутри не возвращается', !bad.length && !n.ping(i.id, '198.51.100.10').ok, bad.join('; '));
+  ['conf t', 'policy-map global_policy', 'class inspection_default', 'inspect icmp', 'end'].forEach(function (l) { n.exec(f.id, l); });
+  chk('ASA: с inspect icmp — IN пингует WEB через PAT (nat dynamic interface)', n.ping(i.id, '198.51.100.10').ok && (n.ctLast || []).some(function (c) { return c.kind === 's' && c.pub === '203.0.113.2'; }));
+  chk('ASA: снаружи внутрь без ACL — запрещено (outside 0 → inside 100)', !n.ping(w.id, '192.168.1.10').ok);
+  chk('ASA: static NAT 203.0.113.10 → SRV в dmz + ACL на outside — WEB пингует сервер', n.ping(w.id, '203.0.113.10').ok);
+  chk('ASA: show nameif, show route (имена интерфейсов), ping «!!!!!»', /GigabitEthernet1\/3\s+dmz\s+50/.test(n.exec(f.id, 'show nameif')) && /S\*\s+0\.0\.0\.0\/0 \[1\/0\] via 203\.0\.113\.1/.test(n.exec(f.id, 'show route')) &&
+    /!!!!!/.test(n.exec(f.id, 'ping 198.51.100.10')));
+  console.log('✓ Cisco ASA 5506: уровни безопасности, ACL, NAT, inspect icmp');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
