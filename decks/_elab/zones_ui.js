@@ -68,5 +68,41 @@
       if (b.dataset.zx && EL.zoneAct) EL.zoneAct(z, b.dataset.zx);
       U.closeWin('zone', true); U.draw(); });
   }
-  EL.zones = { list: Z, paint: paint, edit: edit, inside: inside };
+  // ---------------------------------------------------------------- кластеры: свёрнутая зона — один значок, кабели наружу идут от него
+  var gc = document.getElementById('gc');
+  if (!gc) { gc = document.createElementNS('http://www.w3.org/2000/svg', 'g'); gc.id = 'gc'; world.insertBefore(gc, document.getElementById('pk')); }
+  function members(z) { var n = net(); return (z.members || []).map(function (nm) { return n.byName(nm); }).filter(Boolean); }
+  function ctr(z) { return { x: z.x + 70, y: z.y + 44 }; }
+  X.preDraw = function () { var keep = [];
+    Z().forEach(function (z) { if (!z.min) return; var c = ctr(z); members(z).forEach(function (d) { keep.push([d, d.x, d.y]); d.x = c.x; d.y = c.y; }); });
+    return keep.length ? function () { keep.forEach(function (k) { k[0].x = k[1]; k[0].y = k[2]; }); } : null; };
+  function collapse(z, on) {
+    if (on) { z.members = net().list().filter(function (d) { return inside(z, d.x, d.y); }).map(function (d) { return d.name; }); z.min = true; }
+    else { z.min = false; delete z.members; }
+  }
+  EL.zoneExtra = function (z) { return '<button data-zx="toggle">' + (z.min ? 'Развернуть' : 'Свернуть в значок') + '</button>'; };
+  EL.zoneAct = function (z, a) { if (a === 'toggle') collapse(z, !z.min); };
+  function hideInner() { var n = net();
+    Z().forEach(function (z) { if (!z.min) return; var ids = {}; members(z).forEach(function (d) { ids[d.id] = 1; });
+      Object.keys(ids).forEach(function (id) { var g = document.querySelector('#gd g.dev[data-id="' + id + '"]'); if (g) g.style.display = 'none'; });
+      n.links.forEach(function (l, i) { if (!(ids[l.a.dev] && ids[l.b.dev])) return;
+        var ln = document.querySelector('#gl [data-li="' + i + '"]'); if (ln) ln.style.display = 'none';
+        [l.a.dev + '|' + l.a.port, l.b.dev + '|' + l.b.port].forEach(function (k) { [].forEach.call(document.querySelectorAll('#gp [data-dp="' + k + '"]'), function (x) { x.style.display = 'none'; }); }); }); }); }
+  function paintClusters() { gc.innerHTML = ''; hideInner();
+    Z().forEach(function (z) { if (!z.min) return; var c = ctr(z), M = members(z), g = U.el('g', { 'class': 'clu', transform: 'translate(' + c.x + ',' + c.y + ')', style: '--zc:' + z.c }, gc);
+      U.el('rect', { x: -66, y: -38, width: 132, height: 76, rx: 10 }, g);
+      [[-30, -6], [0, -14], [30, -6]].forEach(function (q) { U.el('circle', { cx: q[0], cy: q[1], r: 9 }, g); });
+      U.el('path', { d: 'M-30 -6 L0 -14 L30 -6 M-30 -6 L30 -6', 'class': 'cl' }, g);
+      U.el('text', { y: 18, 'class': 'ct' }, g).textContent = M.length + ' устр.';
+      U.el('text', { y: 54, 'class': 'lbl' }, g).textContent = z.t;
+      var t = U.el('title', {}, g); t.textContent = z.t + ': ' + M.map(function (d) { return d.name; }).join(', ') + ' — двойной щелчок: развернуть';
+      g.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button === 0) dragC(e, z); });
+      g.addEventListener('dblclick', function (e) { e.stopPropagation(); collapse(z, false); U.draw(); });
+      g.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); edit(z); }); }); }
+  function dragC(e, z) { var p0 = U.toWorld(e.clientX, e.clientY), x0 = z.x, y0 = z.y, D = members(z).map(function (d) { return { o: d, x: d.x, y: d.y }; });
+    function mv(ev) { var p = U.toWorld(ev.clientX, ev.clientY); z.x = x0 + p.x - p0.x; z.y = y0 + p.y - p0.y; D.forEach(function (q) { q.o.x = q.x + p.x - p0.x; q.o.y = q.y + p.y - p0.y; }); U.draw(); }
+    function up() { window.removeEventListener('mousemove', mv); window.removeEventListener('mouseup', up); }
+    window.addEventListener('mousemove', mv); window.addEventListener('mouseup', up); }
+  var draw1 = X.onDraw; X.onDraw = function () { draw1(); paintClusters(); };
+  EL.zones = { list: Z, paint: paint, edit: edit, inside: inside, collapse: collapse };
 })();

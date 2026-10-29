@@ -6,7 +6,7 @@
   var NS = 'http://www.w3.org/2000/svg';
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
-    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {} };
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; } };
   var msel = {}, mselL = {}, spaceDown = false;    // множественное выделение: устройства и кабели
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
@@ -74,10 +74,11 @@
   }
   function draw() {
     var gl = $('gl'), gp = $('gp'), gd = $('gd'); gl.innerHTML = ''; gp.innerHTML = ''; gd.innerHTML = '';
+    var undoPre = X.preDraw();          // кластеры: устройства свёрнутой зоны рисуются в точке значка
     net.links.forEach(function (l, i) {
       var a = net.devs[l.a.dev], b = net.devs[l.b.dev], o = linkOff(i), A = { x: a.x + o.x, y: a.y + o.y }, B = { x: b.x + o.x, y: b.y + o.y };
       var up = net.linkUp(l.a.dev, l.a.port);
-      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i || mselL[i] ? ' sel' : '') + (/^(console|aux)/.test(l.a.port) || /^(console|aux)/.test(l.b.port) ? ' ser' : '') }, gl);   // ser — консольный RS-232
+      var ln = el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, 'class': 'lnk' + (up ? '' : ' down') + (selLink === i || mselL[i] ? ' sel' : '') + (/^(console|aux)/.test(l.a.port) || /^(console|aux)/.test(l.b.port) ? ' ser' : ''), 'data-li': i }, gl);   // ser — консольный RS-232
       ln.addEventListener('mousedown', function (e) { e.stopPropagation(); if (e.button !== 0) return;
         if (e.ctrlKey || e.metaKey) { if (mselL[i]) delete mselL[i]; else mselL[i] = 1; selLink = null; }
         else { msel = {}; mselL = {}; selLink = i; sel = null; } draw(); });
@@ -90,7 +91,7 @@
         var lo = net.ledOf ? net.ledOf(zz[0] === A ? l.a.dev : l.b.dev, zz[2]) : null;
         if (lo) { var t = Math.min(dx ? 70 / Math.abs(dx / L) : 1e9, dy ? 44 / Math.abs(dy / L) : 1e9, L * 0.3), hv = Math.abs(dx) >= Math.abs(dy) ? w / 2 : 9,
             sh = k - t < hv + 6 ? 13 : 0,              // подпись порта рядом — огонёк сбоку от кабеля
-            c = el('circle', { 'class': 'pled ' + lo.c, cx: zz[0].x + dx / L * t - dy / L * sh, cy: zz[0].y + dy / L * t + dx / L * sh, r: 5 }, gp);
+            c = el('circle', { 'class': 'pled ' + lo.c, 'data-dp': (zz[0] === A ? l.a.dev : l.b.dev) + '|' + zz[2], cx: zz[0].x + dx / L * t - dy / L * sh, cy: zz[0].y + dy / L * t + dx / L * sh, r: 5 }, gp);
           if (mode === 'test') el('title', {}, c).textContent = ({ g: 'Зелёный', o: 'Оранжевый', r: 'Красный' }[lo.c]) + ': ' + lo.why; }
       });
     });
@@ -107,6 +108,7 @@
       g.addEventListener('dblclick', function (e) { e.stopPropagation(); openTerm(d.id); });
       g.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); devMenu(d, e); });
     });
+    if (undoPre) undoPre();
     stat(); X.onDraw();
   }
   function ipLabel(d) { var f = net.ifaces(d.id)[0]; return f && (d.type === 'vpc' || d.type === 'deb') ? ' · ' + f.ip : ''; }
