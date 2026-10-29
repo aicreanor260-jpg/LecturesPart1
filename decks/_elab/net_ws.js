@@ -39,6 +39,7 @@
     return true; };
   on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; offline = false; paintMsgBtn();
     if (WATCH || started) return; started = true;
+    if (/^#room=/.test(location.hash)) return;           // вход по ссылке в комнату — своя работа не нужна (room_ui.js)
     var key = startLab || 'free', hit = saved.filter(function (s) { return s.lab === key; })[0];
     if (!hit) { begin(); return; }
     send({ t: 'load', lab: key }); });
@@ -54,12 +55,13 @@
 
   // ---------------------------------------------------------------- сохранение и журнал
   function snap() { var j = U.snapshot(), s = JSON.stringify(j); if (s.length > 3e6) { U.toast('Схема слишком большая для сохранения на сервер (больше 3 МБ)'); return null; } return j; }
-  EL.serverSave = function (j) { if (WATCH || !live) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
+  function inRoom() { return !!(EL.room && EL.room.id); }   // в комнате схема — с сервера комнаты, своя работа не сохраняется
+  EL.serverSave = function (j) { if (WATCH || !live || inRoom()) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
     return new Promise(function (ok) { var t0 = Date.now(); (function wait() { if (!ws || ws.bufferedAmount === 0 || Date.now() - t0 > 3000) ok(); else setTimeout(wait, 50); })(); }); };
   setInterval(function () { if (WATCH || !live || EL.room && EL.room.id) return; var n = net();
     var li = U.labInfo(), st = li ? li.id + ':' + li.done.join(',') + '/' + li.total : 'free'; if (st !== labState) { labState = st; send({ t: 'state', lab: curLab(), mode: U.mode(), done: li ? li.done : [], total: li ? li.total : 0 }); }
     if (n.gen !== lastGen && Date.now() - lastSnap > 5000) { var j = snap(); if (j) { send({ t: 'snap', lab: curLab(), data: j }); lastSnap = Date.now(); } lastGen = n.gen; } }, 1500);
-  window.addEventListener('pagehide', function () { if (!WATCH && live && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
+  window.addEventListener('pagehide', function () { if (!WATCH && live && !inRoom() && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
   var cmd0 = X.onCmd; X.onCmd = function (id, line, secret) { cmd0(id, line, secret); if (WATCH) return; var d = net().devs[id]; if (!d) return;
     send(secret ? { t: 'cmd', name: d.name, line: '***', secret: true } : { t: 'cmd', name: d.name, line: String(line).slice(0, 500) }); };
   var out0 = X.onOut; X.onOut = function (id, text, cls) { out0(id, text, cls); if (WATCH || EL.room && EL.room.id) return; var d = net().devs[id]; if (!d) return;
