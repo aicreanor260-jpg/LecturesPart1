@@ -76,6 +76,7 @@
   "cisco_sw.js",
   "cisco_rt.js",
   "cisco_asa.js",
+  "ros.js",
   "mes10.js",
   "sim.js",
   "qos.js",
@@ -88,7 +89,8 @@
   "labs_exam.js",
   "labs_faults.js",
   "labs_mixed.js",
-  "labs_cisco.js"
+  "labs_cisco.js",
+  "labs_ros.js"
  ],
  "note": "ядро эмулятора без DOM: загружать по порядку в vm с global.window = global (как test.js)"
 }

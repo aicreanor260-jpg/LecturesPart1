@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js'];
+var engineFiles = ['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'simnb.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'huawei.js', 'huawei_s.js', 'huawei_ar.js', 'faults.js', 'cisco.js', 'cisco_sw.js', 'cisco_rt.js', 'cisco_asa.js', 'ros.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js', 'labs_mixed.js', 'labs_cisco.js', 'labs_ros.js'];
 engineFiles.forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
@@ -3184,6 +3184,51 @@ EL.labs.LABS.forEach(runLab);
   chk('ASA: show nameif, show route (имена интерфейсов), ping «!!!!!»', /GigabitEthernet1\/3\s+dmz\s+50/.test(n.exec(f.id, 'show nameif')) && /S\*\s+0\.0\.0\.0\/0 \[1\/0\] via 203\.0\.113\.1/.test(n.exec(f.id, 'show route')) &&
     /!!!!!/.test(n.exec(f.id, 'ping 198.51.100.10')));
   console.log('✓ Cisco ASA 5506: уровни безопасности, ACL, NAT, inspect icmp');
+})();
+// MikroTik RouterOS v7 (spec/routeros.md): меню и приглашения, мост с VLAN-фильтрацией, DHCP, NAT, firewall, OSPF v7
+(function () {
+  function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ ' + name + (extra ? ' — ' + extra : '')); } }
+  var n = new EL.Net(), r = n.add('hEX RB750Gr3', 'R1'), e = n.add('vESR', 'ISP'), a = n.add('VPC', 'PC1'), b = n.add('VPC', 'PC2'), w = n.add('VPC', 'WEB');
+  n.connect(r.id, 'ether1', e.id, 'gi1/0/1'); n.connect(a.id, 'eth0', r.id, 'ether2'); n.connect(b.id, 'eth0', r.id, 'ether3'); n.connect(w.id, 'eth0', e.id, 'gi1/0/2');
+  chk('RouterOS: приглашение [admin@MikroTik] >, ip address → /ip/address>, .. → /ip>', n.prompt(r.id) === '[admin@MikroTik] >' && (n.exec(r.id, 'ip address'), n.prompt(r.id) === '[admin@MikroTik] /ip/address>') &&
+    (n.exec(r.id, '..'), n.prompt(r.id) === '[admin@MikroTik] /ip>') && (n.exec(r.id, '/'), n.prompt(r.id) === '[admin@MikroTik] >'));
+  chk('RouterOS: /system identity set name=R1 меняет приглашение; bad command name', (n.exec(r.id, '/system identity set name=R1'), n.prompt(r.id) === '[admin@R1] >') && /^bad command name foo \(line 1 column \d+\)$/.test(n.exec(r.id, '/foo')));
+  var bad = ['/interface bridge add name=bridge1', '/interface bridge port add bridge=bridge1 interface=ether2', '/interface bridge port add bridge=bridge1 interface=ether3',
+    '/ip address add address=192.168.88.1/24 interface=bridge1', '/ip address add address=203.0.113.2/24 interface=ether1', '/ip route add gateway=203.0.113.1',
+    '/ip pool add name=dhcp_pool0 ranges=192.168.88.10-192.168.88.254', '/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=192.168.88.1',
+    '/ip dhcp-server add address-pool=dhcp_pool0 interface=bridge1 name=dhcp1', '/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade']
+    .filter(function (l) { return /error|bad command|does not match/.test(n.exec(r.id, l)); });
+  EL.labs.apply(n, { ISP: ['configure', 'interface gi1/0/1', 'ip address 203.0.113.1/24', 'ip firewall disable', 'exit', 'interface gi1/0/2', 'ip address 198.51.100.1/24', 'ip firewall disable', 'exit', 'end', 'commit', 'confirm'],
+    WEB: ['ip 198.51.100.10/24 198.51.100.1'], PC1: ['ip dhcp'], PC2: ['ip 192.168.88.20/24 192.168.88.1'] });
+  chk('RouterOS: мост, DHCP-сервер (пул .10–.254), ping внутри моста, masquerade наружу', !bad.length && n.devs[a.id].st.ip === '192.168.88.10' && n.ping(a.id, '192.168.88.20').ok && n.ping(b.id, '198.51.100.10').ok, bad.join('; '));
+  chk('RouterOS: /ip route print — DAC и AS 0.0.0.0/0', /DAC 192\.168\.88\.0\/24\s+bridge1\s+0/.test(n.exec(r.id, '/ip route print')) && /0 AS\s+0\.0\.0\.0\/0\s+203\.0\.113\.1\s+1/.test(n.exec(r.id, '/ip route print')));
+  chk('RouterOS: export — /interface bridge port / add bridge=bridge1 interface=ether2', /\/interface bridge port\nadd bridge=bridge1 interface=ether2/.test(n.exec(r.id, '/export')));
+  n.exec(r.id, '/ip firewall filter add chain=forward action=drop src-address=192.168.88.0/24');
+  chk('RouterOS: firewall filter chain=forward action=drop режет LAN → WAN', !n.ping(b.id, '198.51.100.10').ok);
+  n.exec(r.id, '/ip firewall filter remove 0');
+  chk('RouterOS: /ip firewall filter remove 0 — снова работает', n.ping(b.id, '198.51.100.10').ok);
+  // мост с VLAN-фильтрацией и транк Cisco
+  var m = new EL.Net(), sw = m.add('CRS326-24G-2S+', 'SW'), c = m.add('2960-24TT', 'CS'), p1 = m.add('VPC', 'A'), p2 = m.add('VPC', 'B');
+  m.connect(sw.id, 'ether1', c.id, 'gi0/1'); m.connect(p1.id, 'eth0', sw.id, 'ether2'); m.connect(p2.id, 'eth0', c.id, 'fa0/1');
+  ['/interface bridge add name=bridge1', '/interface bridge port add bridge=bridge1 interface=ether1', '/interface bridge port add bridge=bridge1 interface=ether2 pvid=20',
+    '/interface bridge vlan add bridge=bridge1 tagged=ether1 untagged=ether2 vlan-ids=20'].forEach(function (l) { m.exec(sw.id, l); });
+  ['en', 'conf t', 'vlan 20', 'int fa0/1', 'sw mo acc', 'sw acc vl 20', 'int gi0/1', 'sw mode trunk', 'end'].forEach(function (l) { m.exec(c.id, l); });
+  m.exec(p1.id, 'ip 10.20.0.10/24'); m.exec(p2.id, 'ip 10.20.0.11/24'); m.tick(40);
+  chk('VLAN-фильтрация: до vlan-filtering=yes PVID не действует — связи нет', !m.ping(p1.id, '10.20.0.11').ok);
+  m.exec(sw.id, '/interface bridge set bridge1 vlan-filtering=yes');
+  chk('VLAN-фильтрация включена: MikroTik pvid=20 ↔ транк Cisco ↔ access VLAN 20', m.ping(p1.id, '10.20.0.11').ok);
+  // OSPF v7 с Cisco
+  var o = new EL.Net(), R1 = o.add('CHR', 'R1'), R2 = o.add('1941', 'R2'), q1 = o.add('VPC', 'P1'), q2 = o.add('VPC', 'P2');
+  o.connect(R1.id, 'ether1', R2.id, 'gi0/0'); o.connect(q1.id, 'eth0', R1.id, 'ether2'); o.connect(q2.id, 'eth0', R2.id, 'gi0/1');
+  ['/ip address add address=10.0.12.1/30 interface=ether1', '/ip address add address=192.168.1.1/24 interface=ether2', '/routing ospf instance add name=v2inst version=2 router-id=1.1.1.1',
+    '/routing ospf area add name=backbone_v2 area-id=0.0.0.0 instance=v2inst', '/routing ospf interface-template add networks=10.0.12.0/30 area=backbone_v2',
+    '/routing ospf interface-template add networks=192.168.1.0/24 area=backbone_v2'].forEach(function (l) { o.exec(R1.id, l); });
+  ['en', 'conf t', 'int gi0/0', 'ip add 10.0.12.2 255.255.255.252', 'no sh', 'int gi0/1', 'ip add 192.168.2.1 255.255.255.0', 'no sh', 'router ospf 1', 'network 10.0.12.0 0.0.0.3 area 0',
+    'network 192.168.2.0 0.0.0.255 area 0', 'end'].forEach(function (l) { o.exec(R2.id, l); });
+  o.exec(q1.id, 'ip 192.168.1.10/24 192.168.1.1'); o.exec(q2.id, 'ip 192.168.2.10/24 192.168.2.1'); o.tick(60);
+  chk('OSPF v7 MikroTik ↔ Cisco: DAo 192.168.2.0/24 … 110, ping, сосед Full', o.ping(q1.id, '192.168.2.10').ok && /DAo 192\.168\.2\.0\/24\s+10\.0\.12\.2%ether1\s+110/.test(o.exec(R1.id, '/ip route print')) &&
+    /Full/.test(o.exec(R1.id, '/routing ospf neighbor print')));
+  console.log('✓ MikroTik RouterOS v7: мост и VLAN, DHCP, NAT, firewall, OSPF v7');
 })();
 console.log('\nИтого прогонов: ' + total + ', ошибок: ' + fail);
 process.exit(fail ? 1 : 0);
