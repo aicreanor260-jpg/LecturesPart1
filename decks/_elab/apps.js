@@ -138,4 +138,23 @@
     var r = this.simulate([fl], {}), f = r.flows[0]; this.gen++;
     return { ok: true, flow: fl, res: f, sim: r, refused: fl.refused };
   };
+  // ---------------------------------------------------------------- PDU (как Simple / Complex PDU в Packet Tracer)
+  // простой: ICMP echo от src к первому адресу получателя; сложный: {proto icmp|udp|tcp, dst, port, size, count, interval}
+  P.pduDst = function (id) { var f = this.ifaces(id)[0]; return f ? f.ip : null; };
+  P.pdu = function (src, o) {
+    var dst = o.dst, proto = o.proto || 'icmp', d = this.devs[src];
+    if (!d || d.off) return { ok: false, why: 'источник выключен', r: { ok: false, steps: [] } };
+    if (!this.ifaces(src).length) return { ok: false, why: 'у источника нет IP-адреса', r: { ok: false, steps: [] } };
+    if (IP.ip2n(dst || '') === null) return { ok: false, why: 'у получателя нет IP-адреса', r: { ok: false, steps: [] } };
+    var r = proto === 'icmp' ? this.ping(src, dst) : this.request(src, dst, proto, +o.port || (proto === 'tcp' ? 80 : 9));
+    var hit = r.ok || (proto === 'udp' && r.why === 'Connection refused');      // UDP: датаграмма дошла до узла, даже если порт не слушают
+    var res = { ok: hit, r: r, why: hit ? '' : r.why === 'Connection refused' ? 'TCP ' + o.port + ': соединение отклонено (служба не запущена)' : r.why || 'не доставлено', sent: 1, recv: hit ? 1 : 0 };
+    var cnt = Math.max(1, Math.min(100, +o.count || 1));
+    if (cnt > 1 && hit && proto !== 'tcp' && this.simulate) {
+      var f = this.simulate([proto === 'icmp' ? { kind: 'ping', src: src, dst: dst, size: +o.size || 56, count: cnt, interval: Math.max(0.001, +o.interval || 1) }
+        : { kind: 'udp', src: src, dst: dst, size: +o.size || 56, rate: 1 / Math.max(0.001, +o.interval || 1), dur: cnt * Math.max(0.001, +o.interval || 1) }], {}).flows[0];
+      res.sent = f.sent; res.recv = f.recv; res.ok = f.recv === f.sent; if (!res.ok) res.why = 'потеряно ' + (f.sent - f.recv) + ' из ' + f.sent;
+    } else if (cnt > 1) { res.sent = cnt; res.recv = hit ? cnt : 0; }
+    this.gen++; return res;
+  };
 })(typeof window !== 'undefined' ? window : global);

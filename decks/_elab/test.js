@@ -454,6 +454,24 @@ EL.labs.LABS.forEach(runLab);
     chk('все 10 служб переключаются галочкой и видны в systemctl', Object.keys(S.UNITS).every(function (k) { S.set(st, k, true); var on = S.on(st, k); S.set(st, k, false); return on && !S.on(st, k); }));
     console.log('✓ Службы сервера: DHCP, DNS, HTTPS, FTP-пользователи, RADIUS, TACACS+');
   })();
+  // PDU: простой (ICMP) и сложный (ICMP / UDP / TCP, количество)
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ PDU: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), sw = n.add('MES2300-24', 'SW1'), a = n.add('VPC', 'A'), sv = n.add('Debian-server', 'SRV'), c = n.add('VPC', 'C');
+    n.connect(a.id, 'eth0', sw.id, 'gi1/0/1'); n.connect(sv.id, 'ens3', sw.id, 'gi1/0/2'); n.connect(c.id, 'eth0', sw.id, 'gi1/0/3');
+    n.exec(a.id, 'ip 10.0.0.1/24'); n.ipSet(sv.id, { mode: 'static', ip: '10.0.0.10', mask: '255.255.255.0' }); n.tick(31);
+    var p = n.pdu(a.id, { dst: n.pduDst(sv.id), proto: 'icmp' });
+    chk('простой PDU A → SRV: успешно, есть трасса', p.ok && p.r.steps.length > 0);
+    chk('простой PDU на узел без адреса', n.pduDst(c.id) === null);
+    chk('сложный PDU TCP 80 к apache2 — успешно', n.pdu(a.id, { dst: '10.0.0.10', proto: 'tcp', port: 80 }).ok);
+    var t = n.pdu(a.id, { dst: '10.0.0.10', proto: 'tcp', port: 8080 });
+    chk('сложный PDU TCP 8080 — соединение отклонено', !t.ok && /отклонено/.test(t.why), t.why);
+    chk('сложный PDU UDP на закрытый порт — доставлен', n.pdu(a.id, { dst: '10.0.0.10', proto: 'udp', port: 5555 }).ok);
+    var m = n.pdu(a.id, { dst: '10.0.0.10', proto: 'icmp', count: 5, interval: 0.2, size: 1000 });
+    chk('сложный PDU ICMP ×5 — 5/5', m.ok && m.sent === 5 && m.recv === 5, JSON.stringify({ s: m.sent, r: m.recv }));
+    chk('нет пути — неудачно', !n.pdu(a.id, { dst: '10.9.9.9', proto: 'icmp' }).ok);
+    console.log('✓ PDU: простой и сложный');
+  })();
 
 // случайные задания движка: решение на одном коммутаторе MES
 ['base', 'vlan'].forEach(function (kind) {
