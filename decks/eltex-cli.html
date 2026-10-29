@@ -12401,6 +12401,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   P.help = function (id, line) { var d = this.devs[id]; return isVrp(d) ? help(d.st, line) : he0.apply(this, arguments); };
   var tb0 = P.tab;
   P.tab = function (id, line) { var d = this.devs[id]; return isVrp(d) ? tab(d.st, line) : tb0.apply(this, arguments); };
+  // время жизни ARP у Huawei — 1200 с (S-CR j01d, AR-CR arp_expire-time; spec/defaults-vs-eltex.md §10); MAC — 300 с, как в модели
+  var aa0 = P.arpAge;
+  P.arpAge = function (id) { return isVrp(this.devs[id]) ? 1200 : aa0.apply(this, arguments); };
   var sh0 = P.setHost;                           // «Свойства» → имя: у VRP это sysname
   P.setHost = function (id, name) { var d = this.devs[id]; if (!isVrp(d)) return sh0.apply(this, arguments); d.st.vrp.c.sysname = name; compile(d.st); };
   var rb0 = P.reboot;
