@@ -6,7 +6,9 @@
   var NS = 'http://www.w3.org/2000/svg';
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
-    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; } };
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; },
+    roomRun: function () { return false; }, onCmd: function () {}, onOut: function () {}, siteStart: function () { return false; } };   // клиент сайта и комнат — net_ws.js
+  var readOnly = false;                            // просмотр преподавателем: схема и консоли без ввода
   var msel = {}, mselL = {}, spaceDown = false;    // множественное выделение: устройства и кабели
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
@@ -221,6 +223,7 @@
   document.addEventListener('mousedown', closeMenu);
   function item(a, ic, t) { return '<button data-a="' + a + '"><span>' + ic + '</span>' + t + '</button>'; }
   function devMenu(d, e) {
+    if (readOnly) return;
     sel = d.id; draw();
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
       item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
@@ -241,6 +244,7 @@
       });
   }
   function linkMenu(i, e) {
+    if (readOnly) return;
     selLink = i; draw(); var l = net.links[i];
     var ph = net.phys ? net.phys(l.a.dev, l.a.port) : null;
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
@@ -266,6 +270,7 @@
     return out;
   }
   function addMenu(e) {
+    if (readOnly) return;
     var p = toWorld(e.clientX, e.clientY);
     var m = showMenu(e.clientX, e.clientY, '<div class="h">Добавить устройство</div><input class="q" placeholder="Поиск: MES2428, ESR, ПК…"><div class="list"></div><hr>' +
       X.items('field') + item('fit', '⤢', 'Показать всю схему') + item('clear', '✕', 'Очистить схему'), function (a, b) {
@@ -292,6 +297,7 @@
     var y = body.querySelector('[data-q="y"]'); if (y) setTimeout(function () { y.focus(); }, 0);
   }
   function delSelected() {
+    if (readOnly) return;
     var ds = Object.keys(msel).filter(function (k) { return net.devs[k]; }); if (!ds.length && sel && net.devs[sel]) ds = [sel];
     var ls = Object.keys(mselL).map(Number); if (selLink !== null) ls.push(selLink);
     ls = ls.filter(function (i, j, a) { var l = net.links[i]; return l && a.indexOf(i) === j && ds.indexOf(l.a.dev) < 0 && ds.indexOf(l.b.dev) < 0; });
@@ -542,7 +548,7 @@
     if (x.type === 'password') x.type = 'text';
     [['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'], ['data-lpignore', 'true'], ['data-1p-ignore', 'true'], ['data-form-type', 'other']].forEach(function (a) { if (!x.hasAttribute(a[0])) x.setAttribute(a[0], a[1]); }); }, true);
   function tlog(id, text, cls) {
-    var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h;
+    var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h; X.onOut(id, text, cls);
     var b = tEl(id); if (b) { var out = b.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight;
       if (consOrder.indexOf(String(id)) >= 0 && consActive !== String(id) && !t.unread) { t.unread = true; renderTabs(); } }
   }
@@ -556,7 +562,9 @@
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var b = tEl(id); if (b) b.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
-    var d = net.devs[id], t = term(id); if (!d || d.off) return;
+    var d = net.devs[id], t = term(id); if (!d || d.off || readOnly) return;
+    if (X.roomRun(id, line)) return;                // комната: команду выполняет сервер, вывод придёт всем
+    X.onCmd(id, line, !!t.secret || (needLogin(d) && !t.auth && t.user !== null));
     var w = wins['t' + id], pw = !!t.secret;
     if (needLogin(d) && !t.auth) {                 // вход в консоль
       tlog(id, loginPrompt(d, t) + (t.user === null ? line : ''), 'c');
@@ -921,7 +929,9 @@
     startLab(m[1]);
   }
   window.addEventListener('hashchange', labFromHash);
-  setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
+  setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/);
+    if (X.siteStart(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash)) return;    // на сайте: работа хранится на сервере (net_ws.js)
+    autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
   // проверка пунктов по фактическому состоянию сети — при каждой команде и раз в 3 с модельного времени, даже если окно задания закрыто
   function labCheck() {
     var ts = lab.tasks(labP), was = lab._done || {}, now = {}, fresh = [], ok = 0, first = !lab._done;
@@ -1266,5 +1276,7 @@
   window.addEventListener('resize', applyView);
   window.ELUI = { quizRender: function (box, id, q, qs) { quizRender(box, id, q, qs); }, subRender: function (box, j) { subRender(box, j); }, reviewFromHash: reviewFromHash, snapshot: snapshot, net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
+    renderSide: renderSide, ask: function (q, yes, ok) { ask(q, yes, ok); }, setAutoOff: function (v) { autoOff = v; }, setReadOnly: function (v) { readOnly = !!v; document.body.classList.toggle('ro', readOnly); },
+    labInfo: function () { if (!lab) return null; var ts = lab.tasks(labP); return { id: lab.id, title: lab.title, total: ts.length, done: Object.keys(lab._done || {}).map(function (i) { return +i + 1; }) }; },
+    startFree: function () { lab = null; task = null; resetNet(); renderSide(); }, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();

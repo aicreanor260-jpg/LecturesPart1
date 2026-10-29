@@ -243,6 +243,13 @@ details.more{margin-top:10px;border-top:1px solid var(--line,rgba(111,227,234,.2
 .pyw .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}.pyw .ok{color:var(--ok);font:700 12px var(--m)}.pyw select{max-width:280px}
 .pyw .pycode{width:100%;font:500 13px/1.45 var(--m);resize:vertical;tab-size:4}.pyw .pyst{font:600 12px var(--m);margin:6px 0}
 .pyw .pyout{max-height:220px;overflow:auto;font:500 12px/1.4 var(--m);color:var(--ink);white-space:pre-wrap;margin:0}.pyw .pyimg img{max-width:100%;background:#fff;margin:6px 0;display:block}.pyw code{color:var(--cy)}
+.msg-btn{margin-left:8px;background:#2a1d3a;color:#c99bff}.msg-btn.new{background:#c99bff;color:#150b0e;animation:mpulse 1.2s ease-in-out infinite}@keyframes mpulse{50%{box-shadow:0 0 16px #c99bff}}
+.msgw .mrow{border-left:2px solid #c99bff;padding:4px 10px;margin:8px 0;font:500 14px/1.45 var(--f)}.msgw .mrow i{color:var(--dim);font-style:normal;font:500 11px var(--m)}
+.msgw .mtext{font:600 16px/1.5 var(--f);color:var(--ink);margin:10px 0}.msgw .row{display:flex;gap:8px;margin-top:10px}.msgw .cs2{color:var(--dim)}.msgw h2{font-size:15px;margin-top:12px}
+.msgw button:not(.pri){background:transparent;border:1px solid var(--cy2);color:var(--cy);padding:6px 10px;font:700 12px var(--m);cursor:pointer}
+.wbar{position:fixed;left:50%;top:58px;transform:translateX(-50%);z-index:40;display:flex;gap:14px;align-items:center;background:#2a1d3a;border:1px solid #c99bff;padding:6px 14px;font:600 13px var(--m);color:#e9dcff}
+.wbar span{color:var(--dim)}.wbar button{background:#c99bff;border:0;color:#150b0e;font:700 12px var(--m);padding:4px 10px;cursor:pointer}
+body.ro #bPower,body.ro #bPdu{display:none}body.ro .inp input{visibility:hidden}body.ro .inp::after{content:'только просмотр';color:var(--dim);font:500 12px var(--m)}
 .lprop h2{font-size:15px;margin:14px 0 2px}
 .lkm{fill:#ffc65c;font:700 12px var(--m);text-anchor:middle;paint-order:stroke;stroke:#0b0507;stroke-width:4px;pointer-events:none}
 .lprop .row,.mapw .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}.lprop .row .q{flex:1;width:auto}.lprop .cs2,.mapw .cs2{color:var(--dim);font:500 12px var(--m)}.lprop .cs{font:600 12px var(--m);color:var(--cy)}
@@ -13423,7 +13430,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   var NS = 'http://www.w3.org/2000/svg';
   // точки подключения учебных инструментов (ui_tools.js): пункты меню, undo, захват, разбор шага, заметки
   var X = EL.uiX = { rec: function () {}, delOp: function () { return null; }, linkArr: function () { return null; }, items: function () { return ''; }, run: function () {},
-    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; } };
+    undo: function () {}, side: function () { return ''; }, sideClick: function () {}, onDraw: function () {}, onTrace: function () {}, onStep: function () {}, saveX: function () {}, loadX: function () {}, onMode: function () {}, preDraw: function () { return null; },
+    roomRun: function () { return false; }, onCmd: function () {}, onOut: function () {}, siteStart: function () { return false; } };   // клиент сайта и комнат — net_ws.js
+  var readOnly = false;                            // просмотр преподавателем: схема и консоли без ввода
   var msel = {}, mselL = {}, spaceDown = false;    // множественное выделение: устройства и кабели
   var net = new EL.Net(), sel = null, selLink = null, cable = null, lab = null, labP = null, labShow = false, task = null, trace = null;
   var view = { x: 0, y: 0, k: 1 }, cv = $('cv'), world = $('world');
@@ -13638,6 +13647,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
   document.addEventListener('mousedown', closeMenu);
   function item(a, ic, t) { return '<button data-a="' + a + '"><span>' + ic + '</span>' + t + '</button>'; }
   function devMenu(d, e) {
+    if (readOnly) return;
     sel = d.id; draw();
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(d.name) + ' · ' + esc(d.model) + '</div>' +
       item('term', '▣', 'Консоль') + (mode === 'test' ? item('tables', '☰', 'Таблицы ARP / MAC / маршруты') : '') + item('props', 'ⓘ', 'Свойства') + item('cable', '⌁', 'Подключить кабель') +
@@ -13658,6 +13668,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
       });
   }
   function linkMenu(i, e) {
+    if (readOnly) return;
     selLink = i; draw(); var l = net.links[i];
     var ph = net.phys ? net.phys(l.a.dev, l.a.port) : null;
     showMenu(e.clientX, e.clientY, '<div class="h">' + esc(net.devs[l.a.dev].name + ' ' + l.a.port + ' ↔ ' + net.devs[l.b.dev].name + ' ' + l.b.port) + '</div>' +
@@ -13683,6 +13694,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     return out;
   }
   function addMenu(e) {
+    if (readOnly) return;
     var p = toWorld(e.clientX, e.clientY);
     var m = showMenu(e.clientX, e.clientY, '<div class="h">Добавить устройство</div><input class="q" placeholder="Поиск: MES2428, ESR, ПК…"><div class="list"></div><hr>' +
       X.items('field') + item('fit', '⤢', 'Показать всю схему') + item('clear', '✕', 'Очистить схему'), function (a, b) {
@@ -13709,6 +13721,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     var y = body.querySelector('[data-q="y"]'); if (y) setTimeout(function () { y.focus(); }, 0);
   }
   function delSelected() {
+    if (readOnly) return;
     var ds = Object.keys(msel).filter(function (k) { return net.devs[k]; }); if (!ds.length && sel && net.devs[sel]) ds = [sel];
     var ls = Object.keys(mselL).map(Number); if (selLink !== null) ls.push(selLink);
     ls = ls.filter(function (i, j, a) { var l = net.links[i]; return l && a.indexOf(i) === j && ds.indexOf(l.a.dev) < 0 && ds.indexOf(l.b.dev) < 0; });
@@ -13959,7 +13972,7 @@ vesr(config)#         do confirm  — подтвердить</pre>
     if (x.type === 'password') x.type = 'text';
     [['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'], ['data-lpignore', 'true'], ['data-1p-ignore', 'true'], ['data-form-type', 'other']].forEach(function (a) { if (!x.hasAttribute(a[0])) x.setAttribute(a[0], a[1]); }); }, true);
   function tlog(id, text, cls) {
-    var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h;
+    var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h; X.onOut(id, text, cls);
     var b = tEl(id); if (b) { var out = b.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight;
       if (consOrder.indexOf(String(id)) >= 0 && consActive !== String(id) && !t.unread) { t.unread = true; renderTabs(); } }
   }
@@ -13973,7 +13986,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var b = tEl(id); if (b) b.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
-    var d = net.devs[id], t = term(id); if (!d || d.off) return;
+    var d = net.devs[id], t = term(id); if (!d || d.off || readOnly) return;
+    if (X.roomRun(id, line)) return;                // комната: команду выполняет сервер, вывод придёт всем
+    X.onCmd(id, line, !!t.secret || (needLogin(d) && !t.auth && t.user !== null));
     var w = wins['t' + id], pw = !!t.secret;
     if (needLogin(d) && !t.auth) {                 // вход в консоль
       tlog(id, loginPrompt(d, t) + (t.user === null ? line : ''), 'c');
@@ -14338,7 +14353,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
     startLab(m[1]);
   }
   window.addEventListener('hashchange', labFromHash);
-  setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/); autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
+  setTimeout(function () { if (reviewFromHash()) return; var m = location.hash.match(/^#lab=([A-Za-z0-9.]+)$/);
+    if (X.siteStart(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash)) return;    // на сайте: работа хранится на сервере (net_ws.js)
+    autoOffer(m && EL.labs.byId(m[1]) ? m[1] : null, labFromHash); }, 0);
   // проверка пунктов по фактическому состоянию сети — при каждой команде и раз в 3 с модельного времени, даже если окно задания закрыто
   function labCheck() {
     var ts = lab.tasks(labP), was = lab._done || {}, now = {}, fresh = [], ok = 0, first = !lab._done;
@@ -14683,7 +14700,9 @@ vesr(config)#         do confirm  — подтвердить</pre>
   window.addEventListener('resize', applyView);
   window.ELUI = { quizRender: function (box, id, q, qs) { quizRender(box, id, q, qs); }, subRender: function (box, j) { subRender(box, j); }, reviewFromHash: reviewFromHash, snapshot: snapshot, net: function () { return net; }, run: function (id, l) { run(id, l); }, startLab: startLab, openTerm: openTerm, toWorld: toWorld,
     mode: function () { return mode; }, makeWin: makeWin, closeWin: closeWin, minWin: minWin, wins: wins, esc: esc, toast: toast, draw: draw, refresh: refresh, el: el,
-    renderSide: renderSide, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
+    renderSide: renderSide, ask: function (q, yes, ok) { ask(q, yes, ok); }, setAutoOff: function (v) { autoOff = v; }, setReadOnly: function (v) { readOnly = !!v; document.body.classList.toggle('ro', readOnly); },
+    labInfo: function () { if (!lab) return null; var ts = lab.tasks(labP); return { id: lab.id, title: lab.title, total: ts.length, done: Object.keys(lab._done || {}).map(function (i) { return +i + 1; }) }; },
+    startFree: function () { lab = null; task = null; resetNet(); renderSide(); }, savePng: savePng, tlog: tlog, setPr: setPr, term: term, loadScheme: loadScheme, linkOff: linkOff, saveJSON: function () { var j = net.toJSON(); X.saveX(j); if (lab) j.builtin = { id: lab.id, p: labP }; return j; } };
 })();
 
 /* Учебные инструменты режима «Тест» поверх ui.js: захват трафика на кабеле (как Wireshark в pnetlab), разбор шага трассы по уровням OSI,
@@ -15855,6 +15874,111 @@ vesr(config)#         do confirm  — подтвердить</pre>
     U.makeWin('isp' + id, 'Облако провайдера', d.name, body, { w: 520, h: Math.min(620, innerHeight - 120) });
   }
   EL.openIsp = openIsp;
+})();
+
+/* Клиент сервера курса (wss://net-cat.duckdns.org/ws, вход — cookie сайта): работа хранится на сервере, преподаватель видит её вживую.
+   Одиночная работа (модель в браузере): hello → welcome {you, msgs, invites, saved}; при открытии лабы (или свободной схемы), если на сервере
+   есть сохранение, — «Продолжить с <время>» / «Начать заново» (load → saved); дальше snap (снимок схемы) при изменениях не чаще раза в 5 с
+   и по «Сохранить» / «Выйти» / закрытию вкладки; state — пункты лабы; cmd — каждая введённая команда (пароль помечается secret);
+   con — новый вывод консолей пачками не чаще 2 раз в секунду (для живого просмотра).
+   Сообщения преподавателя: msg → всплывающее окно и история (кнопка «✉» на нижней панели; история приходит в welcome и msgs).
+   Просмотр преподавателем: #watch=<логин> → watch; watch.snap — схема студента, watch.con — его консоли; ввод и меню отключены,
+   внизу — поле сообщения студенту. Комнаты — room_ui.js (тот же сокет: EL.ws.send, EL.ws.on).
+   Не на сайте курса (локальная проверка) клиент не включается. */
+(function () {
+  'use strict';
+  var EL = window.EL, U = window.ELUI, X = EL.uiX, esc = U.esc;
+  var WSURL = (location.search.match(/[?&]wsurl=([^&]+)/) || [])[1];               // локальная проверка: ?wsurl=ws://127.0.0.1:8799
+  var SITE = location.hostname === 'net-cat.duckdns.org' || !!WSURL;
+  var watchM = location.hash.match(/^#watch=(.+)$/), WATCH = watchM ? decodeURIComponent(watchM[1]) : null;
+  var ws = null, ready = false, queue = [], H = {}, you = null, msgs = [], saved = [], lastGen = -1, lastSnap = 0, conBuf = {}, conT = null, labState = '', retry = 0;
+  function net() { return U.net(); }
+  function curLab() { var li = U.labInfo(); return li ? li.id : 'free'; }
+  function send(o) { if (ready && ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else if (queue.length < 200) queue.push(o); }
+  function on(t, f) { (H[t] = H[t] || []).push(f); }
+  EL.ws = { send: send, on: on, site: SITE, you: function () { return you; }, watch: WATCH };
+  if (!SITE) return;
+  EL.wsSite = true;
+
+  function connect() {
+    try { ws = new WebSocket(WSURL ? decodeURIComponent(WSURL) : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'); } catch (e) { return; }
+    ws.onopen = function () { ready = true; retry = 0; ws.send(JSON.stringify({ t: 'hello', lab: WATCH ? null : started ? curLab() : startLab || 'free', mode: WATCH ? 'watch' : U.mode() }));
+      if (WATCH) ws.send(JSON.stringify(/^room:/.test(WATCH) ? { t: 'watch', room: WATCH.slice(5) } : { t: 'watch', login: WATCH }));
+      queue.splice(0).forEach(function (o) { ws.send(JSON.stringify(o)); }); };
+    ws.onmessage = function (e) { var m; try { m = JSON.parse(e.data); } catch (er) { return; } (H[m.t] || []).forEach(function (f) { try { f(m); } catch (er) { /* обработчик не должен ронять сокет */ } }); };
+    ws.onclose = function (e) { ready = false; if (e.code === 4001 || e.code === 1008) { U.toast('Сессия курса истекла — войдите снова'); return; }
+      setTimeout(connect, Math.min(30000, 1000 * Math.pow(2, retry++))); };
+  }
+
+  // ---------------------------------------------------------------- приветствие, восстановление работы
+  var startLab = null, startFresh = null, started = false;
+  X.siteStart = function (hashLab, fresh) { startLab = hashLab; startFresh = fresh; U.setAutoOff(true); if (WATCH) { U.setReadOnly(true); return true; }
+    setTimeout(function () { if (!started) { started = true; U.toast('Сервер курса не отвечает — работа пока не сохраняется'); begin(); } }, 5000);   // без связи — работать всё равно можно
+    return true; };
+  on('welcome', function (m) { you = m.you || null; msgs = m.msgs || []; saved = m.saved || []; paintMsgBtn();
+    if (WATCH || started) return; started = true;
+    var key = startLab || 'free', hit = saved.filter(function (s) { return s.lab === key; })[0];
+    if (!hit) { begin(); return; }
+    send({ t: 'load', lab: key }); });
+  on('saved', function (m) {
+    if (!m.data) { begin(); return; }
+    var at = new Date(m.at || Date.now()), p = function (v) { return ('0' + v).slice(-2); }, when = p(at.getDate()) + '.' + p(at.getMonth() + 1) + ' в ' + p(at.getHours()) + ':' + p(at.getMinutes());
+    U.ask('На сервере сохранена ваша работа (' + (m.lab === 'free' ? 'свободная схема' : 'лаба ' + m.lab) + ', ' + when + '). Продолжить с этого места?', function () {
+      try { U.loadScheme(m.data); if (m.data.now) net().now = m.data.now; U.draw(); lastGen = net().gen; U.toast('Работа восстановлена'); } catch (err) { U.toast('Не удалось восстановить: ' + err.message); startFresh && startFresh(); } go(); }, 'Продолжить с ' + when);
+    var w = U.wins.ask, nb = w && w.el.querySelector('[data-q="n"]'); if (nb) nb.textContent = 'Начать заново';
+    if (w) w.el.addEventListener('click', function (e) { if (e.target.closest('[data-q="n"],.x,[data-w="close"]')) begin(); }, true); });
+  function begin() { if (startLab && startFresh) startFresh(); go(); }
+  function go() { U.setAutoOff(false); lastGen = -1; }
+
+  // ---------------------------------------------------------------- сохранение и журнал
+  function snap() { var j = U.snapshot(), s = JSON.stringify(j); if (s.length > 3e6) { U.toast('Схема слишком большая для сохранения на сервер (больше 3 МБ)'); return null; } return j; }
+  EL.serverSave = function (j) { if (WATCH) return Promise.resolve(); send({ t: 'snap', lab: curLab(), data: j || snap() }); lastSnap = Date.now(); lastGen = net().gen;
+    return new Promise(function (ok) { var t0 = Date.now(); (function wait() { if (!ws || ws.bufferedAmount === 0 || Date.now() - t0 > 3000) ok(); else setTimeout(wait, 50); })(); }); };
+  setInterval(function () { if (WATCH || !started || EL.room && EL.room.id) return; var n = net();
+    var li = U.labInfo(), st = li ? li.id + ':' + li.done.join(',') + '/' + li.total : 'free'; if (st !== labState) { labState = st; send({ t: 'state', lab: curLab(), mode: U.mode(), done: li ? li.done : [], total: li ? li.total : 0 }); }
+    if (n.gen !== lastGen && Date.now() - lastSnap > 5000) { var j = snap(); if (j) { send({ t: 'snap', lab: curLab(), data: j }); lastSnap = Date.now(); } lastGen = n.gen; } }, 1500);
+  window.addEventListener('pagehide', function () { if (!WATCH && started && net().gen !== lastGen) { var j = snap(); if (j && ws && ws.readyState === 1) ws.send(JSON.stringify({ t: 'snap', lab: curLab(), data: j })); } });
+  var cmd0 = X.onCmd; X.onCmd = function (id, line, secret) { cmd0(id, line, secret); if (WATCH) return; var d = net().devs[id]; if (!d) return;
+    send(secret ? { t: 'cmd', name: d.name, line: '***', secret: true } : { t: 'cmd', name: d.name, line: String(line).slice(0, 500) }); };
+  var out0 = X.onOut; X.onOut = function (id, text, cls) { out0(id, text, cls); if (WATCH || EL.room && EL.room.id) return; var d = net().devs[id]; if (!d) return;
+    conBuf[d.name] = (conBuf[d.name] || '') + text + '\n'; if (!conT) conT = setTimeout(flushCon, 500); };
+  function flushCon() { conT = null; Object.keys(conBuf).forEach(function (k) { send({ t: 'con', dev: k, text: conBuf[k].slice(-20000) }); }); conBuf = {}; }
+
+  // ---------------------------------------------------------------- сообщения преподавателя
+  var bm = document.createElement('button'); bm.className = 'term-btn msg-btn'; bm.id = 'bMsg'; bm.hidden = true; bm.title = 'Сообщения преподавателя';
+  var dock = document.getElementById('bTerm'); if (dock) dock.parentNode.insertBefore(bm, document.getElementById('bPdu') ? document.getElementById('bPdu').nextSibling : dock.nextSibling);
+  var unread = 0;
+  function paintMsgBtn() { bm.hidden = !msgs.length && !WATCH; bm.textContent = '✉ ' + (WATCH ? 'Написать' : 'Сообщения') + (unread ? ' (' + unread + ')' : ''); bm.classList.toggle('new', !!unread); }
+  function fmtAt(a) { var d = new Date(a || Date.now()), p = function (v) { return ('0' + v).slice(-2); }; return p(d.getDate()) + '.' + p(d.getMonth() + 1) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function msgList() { return msgs.length ? msgs.slice().reverse().map(function (m) { return '<div class="mrow"><b>' + esc(m.from || 'Преподаватель') + '</b> <i>' + fmtAt(m.at) + (m.to && /^room:/.test(m.to) ? ' · комнате' : '') + '</i><div>' + esc(m.text).replace(/\n/g, '<br>') + '</div></div>'; }).join('') : '<p class="cs2">Сообщений нет</p>'; }
+  function openMsgs() { unread = 0; paintMsgBtn(); var body = document.createElement('div'); body.className = 'pad msgw';
+    body.innerHTML = (WATCH ? '<label>Сообщение ' + esc(WATCH) + '</label><textarea class="q" rows="3"></textarea><div class="row"><button class="pri" data-c="send">Отправить</button><span class="cs"></span></div><h2>История</h2>' : '') + '<div class="mlist">' + msgList() + '</div>';
+    body.addEventListener('keydown', function (e) { e.stopPropagation(); });
+    body.addEventListener('click', function (e) { if (!e.target.closest('[data-c="send"]')) return; var ta = body.querySelector('textarea'), t = ta.value.trim(); if (!t) return;
+      send({ t: 'msg', to: /^room:/.test(WATCH) ? WATCH : WATCH, text: t.slice(0, 2000) }); ta.value = ''; body.querySelector('.cs').textContent = 'Отправлено'; });
+    U.makeWin('msgs', 'Сообщения', WATCH ? 'студенту' : 'от преподавателя', body, { w: 420, h: 380 }); }
+  EL.wsMsgs = { open: openMsgs, list: function () { return msgs; }, html: msgList };
+  bm.addEventListener('click', openMsgs);
+  function popup(m) { var body = document.createElement('div'); body.className = 'pad msgw pop';
+    body.innerHTML = '<div class="k">' + esc(m.from || 'Преподаватель') + ' · ' + fmtAt(m.at) + '</div><div class="mtext">' + esc(m.text).replace(/\n/g, '<br>') + '</div><div class="row"><button class="pri" data-c="ok">Понятно</button><button data-c="all">Все сообщения</button></div>';
+    body.addEventListener('click', function (e) { var b = e.target.closest('[data-c]'); if (!b) return; U.closeWin('msgpop', true); unread = 0; paintMsgBtn(); if (b.dataset.c === 'all') openMsgs(); });
+    U.makeWin('msgpop', 'Сообщение преподавателя', '', body, { w: 400, h: 230, x: innerWidth / 2 - 200, y: 90 }); }
+  on('msg', function (m) { msgs.push(m); if (WATCH) { if (U.wins.msgs) U.wins.msgs.el.querySelector('.mlist').innerHTML = msgList(); return; } unread++; paintMsgBtn(); popup(m);
+    if (U.wins.msgs) U.wins.msgs.el.querySelector('.mlist').innerHTML = msgList(); });
+  on('msgs', function (m) { msgs = m.msgs || msgs; paintMsgBtn(); });
+
+  // ---------------------------------------------------------------- просмотр преподавателем: схема и консоли студента, без ввода
+  var wName = {};
+  on('watch.snap', function (m) { if (!m.data) { U.toast(WATCH + ': сохранённой работы нет'); return; } try { U.loadScheme(m.data); } catch (er) { U.toast('Не удалось показать схему: ' + er.message); return; }
+    wName = {}; net().list().forEach(function (d) { wName[d.name] = d.id; }); U.setReadOnly(true); U.draw(); banner('Просмотр: ' + (m.login || WATCH) + (m.lab && m.lab !== 'free' ? ' · лаба ' + m.lab : '') + (m.at ? ' · ' + fmtAt(m.at) : '')); });
+  on('watch.con', function (m) { var id = wName[m.dev]; if (!id) return; String(m.text).replace(/\n$/, '').split('\n').forEach(function (l) { U.tlog(id, l, ''); }); });
+  on('watch.state', function (m) { banner('Просмотр: ' + (m.login || WATCH) + ' · ' + (m.lab || '') + (m.total ? ' · пункты ' + (m.done || []).length + '/' + m.total : '')); });
+  on('watch.inroom', function (m) { banner('Просмотр: ' + WATCH + ' — сейчас в комнате ' + (m.room && (m.room.name || m.room.code) || '')); });
+  function banner(t) { var b = document.getElementById('wbar'); if (!b) { b = document.createElement('div'); b.id = 'wbar'; b.className = 'wbar'; document.body.appendChild(b);
+      b.addEventListener('click', function (e) { if (e.target.closest('[data-c="msg"]')) openMsgs(); }); }
+    b.innerHTML = '<b>👁 ' + esc(t) + '</b><span>только просмотр — ввод и изменения отключены</span><button data-c="msg">✉ Написать</button>'; }
+  if (WATCH) { U.setReadOnly(true); paintMsgBtn(); }
+  connect();
 })();
 
 /* Окно «Симуляция пакетов» (режим «Тест»), как Simulation в Packet Tracer: пока окно открыто, каждый обмен (ping, curl, DHCP,
