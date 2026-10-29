@@ -586,6 +586,12 @@ tunnel l2tpv3 1
 - **Анимация:** кадры летят по кабелям в замедленном модельном времени, часы — время модели; длинные паузы между пакетами сжаты; показываются первые 400 кадров.
 - Упрощения: путь считается один раз на поток (переключение маршрута во время потока не моделируется), TCP-окна и повторы не моделируются.
 
+### Экспорт результатов симуляции (как в OMNeT++)
+Окно «Результаты» (режим «Тест») → «Экспорт как в OMNeT++»: **.vec**, **.sca** и **CSV (Excel)**. Формат `.vec` / `.sca` — по приложению «Result File Formats» руководства OMNeT++ (версия 3, OMNeT++ 6): заголовок `version 3`, `run`, `attr …`, `config …`; векторы — `vector ID МОДУЛЬ ИМЯ TV` + `attr unit`, данные — `ID время значение`; скаляры — `scalar МОДУЛЬ ИМЯ ЗНАЧЕНИЕ`; гистограммы — `statistic`, `field count|mean|stddev|min|max|sum|sqrsum`, `bin НИЖНЯЯ_ГРАНИЦА КОЛИЧЕСТВО` (первый — `-INF`). Файлы открываются в OMNeT++ IDE и `opp_scavetool`.
+- Векторы: `rtt:vector` (ping, туда и обратно) / `endToEndDelay:vector` (UDP), `packetDropped:vector` по потокам; `queueLength:vector`, `utilization:vector` по портам. Модули: `Net.<устройство>.flow<N>`, `Net.<устройство>.<порт>` (`/` → `_`).
+- Скаляры: `sentPk:count`, `rcvdPk:count`, `lostPk:count`, `lossRate`, `rtt|delay:min|mean|max`, `jitter`; по кабелям `txFrames:count`, `utilization:mean`, `datarate`; `queueLength:max`; `Net convergenceTime` (сходимость после изменения линка), `Net simDuration`.
+- CSV: `тип;модуль;имя;время;значение;единица`, десятичная запятая, UTF-8 с BOM — открывается в Excel с русскими настройками.
+
 ### MTU и размер пакета (дерево команд прошивки ESR 1.40.4, шаблоны прошивки MES 10.4.6)
 - **ESR:** на интерфейсе и саб-интерфейсе `mtu 1400` (552–9018, по умолчанию 1500), на туннеле `tunnel gre 1` → `mtu 1400` (552–10000; GRE по умолчанию 1476 — видно в `show tunnels status`), `no mtu`.
 - **Ping с размером:** ESR — `ping 10.9.9.9 size 1472 packets 3 strategy disallow-fragmentation | discovery-pmtu | allow-fragmentation`; MES 10.x — `ping 10.9.9.9 size 1472 df-bit count 3` (size 36–2080, count 1–10); VPC — `ping 10.9.9.9 -l 1472 -D -c 3`; Debian — `ping -s 1472 -M do -c 3 10.9.9.9`. Размер — данные ICMP, IP-пакет на 28 байт больше.

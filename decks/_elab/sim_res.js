@@ -59,15 +59,25 @@
     R = r || null; cur = -1; stop();
     var body = document.createElement('div'); body.className = 'pad simres';
     body.innerHTML = '<div class="row" data-tabs>' + [['log', 'Журнал событий'], ['vec', 'Векторы'], ['his', 'Гистограммы'], ['sca', 'Скаляры'], ['net', 'События сети']].map(function (t) {
-      return '<button data-t="' + t[0] + '"' + (t[0] === tab ? ' class="pri"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div><div data-v></div>';
+      return '<button data-t="' + t[0] + '"' + (t[0] === tab ? ' class="pri"' : '') + '>' + t[1] + '</button>'; }).join('') + '</div>' +
+      (R ? '<div class="row exp"><span>Экспорт как в OMNeT++:</span><button data-x="vec">.vec</button><button data-x="sca">.sca</button><button data-x="csv">CSV (Excel)</button>' + (EL.simNotebook ? '<button data-x="ipynb">Скачать тетрадку .ipynb</button>' : '') + '</div>' : '') + '<div data-v></div>';
     U.makeWin('simres', 'Результаты', 'как в OMNeT++: события, векторы, гистограммы, скаляры', body, { w: Math.min(760, innerWidth - 40), h: Math.min(620, innerHeight - 120), x: Math.max(20, innerWidth - 800), y: 70 });
     body.addEventListener('keydown', function (e) { e.stopPropagation(); });
-    body.addEventListener('click', function (e) { var b = e.target.closest('[data-t],[data-k]'); if (!b) return;
+    body.addEventListener('click', function (e) { var xb = e.target.closest('[data-x]'); if (xb && R) { saveRes(xb.dataset.x); return; }
+      var b = e.target.closest('[data-t],[data-k]'); if (!b) return;
       if (b.dataset.t) { tab = b.dataset.t; [].forEach.call(body.querySelectorAll('[data-t]'), function (x) { x.classList.toggle('pri', x === b); }); paint(body); return; }
       ctl(body, b.dataset.k); });
     body.addEventListener('change', function (e) { if (e.target.dataset.sel) paint(body); });
     paint(body);
   }
+  // ---------------------------------------------------------------- экспорт результатов (simexp.js) и тетрадка Jupyter (simnb.js)
+  function convSec() { var c = conv(net()._evlog || []); return c && c.last ? c.last.t - c.from.t : null; }
+  function exportNow() { return EL.simExport(net(), R, { conv: convSec(), qcap: R.qcap }); }
+  function saveRes(k) { var x = exportNow(), nm = 'netcat-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    var data = k === 'ipynb' ? EL.simNotebook(nm) : x[k], type = k === 'csv' ? 'text/csv;charset=utf-8' : k === 'ipynb' ? 'application/x-ipynb+json' : 'text/plain;charset=utf-8';
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: type })); a.download = (k === 'ipynb' ? 'analiz-netcat' : nm) + '.' + k;
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000); U.toast('Сохранено: ' + a.download); }
+  EL.simResData = function () { return R ? exportNow() : null; };
   function evRows() { return R ? R.events.slice().sort(function (a, b) { return a.t - b.t; }) : []; }
   function evText(e) { var n = net(), from = e.seg && n.devs[e.seg.from], to = e.seg && n.devs[e.seg.to], f = R.flows[e.flow] || {};
     var what = f.kind === 'udp' ? 'UDP' : e.dir === 'bk' ? 'ICMP echo-reply' : 'ICMP echo-request';

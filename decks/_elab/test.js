@@ -4,7 +4,7 @@
 var fs = require('fs'), path = require('path'), vm = require('vm');
 var D = __dirname, N = +process.argv[2] || 12;
 global.window = global;
-['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
+['../_dk_cli.js', 'common.js', 'esr.js', 'esr_svc.js', 'esr_more.js', 'esr_ops.js', 'mesx.js', 'mes_l2.js', 'mes_dialects.js', 'hosts.js', 'catalog.js', 'net.js', 'tables.js', 'aging.js', 'mes_full.js', 'esr_fw.js', 'rt_timers.js', 'console.js', 'frames.js', 'ipv6.js', 'ipv6_rt.js', 'slaac.js', 'dhcp6.js', 'dns.js', 'tunnel.js', 'ipsec.js', 'physics.js', 'l2sec.js', 'qinq.js', 'mstp.js', 'stp_timers.js', 'dhcp_timers.js', 'svc_timers.js', 'snmp.js', 'aaa.js', 'ra.js', 'wg.js', 'ovpn.js', 'vrf.js', 'reload.js', 'pbr.js', 'bfd.js', 'bgp.js', 'bgp_policy.js', 'l2tp.js', 'dot1x.js', 'igmp.js', 'pim.js', 'stack.js', 'mtu.js', 'scs.js', 'ssh.js', 'wlc.js', 'olt.js', 'lte.js', 'tau.js', 'esbc.js', 'cpe.js', 'cables.js', 'linkprops.js', 'isp.js', 'simexp.js', 'apps.js', 'srv.js', 'me.js', 'me_mpls.js', 'security.js', 'mes10.js', 'sim.js', 'qos.js', 'pt.js', 'labs.js', 'labs_routing.js', 'labs_services.js', 'labs_l2.js', 'labs_ops.js', 'labs_exam.js', 'labs_faults.js'].forEach(function (f) {
   vm.runInThisContext(fs.readFileSync(path.join(D, f), 'utf8'), { filename: f });
 });
 var EL = global.EL, fail = 0, total = 0;
@@ -564,6 +564,26 @@ EL.labs.LABS.forEach(runLab);
     chk('ошибка в маршруте ловится', /маршрут/.test(n.ispCheck({ ports: {}, routes: [{ net: '10.0.0.0', nh: 'x' }], delay: 1, mbps: 1, loss: 0 })));
     chk('после перезагрузки настройки облака на месте', (n.reboot(c.id), /time=/.test(n.exec(a.id, 'ping 192.168.2.10'))));
     console.log('✓ Облако провайдера');
+  })();
+  // Экспорт результатов симуляции: .vec / .sca (OMNeT++ 6, версия 3) и CSV
+  (function () {
+    function chk(name, ok, extra) { total++; if (!ok) { fail++; console.error('✗ Экспорт: ' + name + (extra ? ' — ' + extra : '')); } }
+    var n = new EL.Net(), a = n.add('VPC', 'A'), b = n.add('VPC', 'B'); n.connect(a.id, 'eth0', b.id, 'eth0'); n.exec(a.id, 'ip 10.0.0.1/24'); n.exec(b.id, 'ip 10.0.0.2/24'); n.setLink(0, { mbps: 2 });
+    var r = n.simulate([{ kind: 'ping', src: a.id, dst: '10.0.0.2', count: 20, interval: 0.05, size: 56 }, { kind: 'udp', src: a.id, dst: '10.0.0.2', size: 1000, rate: 500, dur: 0.5 }]);
+    var x = EL.simExport(n, r, { conv: 12, date: new Date(2026, 9, 29, 12, 0, 0), pid: 7 });
+    var V = x.vec.split('\n'), S = x.sca.split('\n');
+    chk('заголовок: version 3, run, attr network', V[0] === 'version 3' && /^run NetCat-0-20261029-12:00:00-7$/.test(V[1]) && V.indexOf('attr network Net') > 0);
+    var decl = {}, okData = true, lastT = {};
+    V.forEach(function (l) { var m = l.match(/^vector (\d+) (\S+) (\S+) TV$/); if (m) decl[m[1]] = m[3];
+      var d = l.match(/^(\d+)\t(\S+)\t(\S+)$/); if (d) { if (!(d[1] in decl) || !isFinite(+d[2]) || !isFinite(+d[3]) || +d[2] < (lastT[d[1]] || 0)) okData = false; lastT[d[1]] = +d[2]; } });
+    chk('векторы объявлены до данных, время по возрастанию', Object.keys(decl).length >= 4 && okData, JSON.stringify(decl));
+    chk('векторы: rtt, endToEndDelay, queueLength, utilization', ['rtt:vector', 'endToEndDelay:vector', 'queueLength:vector', 'utilization:vector'].every(function (k) { return Object.keys(decl).some(function (i) { return decl[i] === k; }); }));
+    chk('скаляры: sentPk:count, lossRate, convergenceTime', /^scalar Net\.A\.flow0 sentPk:count 20$/m.test(x.sca) && /^scalar Net\.A\.flow1 lossRate \d+$/m.test(x.sca) && /^scalar Net convergenceTime 12$/m.test(x.sca));
+    var st = x.sca.match(/statistic Net\.A\.flow0 rtt:histogram\n((?:field \w+ \S+\n)+)attr unit s\n((?:bin\t\S+\t\d+\n)+)/);
+    chk('гистограмма: field count/mean/stddev/min/max/sum/sqrsum и бины с -INF', st && /field count \d+/.test(st[1]) && /field sqrsum/.test(st[1]) && /^bin\t-INF\t0/.test(st[2]), x.sca.slice(x.sca.indexOf('statistic'), x.sca.indexOf('statistic') + 300));
+    chk('каждая строка .sca — известного типа', S.every(function (l) { return !l || /^(version|run|attr|config|scalar|statistic|field|bin)[ \t]/.test(l); }));
+    chk('CSV: BOM, «;», десятичная запятая', x.csv.charCodeAt(0) === 0xfeff && /^vector;Net\.A\.flow0;rtt:vector;0,\d+;0,\d+;s\r$/m.test(x.csv), x.csv.slice(0, 200));
+    console.log('✓ Экспорт результатов: .vec, .sca, CSV');
   })();
 
 // случайные задания движка: решение на одном коммутаторе MES
