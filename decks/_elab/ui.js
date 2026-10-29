@@ -391,15 +391,26 @@
     var key = 't' + id; if (wins[key]) { minWin(key, false); wins[key].el.querySelector('input').focus(); return; }
     var t = term(id); if (!t.html) t.html = '<div class="s">' + esc(banner(d)) + '</div>';
     var body = document.createElement('div'); body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
-    body.innerHTML = '<div class="out"></div><label class="inp"><span></span><input spellcheck="false" autocomplete="off"></label>';
+    body.innerHTML = '<div class="out"></div><label class="inp"><span></span><input ' + NOFILL + '></label>';
     var tw = makeWin(key, d.name, d.model, body, { w: Math.min(720, innerWidth - 60), h: Math.min(460, innerHeight - 160) });
     if (net.manualFor(id)) { var mb = document.createElement('button'); mb.className = 'man'; mb.title = 'Официальное руководство Eltex'; mb.textContent = 'Руководство';
       tw.querySelector('.wt').insertBefore(mb, tw.querySelector('.wt [data-w="min"]')); mb.addEventListener('click', function () { openManual(id); }); }
     var out = body.querySelector('.out'), inp = body.querySelector('input');
     out.innerHTML = t.html; out.scrollTop = out.scrollHeight; setPr(id);
     out.addEventListener('mouseup', function () { if (!getSelection().toString()) inp.focus(); });
+    // ввод без keydown (IME, мобильные клавиатуры, вставка текста) — тоже в скрытый буфер
+    inp.addEventListener('beforeinput', function (e) { if (!t.secret) return; e.preventDefault();
+      if (/^delete/.test(e.inputType || '')) t.pwbuf = (t.pwbuf || '').slice(0, -1); else if (e.data) t.pwbuf = (t.pwbuf || '') + e.data; });
+    inp.addEventListener('input', function () { if (t.secret && inp.value) { t.pwbuf = (t.pwbuf || '') + inp.value; inp.value = ''; } });
+    inp.addEventListener('paste', function (e) { if (!t.secret) return; e.preventDefault(); t.pwbuf = (t.pwbuf || '') + ((e.clipboardData || window.clipboardData).getData('text') || '').split(/\r?\n/)[0]; });
     inp.addEventListener('keydown', function (e) {
       if (t.more) { e.preventDefault(); e.stopPropagation(); moreKey(id, e); return; }
+      if (t.secret && !e.ctrlKey && !e.metaKey && !e.altKey) {           // пароль: строка остаётся пустой, нажатия — в буфер
+        if (e.key === 'Enter') { var pv = t.pwbuf || ''; t.pwbuf = ''; inp.value = ''; e.preventDefault(); e.stopPropagation(); run(id, pv); return; }
+        if (e.key === 'Backspace') { t.pwbuf = (t.pwbuf || '').slice(0, -1); e.preventDefault(); e.stopPropagation(); return; }
+        if (e.key.length === 1) { t.pwbuf = (t.pwbuf || '') + e.key; e.preventDefault(); e.stopPropagation(); return; }
+        if (/^(ArrowUp|ArrowDown|Tab)$/.test(e.key)) { e.preventDefault(); e.stopPropagation(); return; }
+      }
       if (e.key === 'Enter') { var v = inp.value; inp.value = ''; run(id, v); e.preventDefault(); }
       else if (e.ctrlKey && /^[zZя]$/.test(e.key)) { e.preventDefault(); var dz = net.devs[id];   // Ctrl+Z — выход в привилегированный режим
         if (dz && needLogin(dz) && t.auth && !dz.off) { tlog(id, net.prompt(id) + inp.value + '^Z', 'c'); inp.value = '';
@@ -413,6 +424,12 @@
     });
     setTimeout(function () { inp.focus(); }, 0);
   }
+  // ввод консоли — без type=password и без признаков формы входа: менеджер паролей браузера к нему не цепляется
+  var NOFILL = 'type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-autocomplete="none"';
+  // все поля эмулятора (nano, тест, комментарии, поиск) — без автозаполнения браузера и менеджеров паролей
+  document.addEventListener('focusin', function (e) { var x = e.target; if (!x || !/^(INPUT|TEXTAREA)$/.test(x.tagName) || /^(checkbox|radio|file|number)$/.test(x.type)) return;
+    if (x.type === 'password') x.type = 'text';
+    [['autocomplete', 'off'], ['autocorrect', 'off'], ['autocapitalize', 'off'], ['data-lpignore', 'true'], ['data-1p-ignore', 'true'], ['data-form-type', 'other']].forEach(function (a) { if (!x.hasAttribute(a[0])) x.setAttribute(a[0], a[1]); }); }, true);
   function tlog(id, text, cls) {
     var t = term(id), h = '<div class="' + (cls || '') + '">' + esc(text) + '</div>'; t.html += h;
     var w = wins['t' + id]; if (w) { var out = w.el.querySelector('.out'); out.insertAdjacentHTML('beforeend', h); out.scrollTop = out.scrollHeight; }
@@ -421,12 +438,13 @@
     if (t.more && !d.off) p = net.moreText(id);
     if (t.ask && !d.off) p = t.ask.q;
     if (t.cep && !d.off) p = net.prompt(id).replace(/#$/, '') + '(change-expired-password)# ';
-    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.type = /password: ?$/i.test(p) ? 'password' : 'text'; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
+    var sec = !d.off && /(password|passphrase[^:]*): ?$/i.test(p); if (sec !== !!t.secret) { t.secret = sec; t.pwbuf = ''; inp.value = ''; }
+    w.el.querySelector('.inp span').textContent = d.off ? '[выключено] ' : p; inp.disabled = !!d.off; inp.readOnly = !!t.more; }
   var hooks = { clear: function () { var id = hooks.cur; term(id).html = ''; var w = wins['t' + id]; if (w) w.el.querySelector('.out').innerHTML = ''; },
                 edit: function (name, text, save) { openNano(name, text, save); } };
   function run(id, line) {
     var d = net.devs[id], t = term(id); if (!d || d.off) return;
-    var w = wins['t' + id], pw = w && w.el.querySelector('input').type === 'password';
+    var w = wins['t' + id], pw = !!t.secret;
     if (needLogin(d) && !t.auth) {                 // вход в консоль
       tlog(id, loginPrompt(d, t) + (t.user === null ? line : ''), 'c');
       if (t.user === null) { t.user = line.trim(); if (!t.user) t.user = null; }
@@ -503,7 +521,7 @@
   // ================================================================== nano, свойства, ping
   function openNano(name, text, save) {
     var body = document.createElement('div'); body.className = 'nano'; body.style.cssText = 'display:flex;flex-direction:column;flex:1;min-height:0';
-    body.innerHTML = '<textarea spellcheck="false"></textarea><div class="keys"><span><button data-n="s">^S</button> Сохранить</span><span><button data-n="x">^X</button> Выход</span></div>';
+    body.innerHTML = '<textarea spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other"></textarea><div class="keys"><span><button data-n="s">^S</button> Сохранить</span><span><button data-n="x">^X</button> Выход</span></div>';
     makeWin('nano', 'GNU nano 5.4', name, body, { w: 680, h: 440 }); var ta = body.querySelector('textarea'); ta.value = text; ta.focus();
     function done(s) { if (s) { save(ta.value); toast('Файл сохранён'); } else closeWin('nano'); }
     body.addEventListener('click', function (e) { var b = e.target.closest('[data-n]'); if (b) done(b.dataset.n === 's'); });
