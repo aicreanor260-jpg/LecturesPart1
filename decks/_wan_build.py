@@ -22,7 +22,7 @@ def build():
     _wan_deck.build()
     _wan_final.tail()
     K.build("globalnaya-set-wan.html", "Глобальная сеть WAN — лекция", "th-wan", _wan_theme.FONTS,
-            _wan_theme.css("_wan_assets"), list(L.SL), out_env="WAN_OUT")
+            _wan_theme.css("_wan_assets") + __import__("_scoob").css(), list(L.SL), extra_js=__import__("_scoob").js(), out_env="WAN_OUT")
 
 
 if __name__ == "__main__":

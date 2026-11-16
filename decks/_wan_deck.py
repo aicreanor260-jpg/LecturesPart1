@@ -9,6 +9,15 @@ A = "_wan_assets"
 
 
 def info(n, title):
+    try:
+        import _wan_ar as _ar
+        import _scoob
+    except ImportError:
+        _ar = None
+    if _ar and n in _ar.AR:                 # инфографика автора — вёрсткой и SVG с анимацией
+        t, html = _ar.AR[n]()
+        _scoob.emit(t, html, title)
+        return
     K.info(A, "image%d" % n, title)
 
 

@@ -22,7 +22,7 @@ def build():
     _wan2_deck.build()
     _wan2_final.tail()
     K.build("wan-ethernet.html", "WAN на основе Ethernet — лекция", "th-wan", _wan_theme.FONTS,
-            _wan_theme.css("_wan_assets"), list(L.SL), extra_js=K.js("_gre_cli.js"), out_env="WAN2_OUT")
+            _wan_theme.css("_wan_assets") + __import__("_scoob").css(), list(L.SL), extra_js=__import__("_scoob").js() + K.js("_gre_cli.js"), out_env="WAN2_OUT")
 
 
 if __name__ == "__main__":
