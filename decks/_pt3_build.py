@@ -40,7 +40,11 @@ def build(key):
     fin = __import__(d["fin"])
     del L.SL[:]
     fin.cover()
-    A.render(slides, adir, getattr(fin, "TITLES", {}))
+    try:
+        man = __import__("_%s_man" % key).M
+    except ImportError:
+        man = None
+    A.render(slides, adir, getattr(fin, "TITLES", {}), man=man)
     fin.tail()
     js = K.js(d["cli"]) if d["cli"] else ""
     K.build(d["out"], d["title"], "th-" + key, TH.FONTS[key], TH.css(key, adir), list(L.SL), extra_js=js, out_env=key.upper() + "_OUT")

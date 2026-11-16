@@ -144,7 +144,7 @@ def _weight(paras):
     return sum(len(K._plain(q["t"])) for q in paras)
 
 
-def render(slides, adir, titles=None, budget=1300, skip=(1,)):
+def render(slides, adir, titles=None, budget=1300, skip=(1,), man=None):
     """slides — из parse(); titles — {номер: заголовок с <em>} для красоты; skip — номера слайдов pptx, которые не выводить (титул)."""
     titles = titles or {}
     last_title = ""
@@ -154,6 +154,12 @@ def render(slides, adir, titles=None, budget=1300, skip=(1,)):
         t = s["title"] or last_title
         last_title = t
         title = titles.get(n) or _esc(t)
+        if man and n in man:                # ручная выжимка: тезисы + перерисованная схема; полный текст pptx — свёрнут
+            import _pt_man
+            _pt_man.emit(n, s, man[n], title, t, adir, _block)
+            for i in dict.fromkeys(i for i, sz in s["imgs"] if sz > BIG):
+                K.info(adir, i, "pptx %d · %s · %s" % (n, K._plain(t), i))
+            continue
         small = [i for i, sz in s["imgs"] if sz <= BIG]
         big = [i for i, sz in s["imgs"] if sz > BIG]
         small = list(dict.fromkeys(small))

@@ -255,13 +255,7 @@ def _split_para(h):
             chunks.append(cur)
     if len(chunks) < 2 or not all(_balanced(c) for c in chunks):
         return None
-    # на слайде — главная мысль (первый блок), остальное под «Подробнее»: текст pptx сохранён, экран не перегружен
-    while len(chunks) > 1 and _plain(chunks[0]).rstrip().endswith(":"):   # «…а именно:» — продолжение не прячем
-        chunks[0:2] = [chunks[0] + " " + chunks[1]]
-    if len(chunks) < 2:
-        return '<p class="ptb">%s</p>' % chunks[0]
-    rest = "".join('<p class="ptb">%s</p>' % c for c in chunks[1:])
-    return '<p class="ptb ptmain">%s</p><details class="ptmore"><summary>Подробнее</summary>%s</details>' % (chunks[0], rest)
+    return "".join('<p class="ptb">%s</p>' % c for c in chunks)
 
 
 _LI = re.compile(r"<li>(.*?)</li>", re.S)
@@ -280,14 +274,20 @@ def blocks(html):
 
 BASE_CSS += r"""
 p.ptb{border-left:5px solid var(--cy);padding:3px 0 3px 12px!important;margin:0!important}
-p.ptb+p.ptb,p+p.ptb,p.ptb+p,details.ptmore+p{margin-top:9px!important}
-details.ptmore{margin-top:6px}
-details.ptmore>summary{display:inline-block;cursor:pointer;list-style:none;font:700 calc(clamp(11px,.9vw,16px)*var(--fz,1))/1 var(--f);
+p.ptb+p.ptb,p+p.ptb,p.ptb+p,details.ptsrc+p{margin-top:9px!important}
+details.ptsrc{margin-top:6px}
+details.ptsrc>summary{display:inline-block;cursor:pointer;list-style:none;font:700 calc(clamp(11px,.9vw,16px)*var(--fz,1))/1 var(--f);
  padding:5px 12px;border-radius:999px;border:2px solid var(--cy);color:var(--cy);background:rgba(255,255,255,.55);opacity:.9}
-details.ptmore>summary::-webkit-details-marker{display:none}
-details.ptmore>summary::after{content:" ▾"}details.ptmore[open]>summary::after{content:" ▴"}
-details.ptmore[open]>summary{margin-bottom:8px}
-details.ptmore>p.ptb{animation:ptpic .35s ease both}
+details.ptsrc>summary::-webkit-details-marker{display:none}
+details.ptsrc>summary::after{content:" ▾"}details.ptsrc[open]>summary::after{content:" ▴"}
+details.ptsrc[open]>summary{margin-bottom:8px}
+details.ptsrc{margin-top:10px}details.ptsrc[open]{background:rgba(255,255,255,.08)}
+details.ptsrc>.c{margin-top:6px;animation:ptpic .35s ease both}
+.ptsvg{width:100%;height:auto;display:block;color:var(--ink,currentColor)}
+.ptsvgw{padding:10px 12px}
+.ptsvg text{font-family:var(--f);}
+.ptsvg .mono{font-family:"JetBrains Mono",Consolas,monospace}
+.ptkey li{margin:.25em 0}
 """
 
 
