@@ -91,7 +91,7 @@ def flow(d, col=OR, T=3, n=2, w=5):
 
 def tab(head_, rows, tone=CY):
     def cell(c):
-        return '<td class="%s">%s</td>' % (c[1], c[0]) if isinstance(c, tuple) else "<td>%s</td>" % c
+        return '<td class="c-%s">%s</td>' % (c[1], c[0]) if isinstance(c, tuple) else "<td>%s</td>" % c
     return ('<table class="sb-tab" style="--t:%s"><tr>%s</tr>%s</table>' % (tone, "".join("<th>%s</th>" % h for h in head_),
                                                                             "".join("<tr>%s</tr>" % "".join(cell(c) for c in r) for r in rows)))
 
@@ -114,7 +114,7 @@ CSS = r"""
 .sb ul.li li::marker{content:"✿ ";color:#ff7a00}
 .sb-tab{width:100%;border-collapse:separate;border-spacing:0;border:3px solid #2a1b4a;border-radius:12px;overflow:hidden;font:800 calc(clamp(12px,1vw,17px)*var(--fz,1))/1.25 var(--f)}
 .sb-tab th{background:var(--t);color:#2a1b4a;padding:5px 10px;border-bottom:3px solid #2a1b4a}.sb-tab td{background:#fff6dc;color:#2a1b4a;padding:4px 10px;border-top:1.5px solid #e4d3a6}
-.sb-tab td.y{background:#ffe48a}.sb-tab td.r{background:#ffd0d0}.sb-tab td.g{background:#dff5b0}
+.sb-tab td.c-y{background:#ffe48a}.sb-tab td.c-r{background:#ffd0d0}.sb-tab td.c-g{background:#dff5b0}
 .sb-big{font:900 calc(clamp(20px,2vw,34px)*var(--fz,1))/1.1 var(--f);color:#2a1b4a;text-align:center}
 """
 

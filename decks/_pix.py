@@ -147,7 +147,7 @@ CSS = r"""
 .th-stp .sp-chip{color:#173a5e;border-color:#1fa595;background:#e6f7f4}
 .px-tab{width:100%;border-collapse:collapse;font:700 calc(clamp(12px,1vw,17px)*var(--fz,1))/1.25 var(--f)}
 .px-tab th{background:#1fa595;color:#fff;padding:5px 9px;text-align:left}.px-tab td{background:#eaf8f5;color:#173a5e;padding:4px 9px;border-top:2px solid #fffbea}
-.px-tab td.y{background:#ffe89a}.px-tab td.r{background:#ffd9d9;color:#a01818}.px-tab td.g{background:#d8f5d0;color:#1d6e1d}
+.px-tab td.c-y{background:#ffe89a}.px-tab td.c-r{background:#ffd9d9;color:#a01818}.px-tab td.c-g{background:#d8f5d0;color:#1d6e1d}
 .px-big{font:900 calc(clamp(20px,2vw,34px)*var(--fz,1))/1.1 var(--f);color:#173a5e;text-align:center}
 .px-big em{font-style:normal;color:#e5484d}.px-big b{color:#2f9e44}
 """
@@ -156,6 +156,6 @@ CSS = r"""
 def tab(head, rows):
     def cell(c):
         if isinstance(c, tuple):
-            return '<td class="%s">%s</td>' % (c[1], c[0])
+            return '<td class="c-%s">%s</td>' % (c[1], c[0])
         return "<td>%s</td>" % c
     return '<table class="px-tab"><tr>%s</tr>%s</table>' % ("".join("<th>%s</th>" % h for h in head), "".join("<tr>%s</tr>" % "".join(cell(c) for c in r) for r in rows))
