@@ -257,11 +257,18 @@ def _split_para(h):
     return "".join('<p class="ptb">%s</p>' % c for c in chunks)
 
 
+_LI = re.compile(r"<li>(.*?)</li>", re.S)
+
+
 def blocks(html):
     def rep(m):
         r = _split_para(m.group(1))
         return r if r else m.group(0)
-    return _PARA.sub(rep, html)
+
+    def rep_li(m):   # длинный пункт списка — пункт и под ним блоки
+        r = _split_para(m.group(1))
+        return "<li>%s</li>" % r if r else m.group(0)
+    return _LI.sub(rep_li, _PARA.sub(rep, html))
 
 
 BASE_CSS += r"""
