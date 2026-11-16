@@ -129,9 +129,12 @@ def js():
     import _arena
     return _arena.JS
 CSS += r"""
-.sb .sp .ar-scene svg{max-height:36vh}
+.sb .sp .ar-scene svg{max-height:41vh}
 """
 CSS += r"""
 .sb .sp-pn:not(.sc) .ar-scene svg{max-height:25vh}
 .sb .sp-pn:not(.sc) .ar-scene{border:0;box-shadow:none;background:none;padding:0}
+"""
+CSS += r"""
+.sb .sp-pn.short .ar-scene svg{max-height:27vh}
 """
