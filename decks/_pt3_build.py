@@ -57,7 +57,7 @@ def build(key):
     A.render(slides, adir, getattr(fin, "TITLES", {}), man=man)
     fin.tail()
     js = (K.js(d["cli"]) if d["cli"] else "") + __import__("_arena").JS
-    K.build(d["out"], d["title"], "th-" + key, TH.FONTS[key], TH.css(key, adir) + __import__("_arena").CSS + ARW, list(L.SL), extra_js=js, out_env=key.upper() + "_OUT")
+    K.build(d["out"], d["title"], "th-" + key, TH.FONTS[key], TH.css(key, adir) + __import__("_arena").CSS + __import__("_space").CSS + ARW, list(L.SL), extra_js=js, out_env=key.upper() + "_OUT")
 
 
 if __name__ == "__main__":

@@ -170,7 +170,7 @@ def scene(w, h, inner):
     i = next(_ID)
     inner = inner.replace('url(#glw)', 'url(#glw%d)' % i)
     return ('<div class="ar-scene"><svg viewBox="0 0 %d %d" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" '
-            'font-family="Nunito,Segoe UI,sans-serif"><defs><filter id="glw%d" x="-30%%" y="-30%%" width="160%%" height="160%%">'
+            'font-family="Nunito,Segoe UI,sans-serif"><defs><filter id="glw%d" filterUnits="userSpaceOnUse" x="-2000" y="-2000" width="6000" height="6000">'
             '<feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>'
             '%s</svg></div>' % (w, h, i, inner))
 
