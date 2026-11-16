@@ -140,17 +140,48 @@ CSS += r"""
 """
 
 
-def tx_wrap(pslide, TX):
+def tx_wrap(pslide, TX, cls="sb"):
     """Обёртка pslide деки: если метка есть в TX — слайд-тезисы, а исходные блоки pptx — в «Текст слайда из лекции»."""
     from _sw_lib import step, card
 
     def w(label, title, left, right=None, sub="", layout="g2"):
         if label not in TX:
             return pslide(label, title, left, right, sub, layout)
-        sub2, html = TX[label]
+        sub2, html = TX[label][:2]
+        if len(TX[label]) > 2 and TX[label][2]:          # CLI pptx — дословно и на виду
+            import re as _re
+            src_html = "".join(left + (right or []))
+            clis = _re.findall(r'(?:<div class="clih">.*?</div>)?<pre class="cli.*?</pre>|<div class="tw[^"]*">.*?</table></div>', src_html, _re.S)
+            if clis:
+                def width(c):
+                    if "<table" in c:
+                        return 999
+                    body = _re.sub(r"<[^>]+>", "", _re.sub(r'<div class="clih">.*?</div>', "", c, flags=_re.S))
+                    return max((len(x) for x in body.split("\n")), default=0)
+                out, buf = "", []
+
+                def flush():
+                    if buf:
+                        cols = 2 if len(buf) > 1 else 1
+                        halves = [buf[i::cols] for i in range(cols)]
+                        return '<div class="tx-cli" style="grid-template-columns:repeat(%d,1fr)">%s</div>' % (
+                            cols, "".join('<div class="sp-col">%s</div>' % "".join(h) for h in halves))
+                    return ""
+                for c in clis:                       # порядок блоков — как в pptx
+                    if width(c) <= 58:
+                        buf.append(c)
+                        if len(buf) == 2:
+                            out += flush()
+                            buf = []
+                    else:
+                        out += flush()
+                        buf = []
+                        out += '<div class="tx-cli" style="grid-template-columns:1fr">%s</div>' % c
+                out += flush()
+                html = html + out
         src = '<details class="ptsrc"><summary>Текст слайда из лекции</summary>%s</details>' % "".join(left + (right or []))
         from _sw_lib import slide, sc as _sc, head, grow
-        slide(label, _sc(head(title, ""), grow("g", '<div class="arwrap sb">%s%s</div>' % (page(sub2 or sub, html), src))))
+        slide(label, _sc(head(title, ""), grow("g", '<div class="arwrap %s">%s%s</div>' % (cls, page(sub2 or sub, html), src))))
     return w
 
 
@@ -168,4 +199,10 @@ CSS += r"""
 .sb .sp-note b{font-size:calc(clamp(14px,1.3vw,24px)*var(--fz,1))!important}
 .sb .sp-note small{font-size:calc(clamp(12px,1vw,18px)*var(--fz,1))!important}
 .sb-tab{font-size:calc(clamp(13px,1.15vw,22px)*var(--fz,1))!important}
+"""
+
+CSS += r"""
+.tx-cli{display:grid;gap:10px;align-items:start;flex:none}
+.tx-cli .sp-col{gap:8px}
+.tx-cli pre.cli{margin:0}
 """
