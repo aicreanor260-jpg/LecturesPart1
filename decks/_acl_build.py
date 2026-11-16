@@ -224,13 +224,15 @@ def build():
            + THEME % {"bg": b64("bg_main"), "cover": b64("bg_cover"), "btn": WINBTN} + _acl_fig.CSS + _acl_final.CSS)
     with io.open(os.path.join(HERE, "_acl_cli.js"), encoding="utf-8") as fh:
         cli_js = fh.read()
-    js = JS + _dk_kit.JS + cli_js + FIT_JS
+    import _pt_kit as K
+    css += K.BASE_CSS.split('/* ---- smysl ---- */')[-1] if False else K.BASE_CSS[K.BASE_CSS.find('p.ptb{'):]
+    js = JS + _dk_kit.JS + cli_js + FIT_JS.replace("window.ACL_FIT=cur;", "document.addEventListener('toggle',function(){setTimeout(cur,30);},true);window.ACL_FIT=cur;")
     html = (
         '<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
         "<title>Списки контроля доступа ACL — лекция</title>\n%s\n<style>%s</style>\n</head>\n<body class=\"th-acl\">\n"
         '<div id="bgimg"></div><div id="bgfx"></div>\n<div id="stage">\n%s\n</div>\n%s\n'
-        "<script>%s</script>\n</body>\n</html>\n" % (FONTS, css, "\n".join(slides), _sw_build.HUD, js))
+        "<script>%s</script>\n</body>\n</html>\n" % (FONTS, css, "\n".join(K.blocks(x) for x in slides), _sw_build.HUD, js))
     out = os.environ.get("ACL_OUT") or os.path.join(HERE, OUT)
     with io.open(out, "w", encoding="utf-8") as fh:
         fh.write(html)
