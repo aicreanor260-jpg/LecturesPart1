@@ -21,8 +21,8 @@ def build():
     _mon_final.cover()
     _mon_deck.build()
     _mon_final.tail()
-    K.build("monitoring-upravlenie.html", "Мониторинг и управление — лекция", "th-mon", _mon_theme.FONTS, _mon_theme.CSS,
-            list(L.SL), extra_js=K.js("_mon_cli.js"), out_env="MON_OUT")
+    K.build("monitoring-upravlenie.html", "Мониторинг и управление — лекция", "th-mon", _mon_theme.FONTS, _mon_theme.CSS + __import__("_scoob").css() + __import__("_mon_ar").CSS,
+            list(L.SL), extra_js=__import__("_scoob").js() + K.js("_mon_cli.js"), out_env="MON_OUT")
 
 
 if __name__ == "__main__":

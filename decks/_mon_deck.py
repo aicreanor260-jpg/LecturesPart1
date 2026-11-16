@@ -11,6 +11,11 @@ A = "_mon_assets"
 
 
 def info(n, title):
+    import _mon_ar as _ar                   # инфографика автора — вёрсткой и SVG с анимацией
+    if n in _ar.AR:
+        t, html = _ar.AR[n]()
+        _ar.emit(t, html, title)
+        return
     K.info(A, "image%d" % n, title)
 
 
