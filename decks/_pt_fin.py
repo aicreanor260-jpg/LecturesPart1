@@ -3,10 +3,10 @@
 from _sw_lib import slide, head, sc, grow, col, card, li, step, p, tags, tag
 
 
-def cover(big, lead, tg):
-    slide("Титул", sc('<div class="cover"><div class="big">%s</div><div class="lead">%s</div>%s'
+def cover(big, lead, tg, kicker="Лекция · Сетевые технологии"):
+    slide("Титул", sc('<div class="cover"><div class="lead" style="font-weight:900;letter-spacing:.12em;text-transform:uppercase">%s</div><div class="big">%s</div><div class="lead">%s</div>%s'
                       '<div class="lead" style="font-size:clamp(12px,.95vw,17px)">← → шаги · ↑ ↓ слайды · Esc — содержание</div></div>'
-                      % (big, lead, tags(*[tag(t, c) for t, c in tg]))), cover=True)
+                      % (kicker, big, lead, tags(*[tag(t, c) for t, c in tg]))), cover=True)
 
 
 def qslide(title, sub, qs):

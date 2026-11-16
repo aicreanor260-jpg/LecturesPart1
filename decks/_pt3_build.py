@@ -25,6 +25,16 @@ DECKS = {
 }
 
 
+ARW = r"""
+.arwrap{position:relative;height:100%;min-height:0;display:flex;flex-direction:column}
+.arwrap>.ar{flex:1 1 auto;min-height:0}
+.arwrap>details.ptsrc{position:absolute;right:0;top:calc(-1 * clamp(40px,4.4vw,70px));z-index:6;max-width:62%;margin:0}
+.arwrap>details.ptsrc[open]{background:#fff8e6;border:3px solid #c9962e;border-radius:12px;padding:10px;max-height:72vh;overflow:auto;
+ box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.arwrap>details.ptsrc[open]>.c{color:#13286b}
+"""
+
+
 def build(key):
     d = DECKS[key]
     adir = "_%s_assets" % key
@@ -46,8 +56,8 @@ def build(key):
         man = None
     A.render(slides, adir, getattr(fin, "TITLES", {}), man=man)
     fin.tail()
-    js = K.js(d["cli"]) if d["cli"] else ""
-    K.build(d["out"], d["title"], "th-" + key, TH.FONTS[key], TH.css(key, adir), list(L.SL), extra_js=js, out_env=key.upper() + "_OUT")
+    js = (K.js(d["cli"]) if d["cli"] else "") + __import__("_arena").JS
+    K.build(d["out"], d["title"], "th-" + key, TH.FONTS[key], TH.css(key, adir) + __import__("_arena").CSS + ARW, list(L.SL), extra_js=js, out_env=key.upper() + "_OUT")
 
 
 if __name__ == "__main__":

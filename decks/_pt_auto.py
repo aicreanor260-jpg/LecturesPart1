@@ -157,6 +157,8 @@ def render(slides, adir, titles=None, budget=1300, skip=(1,), man=None):
         if man and n in man:                # ручная выжимка: тезисы + перерисованная схема; полный текст pptx — свёрнут
             import _pt_man
             _pt_man.emit(n, s, man[n], title, t, adir, _block)
+            if any(pg.get("raw") for pg in man[n]):      # инфографика автора уже повторена вёрсткой
+                continue
             for i in dict.fromkeys(i for i, sz in s["imgs"] if sz > BIG):
                 K.info(adir, i, "pptx %d · %s · %s" % (n, K._plain(t), i))
             continue

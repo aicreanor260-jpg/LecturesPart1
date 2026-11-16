@@ -350,3 +350,7 @@ M = {
                    "-------------------------------------------------------------------------", "1      [[Po1(U)[AU,OU]]]   LACP      gi 0/1(P)"]),
            t="Мониторинг LAG на MES14xx/24xx", src=False)],
 }
+
+
+from _lacp_arena import AR  # noqa: E402
+M.update(AR)

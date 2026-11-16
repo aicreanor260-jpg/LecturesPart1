@@ -9,9 +9,9 @@ from _sw_lib import slide, head, sc, grow, col, step, card, li
 import _pt_kit as K
 
 
-def P(l, r=None, t=None, src=True, sub="", stack=False):
+def P(l, r=None, t=None, src=True, sub="", stack=False, raw=False):
     """l — левая колонка (html или список html), r — правая (схема), t — свой заголовок, src — приложить текст pptx."""
-    return dict(l=l, r=r, t=t, src=src, sub=sub, stack=stack)
+    return dict(l=l, r=r, t=t, src=src, sub=sub, stack=stack, raw=raw)
 
 
 def row(*items):
@@ -56,7 +56,9 @@ def emit(n, s, pages, title, t, adir, _block):
         lab = "pptx %d · %s" % (n, re.sub("<[^>]+>", "", ttl))
         if len(pages) > 1:
             lab += " · %d" % (pi + 1)
-        if pg["r"] and pg["stack"]:           # длинные команды / вывод — во всю ширину, под тезисами
+        if pg["raw"]:                         # инфографика во весь слайд; текст pptx — кнопкой в углу
+            body = grow("g", '<div class="arwrap">%s</div>' % "".join(left))
+        elif pg["r"] and pg["stack"]:           # длинные команды / вывод — во всю ширину, под тезисами
             right = pg["r"] if isinstance(pg["r"], list) else [pg["r"]]
             body = grow("g", col(*[step(x) for x in left[:-1] + right + left[-1:]] if len(left) > 1 and "ptsrc" in left[-1]
                                  else [step(x) for x in left + right]))
