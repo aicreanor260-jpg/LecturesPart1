@@ -295,7 +295,7 @@ M = {
                                           ["Expired", "LACPDU получено вовремя", "после timeout"]])],
            t="Формат LACPDU", stack=True),
          P(K.term(LACPDU_ACT[:20], "Пример LACPDU от активного к активному коммутатору · Actor"),
-           K.term(LACPDU_ACT[20:], "· Partner"), t="Пример LACPDU", src=False)],
+           K.term(LACPDU_ACT[20:], "· Partner"), t="Пример LACPDU")],
     26: [P(pts(["Получив LACPDU, коммутатор запоминает флаги из <b>Actor State</b> партнёра.",
                 "В ответном LACPDU повторяет их в поле <b>Partner State</b>.",
                 "Флаги хранятся до следующего LACPDU — чтобы сравнить текущее состояние с прошлым.",
