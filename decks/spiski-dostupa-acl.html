@@ -396,6 +396,7 @@ pre.cli{border-radius:0!important;background:#14201d!important;color:#e6f2d8!imp
 pre.cli.term{font-size:calc(clamp(12px,1.05vw,20px)*var(--fm,1))!important;white-space:pre;overflow-x:auto}
 pre.cli.fitw{font-size:var(--pw)!important}
 pre.cli.wrapw{white-space:pre-wrap!important;overflow-wrap:anywhere}
+.ptfit,.ptfit *{transition:none!important}
 pre.cli .p{color:#8fb9a6!important}pre.cli .k{color:#ffe082!important;font-weight:700}
 pre.cli .h{background:rgba(255,224,130,.28)}
 pre.cli.syn{background:#fff!important;color:#1d1d1b!important}
@@ -1561,6 +1562,7 @@ show(0);
       return false;
     }
     function set(f){s.style.setProperty('--fz',f.toFixed(3));s.style.setProperty('--fm',Math.min(f,1.2).toFixed(3));}
+    s.classList.add('ptfit');
     var f=1; set(f);
     if(over()){while(f>0.62&&over()){f-=0.04;set(f);}}
     else if(grow){while(f<1.75&&!over()){f+=0.04;set(f);} if(over()){f-=0.04;set(f);}}
@@ -1571,10 +1573,11 @@ show(0);
       while(p.scrollWidth>p.clientWidth+1&&k<40&&fs>min){fs*=0.96;p.style.setProperty('--pw',fs+'px');k++;}
       if(p.scrollWidth>p.clientWidth+1) p.classList.add('wrapw');
     });
+    s.classList.remove('ptfit');
   }
-  function cur(){var s=document.querySelector('.slide.on'); if(s) fit(s);}
-  new MutationObserver(function(m){ if(m.some(function(x){return x.target.classList&&x.target.classList.contains('slide')&&x.target.classList.contains('on');})) cur(); })
-    .observe(stage,{subtree:true,attributes:true,attributeFilter:['class']});
+  var obs=new MutationObserver(function(m){ if(m.some(function(x){return x.target.classList&&x.target.classList.contains('slide')&&x.target.classList.contains('on');})) cur(); });
+  function cur(){var s=document.querySelector('.slide.on'); if(s){ fit(s); obs.takeRecords(); }}
+  obs.observe(stage,{subtree:true,attributes:true,attributeFilter:['class']});
   window.addEventListener('resize',function(){clearTimeout(window.__fitT);window.__fitT=setTimeout(cur,120);});
   if(document.fonts&&document.fonts.ready) document.fonts.ready.then(cur);
   setTimeout(cur,60);
