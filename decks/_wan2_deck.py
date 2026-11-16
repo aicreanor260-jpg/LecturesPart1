@@ -4,6 +4,7 @@
 инфографики автора — во весь слайд сразу за своим слайдом."""
 from _sw_lib import card, p, li, slide, sc, head, grow, col, step, foot
 from _dk_kit import pslide, full, txt
+from _dk_kit import pslide as _dk_pslide
 import _pt_kit as K
 
 A = "_wan2_assets"
@@ -27,6 +28,10 @@ def pic(n, cap=""):
 
 
 def build():
+    global pslide
+    import _scoob
+    import _wan2_tx
+    pslide = _scoob.tx_wrap(_dk_pslide, _wan2_tx.TX)
     # ---------------------------------------------------------------- pptx 1
     T1 = "WAN на основе <em>Ethernet</em>"
     pslide("WAN на основе Ethernet", T1, [

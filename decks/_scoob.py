@@ -138,3 +138,34 @@ CSS += r"""
 CSS += r"""
 .sb .sp-pn.short .ar-scene svg{max-height:27vh}
 """
+
+
+def tx_wrap(pslide, TX):
+    """Обёртка pslide деки: если метка есть в TX — слайд-тезисы, а исходные блоки pptx — в «Текст слайда из лекции»."""
+    from _sw_lib import step, card
+
+    def w(label, title, left, right=None, sub="", layout="g2"):
+        if label not in TX:
+            return pslide(label, title, left, right, sub, layout)
+        sub2, html = TX[label]
+        src = '<details class="ptsrc"><summary>Текст слайда из лекции</summary>%s</details>' % "".join(left + (right or []))
+        from _sw_lib import slide, sc as _sc, head, grow
+        slide(label, _sc(head(title, ""), grow("g", '<div class="arwrap sb">%s%s</div>' % (page(sub2 or sub, html), src))))
+    return w
+
+
+CSS += r"""
+.arwrap>details.ptsrc{position:absolute;right:0;top:calc(-1 * clamp(40px,4.4vw,70px));z-index:6;max-width:62%;margin:0}
+.arwrap>details.ptsrc>summary{display:inline-block;cursor:pointer;list-style:none;font:700 clamp(11px,.9vw,16px)/1 var(--f);padding:5px 12px;border-radius:999px;
+ border:2px solid #2a1b4a;color:#2a1b4a;background:#ffd27a}
+.arwrap>details.ptsrc>summary::-webkit-details-marker{display:none}
+.arwrap>details.ptsrc[open]{background:#fff8e6;border:3px solid #2a1b4a;border-radius:12px;padding:10px;max-height:72vh;overflow:auto;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+"""
+CSS += r"""
+.sb .sp-pn>p,.sb .sp-pn ul.li li,.sb .sp-nm p,.sb .sp-it p{font-size:calc(clamp(14px,1.3vw,25px)*var(--fz,1))!important;line-height:1.38!important}
+.sb .sp-nm b,.sb .sp-it b{font-size:calc(clamp(15px,1.4vw,27px)*var(--fz,1))!important}
+.sb .sp-ph{font-size:calc(clamp(15px,1.4vw,26px)*var(--fz,1))!important}
+.sb .sp-note b{font-size:calc(clamp(14px,1.3vw,24px)*var(--fz,1))!important}
+.sb .sp-note small{font-size:calc(clamp(12px,1vw,18px)*var(--fz,1))!important}
+.sb-tab{font-size:calc(clamp(13px,1.15vw,22px)*var(--fz,1))!important}
+"""
