@@ -1,0 +1,340 @@
+{
+  "11": {
+    "title": "Анонс VRRP в Wireshark",
+    "blocks": [{"title": "В анализаторе трафика Wireshark анонс VRRP выглядит следующим образом:", "lines": [
+      "Ethernet II, Src: IETF-VRRP-VRID_64 (00:00:5e:00:01:64), Dst: IPv4mcast_12 (01:00:5e:00:00:12)",
+      "Internet Protocol Version 4, Src: 10.10.1.2, Dst: 224.0.0.18",
+      "Virtual Router Redundancy Protocol",
+      "  Version 2, Packet type 1 (Advertisement)",
+      "  Virtual Rtr ID: 100",
+      "  Priority: 110 (Non-default backup priority)",
+      "  Addr Count: 1",
+      "  Auth Type: No Authentication (0)",
+      "  Adver Int: 1",
+      "  Checksum: 0x658e [correct]",
+      "  [Checksum Status: Good]",
+      "  IP Address: 10.10.1.1"
+    ]}],
+    "issues": []
+  },
+  "15": {
+    "title": "Основные переходы между состояниями",
+    "blocks": [{"title": "Условие → Переход", "lines": [
+      "VRRP включён, виртуальный IP принадлежит этому маршрутизатору → Initialize → Master",
+      "VRRP включён, виртуальный IP не принадлежит этому маршрутизатору → Initialize → Backup",
+      "У Backup истёк Master Down Interval → Backup → Master",
+      "У Master появился соперник с более высоким приоритетом → Master → Backup",
+      "При равном приоритете у соперника выше IP-адрес → Master → Backup",
+      "Backup получает объявление от маршрутизатора с меньшим приоритетом и разрешено вытеснение → Backup → Master",
+      "Итог: Master отвечает на ARP-запросы и обслуживает трафик виртуального IP. Backup следит за его объявлениями и принимает роль Master, если основной маршрутизатор перестаёт отвечать или уступает маршрутизатору с более высоким приоритетом."
+    ]}],
+    "issues": ["Упрощённая формулировка последнего перехода не отражает ожидание истечения таймера при preempt; перенесена как в исходнике."]
+  },
+  "16": {
+    "title": "Master Down Interval и Skew Time",
+    "blocks": [
+      {"title": "Формулы", "lines": ["MDI = 3 × AdvertInt + ST", "ST = ((256 − Pri) × AdvertInt) / 256"]},
+      {"title": "Пример расчёта", "lines": [
+        "Пусть у Backup приоритет 100, а объявления Master отправляются раз в 1 секунду.",
+        "1. Сначала найдём ST:",
+        "ST = ((256 − 100) × 1) / 256 = 156 / 256 ≈ 0,609 с",
+        "2. Подставим значение в формулу MDI:",
+        "MDI = 3 × 1 + 0,609 ≈ 3,609 с",
+        "Значит, если Backup не получит VRRP-объявлений примерно 3,6 секунды, он перейдёт в состояние Master."
+      ]},
+      {"title": "Зачем нужен ST", "lines": [
+        "Без добавки все резервные маршрутизаторы могли бы одновременно решить, что Master пропал, и начать претендовать на его роль. ST немного раздвигает моменты срабатывания таймеров:",
+        "у маршрутизатора с более высоким приоритетом ST меньше, поэтому его таймер истечёт раньше;",
+        "у маршрутизатора с более низким приоритетом ST больше, поэтому он подождёт дольше.",
+        "Например, при AdvertInt = 1 с и Pri = 200:",
+        "ST = 56 / 256 ≈ 0,219 с",
+        "MDI ≈ 3,219 с",
+        "Приоритет 200 приводит к более раннему срабатыванию таймера, чем приоритет 100.",
+        "Итого: Backup ждёт три интервала объявлений плюс Skew Time. Если объявлений нет до истечения MDI, он начинает выполнять роль Master."
+      ]}
+    ],
+    "issues": []
+  },
+  "18": {
+    "title": "Команды настройки VRRP",
+    "blocks": [
+      {"title": "Подготовка интерфейса", "lines": [
+        "Настроить VRRP можно на интерфейсе, bridge-интерфейсе или туннеле. Для целей нашего курса будет рассматриваться настройка VRRP на интерфейсах.",
+        "Перед включением протокола VRRP нужно настроить IP-адрес и отключить или настроить Firewall.",
+        "esr(config)# interface gigabitethernet 1/0/x",
+        "esr(config-if-gi)# ip address <ipaddress/prefixlength>",
+        "esr(config-if-gi)# ip firewall disable",
+        "где ipaddress – это собственный адрес интерфейса, а prefixlength – длина префикса. IP-адрес также можно вводить в формате «IP-адрес маска_подсети».",
+        "Интерфейс подготовлен к конфигурации протокола VRRP. Приступаем к самой конфигурации."
+      ]},
+      {"title": "Конфигурация VRRP", "lines": [
+        "Сконфигурируем адрес виртуального маршрутизатора:",
+        "esr(config-if-gi)# vrrp ip <ipaddress/prefixlength>",
+        "Затем укажем идентификатор виртуального маршрутизатора VRID:",
+        "esr(config-if-gi)# vrrp id yyy",
+        "где yyy – целое число от 1 до 255.",
+        "Установим приоритет маршрутизатора в процессе VRRP:",
+        "esr(config-if-gi)# vrrp priority zzz",
+        "где zzz – целое число от 1 до 254. Как уже отмечалось ранее, значение приоритета влияет на время перехода маршрутизатора из состояния Backup в состояние Master. При совпадении IP-адресов интерфейса и виртуального маршрутизатора приоритет автоматически устанавливается равным 255. При несовпадении этих параметров по умолчанию устанавливается приоритет 100.",
+        "Процесс VRRP на интерфейсе включается командой:",
+        "esr(config-if-gi)# vrrp"
+      ]}
+    ],
+    "issues": []
+  },
+  "20": {
+    "title": "Диагностика VRRP",
+    "blocks": [
+      {"title": "Состояние всех процессов", "lines": [
+        "Для диагностики текущего состояния процессов VRRP на маршрутизаторе Eltex ESR необходимо использовать команду:",
+        "ESR#show vrrp",
+        "",
+        "ESR#  show vrrp",
+        "Virtual router   Virtual IP                         Priority   Preemption   State",
+        "--------------   --------------------------------   --------   ----------   ------",
+        "100              10.10.1.1/32                       110        Disabled     Master",
+        "200              10.10.2.1/32                       10         Disabled     Backup"
+      ]},
+      {"title": "Отдельный виртуальный маршрутизатор", "lines": [
+        "Для просмотра отдельного процесса VRRP на маршрутизаторе можно использовать команду show vrrp с указанием конкретного идентификатора виртуального маршрутизатора:",
+        "ESR#show vrrp vrid"
+      ]}
+    ],
+    "issues": []
+  },
+  "21": {
+    "title": "Диагностика отдельного процесса и конфигурации VRRP",
+    "blocks": [
+      {"title": "Параметры процесса", "lines": [
+        "ESR#show vrrp vrid",
+        "",
+        "ESR# show vrrp 100",
+        "VRRP ID:                       100",
+        "VRRP Version:                  2",
+        "Interface:                     gi1/0/1",
+        "Priority:                      110",
+        "State:                         Master",
+        "Track ID:                      --",
+        "Source IP address:             10.10.1.2",
+        "Virtual IP address:            10.10.1.1/32",
+        "Virtual MAC address:           00:00:5e:00:01:64",
+        "Synchronization group ID:      --",
+        "Preemption:                    Disabled",
+        "Advertisement interval:        1 seconds",
+        "Gratuitous ARP delay:          5 seconds",
+        "Gratuitous ARP repeat:         5 times",
+        "Gratuitous ARP refresh:        0 seconds",
+        "Gratuitous ARP refresh repeat: 1 times"
+      ]},
+      {"title": "Конфигурация интерфейса", "lines": [
+        "Оценить правильность конфигурации протокола VRRP на конкретном интерфейсе можно с помощью проверки текущей конфигурации интерфейса командой show running-config interfaces:",
+        "",
+        "ESR# show running-config interfaces gigabitethernet 1/0/1",
+        "interface gigabitethernet 1/0/1",
+        "  ip firewall disable",
+        "  ip address 10.10.1.2/24",
+        "  vrrp id 100",
+        "  vrrp ip 10.10.1.1/32",
+        "  vrrp priority 110",
+        "  vrrp preempt disable",
+        "  vrrp",
+        "  lldp transmit",
+        "  lldp receive",
+        "exit"
+      ]}
+    ],
+    "issues": ["Изображение image30.png на исходном слайде вставлено дважды; одинаковый материал транскрибирован один раз."]
+  },
+  "23": {
+    "title": "Пример 1: настройка маршрутизаторов",
+    "blocks": [
+      {"title": "Маршрутизатор R1", "lines": [
+        "R1#configure",
+        "R1(config)# interface Gi1/0/1",
+        "R1(config-if-gi)#ip address 10.10.1.2/24",
+        "R1(config-if-gi)# ip firewall disable",
+        "R1(config-if-gi)# vrrp id 100",
+        "R1(config-if-gi)# vrrp ip 10.10.1.1"
+      ]},
+      {"title": "Маршрутизатор R2", "lines": [
+        "R2#configure",
+        "R2(config)#interface Gi1/0/2",
+        "R2(config-if-gi)#ip address 10.10.1.3/24",
+        "R2(config-if-gi)# ip firewall disable",
+        "R2(config-if-gi)# vrrp id 100",
+        "R2(config-if-gi)# vrrp ip 10.10.1.1"
+      ]},
+      {"title": "Порядок настройки", "lines": [
+        "Вход в режим глобальной конфигурации",
+        "Выбор интерфейса для конфигурации",
+        "Настройка IP-адреса",
+        "Отключение межсетевого экрана на интерфейсах маршрутизаторов",
+        "Настройка идентификатора виртуального маршрутизатора",
+        "Настройка виртуального IP-адреса"
+      ]}
+    ],
+    "issues": []
+  },
+  "24": {
+    "title": "Пример 1: приоритет и включение VRRP",
+    "blocks": [
+      {"title": "Маршрутизатор R1", "lines": [
+        "R1(config-if-gi)# vrrp priority 110",
+        "Так как приоритетное вытеснение включено по умолчанию, дополнительная настройка не нужна",
+        "R1(config-if-gi)# vrrp",
+        "R1(config-if-gi)# do commit",
+        "R1(config-if-gi)# do confirm"
+      ]},
+      {"title": "Маршрутизатор R2", "lines": [
+        "Так как приоритет 100 является значением по умолчанию, настройка не нужна",
+        "Так как у маршрутизатора R2 меньший приоритет, он будет проигрывать R1, а значит, можно не отключать Preempt дополнительно.",
+        "R2(config-if-gi)# vrrp",
+        "R2(config-if-gi)# do commit",
+        "R2(config-if-gi)# do confirm"
+      ]},
+      {"title": "Порядок настройки", "lines": [
+        "Настройка приоритета маршрутизатора",
+        "Настройка приоритетного вытеснения (Preempt)",
+        "Включение виртуального маршрутизатора на интерфейсе",
+        "Применение и подтверждение изменений в конфигурации"
+      ]}
+    ],
+    "issues": []
+  },
+  "25": {
+    "title": "Пример 1: настройка коммутаторов",
+    "blocks": [
+      {"title": "Коммутатор SW1", "lines": [
+        "SW1#configure",
+        "SW1(config)#interface range gi0/1,gi0/3",
+        "SW1(config-if-range)#switchport mode access",
+        "SW1(config-if-range)#switchport access vlan 10",
+        "SW1(config-if-range)#interface gi0/2",
+        "SW1(config-if)#switchport mode trunk",
+        "SW1(config-if)#switchport trunk allowed vlan add 10"
+      ]},
+      {"title": "Коммутатор SW2", "lines": [
+        "SW2#configure",
+        "SW2(config)#interface range gi0/1,gi0/3",
+        "SW2(config-if-range)#switchport mode access",
+        "SW2(config-if-range)#switchport access vlan 10",
+        "SW1(config-if-range)#interface gi0/2",
+        "SW1(config-if)#switchport mode trunk",
+        "SW1(config-if)#switchport trunk allowed vlan add 10"
+      ]},
+      {"title": "Порядок настройки", "lines": [
+        "Вход в режим глобальной конфигурации",
+        "Выбор интерфейсов",
+        "Конфигурация режима доступа и VLAN",
+        "Выбор интерфейса для транкового канала и добавление VLAN 10 в список разрешённых"
+      ]}
+    ],
+    "issues": ["В правой колонке SW2 последние три приглашения ошибочно подписаны SW1. Сохранено дословно."]
+  },
+  "27": {
+    "title": "Пример 2: подинтерфейсы маршрутизаторов",
+    "blocks": [
+      {"title": "Маршрутизатор R1", "lines": [
+        "R1#configure",
+        "R1(config)# interface Gi1/0/1.10",
+        "R1(config-subif)#ip address 10.10.1.2/24",
+        "R1(config-subif)#ip firewall disable",
+        "R1(config-subif)#exit",
+        "R1(config)# interface Gi1/0/1.20",
+        "R1(config-subif)#ip address 10.10.2.3/24",
+        "R1(config-subif)#ip firewall disable",
+        "R1(config-subif)#exit"
+      ]},
+      {"title": "Маршрутизатор R2", "lines": [
+        "R2#configure",
+        "R2(config)#interface Gi1/0/1.10",
+        "R2(config-subif)#ip address 10.10.1.3/24",
+        "R2(config-subif)#ip firewall disable",
+        "R2(config-subif)#exit",
+        "R2(config)#interface Gi1/0/1.20",
+        "R2(config-subif)#ip address 10.10.2.2/24",
+        "R2(config-subif)#ip firewall disable",
+        "R2(config-subif)#exit"
+      ]},
+      {"title": "Порядок настройки", "lines": [
+        "Вход в режим глобальной конфигурации",
+        "Создание подинтерфейсов, конфигурация IP-адресов, МСЭ"
+      ]}
+    ],
+    "issues": ["Физические адреса второго VLAN указаны как R1 10.10.2.3 и R2 10.10.2.2. Это соответствует изображению и не исправлялось."]
+  },
+  "28": {
+    "title": "Пример 2: VRID 100 и VRID 200",
+    "blocks": [
+      {"title": "Маршрутизатор R1: VRID 100", "lines": [
+        "R1(config)# interface gi1/0/1.10",
+        "R1(config-subif) vrrp id 100",
+        "R1(config-subif) vrrp ip 10.10.1.1",
+        "R1(config-subif) vrrp priority 110",
+        "R1(config-subif) vrrp",
+        "R1(config-subif) exit"
+      ]},
+      {"title": "Маршрутизатор R2: VRID 100", "lines": [
+        "R2(config)# interface gi1/0/1.10",
+        "R2(config-subif) vrrp id 100",
+        "R2(config-subif) vrrp ip 10.10.1.1",
+        "R2(config-subif) vrrp priority 10",
+        "R2(config-subif) vrrp",
+        "R2(config-subif) exit"
+      ]},
+      {"title": "Маршрутизатор R1: VRID 200", "lines": [
+        "R1(config)# interface gi1/0/1.20",
+        "R1(config-subif) vrrp id 200",
+        "R1(config-subif) vrrp ip 10.10.2.1",
+        "R1(config-subif) vrrp priority 10",
+        "R1(config-subif) vrrp",
+        "R1(config-subif) exit"
+      ]},
+      {"title": "Маршрутизатор R2: VRID 200", "lines": [
+        "R2(config)# interface gi1/0/1.20",
+        "R2(config-subif) vrrp id 200",
+        "R2(config-subif) vrrp ip 10.10.2.1",
+        "R2(config-subif) vrrp priority 110",
+        "R2(config-subif) vrrp",
+        "R2(config-subif) exit"
+      ]},
+      {"title": "Принятие и подтверждение настроек: R1", "lines": ["R1(config)# do commit", "R1(config)# do confirm"]},
+      {"title": "Принятие и подтверждение настроек: R2", "lines": ["R2(config)# do commit", "R2(config)# do confirm"]}
+    ],
+    "issues": ["В исходной таблице приглашения config-subif не содержат символа #. Сохранено дословно."]
+  },
+  "29": {
+    "title": "Пример 2: порты доступа и транки",
+    "blocks": [
+      {"title": "Коммутатор SW1: порты доступа", "lines": [
+        "SW1# configure",
+        "SW1(config)# interface Gi0/3",
+        "SW1(config-if)# switchport mode access",
+        "SW1(config-if)# switchport access vlan 10",
+        "SW1(config)# interface Gi0/5",
+        "SW1(config-if)# switchport mode access",
+        "SW1(config-if)# switchport access vlan 20"
+      ]},
+      {"title": "Коммутатор SW2: порты доступа", "lines": [
+        "SW2# configure",
+        "SW2(config)# interface Gi0/3",
+        "SW2(config-if)# switchport mode access",
+        "SW2(config-if)# switchport access vlan 10",
+        "SW2(config)# interface Gi0/5",
+        "SW2(config-if)# switchport mode access",
+        "SW2(config-if)# switchport access vlan 20"
+      ]},
+      {"title": "Коммутатор SW1: транковые порты", "lines": [
+        "SW1(config)# interface range Gi0/1-2",
+        "SW1(config-if-range)#switchport mode trunk",
+        "SW1(config-if-range)#switchport trunk allowed vlan add 10,20"
+      ]},
+      {"title": "Коммутатор SW2: транковые порты", "lines": [
+        "SW2(config)# interface range Gi0/1-2",
+        "SW2(config-if-range)#switchport mode trunk",
+        "SW2(config-if-range)#switchport trunk allowed vlan add 10,20"
+      ]}
+    ],
+    "issues": ["Многострочные команды, перенесённые в таблице на следующую строку из-за ширины ячейки или разрыва страницы, склеены в одну команду без изменения токенов."]
+  }
+}
